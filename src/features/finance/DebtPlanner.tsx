@@ -5,7 +5,7 @@
  */
 import { Check, Plus, Snowflake, Sparkles, TrendingDown, Trophy, X, Zap } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "@/backend";
 import type { DebtPlan, DebtStrategy } from "@/backend/types";
 import { LineChart } from "@/charts/Line";
@@ -21,10 +21,11 @@ import { spring } from "@/ui/motion/tokens";
 import { Sensitive } from "@/ui/Sensitive";
 import { Slider } from "@/ui/Slider";
 import { Skeleton } from "@/ui/Skeleton";
+import { DebtRace } from "./DebtRace";
 import { StackedAreaChart } from "./shared/charts";
-import { addMonths, fmtMoney, monthLabel, num, todayIso } from "./shared/format";
+import { addMonths, fmtMoney, monthLabel, num } from "./shared/format";
 import { Quiet, Section } from "./shared/ui";
-import { DEBT_TYPES, useLedgerCtx } from "./MoneyHQ/ledger";
+import { debtInputs, debtPlanStart, useLedgerCtx } from "./MoneyHQ/ledger";
 
 interface DebtRow {
   key: string;
@@ -50,14 +51,10 @@ export default function DebtPlanner() {
 
   useEffect(() => {
     if (debts || l.loading) return;
-    setDebts(
-      l.accounts
-        .filter((a) => DEBT_TYPES.has(a.type) && !a.closed && a.balance < 0)
-        .map((a) => ({ key: a.id, name: a.name, balance: (-a.balance).toFixed(2), aprPct: String(a.apr ?? 0), minPayment: a.minPayment.toFixed(2) })),
-    );
+    setDebts(debtInputs(l.accounts));
   }, [l.loading, l.accounts, debts]);
 
-  const startMonth = addMonths(todayIso().slice(0, 7), 1);
+  const startMonth = debtPlanStart();
   const reqKey = JSON.stringify({ debts, extra });
   useEffect(() => {
     if (!debts?.length) return;
@@ -101,6 +98,12 @@ export default function DebtPlanner() {
     for (let i = 0; i < len; i++) pts.push({ m: addMonths(startMonth, i), avalanche: total(plans.avalanche, i), snowball: total(plans.snowball, i), hybrid: total(plans.hybrid, i) });
     return pts;
   }, [plans, debts, startMonth]);
+
+  // unselected strategies recede as tertiary dashes; the chosen one renders last (on top) in ink
+  const chartSeries = useMemo(
+    () => [...STRATS.filter((s) => s.id !== strategy).map((s) => ({ key: s.id, label: s.title, color: "var(--text-tertiary)", dashed: true })), ...STRATS.filter((s) => s.id === strategy).map((s) => ({ key: s.id, label: s.title, color: "var(--chart-line)" }))],
+    [strategy],
+  );
 
   const stack = useMemo(() => {
     if (!plan || !debts) return [];
@@ -170,12 +173,18 @@ export default function DebtPlanner() {
                     </span>
                   </span>
                   <span className="text-right flex-none">
-                    <span className="block text-body-sm font-semibold tabular">{r ? monthLabel(r.payoffDate) : "—"}</span>
+                    <span className="block text-body-sm font-semibold tabular">{r ? <SlideText text={monthLabel(r.payoffDate)} order={r.months} /> : "—"}</span>
                     <span className="block text-caption text-tertiary tabular" style={{ fontWeight: 400 }}>
-                      {r ? <Sensitive>{fmtMoney(r.totalInterest, "USD", { noCents: true })} interest</Sensitive> : ""}
+                      {r ? (
+                        <span data-sensitive="">
+                          <RollingNumber value={num(r.totalInterest)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive /> interest
+                        </span>
+                      ) : (
+                        ""
+                      )}
                     </span>
                   </span>
-                  <AnimatePresence>{selected ? <m.span key="c" className="fh-strat-check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={spring.bouncy}><Check size={11} strokeWidth={3} /></m.span> : null}</AnimatePresence>
+                  <AnimatePresence>{selected ? <m.span key="c" className="fh-strat-check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0, transition: { duration: 0.1 } }} transition={spring.pop}><Check size={11} strokeWidth={3} /></m.span> : null}</AnimatePresence>
                 </button>
               );
             })}
@@ -183,19 +192,17 @@ export default function DebtPlanner() {
         </section>
         <section className="fh-card fh-span-7 flex flex-col">
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <BigFact label="Debt-free" value={sel ? monthLabel(sel.payoffDate) : "—"} sub={sel ? `${sel.months} months` : ""} />
-            <BigFact label="Interest saved" value={sel ? fmtMoney(sel.interestSavedVsMin, "USD", { noCents: true }) : "—"} sub="vs minimums only" good sensitive />
-            <BigFact label="Months sooner" value={sel && minimum ? String(Math.max(0, minimum.months - sel.months)) : "—"} sub={minimum ? `minimums: ${minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)}` : ""} good />
+            <BigFact label="Debt-free" value={sel ? <SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /> : "—"} sub={sel ? `${sel.months} months` : ""} />
+            <BigFact label="Interest saved" value={sel ? <RollingNumber value={num(sel.interestSavedVsMin)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive /> : "—"} sub="vs minimums only" good sensitive />
+            <BigFact label="Months sooner" value={sel && minimum ? <RollingNumber value={Math.max(0, minimum.months - sel.months)} format={(n) => String(Math.round(n))} countUp={false} /> : "—"} sub={minimum ? `minimums: ${minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)}` : ""} good />
           </div>
           {error ? <div className="text-body-sm text-loss-text">{error}</div> : null}
           <LineChart
+            // remount on a new pick: recharts layers lines by mount order, and the chosen line must draw on top
+            key={strategy}
             data={comparison}
             x="m"
-            series={[
-              { key: "avalanche", label: "Avalanche", color: strategy === "avalanche" ? "var(--accent-solid)" : undefined },
-              { key: "snowball", label: "Snowball", color: strategy === "snowball" ? "var(--accent-solid)" : undefined },
-              { key: "hybrid", label: "Hybrid", color: strategy === "hybrid" ? "var(--accent-solid)" : undefined, dashed: true },
-            ]}
+            series={chartSeries}
             colorBySign={false}
             startReference={false}
             height={236}
@@ -209,6 +216,10 @@ export default function DebtPlanner() {
           </div>
         </section>
       </div>
+
+      <Section title="The race" subtitle="Avalanche vs snowball on one clock — each notch is a debt cleared, the ticker is interest paid so far.">
+        {plans ? <DebtRace plans={plans} debts={debts} minimumLabel={minimum ? (minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)) : undefined} /> : <Skeleton height={150} radius={12} />}
+      </Section>
 
       <div className="fh-grid">
         <Section className="fh-span-7" title={`Payoff by debt · ${STRATS.find((s) => s.id === strategy)?.title}`} subtitle="Each band is one debt; the extra payment rolls to the next as each is cleared.">
@@ -259,14 +270,41 @@ export default function DebtPlanner() {
   );
 }
 
-function BigFact({ label, value, sub, good, sensitive }: { label: string; value: string; sub?: string; good?: boolean; sensitive?: boolean }) {
+/** A date (or any label) that rolls in the direction of change, odometer-style: later rolls up, sooner rolls down. */
+function SlideText({ text, order }: { text: string; order: number }) {
+  const prev = useRef(order);
+  const dir = order === prev.current ? 0 : order > prev.current ? 1 : -1;
+  useEffect(() => {
+    prev.current = order;
+  }, [order]);
+  return (
+    <span className="fh-slide-text">
+      <AnimatePresence mode="popLayout" initial={false} custom={dir}>
+        <m.span
+          key={text}
+          custom={dir}
+          variants={{ in: (d: number) => ({ y: `${d * 70}%`, opacity: 0 }), at: { y: 0, opacity: 1 }, out: (d: number) => ({ y: `${d * -70}%`, opacity: 0 }) }}
+          initial="in"
+          animate="at"
+          exit="out"
+          transition={spring.roll}
+          style={{ display: "inline-block" }}
+        >
+          {text}
+        </m.span>
+      </AnimatePresence>
+    </span>
+  );
+}
+
+function BigFact({ label, value, sub, good, sensitive }: { label: string; value: ReactNode; sub?: string; good?: boolean; sensitive?: boolean }) {
   return (
     <div className={cn("fh-fact", good && "is-good")}>
       <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
         {label}
       </div>
       <div className="tabular" style={{ fontSize: 22, lineHeight: "28px", fontWeight: 620, letterSpacing: "-0.02em" }}>
-        {sensitive ? <Sensitive>{value}</Sensitive> : value}
+        {sensitive ? <span data-sensitive="">{value}</span> : value}
       </div>
       {sub ? (
         <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>

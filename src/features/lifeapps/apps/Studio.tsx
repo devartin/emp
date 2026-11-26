@@ -4,7 +4,7 @@
  */
 import { ArrowRight, FileSpreadsheet, FileUp, Sheet as SheetIcon } from "lucide-react";
 import { m } from "motion/react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { api, errorMessage } from "@/backend";
 import type { LifeAppInstance } from "@/backend/types";
 import { navigate } from "@/app/router";
@@ -19,6 +19,7 @@ import { Dialog } from "@/ui/Dialog";
 import { Input } from "@/ui/Input";
 import { Spinner } from "@/ui/Spinner";
 import { Switch } from "@/ui/Switch";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { spring } from "@/ui/motion/tokens";
 import { PageIcon } from "@/features/shell/PageIcon";
 import { GoogleSetupSheet } from "@/features/integrations/GoogleSetupSheet";
@@ -140,17 +141,21 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
                   const Icon = iconByName(t.icon) ?? SheetIcon;
                   const th = THUMBS[t.value] ?? THUMBS.blank;
                   return (
-                    <m.button key={t.value} type="button" className="st-tpl" onClick={() => void create(t.value)} disabled={!!creating} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { ...spring.gentle, delay: i * 0.03 } }} whileTap={{ scale: 0.985 }}>
-                      <div className="st-thumb" aria-hidden>
-                        {Array.from({ length: 25 }, (_, k) => (
-                          <span key={k} className={th.in.includes(k) ? "is-in" : th.out.includes(k) ? "is-out" : undefined} style={k < 5 ? { background: "rgba(var(--text-rgb),.14)" } : undefined} />
-                        ))}
+                    <m.button key={t.value} type="button" className="st-tpl panel" data-raise="" data-light="" aria-busy={creating === t.value || undefined} onClick={() => void create(t.value)} disabled={!!creating} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { ...spring.settle, delay: Math.min(i, 7) * 0.04 } }}>
+                      <EdgeLight />
+                      <div className="st-thumb well" data-static="" aria-hidden>
+                        {Array.from({ length: 25 }, (_, k) => {
+                          const kind = th.in.includes(k) ? "is-in" : th.out.includes(k) ? "is-out" : k < 5 ? "is-h" : undefined;
+                          return <span key={k} className={kind} style={kind === "is-in" || kind === "is-out" ? ({ ["--i" as string]: th.in.indexOf(k) >= 0 ? th.in.indexOf(k) : th.out.indexOf(k) } as CSSProperties) : undefined} />;
+                        })}
                       </div>
-                      <div className="flex items-center gap-2">
-                        {creating === t.value ? <Spinner size={14} /> : <Icon size={14} className="text-tertiary" aria-hidden />}
-                        <span className="text-body-sm font-semibold text-primary">{t.label}</span>
+                      <div className="st-meta">
+                        <div className="flex items-center gap-2">
+                          {creating === t.value ? <Spinner size={14} /> : <Icon size={14} className="text-tertiary" aria-hidden />}
+                          <span className="text-body-sm font-semibold text-primary">{t.label}</span>
+                        </div>
+                        <span className="text-caption text-tertiary">{t.description}</span>
                       </div>
-                      <span className="text-caption text-tertiary">{t.description}</span>
                     </m.button>
                   );
                 })}
@@ -163,14 +168,14 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
                   <ul className="flex flex-col">
                     {recent.map((p) => (
                       <li key={p.id}>
-                        <button type="button" className="st-row w-full" onClick={() => navigate({ t: "page", id: p.id })}>
+                        <button type="button" className="st-wb-row w-full" onClick={() => navigate({ t: "page", id: p.id })}>
                           <PageIcon icon={p.icon} kind="sheet" size={20} />
                           <span className="flex min-w-0 flex-1 flex-col">
                             <span className="truncate text-body font-medium text-primary">{p.title || "Untitled"}</span>
                             <span className="truncate text-caption text-tertiary">{pathOf(p.id) || "Workspace"}</span>
                           </span>
                           <span className="text-caption text-tertiary">{formatRelative(p.updatedAt)}</span>
-                          <ArrowRight size={14} className="text-tertiary" aria-hidden />
+                          <ArrowRight size={14} className="st-go text-tertiary" aria-hidden />
                         </button>
                       </li>
                     ))}
@@ -185,10 +190,10 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
             <StartHere instance={instance} />
             <Card title="How these workbooks are built">
               <ul className="flex flex-col gap-2.5 text-body-sm text-secondary">
-                <li className="flex gap-2"><span className="mt-1 h-3 w-3 flex-none rounded-[3px]" style={{ background: `color-mix(in oklab, ${color} 22%, transparent)` }} />Tinted cells are inputs — change these.</li>
-                <li className="flex gap-2"><span className="mt-1 h-3 w-3 flex-none rounded-[3px] bg-surface-3" /><span><strong className="font-semibold text-primary">Bold</strong> cells are outputs.</span></li>
-                <li className="flex gap-2"><span className="mt-1 h-3 w-3 flex-none rounded-[3px] bg-gain-soft" />Checks turn green when the model adds up.</li>
-                <li className="flex gap-2"><span className="mt-1 h-3 w-3 flex-none rounded-[3px] bg-surface-2" />Constants live in named ranges; headers are frozen; dates are ISO.</li>
+                <li className="flex gap-2.5"><span className="st-legend" style={{ background: `color-mix(in oklab, ${color} 26%, transparent)`, boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--app) 30%, transparent)" }} />Tinted cells are inputs — change these.</li>
+                <li className="flex gap-2.5"><span className="st-legend" style={{ background: `linear-gradient(180deg, color-mix(in oklab, ${color} 70%, white), ${color})` }} /><span><strong className="font-semibold text-primary">Bold</strong> cells are outputs.</span></li>
+                <li className="flex gap-2.5"><span className="st-legend bg-gain-soft" style={{ boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--gain) 35%, transparent)" }} />Checks turn green when the model adds up.</li>
+                <li className="flex gap-2.5"><span className="st-legend well" data-static="" />Constants live in named ranges; headers are frozen; dates are ISO.</li>
               </ul>
             </Card>
           </div>

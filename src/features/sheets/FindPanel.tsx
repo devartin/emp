@@ -10,10 +10,11 @@ import { Button } from '@/ui/Button';
 import { IconButton } from '@/ui/IconButton';
 import { Tooltip } from '@/ui/Tooltip';
 import { presets } from '@/ui/motion/presets';
-import { useGridVersion, type GridController } from './GridController';
+import { useGridSelector, type GridController } from './GridController';
 
 export function FindPanel({ ctrl }: { ctrl: GridController }) {
-  useGridVersion(ctrl);
+  // Closed: nothing to show, so selection moves don't re-render the panel.
+  useGridSelector(ctrl, (c) => (c.find.open ? c.version : -1));
   const f = ctrl.find;
   const inputRef = useRef<HTMLInputElement | null>(null);
   const timer = useRef<number | undefined>(undefined);

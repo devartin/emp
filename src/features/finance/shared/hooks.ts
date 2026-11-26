@@ -3,10 +3,11 @@
  * `db:changed` events (§13.1 — no TanStack Query). Life-app databases are located by semantic role (§15.0), so the
  * hubs never depend on database titles.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api, errorMessage, listen } from "@/backend";
 import type { CellValue, DbSchema, Id, RowDTO } from "@/backend/types";
 import { useTree } from "@/stores/tree";
+import { isReducedMotion } from "@/ui/motion/useReducedEffects";
 
 export interface AsyncState<T> {
   data: T | undefined;
@@ -214,4 +215,87 @@ export function useNow(ms = 60_000): number {
 export function useStableMemo<T>(fn: () => T, deps: unknown[]): T {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(fn, deps);
+}
+
+// ───────────────────────────────────────────────────────────────────────────── chart scrub
+
+export interface ScrubStore {
+  get: () => number | null;
+  set: (i: number | null) => void;
+  subscribe: (fn: () => void) => () => void;
+  hostRef: (el: HTMLElement | null) => void;
+}
+
+/** Scrub index outside React state: subscribers re-render, the owner (and its chart) does not. Mirrors
+ * `data-scrub` on the hero host for CSS. */
+export function useScrubStore(): ScrubStore {
+  const [store] = useState<ScrubStore>(() => {
+    let idx: number | null = null;
+    let host: HTMLElement | null = null;
+    const subs = new Set<() => void>();
+    return {
+      get: () => idx,
+      set: (i) => {
+        if (i === idx) return;
+        idx = i;
+        if (host) {
+          if (i === null) host.removeAttribute("data-scrub");
+          else host.setAttribute("data-scrub", "");
+        }
+        subs.forEach((fn) => fn());
+      },
+      subscribe: (fn) => {
+        subs.add(fn);
+        return () => subs.delete(fn);
+      },
+      hostRef: (el) => {
+        host = el;
+      },
+    };
+  });
+  return store;
+}
+
+export function useScrubIdx(store: ScrubStore): number | null {
+  return useSyncExternalStore(store.subscribe, store.get, store.get);
+}
+
+// ───────────────────────────────────────────────────────────────────────────── disclosure glide (FLIP)
+
+const GLIDE = { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" };
+
+/**
+ * Siblings displaced by a disclosure glide into place on the compositor instead of the disclosure animating `height`
+ * (DESIGN §5.4 rule 5). When `dep` changes, the children's offsets are read once during render (the DOM still shows
+ * the previous commit), again after the commit, and each moved child plays a `translate` FLIP (`translate` composes
+ * with any transform the element already has). Pair with `AnimatePresence mode="popLayout"` so exits leave the flow in
+ * the same commit. `ref` targets the container; pass `self` to glide the element itself instead of its children.
+ */
+export function useFlip<T extends HTMLElement>(dep: unknown, opts: { self?: boolean } = {}) {
+  const ref = useRef<T>(null);
+  const last = useRef(dep);
+  const before = useRef<Map<HTMLElement, number> | null>(null);
+  const targets = (): HTMLElement[] => {
+    const host = ref.current;
+    if (!host) return [];
+    return opts.self ? [host] : (Array.from(host.children) as HTMLElement[]);
+  };
+  if (last.current !== dep) {
+    last.current = dep;
+    before.current = new Map(targets().map((el) => [el, el.offsetTop]));
+  }
+  useLayoutEffect(() => {
+    const prev = before.current;
+    before.current = null;
+    if (!prev || isReducedMotion()) return;
+    for (const el of targets()) {
+      const b = prev.get(el);
+      if (b === undefined) continue;
+      const dy = b - el.offsetTop;
+      if (Math.abs(dy) < 0.5) continue;
+      el.animate?.([{ translate: `0 ${dy}px` }, { translate: "0 0" }], GLIDE);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dep]);
+  return ref;
 }

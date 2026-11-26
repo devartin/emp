@@ -45,3 +45,92 @@
 .ig-status.is-bad { background: var(--loss-soft); color: var(--loss-text); }
 .ig-guide-toggle { display: flex; align-items: center; gap: 8px; width: 100%; height: 40px; padding: 0 12px; border-radius: 10px; font-size: calc(13rem / 14); font-weight: 600; color: var(--text-primary); background: var(--bg-surface-2); transition: background-color var(--dur-fast) var(--ease-out); }
 .ig-guide-toggle:hover { background: var(--bg-surface-3); }
+
+/* ════════ Design language v2 "Slab" (docs/DESIGN.md §8.3, S20). Layered over the rules above. ════════ */
+.ig-card, .ig-prov, .ig-offline {
+  position: relative; isolation: isolate;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 -1px 0 var(--panel-lo), inset 0 0 0 1px var(--panel-rim), var(--panel-shadow);
+}
+.ig-prov { transition: transform 220ms var(--ease-out); }
+.ig-prov::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none; box-shadow: var(--panel-raise); opacity: 0; transition: opacity 220ms var(--ease-out); }
+.ig-prov:hover { transform: translateY(-1px); }
+.ig-prov:hover::after { opacity: 1; }
+.ig-offline.is-on { background: linear-gradient(180deg, color-mix(in oklab, var(--warning) 8%, var(--panel-top)), color-mix(in oklab, var(--warning) 12%, var(--panel-bot))); }
+.ig-offline-ico, .ig-step-n { background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
+.ig-step-n { transition: transform var(--dur-release) var(--spring-pop); }
+.ig-step.is-done .ig-step-n { background: radial-gradient(circle at 50% 25%, color-mix(in oklab, var(--gain) 55%, #fff), var(--gain) 70%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 0.5px color-mix(in oklab, var(--gain) 60%, #000), 0 1px 2px rgba(0, 0, 0, 0.2); }
+.ig-step:not(:last-child)::before { width: 2px; left: 11px; background: linear-gradient(90deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px); }
+.ig-code, .ig-copy code { background: var(--well-bg); box-shadow: inset 0 0 0 1px var(--well-rim); }
+.ig-copy { transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.ig-copy:hover { background: var(--ghost-hover); }
+.ig-copy:active { transform: scale(0.96); transition-duration: var(--dur-press); }
+.ig-guide-toggle { background: var(--ghost-hover); transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.ig-guide-toggle:hover { background: var(--ghost-press); }
+.ig-guide-toggle:active { transform: scale(0.99); transition-duration: var(--dur-press); }
+.ig-g { background: conic-gradient(from -45deg, #ea4335 0 25%, #fbbc05 0 50%, #34a853 0 75%, #4285f4 0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.15), inset 0 0 0 1px rgba(0, 0, 0, 0.12), 0 1.5px 0 rgba(0, 0, 0, 0.18), 0 3px 6px -2px rgba(0, 0, 0, 0.3); text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25); }
+.ig-health { box-shadow: none; background: radial-gradient(circle at 50% 30%, color-mix(in oklab, var(--hc, var(--text-tertiary)) 45%, #fff), var(--hc, var(--text-tertiary)) 70%); box-shadow: 0 0 0 0.5px color-mix(in oklab, var(--hc, #888) 60%, #000), 0 0 6px color-mix(in oklab, var(--hc, transparent) 40%, transparent); }
+.ig-health.is-ok { --hc: var(--gain); box-shadow: 0 0 0 0.5px color-mix(in oklab, var(--gain) 60%, #000), 0 0 6px color-mix(in oklab, var(--gain) 45%, transparent); }
+.ig-health.is-warn { --hc: var(--warning); box-shadow: 0 0 0 0.5px color-mix(in oklab, var(--warning) 60%, #000), 0 0 6px color-mix(in oklab, var(--warning) 45%, transparent); }
+.ig-health.is-down { --hc: var(--loss); box-shadow: 0 0 0 0.5px color-mix(in oklab, var(--loss) 60%, #000), 0 0 6px color-mix(in oklab, var(--loss) 45%, transparent); }
+.ig-health.is-unknown { background: var(--well-bg); box-shadow: inset 0 1px 1px var(--well-in), inset 0 0 0 1px var(--well-rim); }
+.ig-cal { transition: background-color var(--dur-fast) var(--ease-out); }
+.ig-cal:hover { background: var(--ghost-hover); }
+.ig-dot { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 0.5px rgba(0, 0, 0, 0.2); }
+
+/* network log: a flat table in a well; ghost rows; LEDs; new rows flash via a pre-baked layer (opacity only) */
+.ig-log { background: linear-gradient(180deg, var(--panel-top), var(--panel-bot)); box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), var(--panel-shadow); }
+.ig-log-head { background: transparent; border-bottom: 0; box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark); }
+.ig-log-row { border-bottom: 0; box-shadow: inset 0 -1px 0 var(--groove-dark); transition: background-color 120ms var(--ease-out); }
+.ig-log-row:hover { background: var(--ghost-hover); }
+.ig-log-row.is-new { animation: none; }
+.ig-log-row.is-new::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: var(--ghost-press); animation: ig-flash-o 1.2s var(--ease-out) both; }
+@keyframes ig-flash-o { from { opacity: 1; } to { opacity: 0; } }
+.ig-led { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 99px; vertical-align: 1px; background: radial-gradient(circle at 50% 30%, color-mix(in oklab, var(--gain) 45%, #fff), var(--gain) 70%); box-shadow: 0 0 0 0.5px color-mix(in oklab, var(--gain) 60%, #000); }
+.ig-led[data-bad] { background: radial-gradient(circle at 50% 30%, color-mix(in oklab, var(--loss) 45%, #fff), var(--loss) 70%); box-shadow: 0 0 0 0.5px color-mix(in oklab, var(--loss) 60%, #000), 0 0 5px color-mix(in oklab, var(--loss) 50%, transparent); }
+.ig-method { min-width: 40px; padding: 1px 5px; margin-right: 8px; border-radius: 4px; font-size: 10.5px; text-align: center; background: var(--well-bg); box-shadow: inset 0 0 0 1px var(--well-rim); }
+.ig-method[data-m="POST"], .ig-method[data-m="PUT"], .ig-method[data-m="PATCH"], .ig-method[data-m="DELETE"] { color: var(--text-primary); }
+.ig-status { box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 18%, transparent); }
+
+/* ── S20 handshake */
+.ig-test { gap: 14px; padding: 12px 16px 12px 12px; border-radius: 14px; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); color: var(--text-primary); transition: background-color 320ms var(--ease-out); }
+.ig-test.is-ok { background: color-mix(in oklab, var(--gain) 9%, var(--well-bg)); color: var(--text-primary); }
+.ig-hs { position: relative; flex: none; width: 112px; height: 46px; }
+.ig-hs-groove { position: absolute; left: 30px; right: 32px; top: 22px; height: 4px; border-radius: 99px; overflow: hidden; background: var(--panel-bot); box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); transition: opacity 200ms var(--ease-out) 200ms; }
+.ig-hs-fill { position: absolute; inset: 0; border-radius: inherit; transform-origin: left; background: linear-gradient(180deg, var(--lit-b), var(--lit-a)); transition: transform 600ms var(--spring-settle); }
+.ig-hs-a, .ig-hs-b { position: absolute; top: 50%; display: inline-flex; transform: translateY(-50%); }
+.ig-hs-a { left: 0; }
+.ig-hs-b { right: 0; }
+.ig-hs-b .ig-g { width: 28px; height: 28px; border-radius: 8px; font-size: 13px; }
+.ig-hs-flash { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 99px; pointer-events: none; background: radial-gradient(circle, rgba(255, 255, 255, 0.95), color-mix(in oklab, var(--gain) 40%, transparent) 45%, transparent 70%); opacity: 0; }
+.ig-hs-check { position: absolute; left: 50%; top: -6px; width: 18px; height: 18px; margin-left: -9px; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: radial-gradient(circle at 50% 25%, color-mix(in oklab, var(--gain) 55%, #fff), var(--gain) 70%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 2px var(--panel-top), 0 2px 4px rgba(0, 0, 0, 0.25); opacity: 0; transform: scale(0.3); }
+.ig-hs[data-ok] .ig-hs-groove { opacity: 0; }
+.ig-hs[data-ok] .ig-hs-a { animation: ig-hs-a 760ms var(--ease-out) both; }
+.ig-hs[data-ok] .ig-hs-b { animation: ig-hs-b 760ms var(--ease-out) both; }
+.ig-hs[data-ok] .ig-hs-flash { animation: ig-hs-flash 620ms var(--ease-out) 330ms both; }
+.ig-hs[data-ok] .ig-hs-check { animation: ig-hs-check 520ms var(--spring-pop) 430ms both; }
+@keyframes ig-hs-a {
+  0% { transform: translate(0, -50%); }
+  45% { transform: translate(30px, -50%); }
+  52% { transform: translate(29px, calc(-50% + 2px)); }
+  70% { transform: translate(29px, calc(-50% - 0.5px)); }
+  100% { transform: translate(29px, -50%); }
+}
+@keyframes ig-hs-b {
+  0% { transform: translate(0, -50%); }
+  45% { transform: translate(-28px, -50%); }
+  52% { transform: translate(-27px, calc(-50% + 2px)); }
+  70% { transform: translate(-27px, calc(-50% - 0.5px)); }
+  100% { transform: translate(-27px, -50%); }
+}
+@keyframes ig-hs-flash { 0% { opacity: 0; transform: scale(0.4); } 25% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(2.2); } }
+@keyframes ig-hs-check { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: scale(1); } }
+:root:is([data-effects="reduced"]) .ig-hs-flash { display: none; }
+.ig-hs[data-reduced][data-ok] :is(.ig-hs-a, .ig-hs-b, .ig-hs-flash, .ig-hs-check) { animation-duration: 1ms; animation-delay: 0ms; }
+.ig-hs[data-reduced][data-ok] .ig-hs-flash { display: none; }
+:root[data-motion="reduced"] :is(.ig-prov, .ig-copy, .ig-guide-toggle) { transition: none; transform: none !important; }
+:root[data-motion="reduced"] .ig-log-row.is-new::after { animation: none; opacity: 0; }
+.st-card .ig-offline { background: transparent; box-shadow: none; padding: 4px 0; }
+.st-card .ig-offline.is-on { background: transparent; }
+/* RollingNumber inside running text: sit digits on the text baseline */
+:is(.ig-test, .ig-log-foot) :is(.emp-roll-col, .emp-roll-sym) { vertical-align: baseline; }

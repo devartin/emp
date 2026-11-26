@@ -29,6 +29,14 @@ export function Calendar({ value, onSelect, rangeEnd, month: monthProp, onMonthC
     onMonthChange?.(d);
   };
   const [focus, setFocus] = useState<Date>(() => value ?? new Date());
+  // Month change slides ±16px with direction (lateral rule, §6.2).
+  const monthKey = month.getFullYear() * 12 + month.getMonth();
+  const prevKey = useRef(monthKey);
+  const dir = useRef(0);
+  if (prevKey.current !== monthKey) {
+    dir.current = monthKey > prevKey.current ? 1 : -1;
+    prevKey.current = monthKey;
+  }
   const gridRef = useRef<HTMLDivElement>(null);
   const ws = getWeekStart();
   const days = useMemo(() => monthGrid(month, ws), [month, ws]);
@@ -74,7 +82,7 @@ export function Calendar({ value, onSelect, rangeEnd, month: monthProp, onMonthC
           <IconButton size="sm" icon={ChevronRight} label="Next month" noTooltip onClick={() => setMonth(addMonths(month, 1))} />
         </div>
       </div>
-      <div className="emp-cal-grid" role="grid" aria-label={fmt(month, "MMMM yyyy")} ref={gridRef} onKeyDown={onKey}>
+      <div key={monthKey} className="emp-cal-grid" data-dir={dir.current || undefined} role="grid" aria-label={fmt(month, "MMMM yyyy")} ref={gridRef} onKeyDown={onKey}>
         {dow.map((d, i) => (
           <span key={i} className="emp-cal-dow" role="columnheader">
             {d}
@@ -153,7 +161,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", label
             type="button"
             id={ids.id}
             aria-describedby={ids.describedBy}
-            className={cn("emp-input emp-select-trigger", className)}
+            className={cn("emp-input emp-select-trigger slab", className)}
             data-size={size === "md" ? undefined : size}
             data-invalid={ids.invalid ? "" : undefined}
             data-disabled={disabled ? "" : undefined}
@@ -167,7 +175,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", label
         )}
       </RP.Trigger>
       <RP.Portal>
-        <RP.Content className="emp-popover emp-pop" align="start" sideOffset={6} collisionPadding={8} style={{ ...z, padding: 10 }}>
+        <RP.Content className="emp-popover emp-pop" data-opaque={z ? "" : undefined} align="start" sideOffset={6} collisionPadding={8} style={{ ...z, padding: 10 }}>
           <div className="emp-input" data-size="sm" style={{ marginBottom: 10 }}>
             <input
               autoFocus

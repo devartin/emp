@@ -28,7 +28,7 @@ export function Connect({ step, value, onChange }: StepProps) {
         ))}
       </div>
       {current === "google" ? (
-        <div className="la-connect">
+        <div className="la-connect well" data-static="">
           {account ? (
             <>
               <CalendarCheck size={16} className="text-gain-text" aria-hidden />
@@ -43,7 +43,7 @@ export function Connect({ step, value, onChange }: StepProps) {
         </div>
       ) : null}
       {current === "keys" ? (
-        <div className="la-connect">
+        <div className="la-connect well" data-static="">
           <KeyRound size={16} className="text-tertiary" aria-hidden />
           <span className="flex-1 text-body-sm text-secondary">Keys are stored encrypted and only sent to their provider.</span>
           <Button size="sm" variant="secondary" onClick={() => setKeysOpen(true)}>Add keys</Button>

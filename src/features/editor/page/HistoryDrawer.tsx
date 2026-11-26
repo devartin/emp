@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/backend';
 import type { Id, TipTapDoc, VersionMeta } from '@/backend/types';
 import { cn } from '@/lib/cn';
+import { spring } from '@/ui/motion/tokens';
 import { formatBytes } from '@/lib/format';
 import { formatDayLabel, formatTime } from '@/lib/dates';
 import { notify } from '@/stores/toasts';
@@ -173,7 +174,7 @@ export function HistoryDrawer({ open, onOpenChange, pageId, workspaceId, title, 
                     className={cn('emp-history-item', v.id === selected && 'is-active')}
                     onClick={() => setSelected(v.id)}
                   >
-                    {v.id === selected ? <m.span layoutId="history-hl" className="emp-history-hl" transition={{ type: 'spring', stiffness: 500, damping: 40 }} /> : null}
+                    {v.id === selected ? <m.span layoutId="history-hl" className="emp-history-hl" transition={spring.glide} /> : null}
                     <span className="emp-history-time">{formatTime(v.createdAt)}</span>
                     <span className="emp-history-meta">
                       <span className="emp-history-reason">{v.label || REASON[v.reason] || 'Version'}</span>

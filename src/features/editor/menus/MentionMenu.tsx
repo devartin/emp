@@ -3,7 +3,6 @@
  * ("today", "next fri", "Dec 3 3pm", "in 2 weeks"), and "Create page 'x'" for `[[`.
  */
 import type { Editor } from '@tiptap/core';
-import { m } from 'motion/react';
 import { Calendar, CornerDownLeft, FileText, Plus } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/backend';
@@ -11,13 +10,13 @@ import type { DateValue, Icon, SearchHit } from '@/backend/types';
 import { cn } from '@/lib/cn';
 import { formatDateValue, isoDay } from '@/lib/dates';
 import { parseNatural } from '@/lib/nlp';
-import { spring } from '@/ui/motion/tokens';
 import { useTree } from '@/stores/tree';
 import { useWorkspace } from '@/stores/workspace';
 import { currentBlock, isEmptyParagraph } from '../lib/blocks';
 import { editorContext } from '../lib/context';
 import { createSubPage, insertAtom, insertDateMention, insertPageMention } from '../lib/editorCommands';
 import { closeSuggest, consumeSuggest, registerSuggestKeys, type SuggestState } from '../extensions/suggest';
+import { GlideHighlight } from '@/ui/GlideHighlight';
 import { Floating } from './Floating';
 
 interface Row {
@@ -186,6 +185,7 @@ export function MentionMenu({ editor, state }: { editor: Editor; state: SuggestS
   return (
     <Floating open anchor={anchor} context={view.dom} passive className="emp-slash emp-mention-menu" role="listbox" ariaLabel={pagelink ? 'Link to page' : 'Mention'} maxHeight={360}>
       <div className="emp-slash-list" onMouseMove={() => (lastInput.current = 'mouse')}>
+        <GlideHighlight selector='[aria-selected="true"]' tone="slab" attributes={['aria-selected']} />
         {hits === null ? <div className="emp-slash-empty">Searching…</div> : null}
         {hits !== null && !rows.length ? <div className="emp-slash-empty">No matches</div> : null}
         {rows.map((r, i) => {
@@ -202,7 +202,6 @@ export function MentionMenu({ editor, state }: { editor: Editor; state: SuggestS
                 onMouseEnter={() => lastInput.current === 'mouse' && setActive(i)}
                 onClick={() => r.run()}
               >
-                {i === active ? <m.span layoutId={`mention-hl-${editor.instanceId}`} className="emp-slash-hl" transition={spring.snappy} /> : null}
                 <span className="emp-mention-item-icon">{r.icon}</span>
                 <span className="emp-mention-item-text">
                   <span className="emp-mention-item-title">{r.title}</span>

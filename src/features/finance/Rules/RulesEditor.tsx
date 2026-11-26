@@ -19,8 +19,8 @@ import { Sheet } from "@/ui/Sheet";
 import { Skeleton } from "@/ui/Skeleton";
 import { Switch } from "@/ui/Switch";
 import { spring } from "@/ui/motion/tokens";
-import { useAsync } from "../shared/hooks";
-import { Glyph, Quiet } from "../shared/ui";
+import { useAsync, useFlip } from "../shared/hooks";
+import { disclose, Glyph, Quiet } from "../shared/ui";
 import { useLedgerCtx } from "../MoneyHQ/ledger";
 
 const FIELDS: { value: RuleCondition["field"]; label: string; kind: "text" | "number" | "account" }[] = [
@@ -56,6 +56,10 @@ export default function RulesEditor({ instanceId, open, onOpenChange }: { instan
   const rules = useAsync(() => api.finance.rulesList({ instanceId }), [instanceId]);
   const [sel, setSel] = useState<Id | "new" | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  // adding/removing a condition: the rest of the form glides instead of the row animating its height
+  const nConds = draft?.when.all.length ?? 0;
+  const condRef = useFlip<HTMLDivElement>(nConds);
+  const formRef = useFlip<HTMLDivElement>(nConds);
   const [dry, setDry] = useState<{ changed: number; sample: { rowId: Id; from?: string; to: string }[] } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const list = useMemo(() => (rules.data ?? []).slice().sort((a, b) => a.priority - b.priority), [rules.data]);
@@ -195,14 +199,14 @@ export default function RulesEditor({ instanceId, open, onOpenChange }: { instan
           {!draft ? (
             <Quiet icon={ListFilter} title="No rule selected" body="Pick a rule on the left, or create one." />
           ) : (
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-5" ref={formRef}>
               <Input label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
               <div>
                 <div className="fh-rules-h">When all of these match</div>
-                <div className="flex flex-col gap-2">
-                  <AnimatePresence initial={false}>
+                <div className="flex flex-col gap-2" ref={condRef}>
+                  <AnimatePresence initial={false} mode="popLayout">
                     {draft.when.all.map((c, i) => (
-                      <m.div key={i} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.16 }}>
+                      <m.div key={i} {...disclose}>
                         <Condition
                           c={c}
                           accounts={l.accounts.map((a) => ({ value: a.id, label: a.name }))}

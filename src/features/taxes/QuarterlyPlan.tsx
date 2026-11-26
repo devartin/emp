@@ -4,12 +4,14 @@
  */
 import { CalendarCheck, Check, Clock, Info } from "lucide-react";
 import { m } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/backend";
 import type { QuarterlyPlan as Plan } from "@/backend/types";
 import { cn } from "@/lib/cn";
 import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
+import { spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Dialog } from "@/ui/Dialog";
 import { Input } from "@/ui/Input";
 import { MoneyField } from "@/ui/MoneyField";
@@ -43,6 +45,20 @@ export default function QuarterlyPlan() {
   const p = tx.profile;
   const plan = useQuarterly();
   const [recording, setRecording] = useState<{ period: string; suggested: string } | null>(null);
+  // S8-lite: a quarter that becomes paid while you watch gets the ring sweep + check pop (no particles)
+  const paidNow = (plan.data?.due ?? []).filter((d) => d.status === "paid").map((d) => d.period);
+  const seenPaid = useRef<Set<string> | null>(null);
+  const fresh = new Set<string>();
+  if (seenPaid.current) for (const k of paidNow) if (!seenPaid.current.has(k)) fresh.add(k);
+  useEffect(() => {
+    if (plan.data) seenPaid.current = new Set(paidNow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paidNow.join("|"), !!plan.data]);
+  const [freshKeep, setFreshKeep] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (fresh.size) setFreshKeep((f) => new Set([...f, ...fresh]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [[...fresh].join("|")]);
   if (!p) return <Skeleton height={360} radius={14} />;
   const method = METHODS.find((x) => x.value === p.method) ?? METHODS[0];
   const next = plan.data?.due.find((d) => d.status !== "paid" && d.date >= todayIso());
@@ -75,7 +91,7 @@ export default function QuarterlyPlan() {
               const isPaid = d.status === "paid";
               return (
                 <m.div key={d.period} className={cn("tx-q", isPaid && "is-paid")} data-status={d.status} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, type: "spring", stiffness: 260, damping: 30 }}>
-                  <div className="tx-q-dot">{isPaid ? <Check size={12} strokeWidth={3} /> : d.status === "late" ? "!" : i + 1}</div>
+                  <div className="tx-q-dot">{isPaid ? <PaidMark fresh={freshKeep.has(d.period) || fresh.has(d.period)} /> : d.status === "late" ? "!" : i + 1}</div>
                   <div className="text-body font-semibold">{d.period}</div>
                   <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>Due {dayLabel(d.date, true)}</div>
                   <div className="tabular mt-2" style={{ fontSize: 18, fontWeight: 620 }}>
@@ -111,6 +127,22 @@ export default function QuarterlyPlan() {
       </div>
       {recording ? <RecordDialog period={recording.period} suggested={recording.suggested} onClose={() => setRecording(null)} /> : null}
     </div>
+  );
+}
+
+/** The paid mark: the ring sweeps closed on `settle`, then the check pops with --glow-gain (fresh only). */
+function PaidMark({ fresh }: { fresh: boolean }) {
+  const reduced = useReducedMotionPref();
+  const anim = fresh && !reduced;
+  return (
+    <span className="tx-paid" data-fresh={anim ? "" : undefined}>
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden>
+        <m.circle cx="14" cy="14" r="12.5" fill="none" strokeWidth="3" strokeLinecap="round" style={{ stroke: "var(--gain)", rotate: -90, originX: "50%", originY: "50%" }} initial={anim ? { pathLength: 0 } : false} animate={{ pathLength: 1 }} transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }} />
+      </svg>
+      <m.span className="tx-paid-check" initial={anim ? { scale: 0.2, opacity: 0 } : false} animate={{ scale: 1, opacity: 1 }} transition={{ ...spring.pop, delay: anim ? 0.42 : 0 }}>
+        <Check size={12} strokeWidth={3} />
+      </m.span>
+    </span>
   );
 }
 

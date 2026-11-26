@@ -750,3 +750,420 @@ body.edb-dragging * { cursor: grabbing !important; }
 .edb-check-path { stroke-dasharray: 12; stroke-dashoffset: 0; animation: edb-check-draw 180ms var(--ease-out) both; }
 @keyframes edb-check-draw { from { stroke-dashoffset: 12; } to { stroke-dashoffset: 0; } }
 :root[data-motion="reduced"] .edb-check-path { animation: none; }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════════════
+ * Design Language v2 "Slab" (docs/DESIGN.md §8.2, S14, S21). Overrides the v1 skin above:
+ *   toolbar = ghost keycaps that latch into tag chips · inputs = wells · headers on a groove baseline ·
+ *   rows = flat with a ghost plate (never raised) · board/gallery cards = machined plates that lift ·
+ *   board lanes = shallow wells · landing slot = recessed · overlays = glass.
+ * Transform / opacity / filter only; travel collapses under reduced motion.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── bar: tabs + toolbar sit on an engraved baseline */
+.edb-bar { box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark); }
+.edb-body-host { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-x: clip; }
+.edb-root.is-inline .edb-body-host { flex: none; }
+
+/* ── toolbar keys */
+.edb-toolbar { gap: 3px; padding-bottom: 2px; }
+.edb-tool.slab {
+  --edge: 1.5px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 7px;
+  background: transparent;
+  transition: transform var(--dur-release) var(--spring-release), color var(--dur-fast) var(--ease-out);
+}
+.edb-tool.slab-ghost { --fg: var(--text-tertiary); }
+.edb-tool.slab-ghost:hover { --fg: var(--text-primary); }
+.edb-tool.slab:hover { background: transparent; }
+[data-state="open"] > .edb-tool.slab-ghost { --fg: var(--text-primary); }
+[data-state="open"] > .edb-tool.slab-ghost::after { opacity: 1; transform: scale(1); background: var(--ghost-press); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12); }
+.edb-tool.slab svg { transition: transform var(--dur-release) var(--spring-release); }
+.edb-tool.slab-ghost:hover svg { transform: translateY(-0.5px) scale(1.06); }
+/* active → a tag keycap latched half-down: label + rolling count on a lit pip */
+.edb-tool.edb-tool-chip { --fg: var(--text-primary); padding: 0 6px 0 8px; gap: 5px; background: transparent; animation: edb2-chip-in var(--dur-pop) var(--spring-pop) backwards; }
+.edb-tool.edb-tool-chip.is-active,
+.edb-tool.edb-tool-chip.is-active:hover { background: transparent; color: var(--fg); }
+.edb-tool.edb-tool-chip svg { color: var(--text-secondary); }
+@keyframes edb2-chip-in { from { transform: scale(0.9); } }
+.edb-tool-label { font-weight: 550; }
+.edb-tool-count {
+  height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
+  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
+  color: var(--lit-fg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 0 rgba(0, 0, 0, 0.18);
+  font-variant-numeric: tabular-nums;
+}
+.edb-search.is-open .edb-tool.slab { --fg: var(--text-primary); }
+/* search open/close (DESIGN §1.6): keys sit in FLIP slots that glide; the field is full width from frame one and wipes
+   open with clip-path. The toolbar is the positioning context for the field while it pops out of flow on close. */
+.edb-toolbar { position: relative; }
+.edb-tool-slot { display: inline-flex; align-items: center; flex: none; }
+.edb-search-field { flex: none; }
+.edb-search-field { margin-left: 2px; border-radius: 7px; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim); }
+.edb-search-field input { padding-left: 8px; }
+.edb-search-field:focus-within { box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 3px var(--ring-halo); }
+.edb-search-clear { background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b)); box-shadow: inset 0 0 0 1px var(--slab-s-rim), 0 1px 0 var(--slab-s-side-b); }
+.edb-new { margin-left: 8px; }
+:root[data-motion="reduced"] .edb-tool.edb-tool-chip { animation: none; }
+
+/* ── panels: inputs are wells, nested filter groups are wells, sort rows are little plates */
+.edb-input,
+textarea.edb-input,
+.edb-f-value-btn,
+.edb-cur-select {
+  border: 0 !important;
+  background: var(--well-bg) !important;
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  transition: box-shadow 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+.edb-input:hover, .edb-f-value-btn:hover { box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px color-mix(in oklab, var(--well-rim), var(--text-primary) 12%), 0 1px 0 var(--well-lip); }
+.edb-input:focus,
+.edb-f-value-btn:focus-visible {
+  background: color-mix(in oklab, var(--well-bg), var(--panel-top) 55%) !important;
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+}
+.edb-f-group.is-nested { border: 0; background: color-mix(in oklab, var(--well-bg) 70%, transparent); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim); border-radius: 10px; }
+.edb-f-group.is-nested[data-depth="2"] { background: var(--well-bg); }
+.edb-f-line { animation: edb2-rise 240ms var(--ease-out) backwards; }
+.edb-f-foot, .edb-date-opts, .edb-date-foot, .edb-chart-toggles { border-top: 0; box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite); padding-top: 8px; }
+.edb-f-add { position: relative; isolation: isolate; background: transparent !important; transition: color var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.edb-f-add::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--ghost-hover); opacity: 0; transform: scale(0.92); transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+.edb-f-add:hover::before { opacity: 1; transform: none; transition-duration: 140ms; }
+.edb-f-add[data-destructive]:hover::before { background: var(--loss-soft); }
+.edb-f-add:active { transform: scale(0.97); transition: transform var(--dur-press) var(--ease-press); }
+.edb-f-add svg { transition: transform var(--dur-release) var(--spring-release); }
+.edb-f-add:hover svg.lucide-plus { transform: rotate(90deg); }
+.edb-sort-row {
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), 0 1px 2px rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  padding: 3px;
+}
+.edb-props-row { background: transparent; transition: background var(--dur-fast) var(--ease-out); }
+.edb-props-row:hover { background: var(--ghost-hover); }
+.edb-props-row[style*="transform"] { background: linear-gradient(180deg, var(--panel-top), var(--panel-bot)); box-shadow: inset 0 0 0 1px var(--panel-rim), var(--panel-raise); z-index: 2; }
+/* layout picker: raised plates that latch */
+.edb-layout-card {
+  border: 0;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), 0 1px 0 var(--slab-s-side-b), 0 2px 4px -2px var(--slab-s-contact);
+  transition: transform var(--dur-release) var(--spring-release), color var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
+}
+.edb-layout-card svg { transition: transform var(--dur-release) var(--spring-release); }
+.edb-layout-card:hover { transform: translateY(-1px); color: var(--text-primary); }
+.edb-layout-card:hover svg { transform: scale(1.08); }
+.edb-layout-card:active { transform: translateY(1px); transition: transform var(--dur-press) var(--ease-press); }
+.edb-layout-card[data-on] {
+  transform: translateY(1px);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12), inset 0 0 0 1.5px var(--ring);
+}
+.edb-quick {
+  border: 0;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 1.5px 0 var(--slab-s-side-b), 0 2px 3px -1px var(--slab-s-contact);
+  transition: transform var(--dur-release) var(--spring-release), color var(--dur-fast) var(--ease-out);
+}
+.edb-quick:hover { transform: translateY(-1px); color: var(--text-primary); }
+.edb-quick:active { transform: translateY(1px); transition: transform var(--dur-press) var(--ease-press); }
+.edb-quick[data-on] { transform: translateY(1px); background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b)); color: var(--text-primary); filter: var(--slab-s-press); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 0 0 1px var(--slab-s-rim); }
+.edb-picker-input { background: var(--well-bg); border-bottom: 0; box-shadow: inset 0 1px 2px var(--well-in), inset 0 -1px 0 var(--well-rim); }
+.edb-picker-item.is-hi { background: var(--ghost-hover); box-shadow: inset 0 0 0 1px var(--panel-rim); }
+.edb-type-item.is-hi { background: var(--ghost-hover); }
+.edb-prop-head-icon { border: 0; background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b)); box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 1.5px 0 var(--slab-s-side-b); }
+.edb-fx-summary, .edb-fx-code { border: 0; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
+.edb-fx-code:focus-within { border: 0; box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo); }
+.edb-fx-code.is-error:focus-within { box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--loss), 0 0 0 4px color-mix(in oklab, var(--loss) 16%, transparent); }
+.edb-fx-status > * { animation: edb2-rise 240ms var(--ease-out) backwards; }
+.edb-fx-example { border: 0; background: linear-gradient(180deg, var(--panel-top), var(--panel-bot)); box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), 0 1px 2px rgba(0, 0, 0, 0.05); transition: transform var(--dur-release) var(--spring-release); }
+.edb-fx-example:hover { transform: translateY(-1px); background: linear-gradient(180deg, var(--panel-top), var(--panel-bot)); }
+.edb-fx-example:active { transform: translateY(0) scale(0.99); transition: transform var(--dur-press) var(--ease-press); }
+.edb-fx-doc { background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim); }
+.edb-fx-preview { border: 0; box-shadow: inset 0 0 0 1px var(--panel-rim); }
+.edb-fx-side { border-left: 0; box-shadow: inset 2px 0 0 transparent, inset 1px 0 0 var(--groove-dark), inset 2px 0 0 var(--groove-lite); }
+@keyframes edb2-rise { from { opacity: 0; transform: translateY(4px); } }
+
+/* ── table: headers on a groove baseline; rows flat with a ghost plate (§8.2: never raised) */
+.edb-thead { box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark); }
+.edb-thead.is-scrolled { box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark), 0 8px 12px -10px rgba(var(--ink), 0.22); }
+.edb-th { border-right-color: color-mix(in oklab, var(--border-subtle) 70%, transparent); }
+.edb-th:hover { background: color-mix(in oklab, var(--text-primary) 4%, var(--bg-canvas)); }
+.edb-th svg { transition: transform var(--dur-release) var(--spring-release), color var(--dur-fast) var(--ease-out); }
+.edb-th:hover svg { color: var(--text-secondary); }
+.edb-th-sort { display: inline-flex; animation: edb2-sort-in var(--dur-pop) var(--spring-pop) backwards; }
+@keyframes edb2-sort-in { from { opacity: 0; transform: translateY(-4px); } }
+.edb-col-drop { box-shadow: 0 0 10px color-mix(in oklab, var(--accent-solid) 40%, transparent); }
+.edb-col-drop::before { background: linear-gradient(180deg, var(--lit-b), var(--lit-a)); }
+.edb-col-ghost {
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), var(--panel-raise);
+  transform: rotate(-1.5deg) scale(1.03);
+}
+.edb-td { border-right-color: color-mix(in oklab, var(--border-subtle) 70%, transparent); }
+.edb-tr:hover > .edb-td,
+.edb-tr:hover > .edb-gutter { background-color: color-mix(in oklab, var(--text-primary) 3%, var(--bg-canvas)); }
+.edb-tr.is-selected > .edb-td,
+.edb-tr.is-selected > .edb-gutter { background-color: color-mix(in oklab, var(--accent-solid) 8%, var(--bg-canvas)); }
+.edb-td[data-active] { box-shadow: inset 0 0 0 1.5px var(--ring), inset 0 0 0 4px var(--ring-halo); border-radius: 4px; animation: edb2-active-in 160ms var(--ease-out); }
+@keyframes edb2-active-in { from { opacity: 0.6; } }
+.edb-drag { transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast), transform var(--dur-release) var(--spring-release); }
+.edb-drag:hover { background: var(--ghost-hover); transform: scale(1.08); }
+.edb-tr[data-drop="above"]::before,
+.edb-tr[data-drop="below"]::after { box-shadow: 0 0 10px color-mix(in oklab, var(--accent-solid) 40%, transparent); }
+/* the "Open" pill is a mini keycap that slides in */
+.edb-open { transform: translateX(-4px); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.edb-tr:hover .edb-open { transform: none; }
+.edb-open-btn {
+  border: 0;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 1.5px 0 var(--slab-s-side-b), 0 2px 3px -1px var(--slab-s-contact);
+  transition: transform var(--dur-release) var(--spring-release), color var(--dur-fast) var(--ease-out);
+  margin-bottom: 1.5px;
+}
+.edb-open-btn:hover { transform: translateY(-1px); color: var(--text-primary); }
+.edb-open-btn:active { transform: translateY(1.5px); filter: var(--slab-s-press); box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim); transition: transform var(--dur-press) var(--ease-press); }
+.edb-tnew { position: relative; transition: color var(--dur-fast) var(--ease-out); }
+.edb-tnew:hover { background: color-mix(in oklab, var(--text-primary) 3%, var(--bg-canvas)); }
+.edb-tnew svg { transition: transform var(--dur-release) var(--spring-release); }
+.edb-tnew:hover svg { transform: rotate(90deg); }
+/* footer calculations: groove top; values roll (RollText) */
+.edb-tfoot { box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite); }
+.edb-tf { transition: background-color var(--dur-fast) var(--ease-out); }
+.edb-tf:hover { background: color-mix(in oklab, var(--text-primary) 3.5%, var(--bg-canvas)); }
+.edb-tf-hint { color: var(--text-disabled); font-size: 11.5px; opacity: 0; transform: translateY(2px); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.edb-tfoot:hover .edb-tf-hint { opacity: 1; transform: none; }
+.edb-tf-value .emp-roll { font-variant-numeric: tabular-nums; }
+/* bulk bar: glass-1 rising from the bottom */
+.edb-bulk {
+  background: linear-gradient(180deg, var(--glass-fill-a), var(--glass-fill-b));
+  box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-1-shadow);
+  -webkit-backdrop-filter: var(--glass-blur-1);
+  backdrop-filter: var(--glass-blur-1);
+  border-radius: 14px;
+  padding: 5px 5px 7px 14px;
+}
+:root:is([data-effects="reduced"], [data-contrast="more"]) .edb-bulk { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.edb-bulk-sep { width: 2px; background: linear-gradient(90deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px); }
+/* groups */
+.edb-group-toggle { position: relative; isolation: isolate; background: transparent !important; transition: transform var(--dur-release) var(--spring-release); }
+.edb-group-toggle::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--ghost-hover); opacity: 0; transform: scale(0.94); transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+.edb-group-toggle:hover::before { opacity: 1; transform: none; transition-duration: 140ms; }
+.edb-group-toggle:active { transform: scale(0.98); transition: transform var(--dur-press) var(--ease-press); }
+.edb-group-rows { border-top: 0; box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite); padding-top: 2px; }
+.edb-group-count { font-variant-numeric: tabular-nums; }
+
+/* ── cells: progress fills are lit grooves, checkboxes are the kit's */
+.edb-progress-track { height: 5px; background: var(--well-bg); box-shadow: inset 0 1px 1px var(--well-in), inset 0 0 0 1px var(--well-rim); }
+.edb-progress-fill { background: linear-gradient(180deg, var(--lit-b), var(--lit-a)); border-radius: inherit; }
+.edb-progress-fill[data-done] { background: linear-gradient(180deg, color-mix(in oklab, var(--gain) 80%, white), var(--gain)); }
+.edb-bool { border: 0; background: var(--well-bg); box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim-state); }
+.edb-bool[data-on] { background: linear-gradient(180deg, var(--lit-b), var(--lit-a)); color: var(--lit-fg); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 0 rgba(0, 0, 0, 0.2); }
+.edb-ticker-sym { background: var(--well-bg); box-shadow: inset 0 1px 1px var(--well-in), inset 0 0 0 1px var(--well-rim); }
+.edb-code { background: var(--well-bg); box-shadow: inset 0 1px 1px var(--well-in), inset 0 0 0 1px var(--well-rim); }
+.edb-rating[role="radiogroup"] .edb-rating-star { transition: color var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.edb-rating[role="radiogroup"] .edb-rating-star:hover { transform: translateY(-1px) scale(1.18); }
+.edb-rating-star[data-on] svg { animation: edb2-star var(--dur-pop) var(--spring-pop) backwards; }
+@keyframes edb2-star { from { transform: scale(0.6); } }
+
+/* ── cell editors */
+.edb-editor-overlay {
+  background: var(--glass-solid);
+  box-shadow: inset 0 0 0 1.5px var(--ring), 0 0 0 4px var(--ring-halo), var(--glass-1-shadow);
+  border-radius: 6px;
+  animation: edb2-editor-in 160ms var(--ease-out) backwards;
+}
+@keyframes edb2-editor-in { from { opacity: 0; transform: scale(0.985); } }
+.edb-editor-pop { background: var(--glass-solid); box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-1-shadow); border-radius: 12px; }
+
+/* ── board: lanes are shallow wells; cards are machined plates (S14) */
+.edb-board { gap: 14px; }
+.edb-col {
+  background: color-mix(in oklab, var(--well-bg) 62%, transparent);
+  box-shadow: inset 0 1px 2px color-mix(in oklab, var(--well-in) 70%, transparent), inset 0 0 0 1px color-mix(in oklab, var(--well-rim) 70%, transparent);
+  border-radius: 14px;
+  padding: 0 7px 8px;
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+.edb-col.is-target {
+  background: color-mix(in oklab, var(--well-bg) 85%, var(--accent-solid) 4%);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1.5px color-mix(in oklab, var(--ring) 45%, transparent);
+}
+.edb-col-head { height: 40px; padding: 0 3px; }
+.edb-col-body { gap: 8px; }
+.edb-col-action { transform: translateY(2px); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.edb-col-head:hover .edb-col-action, .edb-col-action[data-state="open"] { transform: none; }
+.edb-col-new { position: relative; isolation: isolate; background: transparent !important; transition: color var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.edb-col-new::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: color-mix(in oklab, var(--panel-top) 60%, transparent); box-shadow: inset 0 0 0 1px var(--panel-rim); opacity: 0; transition: opacity var(--dur-base) var(--ease-out); }
+.edb-col-new:hover::before { opacity: 1; transition-duration: 140ms; }
+.edb-col-new:active { transform: scale(0.98); transition: transform var(--dur-press) var(--ease-press); }
+.edb-col-new svg { transition: transform var(--dur-release) var(--spring-release); }
+.edb-col-new:hover svg { transform: rotate(90deg); }
+.edb-folded {
+  border: 0;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), 0 1px 0 var(--slab-s-side-b), 0 2px 4px -2px var(--slab-s-contact);
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.edb-folded:hover { transform: translateY(-1px); }
+.edb-folded:active { transform: translateY(1px); transition: transform var(--dur-press) var(--ease-press); }
+/* the landing slot: recessed where the card will settle */
+.edb-card-ph {
+  border-radius: 12px;
+  background: var(--well-bg);
+  box-shadow: inset 0 2px 4px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  transform-origin: 50% 0;
+}
+
+/* cards */
+.edb-card {
+  --lift: 0px;
+  --press: 1;
+  isolation: isolate;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 -1px 0 var(--panel-lo), inset 0 0 0 1px var(--panel-rim), 0 1px 1px rgba(16, 16, 24, 0.03), 0 2px 6px -2px rgba(16, 16, 24, 0.08);
+  transform: translateY(var(--lift)) scale(var(--press));
+  transition: transform var(--dur-release) var(--spring-release);
+  /* the raise shadow lives on ::after outside the box, so the card can't clip; the preview clips itself */
+  overflow: visible;
+}
+.edb-card-preview { overflow: hidden; }
+:root:is([data-theme="dark"], [data-theme="midnight"]) .edb-card { box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 -1px 0 var(--panel-lo), inset 0 0 0 1px var(--panel-rim), 0 0 0 1px rgba(0, 0, 0, 0.4), 0 3px 8px -3px rgba(0, 0, 0, 0.5); }
+.edb-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 3;
+  background: url("../../styles/grain.png") 0 0 / 180px;
+  mix-blend-mode: var(--grain-blend);
+  opacity: var(--grain-op);
+}
+:root:is([data-effects="reduced"], [data-contrast="more"]) .edb-card::before { display: none; }
+.edb-card::after { box-shadow: var(--panel-raise); z-index: -1; transition: opacity 220ms var(--ease-out); }
+.edb-card:hover { --lift: -2px; transform: translateY(var(--lift)) scale(var(--press)); transition: transform 220ms var(--ease-out); }
+.edb-card:active { --lift: 0px; --press: 0.99; transition: transform var(--dur-press) var(--ease-press); }
+.edb-card:active::after { opacity: 0; }
+.edb-card:focus-visible { box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), 0 0 0 2px var(--bg-canvas), 0 0 0 3.5px var(--ring); }
+.edb-card-preview { border-bottom: 0; box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark); border-radius: 12px 12px 0 0; }
+.edb-card-preview.is-fit { background: var(--well-bg); }
+.edb-card.is-gallery .edb-card-preview.is-fit { background: radial-gradient(120% 90% at 50% 0%, var(--panel-top), var(--well-bg)); }
+.edb-card-preview.is-fit .edb-card-img { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.18)) drop-shadow(0 10px 14px rgba(var(--ink), 0.22)); transition: transform 700ms var(--ease-out-expo), filter 700ms var(--ease-out-expo); }
+.edb-card:hover .edb-card-preview.is-fit .edb-card-img { transform: translateY(-3px) scale(1.025); filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.18)) drop-shadow(0 16px 18px rgba(var(--ink), 0.26)); }
+:root[data-effects="reduced"] .edb-card-preview.is-fit .edb-card-img { filter: none; }
+.edb-card-preview.is-text { background: linear-gradient(180deg, var(--panel-top), var(--panel-bot)); }
+.edb-card-new { background: transparent; border: 0; box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--well-rim) 120%, transparent); }
+.edb-card-new::before { display: none; }
+.edb-card-new:hover { background: color-mix(in oklab, var(--well-bg) 70%, transparent); border: 0; box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim); }
+.edb-card-new svg { transition: transform var(--dur-release) var(--spring-release); }
+.edb-card-new:hover svg { transform: rotate(90deg); }
+:root[data-motion="reduced"] .edb-card { transition: none; --lift: 0px !important; }
+:root[data-motion="reduced"] .edb-card:hover .edb-card-preview.is-fit .edb-card-img { transform: none; }
+
+/* the lifted card while dragging (S14): raised plate shadow, grabbing; the drop lands with a squash (JS) */
+.edb-drag-ghost .edb-card {
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), var(--panel-raise);
+  transform: none;
+  transition: none;
+}
+.edb-drag-ghost .edb-card::after { opacity: 0; }
+.edb-drag-ghost[data-dropping] .edb-card { box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), var(--panel-shadow); transition: box-shadow 0ms; }
+
+/* ── gallery */
+.edb-gallery { gap: 18px; }
+
+/* ── list */
+.edb-li { position: relative; isolation: isolate; border-radius: 10px; background: transparent !important; transition: transform var(--dur-release) var(--spring-release); }
+.edb-li::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--ghost-hover); opacity: 0; transform: scale(0.985); transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+.edb-li:hover::before { opacity: 1; transform: none; transition-duration: 120ms; }
+.edb-li:active { transform: scale(0.995); transition: transform var(--dur-press) var(--ease-press); }
+.edb-li-title { transition: transform var(--dur-release) var(--spring-release); }
+.edb-li:hover .edb-li-title { transform: translateX(2px); }
+:root[data-motion="reduced"] :is(.edb-li, .edb-li-title) { transform: none !important; }
+
+/* ── calendar: groove grid; the today pip is a primary mini-slab; events are tinted plates that lift */
+.edb-cal { border: 0; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--panel-rim), var(--panel-shadow); background: linear-gradient(180deg, var(--panel-top), var(--panel-bot)); }
+.edb-cal-dows { border-bottom: 0; box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark); }
+.edb-cal-week + .edb-cal-week { border-top-color: color-mix(in oklab, var(--border-subtle) 75%, transparent); }
+.edb-cal-day + .edb-cal-day { border-left-color: color-mix(in oklab, var(--border-subtle) 75%, transparent); }
+.edb-cal-day.is-weekend { background: color-mix(in oklab, var(--well-bg) 55%, transparent); }
+.edb-cal-day.is-drop { background: var(--well-bg); box-shadow: inset 0 2px 4px var(--well-in), inset 0 0 0 1.5px color-mix(in oklab, var(--ring) 45%, transparent); }
+.edb-today {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: linear-gradient(180deg, var(--slab-p-face-a), var(--slab-p-face-b));
+  color: var(--slab-p-fg);
+  box-shadow: inset 0 1px 0 var(--slab-p-hl), inset 0 0 0 1px var(--slab-p-rim), 0 1.5px 0 var(--slab-p-side-b), 0 3px 5px -2px var(--slab-p-ambient);
+}
+.edb-cal-add { transition: opacity var(--dur-fast), transform var(--dur-release) var(--spring-release); }
+.edb-cal-add:hover { transform: rotate(90deg); }
+.edb-ev { border-radius: 6px; transition: transform var(--dur-release) var(--spring-release), filter var(--dur-fast) var(--ease-out), opacity var(--dur-fast); }
+.edb-ev:not(.is-colored) { background: linear-gradient(180deg, var(--panel-top), var(--panel-bot)); box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), 0 1px 2px rgba(0, 0, 0, 0.06); }
+.edb-ev.is-colored { box-shadow: inset 0 1px 0 color-mix(in oklab, white 30%, transparent), inset 0 0 0 1px color-mix(in oklab, var(--ev-fg) 14%, transparent); }
+.edb-ev:hover { transform: translateY(-1px); filter: brightness(0.98); }
+:root:is([data-theme="dark"], [data-theme="midnight"]) .edb-ev:hover { filter: brightness(1.15); }
+.edb-ev:active { transform: translateY(0) scale(0.98); transition: transform var(--dur-press) var(--ease-press); }
+.edb-ev-ghost { box-shadow: var(--panel-raise); transform: rotate(-1.5deg) scale(1.04); }
+.edb-cal-month { overflow: hidden; }
+:root[data-motion="reduced"] .edb-ev { transform: none !important; }
+
+/* ── chart: a machined plate */
+.edb-chart-body { border: 0; border-radius: 16px; background: linear-gradient(180deg, var(--panel-top), var(--panel-bot)); box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), var(--panel-shadow); }
+.edb-chart-legend-dot { border-radius: 3px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 0 rgba(0, 0, 0, 0.12); }
+.edb-chart-kpi-value { font-variant-numeric: tabular-nums; }
+
+/* ── empty view */
+.edb-empty-view { border: 0; background: color-mix(in oklab, var(--well-bg) 70%, transparent); box-shadow: inset 0 2px 4px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); border-radius: 16px; }
+
+/* ── row page / peek */
+.edb-rowpage-bar { background: color-mix(in oklab, var(--bg-canvas) 82%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--groove-dark) 60%, transparent); }
+.edb-rowpage.is-peek .edb-rowpage-bar { background: color-mix(in oklab, var(--glass-solid) 82%, transparent); }
+:root:is([data-effects="reduced"], [data-contrast="more"]) .edb-rowpage-bar { background: var(--bg-canvas); -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root:is([data-effects="reduced"], [data-contrast="more"]) .edb-rowpage.is-peek .edb-rowpage-bar { background: var(--glass-solid); }
+.edb-rowpage-db { position: relative; isolation: isolate; background: transparent !important; transition: color var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.edb-rowpage-db::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--ghost-hover); opacity: 0; transform: scale(0.94); transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+.edb-rowpage-db:hover::before { opacity: 1; transform: none; }
+.edb-rowpage-db:active { transform: scale(0.97); transition: transform var(--dur-press) var(--ease-press); }
+.edb-rowpage-icon { filter: drop-shadow(0 6px 10px rgba(16, 16, 24, 0.16)); }
+:root:is([data-theme="dark"], [data-theme="midnight"]) .edb-rowpage-icon { filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5)); }
+.edb-rowpage-divider { height: 2px; background: linear-gradient(180deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px); }
+.edb-rowprop-label { position: relative; isolation: isolate; background: transparent !important; }
+.edb-rowprop-label::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--ghost-hover); opacity: 0; transition: opacity var(--dur-base) var(--ease-out); }
+.edb-rowprop-label:hover::before { opacity: 1; transition-duration: 120ms; }
+/* property values: flat at rest, a well under the pointer / focus (§8.2 "property fields are wells") */
+.edb-rowprop-value { transition: background-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out); }
+.edb-rowprop-value:not(.is-ro):hover { background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim); }
+.edb-rowprop-value:focus-visible { background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo); }
+
+/* ── page header (full-page databases) */
+.edb-page-icon { transition: transform var(--dur-release) var(--spring-release); filter: drop-shadow(0 6px 10px rgba(16, 16, 24, 0.16)); }
+:root:is([data-theme="dark"], [data-theme="midnight"]) .edb-page-icon { filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5)); }
+.edb-page-icon:hover { background: transparent; transform: translateY(-2px) rotate(-3deg); }
+.edb-page-icon:active { transform: scale(0.94); transition: transform var(--dur-press) var(--ease-press); }
+.edb-page-count { padding: 2px 8px; border-radius: 9999px; background: var(--well-bg); box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); font-variant-numeric: tabular-nums; }
+.edb-inline-title { position: relative; isolation: isolate; background: transparent !important; }
+.edb-inline-title::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--ghost-hover); opacity: 0; transition: opacity var(--dur-base) var(--ease-out); }
+.edb-inline-title:hover::before { opacity: 1; transition-duration: 120ms; }
+.edb-inline-open { transform: translate(-2px, 2px); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release); }
+.edb-inline-title:hover .edb-inline-open { transform: none; }
+
+/* ── import / templates */
+.edb-import-grid { border: 0; box-shadow: inset 0 0 0 1px var(--panel-rim); border-radius: 12px; }
+.edb-import-head { background: var(--well-bg); box-shadow: inset 0 -1px 0 var(--well-rim); }
+.edb-import-row { animation: edb2-rise 240ms var(--ease-out) backwards; }
+.edb-tpl-list { border-right: 0; box-shadow: inset -1px 0 0 var(--groove-lite), inset -2px 0 0 var(--groove-dark); }
+.edb-tpl-list .is-sel { background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b)); box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 1.5px 0 var(--slab-s-side-b); }
+.edb-tpl-body > * { animation: edb2-rise 260ms var(--ease-out) backwards; }
+
+/* ── reduced motion: state changes stay, travel goes */
+:root[data-motion="reduced"] :is(.edb-f-line, .edb-fx-status > *, .edb-th-sort, .edb-rating-star[data-on] svg, .edb-editor-overlay, .edb-import-row, .edb-tpl-body > *) { animation: none !important; }
+:root[data-motion="reduced"] :is(.edb-tool, .edb-open, .edb-open-btn, .edb-layout-card, .edb-quick, .edb-folded, .edb-ev, .edb-col-action, .edb-tf-hint, .edb-inline-open, .edb-page-icon) { transition-property: opacity, color, background-color, box-shadow, filter !important; }
+.edb-group-count { display: inline-flex; align-items: center; line-height: 1; }

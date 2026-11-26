@@ -5,14 +5,13 @@
  * Second-level lists: Turn into…, Color…, Linked view (database picker), Move to… (page picker).
  */
 import type { Editor } from '@tiptap/core';
-import { m } from 'motion/react';
 import { ArrowLeft, CornerDownLeft, Database, FileText, Search } from 'lucide-react';
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api } from '@/backend';
 import type { Icon as PageIconT, SearchHit } from '@/backend/types';
 import { cn } from '@/lib/cn';
+import { GlideHighlight } from '@/ui/GlideHighlight';
 import { Kbd } from '@/ui/Kbd';
-import { spring } from '@/ui/motion/tokens';
 import { TURN_INTO, currentTarget } from '../lib/blockTypes';
 import { currentBlock, turnInto } from '../lib/blocks';
 import { insertLinkedDatabase, moveBlocksToPage } from '../lib/editorCommands';
@@ -87,6 +86,13 @@ export function SlashMenu({ editor, state }: { editor: Editor; state: SuggestSta
   const view = editor.view;
   const query = state.query;
   const [sub, setSub] = useState<Sub>(null);
+  // first 320ms after opening (or entering a sub-list): rows rise in with a 16ms stagger (S22)
+  const [opening, setOpening] = useState(true);
+  useEffect(() => {
+    setOpening(true);
+    const t = window.setTimeout(() => setOpening(false), 420);
+    return () => window.clearTimeout(t);
+  }, [sub]);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [active, setActive] = useState(0);
   const lastInput = useRef<'key' | 'mouse'>('key');
@@ -297,7 +303,8 @@ export function SlashMenu({ editor, state }: { editor: Editor; state: SuggestSta
           ) : null}
         </div>
       ) : null}
-      <div className="emp-slash-list" ref={listRef} onMouseMove={() => (lastInput.current = 'mouse')}>
+      <div className="emp-slash-list" ref={listRef} data-opening={opening ? '' : undefined} data-sub={sub ?? undefined} key={sub ?? 'root'} onMouseMove={() => (lastInput.current = 'mouse')}>
+        <GlideHighlight selector='[aria-selected="true"]' tone="slab" attributes={['aria-selected']} />
         {rows.length === 0 ? (
           <div className="emp-slash-empty">{sub === 'linkedDb' ? 'No databases found' : sub === 'moveTo' ? 'No pages found' : 'No results'}</div>
         ) : (
@@ -306,17 +313,17 @@ export function SlashMenu({ editor, state }: { editor: Editor; state: SuggestSta
             lastGroup = r.group;
             return (
               <Fragment key={r.key}>
-                {header ? <div className="emp-menu-header emp-slash-header">{header}</div> : null}
+                {header ? <div className="emp-menu-header emp-slash-header" style={{ '--i': Math.min(i, 12) } as CSSProperties}>{header}</div> : null}
                 <div
                   role="option"
                   aria-selected={i === active}
                   data-index={i}
                   className={cn('emp-slash-item', i === active && 'is-active')}
+                  style={{ '--i': Math.min(i + 1, 12) } as CSSProperties}
                   onMouseDown={(e) => e.preventDefault()}
                   onMouseEnter={() => lastInput.current === 'mouse' && setActive(i)}
                   onClick={() => r.run()}
                 >
-                  {i === active ? <m.span layoutId={`slash-hl-${editor.instanceId}`} className="emp-slash-hl" transition={spring.snappy} /> : null}
                   {r.icon && (r.icon as { type?: unknown }).type === Tile ? r.icon : <Tile>{r.icon}</Tile>}
                   <span className="emp-slash-text">
                     <span className="emp-slash-title">

@@ -5,8 +5,9 @@
  * Month cells ≥ 112px; today is a 22px accent circle; event chips are 20px at radius 4 (§5.11).
  */
 import { CalendarPlus, Check, ChevronLeft, ChevronRight, Download, Ellipsis, Link2, MapPin, RefreshCw, Trash2, Upload } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, m, useMotionValue, type HTMLMotionProps, type MotionValue } from "motion/react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, errorMessage, listen } from "@/backend";
 import type { CalendarEvent, GoogleCalendarInfo, Id, Route } from "@/backend/types";
 import { cn } from "@/lib/cn";
@@ -27,6 +28,7 @@ import { Segmented } from "@/ui/Segmented";
 import { Select } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
 import { Textarea } from "@/ui/Textarea";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { GoogleSetupSheet } from "@/features/integrations/GoogleSetupSheet";
@@ -112,7 +114,160 @@ function useCalendarData(from: Date, to: Date, prefs: CalPrefs) {
       if (t) clearTimeout(t);
     };
   }, [load]);
-  return { events, reload: load };
+  /** Optimistic local edit (drag-to-reschedule); the next load reconciles. */
+  const patch = useCallback((id: Id, next: Partial<CalendarEvent>) => setEvents((list) => list?.map((x) => (x.id === id ? { ...x, ...next } : x)) ?? list), []);
+  return { events, reload: load, patch };
+}
+
+// ───────────────────────────────────────────────────────────────────────────── drag to reschedule (S14)
+
+interface DragTarget {
+  day: string;
+  /** Week view: minutes from midnight of the dragged block's new top (15-minute steps). */
+  minutes?: number;
+}
+interface DragState {
+  e: CalendarEvent;
+  key: string;
+  mode: "month" | "week";
+  w: number;
+  h: number;
+  ox: number;
+  oy: number;
+  from: string;
+  target: DragTarget | null;
+  tilt: number;
+}
+interface DragApi {
+  canDrag: (e: CalendarEvent) => boolean;
+  start: (ev: React.PointerEvent<HTMLElement>, e: CalendarEvent, key: string, mode: "month" | "week", from: string) => void;
+  dragging: string | null;
+  over: string | null;
+  landed: string | null;
+  /** True right after a drag ended: the click that follows must not open the details popover. */
+  consumeClick: () => boolean;
+}
+const DragCtx = createContext<DragApi | null>(null);
+const useDrag = () => useContext(DragCtx);
+
+function useEventDrag(canDrag: (e: CalendarEvent) => boolean, onDrop: (e: CalendarEvent, t: DragTarget) => void) {
+  const [st, setSt] = useState<DragState | null>(null);
+  const [landed, setLanded] = useState<string | null>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const suppress = useRef(false);
+  const lastX = useRef(0);
+  const live = useRef<DragState | null>(null);
+
+  const start = useCallback(
+    (ev: React.PointerEvent<HTMLElement>, e: CalendarEvent, key: string, mode: "month" | "week", from: string) => {
+      if (ev.button !== 0 || !canDrag(e)) return;
+      const el = ev.currentTarget;
+      const r = el.getBoundingClientRect();
+      const sx = ev.clientX;
+      const sy = ev.clientY;
+      let active = false;
+      const pid = ev.pointerId;
+      const targetAt = (cx: number, cy: number, oy: number): DragTarget | null => {
+        const hit = document.elementFromPoint(cx, cy)?.closest<HTMLElement>("[data-day]");
+        if (!hit) return null;
+        const day = hit.dataset.day as string;
+        if (mode === "week" && hit.dataset.col !== undefined) {
+          const top = cy - oy - hit.getBoundingClientRect().top;
+          const minutes = Math.max(0, Math.min(24 * 60 - 15, Math.round(((top / HPX) * 60) / 15) * 15));
+          return { day, minutes };
+        }
+        return { day };
+      };
+      const move = (pe: PointerEvent) => {
+        if (pe.pointerId !== pid) return;
+        if (!active) {
+          if (Math.hypot(pe.clientX - sx, pe.clientY - sy) < 5) return;
+          active = true;
+          suppress.current = true;
+          lastX.current = pe.clientX;
+          x.set(r.left);
+          y.set(r.top);
+          const s0: DragState = { e, key, mode, w: r.width, h: r.height, ox: sx - r.left, oy: sy - r.top, from, target: null, tilt: 0 };
+          live.current = s0;
+          setSt(s0);
+          document.documentElement.style.cursor = "grabbing";
+        }
+        const cur = live.current;
+        if (!cur) return;
+        x.set(pe.clientX - cur.ox);
+        y.set(pe.clientY - cur.oy);
+        const vx = pe.clientX - lastX.current;
+        lastX.current = pe.clientX;
+        const tilt = Math.abs(vx) > 1.5 ? Math.sign(vx) * 1.5 : cur.tilt;
+        const t = targetAt(pe.clientX, pe.clientY, cur.oy);
+        const tKey = t ? `${t.day}|${t.minutes ?? ""}` : "";
+        const cKey = cur.target ? `${cur.target.day}|${cur.target.minutes ?? ""}` : "";
+        if (tKey !== cKey || tilt !== cur.tilt) {
+          const next = { ...cur, target: t, tilt };
+          live.current = next;
+          setSt(next);
+        }
+      };
+      const up = (pe: PointerEvent) => {
+        if (pe.pointerId !== pid) return;
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+        document.documentElement.style.cursor = "";
+        const cur = live.current;
+        live.current = null;
+        setSt(null);
+        if (!active || !cur) return;
+        window.setTimeout(() => (suppress.current = false), 0);
+        const t = cur.target;
+        if (t && pe.type === "pointerup" && (t.day !== cur.from || (t.minutes !== undefined && cur.mode === "week"))) {
+          setLanded(cur.key.split("@")[0]);
+          window.setTimeout(() => setLanded(null), 520);
+          onDrop(cur.e, t);
+        }
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
+    },
+    [canDrag, onDrop, x, y],
+  );
+
+  const api: DragApi = {
+    canDrag,
+    start,
+    dragging: st?.key ?? null,
+    over: st?.target ? st.target.day : null,
+    landed,
+    consumeClick: () => {
+      const s0 = suppress.current;
+      suppress.current = false;
+      return s0;
+    },
+  };
+  return { api, state: st, x, y };
+}
+
+/** The lifted card that follows the pointer while dragging (transform-only; a portal above everything). */
+function DragGhost({ st, x, y }: { st: DragState; x: MotionValue<number>; y: MotionValue<number> }) {
+  const e = st.e;
+  const when =
+    st.target?.minutes !== undefined
+      ? new Date(2026, 0, 1, Math.floor(st.target.minutes / 60), st.target.minutes % 60).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+      : st.target
+        ? parseDay(st.target.day).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+        : null;
+  return createPortal(
+    <m.div className="cal-ghost" style={{ x, y, width: st.w, height: st.h, ...chipStyle(e.color) }} data-mode={st.mode} aria-hidden>
+      <m.div className={cn("cal-ghost-card", e.allDay ? "is-allday" : "is-timed")} initial={{ scale: 1, rotate: 0 }} animate={{ scale: 1.03, rotate: st.tilt }} transition={spring.release}>
+        {!e.allDay && st.mode === "month" ? <span className="cal-chip-dot" /> : null}
+        <span className="truncate">{e.title}</span>
+      </m.div>
+      {when ? <span className="cal-ghost-when tabular">{when}</span> : null}
+    </m.div>,
+    document.body,
+  );
 }
 
 // ───────────────────────────────────────────────────────────────────────────── event chip + details
@@ -219,7 +374,7 @@ function NewEventDialog({ open, onOpenChange, draft, setDraft, onSave, hasLifeOs
       }
     >
       <form
-        className="flex flex-col gap-4"
+        className="relative flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault();
           if (valid) void onSave();
@@ -232,14 +387,23 @@ function NewEventDialog({ open, onOpenChange, draft, setDraft, onSave, hasLifeOs
             <Switch checked={draft.allDay} onCheckedChange={(v) => setDraft({ ...draft, allDay: v })} label="All day" />
           </div>
         </div>
-        <AnimatePresence initial={false}>
+        {/* DESIGN §1.6: the time fields mount at full size and rise in; on removal they pop out of flow while the
+            fields below glide with a layout="position" FLIP. Nothing animates height. */}
+        <AnimatePresence initial={false} mode="popLayout">
           {!draft.allDay ? (
-            <m.div className="grid grid-cols-2 gap-3 overflow-hidden" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}>
+            <m.div
+              key="times"
+              className="grid grid-cols-2 gap-3"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0, transition: { opacity: { duration: 0.16 }, y: spring.settle } }}
+              exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
+            >
               <Input label="Starts" type="time" value={draft.start} onChange={(e) => setDraft({ ...draft, start: e.currentTarget.value })} />
               <Input label="Ends" type="time" value={draft.end} onChange={(e) => setDraft({ ...draft, end: e.currentTarget.value })} error={draft.end <= draft.start ? "Ends before it starts" : undefined} />
             </m.div>
           ) : null}
         </AnimatePresence>
+        <m.div layout="position" transition={spring.layout} className="flex flex-col gap-4">
         <Input label="Location" icon={MapPin} value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.currentTarget.value })} />
         <Textarea label="Notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.currentTarget.value })} minRows={2} maxRows={6} />
         {hasLifeOs ? (
@@ -253,6 +417,7 @@ function NewEventDialog({ open, onOpenChange, draft, setDraft, onSave, hasLifeOs
             ]}
           />
         ) : null}
+        </m.div>
       </form>
     </Dialog>
   );
@@ -314,7 +479,7 @@ export default function CalendarPage() {
     const d = Array.from({ length: 45 }, (_, i) => addDays(cursor, i));
     return { from: d[0], to: d[44], days: d };
   }, [view, cursor, ws0]);
-  const { events, reload } = useCalendarData(from, to, prefsLoaded ? prefs : {});
+  const { events, reload, patch } = useCalendarData(from, to, prefsLoaded ? prefs : {});
   const hidden = new Set(prefs.hidden ?? []);
   const visible = (events ?? []).filter((e) => !hidden.has(sourceKey(e)));
   const byDay = useMemo(() => {
@@ -460,6 +625,55 @@ export default function CalendarPage() {
     }
   };
 
+  // Drag to reschedule: your own Events calendar is editable; Google, ICS and Life OS items stay read-only here.
+  const canDrag = useCallback((e: CalendarEvent) => !!prefs.eventsDb && e.calendarId === prefs.eventsDb && e.link?.t === "row", [prefs.eventsDb]);
+  const moveEvent = useCallback(
+    async (e: CalendarEvent, t: DragTarget) => {
+      if (!prefs.eventsDb || e.link?.t !== "row") return;
+      const rowId = e.link.id;
+      let start: string;
+      let end: string;
+      let value: ReturnType<typeof write.date>;
+      if (e.allDay) {
+        const span = daysOf(e).length - 1;
+        start = t.day;
+        end = span ? dayOf(addDays(parseDay(t.day), span)) : t.day;
+        value = span ? write.date(start, end) : write.date(start);
+      } else {
+        const s0 = new Date(e.start);
+        const dur = Math.max(15 * 60_000, new Date(e.end).getTime() - s0.getTime());
+        const ns = new Date(`${t.day}T00:00:00`);
+        if (t.minutes !== undefined) ns.setHours(Math.floor(t.minutes / 60), t.minutes % 60, 0, 0);
+        else ns.setHours(s0.getHours(), s0.getMinutes(), 0, 0);
+        start = ns.toISOString();
+        end = new Date(ns.getTime() + dur).toISOString();
+        value = write.date(start, end, true);
+      }
+      if (start === e.start && end === e.end) return;
+      const prev = { start: e.start, end: e.end };
+      patch(e.id, { start, end });
+      try {
+        const schema = await api.db.getSchema({ id: prefs.eventsDb });
+        const date = schema.properties.find((p) => p.type === "date");
+        if (!date) throw new Error("The Events calendar has no date property");
+        await api.db.rowsUpdate({ updates: [{ id: rowId, values: { [date.id]: value } }] });
+        const label = e.allDay ? parseDay(start).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : `${new Date(start).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · ${formatTime(start)}`;
+        notify.undo(`Moved “${e.title}” to ${label}`, async () => {
+          const back = e.allDay ? (daysOf(e).length > 1 ? write.date(prev.start.slice(0, 10), prev.end.slice(0, 10)) : write.date(prev.start.slice(0, 10))) : write.date(prev.start, prev.end, true);
+          patch(e.id, prev);
+          await api.db.rowsUpdate({ updates: [{ id: rowId, values: { [date.id]: back } }] });
+          void reload();
+        });
+        void reload();
+      } catch (err) {
+        patch(e.id, prev);
+        notify.fromError(err, "Couldn’t move the event");
+      }
+    },
+    [prefs.eventsDb, patch, reload],
+  );
+  const drag = useEventDrag(canDrag, (e, t) => void moveEvent(e, t));
+
   // Source list for the rail
   const sources = useMemo(() => {
     const list: { key: string; label: string; color: string }[] = [];
@@ -475,21 +689,49 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [google.cals, events, prefs.eventsDb]);
 
-  const slide = reduced ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } } : { initial: { opacity: 0, x: dir * 16 }, animate: { opacity: 1, x: 0 }, exit: { opacity: 0, x: -dir * 16 } };
+  // Period steps slide with direction (±24px); a view switch is lateral by tab order (±16px) with a slight scale.
+  const slide: Pick<HTMLMotionProps<"div">, "initial" | "animate" | "exit"> = reduced
+    ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.14 } }, exit: { opacity: 0, transition: { duration: 0.1 } } }
+    : {
+        initial: { opacity: 0, x: dir * 24, scale: dir ? 1 : 0.992 },
+        animate: { opacity: 1, x: 0, scale: 1, transition: { x: spring.glide, scale: spring.glide, opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] } } },
+        exit: { opacity: 0, x: -dir * 24, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } },
+      };
+  const VIEWS: View[] = ["month", "week", "agenda"];
+  const switchView = (v: View) => {
+    setDir(Math.sign(VIEWS.indexOf(v) - VIEWS.indexOf(view)));
+    setView(v);
+  };
+  const eventCount = visible.filter((e) => daysOf(e).some((d) => d >= dayOf(from) && d <= dayOf(to))).length;
 
   return (
     <div className="cal-page">
       <header className="cal-head">
         <div className="flex min-w-0 items-center gap-3">
-          <h1 className="cal-title tabular">{title}</h1>
-          <div className="flex items-center">
+          <div className="cal-title-wrap">
+            <AnimatePresence mode="popLayout" initial={false}>
+              <m.h1
+                key={title}
+                className="cal-title tabular"
+                initial={reduced ? { opacity: 0 } : { opacity: 0, y: dir ? dir * 10 : 6, filter: "blur(3px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)", transition: reduced ? { duration: 0.14 } : spring.glide }}
+                exit={reduced ? { opacity: 0, transition: { duration: 0.1 } } : { opacity: 0, y: dir ? -dir * 10 : -6, filter: "blur(3px)", transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }}
+              >
+                {title}
+              </m.h1>
+            </AnimatePresence>
+          </div>
+          <span className="cal-count" aria-live="polite">
+            <RollingNumber value={events ? eventCount : 0} /> {eventCount === 1 ? "event" : "events"}
+          </span>
+          <div className="cal-nav">
             <IconButton icon={ChevronLeft} label="Previous" size="sm" onClick={() => step(-1)} />
             <Button size="sm" variant="ghost" onClick={() => { setDir(0); setCursor(new Date()); }}>Today</Button>
             <IconButton icon={ChevronRight} label="Next" size="sm" onClick={() => step(1)} />
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Segmented<View> size="sm" value={view} onValueChange={(v) => { setDir(0); setView(v); }} options={[{ value: "month", label: "Month" }, { value: "week", label: "Week" }, { value: "agenda", label: "Agenda" }]} aria-label="View" />
+          <Segmented<View> size="sm" value={view} onValueChange={switchView} options={[{ value: "month", label: "Month" }, { value: "week", label: "Week" }, { value: "agenda", label: "Agenda" }]} aria-label="View" />
           <Menu>
             <MenuTrigger asChild>
               <IconButton icon={Ellipsis} label="Calendar menu" size="sm" />
@@ -507,11 +749,12 @@ export default function CalendarPage() {
         </div>
       </header>
       <div className="cal-body">
-        <div className="cal-main">
-          <AnimatePresence mode="popLayout" initial={false}>
-            <m.div key={`${view}-${dayOf(from)}`} {...slide} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }} className="h-full">
+        <DragCtx.Provider value={drag.api}>
+        <div className="cal-main" data-dragging={drag.state ? "" : undefined}>
+          <AnimatePresence mode="popLayout" initial={false} custom={dir}>
+            <m.div key={`${view}-${dayOf(from)}`} {...slide} className="h-full">
               {view === "month" ? (
-                <MonthView days={days} cursor={cursor} today={today} byDay={byDay} loading={!events} onDay={(d) => startNew(d)} onOpen={(e, el) => setOpen({ e, el })} onMore={(d) => { setDir(0); setCursor(parseDay(d)); setView("week"); }} />
+                <MonthView days={days} cursor={cursor} today={today} byDay={byDay} loading={!events} onDay={(d) => startNew(d)} onOpen={(e, el) => setOpen({ e, el })} onMore={(d) => { setDir(1); setCursor(parseDay(d)); setView("week"); }} />
               ) : view === "week" ? (
                 <WeekView days={days} today={today} byDay={byDay} onSlot={(d, t) => startNew(d, t)} onOpen={(e, el) => setOpen({ e, el })} />
               ) : (
@@ -520,6 +763,8 @@ export default function CalendarPage() {
             </m.div>
           </AnimatePresence>
         </div>
+        </DragCtx.Provider>
+        {drag.state ? <DragGhost st={drag.state} x={drag.x} y={drag.y} /> : null}
         <aside className="cal-rail" aria-label="Calendars">
           <MiniCalendar value={cursor} onSelect={(d) => { setDir(d > cursor ? 1 : -1); setCursor(d); }} month={cursor} onMonthChange={(d) => setCursor(d)} />
           <div className="mt-5 flex flex-col gap-1">
@@ -584,9 +829,26 @@ function shortTime(iso: string): string {
   return `${hh}${mm ? `:${String(mm).padStart(2, "0")}` : ""}${h < 12 ? "a" : "p"}`;
 }
 
-function Chip({ e, onOpen, continued }: { e: CalendarEvent; onOpen: (e: CalendarEvent, el: HTMLElement) => void; continued?: boolean }) {
+function Chip({ e, onOpen, continued, day, mode = "month" }: { e: CalendarEvent; onOpen: (e: CalendarEvent, el: HTMLElement) => void; continued?: boolean; day: string; mode?: "month" | "week" }) {
+  const drag = useDrag();
+  const key = `${e.id}@${day}`;
+  const can = !!drag?.canDrag(e) && !continued;
   return (
-    <button type="button" className={cn("cal-chip", e.allDay ? "is-allday" : "is-timed", continued && "is-cont")} style={chipStyle(e.color)} onClick={(ev) => (ev.stopPropagation(), onOpen(e, ev.currentTarget))} title={e.title}>
+    <button
+      type="button"
+      className={cn("cal-chip", e.allDay ? "is-allday" : "is-timed", continued && "is-cont")}
+      style={chipStyle(e.color)}
+      data-draggable={can ? "" : undefined}
+      data-dragging={drag?.dragging === key ? "" : undefined}
+      data-landed={drag?.landed === e.id ? "" : undefined}
+      onPointerDown={can ? (ev) => drag?.start(ev, e, key, mode, day) : undefined}
+      onClick={(ev) => {
+        ev.stopPropagation();
+        if (drag?.consumeClick()) return;
+        onOpen(e, ev.currentTarget);
+      }}
+      title={e.title}
+    >
       {!e.allDay ? <span className="cal-chip-dot" /> : null}
       {!e.allDay ? <span className="cal-chip-time tabular">{shortTime(e.start)}</span> : null}
       <span className="truncate">{e.title}</span>
@@ -597,6 +859,7 @@ function Chip({ e, onOpen, continued }: { e: CalendarEvent; onOpen: (e: Calendar
 function MonthView({ days, cursor, today, byDay, loading, onDay, onOpen, onMore }: { days: Date[]; cursor: Date; today: string; byDay: Map<string, CalendarEvent[]>; loading: boolean; onDay: (d: string) => void; onOpen: (e: CalendarEvent, el: HTMLElement) => void; onMore: (d: string) => void }) {
   const month = cursor.getMonth();
   const MAX = 3;
+  const drag = useDrag();
   return (
     <div className="cal-month" role="grid" aria-label="Month">
       <div className="cal-dow" role="row">
@@ -611,13 +874,13 @@ function MonthView({ days, cursor, today, byDay, loading, onDay, onOpen, onMore 
           const out = d.getMonth() !== month;
           const isToday = key === today;
           return (
-            <div key={key} role="gridcell" className={cn("cal-cell", out && "is-out", (d.getDay() === 0 || d.getDay() === 6) && "is-weekend")} onDoubleClick={() => onDay(key)} aria-label={d.toDateString()}>
+            <div key={key} role="gridcell" data-day={key} data-over={drag?.over === key ? "" : undefined} className={cn("cal-cell", out && "is-out", isToday && "is-today", (d.getDay() === 0 || d.getDay() === 6) && "is-weekend")} onDoubleClick={() => onDay(key)} aria-label={d.toDateString()}>
               <div className="cal-cell-head">
                 <span className={cn("cal-daynum tabular", isToday && "is-today")}>{d.getDate() === 1 ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : d.getDate()}</span>
                 <button type="button" className="cal-add" aria-label={`New event on ${d.toDateString()}`} onClick={() => onDay(key)}>+</button>
               </div>
               <div className="cal-cell-list">
-                {loading ? null : list.slice(0, MAX).map((e) => <Chip key={`${e.id}-${key}`} e={e} onOpen={onOpen} continued={e.allDay && e.start.slice(0, 10) < key} />)}
+                {loading ? null : list.slice(0, MAX).map((e) => <Chip key={`${e.id}-${key}`} e={e} day={key} onOpen={onOpen} continued={e.allDay && e.start.slice(0, 10) < key} />)}
                 {list.length > MAX ? (
                   <button type="button" className="cal-more" onClick={() => onMore(key)}>
                     +{list.length - MAX} more
@@ -666,6 +929,7 @@ function lanes(list: CalendarEvent[]): { e: CalendarEvent; lane: number; lanes: 
 
 function WeekView({ days, today, byDay, onSlot, onOpen }: { days: Date[]; today: string; byDay: Map<string, CalendarEvent[]>; onSlot: (d: string, t: string) => void; onOpen: (e: CalendarEvent, el: HTMLElement) => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const drag = useDrag();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const h = setInterval(() => setNow(new Date()), 60_000);
@@ -697,8 +961,8 @@ function WeekView({ days, today, byDay, onSlot, onOpen }: { days: Date[]; today:
         {days.map((d) => {
           const k = dayOf(d);
           return (
-            <div key={k} className="flex min-w-0 flex-col gap-0.5">
-              {(byDay.get(k) ?? []).filter((e) => e.allDay).slice(0, 3).map((e) => <Chip key={e.id} e={e} onOpen={onOpen} continued={e.start.slice(0, 10) < k} />)}
+            <div key={k} className="cal-week-allday-cell flex min-w-0 flex-col gap-0.5" data-day={k} data-over={drag?.over === k ? "" : undefined}>
+              {(byDay.get(k) ?? []).filter((e) => e.allDay).slice(0, 3).map((e) => <Chip key={e.id} e={e} day={k} onOpen={onOpen} continued={e.start.slice(0, 10) < k} />)}
             </div>
           );
         })}
@@ -716,6 +980,9 @@ function WeekView({ days, today, byDay, onSlot, onOpen }: { days: Date[]; today:
             return (
               <div
                 key={k}
+                data-day={k}
+                data-col=""
+                data-over={drag?.over === k ? "" : undefined}
                 className={cn("cal-col", k === today && "is-today")}
                 onDoubleClick={(ev) => {
                   const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
@@ -726,13 +993,23 @@ function WeekView({ days, today, byDay, onSlot, onOpen }: { days: Date[]; today:
                 {timed.map(({ e, lane, lanes: n }) => {
                   const top = (minutes(e.start) / 60) * HPX;
                   const h = Math.max(20, ((minutes(e.end) - minutes(e.start) || 30) / 60) * HPX - 2);
+                  const dkey = `${e.id}@${k}`;
+                  const can = !!drag?.canDrag(e);
                   return (
                     <button
                       type="button"
                       key={e.id}
                       className="cal-block"
+                      data-draggable={can ? "" : undefined}
+                      data-dragging={drag?.dragging === dkey ? "" : undefined}
+                      data-landed={drag?.landed === e.id ? "" : undefined}
                       style={{ ...chipStyle(e.color), top, height: h, left: `calc(${(lane / n) * 100}% + 2px)`, width: `calc(${100 / n}% - 4px)` }}
-                      onClick={(ev) => (ev.stopPropagation(), onOpen(e, ev.currentTarget))}
+                      onPointerDown={can ? (ev) => drag?.start(ev, e, dkey, "week", k) : undefined}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        if (drag?.consumeClick()) return;
+                        onOpen(e, ev.currentTarget);
+                      }}
                     >
                       <span className="block truncate font-semibold">{e.title}</span>
                       {h > 34 ? <span className="block truncate opacity-80 tabular">{formatTime(e.start)}{e.location ? ` · ${e.location}` : ""}</span> : null}

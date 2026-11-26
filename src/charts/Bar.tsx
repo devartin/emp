@@ -3,7 +3,7 @@ import { Bar, BarChart as RBarChart, CartesianGrid, Rectangle, Tooltip, XAxis, Y
 import { summarizeParts } from "./a11y";
 import { MARGIN, X_AXIS_HEIGHT, niceDomain, tickFormatter, tickStyle, valueFormatter, type ValueFormat } from "./axis";
 import { ChartFrame } from "./ChartFrame";
-import { resolveColor, seriesColor, useChartTheme } from "./theme";
+import { defaultSeriesColor, resolveColor, useChartTheme } from "./theme";
 import { ChartTooltip } from "./Tooltip";
 import type { Datum } from "./Line";
 
@@ -65,7 +65,7 @@ export function BarChart<T extends Datum>({
   const t = useChartTheme();
   const [hover, setHover] = useState<number | null>(null);
   const fmt = valueFormatter(format, currency);
-  const colorOf = (s: BarSeries, i: number) => (s.kind === "expense" ? t.textSecondary : (resolveColor(s.color) ?? seriesColor(t, i)));
+  const colorOf = (s: BarSeries, i: number) => (s.kind === "expense" ? t.textSecondary : (resolveColor(s.color) ?? defaultSeriesColor(t, i, series.length)));
   const opacityOf = (s: BarSeries) => (s.kind === "expense" ? 0.5 : 1);
 
   const summary = useMemo(
@@ -74,13 +74,13 @@ export function BarChart<T extends Datum>({
     [data, series, summaryLabel],
   );
   const table = useMemo(
-    () => ({ columns: [String(x), ...series.map((s) => s.label)], rows: data.map((d) => [xFormat(d[x]), ...series.map((s) => fmt(Number(d[s.key])))]), sensitiveCols: series.map((_, i) => i + 1) }),
+    () => () => ({ columns: [String(x), ...series.map((s) => s.label)], rows: data.map((d) => [xFormat(d[x]), ...series.map((s) => fmt(Number(d[s.key])))]), sensitiveCols: series.map((_, i) => i + 1) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [data, series],
   );
 
   return (
-    <ChartFrame height={height} summary={summary} loading={loading} empty={empty ?? data.length === 0} cached={cached} table={table} header={header} className={className}>
+    <ChartFrame height={height} summary={summary} title={summaryLabel} loading={loading} empty={empty ?? data.length === 0} cached={cached} table={table} header={header} className={className}>
       {(size) => {
         const vals: number[] = [];
         for (const d of data) {

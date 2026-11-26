@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { useInOverlay } from "./layer";
 
-/** Popover (§5.7): padding 12 (16 for forms), radius 10, elev-2, max-width 360, offset 6; closes on outside click/Esc/blur. */
+/** Popover (docs/DESIGN.md §6.3): glass-1 (opaque inside dialogs), origin-aware scale+fade, padding 12 (16 for forms), radius 12. */
 export const Popover = RP.Root;
 export const PopoverTrigger = RP.Trigger;
 export const PopoverAnchor = RP.Anchor;
@@ -32,6 +32,7 @@ export function PopoverContent({ children, side = "bottom", align = "start", sid
       <RP.Content
         className={cn("emp-popover emp-pop", className)}
         data-form={form ? "" : undefined}
+        data-opaque={inOverlay ? "" : undefined}
         side={side}
         align={align}
         sideOffset={sideOffset}

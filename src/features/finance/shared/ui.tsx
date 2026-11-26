@@ -9,7 +9,7 @@ import {
   TrainFront, TrendingUp, Umbrella, Utensils, Wallet, Wifi, Zap, ChevronRight, X,
 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Freshness, Insight, MarketState } from "@/backend/types";
 import { navigate } from "@/app/router";
 import { cn } from "@/lib/cn";
@@ -19,6 +19,7 @@ import { IconButton } from "@/ui/IconButton";
 import { Tabs, type TabItem } from "@/ui/Tabs";
 import { Tooltip } from "@/ui/Tooltip";
 import { spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { blockBg, blockText } from "./format";
 import "./finance.css";
 
@@ -83,11 +84,19 @@ export interface HubPageProps<T extends string> {
 
 export function HubPage<T extends string>({ icon: I, tone, title, subtitle, actions, tabs, tab, onTab, children, footer, wide }: HubPageProps<T>) {
   const c = TONE[tone];
+  // Lateral tab transitions (§5.4.3): the incoming panel slides from the side of travel.
+  const idx = tabs && tab !== undefined ? tabs.findIndex((t) => t.value === tab) : -1;
+  const prevIdx = useRef(idx);
+  const dir = idx === prevIdx.current ? 0 : idx > prevIdx.current ? 1 : -1;
+  useEffect(() => {
+    prevIdx.current = idx;
+  }, [idx]);
+  const reduced = useReducedMotionPref();
   return (
     <div className={cn("fh-page", wide && "fh-page-wide")}>
       <header className="fh-head">
-        <span className="fh-head-icon" style={{ color: blockText(c), background: blockBg(c) }} aria-hidden>
-          <I size={20} strokeWidth={1.75} />
+        <span className="fh-head-icon" style={{ color: blockText(c), ["--fh-mark-bg" as string]: blockBg(c) }} aria-hidden>
+          <I size={21} strokeWidth={1.75} />
         </span>
         <div className="min-w-0 flex-1">
           <h1 className="fh-title">{title}</h1>
@@ -96,8 +105,20 @@ export function HubPage<T extends string>({ icon: I, tone, title, subtitle, acti
         {actions ? <div className="fh-head-actions">{actions}</div> : null}
       </header>
       {tabs && tab !== undefined && onTab ? <Tabs value={tab} onValueChange={onTab} items={tabs} className="fh-tabs" aria-label="Sections" /> : null}
-      <AnimatePresence mode="wait" initial={false}>
-        <m.div key={String(tab ?? "")} className="fh-body" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.18, ease: [0.2, 0, 0, 1] } }} exit={{ opacity: 0, transition: { duration: 0.08 } }}>
+      <AnimatePresence mode="wait" initial={false} custom={dir}>
+        <m.div
+          key={String(tab ?? "")}
+          className="fh-body"
+          custom={dir}
+          variants={{
+            enter: (d: number) => (reduced ? { opacity: 0 } : { opacity: 0, x: d * 16, y: d === 0 ? 6 : 0 }),
+            show: { opacity: 1, x: 0, y: 0, transition: reduced ? { duration: 0.14 } : { duration: 0.22, ease: [0.2, 0, 0, 1] } },
+            exit: (d: number) => (reduced ? { opacity: 0, transition: { duration: 0.08 } } : { opacity: 0, x: d * -12, transition: { duration: 0.09, ease: [0.4, 0, 1, 1] } }),
+          }}
+          initial="enter"
+          animate="show"
+          exit="exit"
+        >
           {children}
         </m.div>
       </AnimatePresence>
@@ -177,6 +198,17 @@ export function providerName(id: string): string {
 
 // ───────────────────────────────────────────────────────────────────────────── insights
 
+/**
+ * Disclosure content (DESIGN §5.4 rule 5): opacity + a 4px rise, never `height`. Exits fade over 120ms; use with
+ * `AnimatePresence mode="popLayout"` and a `layout` parent (or `useFlip`) so displaced siblings glide via transforms.
+ */
+export const disclose = {
+  initial: { opacity: 0, y: -4 },
+  // a beat late, so siblings gliding out of the way (useFlip / layout) have mostly cleared the space first
+  animate: { opacity: 1, y: 0, transition: { duration: 0.18, delay: 0.1, ease: [0.2, 0, 0, 1] as const } },
+  exit: { opacity: 0, y: 0, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] as const } },
+};
+
 const SEV: Record<Insight["severity"], { icon: IconComponent; tone: "info" | "accent" | "warning" | "loss"; label: string }> = {
   info: { icon: Info, tone: "info", label: "Info" },
   tip: { icon: Lightbulb, tone: "accent", label: "Tip" },
@@ -211,9 +243,9 @@ export function InsightCard({ insight, onMute, compact }: { insight: Insight; on
             </Button>
           ) : null}
         </div>
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} mode="popLayout">
           {math && insight.math ? (
-            <m.dl className="fh-insight-math" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}>
+            <m.dl className="fh-insight-math" {...disclose}>
               {insight.math.map((x) => (
                 <div key={x.label} className="flex items-baseline justify-between gap-3 py-1">
                   <dt className="text-secondary">{x.label}</dt>

@@ -1,12 +1,13 @@
 /**
  * Life OS hub (§16.6): Today (quick add with natural-language chips, Top 3, due & overdue, agenda timeline with
  * Google events and scheduled task blocks, habit strip, insights from every app), Tasks, Projects and Review.
- * Completing a task: the box pops with spring.bouncy, a strike line draws from the left over 220ms and the text
- * fades to tertiary (§4.2 "To-do checked"); recurring tasks spawn their next occurrence in the backend.
+ * Completing a task (S13): the round well fills into a lit dome on the `pop` spring, 8 ink rays burst, a strike line
+ * draws from the left over 220ms and the text fades to tertiary; recurring tasks spawn their next occurrence in the
+ * backend. Quick add is a well whose parsed tokens rise in as printed chips; projects are raised panels.
  */
 import { ArrowRight, CalendarDays, Check, CircleDashed, FolderKanban, Inbox, Plus, RotateCcw, Star, Sun, Target } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { api } from "@/backend";
 import type { CalendarEvent, Id, LifeAppInstance, RowDTO } from "@/backend/types";
 import { navigate } from "@/app/router";
@@ -25,13 +26,16 @@ import { Progress } from "@/ui/Progress";
 import { Segmented } from "@/ui/Segmented";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tag } from "@/ui/Tag";
-import { celebrate } from "@/ui/motion/Celebrate";
+import { burst } from "@/ui/motion/Celebrate";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { AppHeader } from "../AppHeader";
 import { localDay, optionId, read, write } from "../cells";
 import { useAppDatabases, useMetrics, useRows, useStableNow, type AppDb } from "../data";
+import { AppTile } from "../AppTile";
 import { appVars, identity } from "../identity";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { InsightsFeed } from "../Insights";
 import { StartHere } from "../StartHere";
 
@@ -59,7 +63,8 @@ const PRIO_COLOR: Record<string, string> = { P1: "var(--loss)", P2: "var(--warni
 
 // ───────────────────────────────────────────────────────────────────────────── task row
 
-function TaskRow({ row, db, today, projectName, onToggle, showStatus }: { row: RowDTO; db: AppDb; today: string; projectName?: string; onToggle: (row: RowDTO, el: HTMLElement) => void; showStatus?: boolean }) {
+/** `ref` (React 19 prop) lets AnimatePresence `popLayout` pop an exiting row out of flow so its siblings glide up. */
+function TaskRow({ row, db, today, projectName, onToggle, showStatus, ref }: { row: RowDTO; db: AppDb; today: string; projectName?: string; onToggle: (row: RowDTO, el: HTMLElement) => void; showStatus?: boolean; ref?: Ref<HTMLDivElement> }) {
   const reduced = useReducedMotionPref();
   const status = read.opt(row, db.p("task.status"));
   const done = status?.name === "Done";
@@ -71,26 +76,24 @@ function TaskRow({ row, db, today, projectName, onToggle, showStatus }: { row: R
   const repeat = row.values[db.p("task.recurrence")?.id ?? ""];
   const p = prio?.name === "P1" || prio?.name === "Do now" ? "1" : prio?.name === "P2" ? "2" : undefined;
   return (
-    <m.div layout="position" className={cn("lo-task group", done && "is-done")} exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}>
-      <m.button
+    <m.div ref={ref} layout="position" transition={spring.glide} className={cn("lo-task group", done && "is-done")} exit={{ opacity: 0, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }}>
+      <button
         type="button"
         className={cn("lo-check", done && "is-done")}
+        style={appVars("life-os")}
         data-p={p}
         aria-label={done ? `Mark “${title}” not done` : `Complete “${title}”`}
         aria-pressed={done}
         onClick={(e) => onToggle(row, e.currentTarget)}
-        animate={done && !reduced ? { scale: [0.85, 1] } : { scale: 1 }}
-        transition={spring.bouncy}
-        whileTap={{ scale: 0.9 }}
       >
         <AnimatePresence>
           {done ? (
-            <m.svg key="c" viewBox="0 0 24 24" width="12" height="12" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <m.path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: reduced ? 1 : 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }} />
+            <m.svg key="c" viewBox="0 0 24 24" width="12" height="12" initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.4 }} animate={{ opacity: 1, scale: 1, transition: reduced ? { duration: 0.12 } : spring.pop }} exit={{ opacity: 0, transition: { duration: 0.1 } }}>
+              <m.path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: reduced ? 1 : 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.2, delay: 0.04, ease: [0.2, 0, 0, 1] }} />
             </m.svg>
           ) : null}
         </AnimatePresence>
-      </m.button>
+      </button>
       <button type="button" className="lo-task-title text-left" onClick={() => useUi.getState().openPeek({ t: "row", id: row.id })}>
         <span className="relative inline-block max-w-full truncate align-bottom">
           {title}
@@ -116,7 +119,7 @@ function useToggleTask(db: AppDb | undefined, setRows: (fn: (r: RowDTO[]) => Row
     const done = read.opt(row, status)?.name === "Done";
     const next = optionId(status, done ? "Next" : "Done");
     if (!status || !next) return;
-    if (!done) celebrate(el, { particles: 6, badge: false });
+    if (!done) burst(el, { radius: 12 });
     setRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, values: { ...r.values, [status.id]: write.status(next) } } : r)));
     try {
       const values: Record<Id, ReturnType<typeof write.status> | null> = { [status.id]: write.status(next) };
@@ -167,13 +170,13 @@ function QuickAdd({ db }: { db: AppDb | undefined }) {
     }
   };
   const chips: ReactNode[] = [];
-  if (parsed?.start) chips.push(<span key="d" className="lo-tok"><CalendarDays size={11} aria-hidden />{parsed.start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}{parsed.hasTime ? ` ${formatTime(parsed.start)}` : ""}</span>);
-  if (parsed?.priority) chips.push(<span key="p" className="lo-tok">!{parsed.priority}</span>);
-  for (const t of parsed?.tags ?? []) chips.push(<span key={t} className="lo-tok">#{t}</span>);
-  if (parsed?.durationMinutes) chips.push(<span key="m" className="lo-tok">{parsed.durationMinutes} min</span>);
+  if (parsed?.start) chips.push(<span key="d" className="lo-tok panel"><CalendarDays size={11} aria-hidden />{parsed.start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}{parsed.hasTime ? ` ${formatTime(parsed.start)}` : ""}</span>);
+  if (parsed?.priority) chips.push(<span key="p" className="lo-tok panel">!{parsed.priority}</span>);
+  for (const t of parsed?.tags ?? []) chips.push(<span key={t} className="lo-tok panel">#{t}</span>);
+  if (parsed?.durationMinutes) chips.push(<span key="m" className="lo-tok panel">{parsed.durationMinutes} min</span>);
   return (
-    <div className="lo-quickadd">
-      <Plus size={16} className="flex-none text-tertiary" aria-hidden />
+    <div className="lo-quickadd well">
+      <Plus size={16} className="lo-plus flex-none text-tertiary" aria-hidden />
       <input
         value={text}
         onChange={(e) => setText(e.currentTarget.value)}
@@ -189,7 +192,7 @@ function QuickAdd({ db }: { db: AppDb | undefined }) {
       />
       <AnimatePresence initial={false}>
         {chips.map((c, i) => (
-          <m.span key={i} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={spring.snappy}>
+          <m.span key={i} initial={{ opacity: 0, y: 6, scale: 0.92 }} animate={{ opacity: 1, y: 0, scale: 1, transition: spring.release }} exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.1 } }}>
             {c}
           </m.span>
         ))}
@@ -313,10 +316,9 @@ function HabitStrip() {
   const n = Number(metrics?.active_count?.value ?? 0);
   const id = identity("habits");
   return (
-    <button type="button" className="flex w-full items-center gap-3 rounded-[14px] bg-surface-1 p-3.5 text-left shadow-elev-1 transition-transform duration-160 hover:-translate-y-px" style={{ boxShadow: "inset 0 0 0 1px var(--border-subtle), var(--elev-1)" }} onClick={() => navigate({ t: "app", instanceId: habits.id })}>
-      <span className="la-tile la-tile-sm" style={{ background: id.color }}>
-        <id.icon size={12} strokeWidth={2.25} aria-hidden />
-      </span>
+    <button type="button" className="lo-strip panel" data-raise="" data-light="" onClick={() => navigate({ t: "app", instanceId: habits.id })}>
+      <EdgeLight />
+      <AppTile appId="habits" size="sm" />
       <span className="flex-1 text-body-sm">
         <span className="font-semibold text-primary">Habits</span>
         <span className="text-secondary"> · {Math.round(pct * n)} of {n} done today</span>
@@ -373,12 +375,49 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
   const top3 = open.filter((r) => read.bool(r, tasksDb?.p("task.top3"))).slice(0, 3);
   const recentlyDone = (tasks ?? []).filter((r) => status(r) === "Done" && read.date(r, tasksDb?.p("task.completed"))?.start?.slice(0, 10) === today);
 
+  // KPI anatomy: every tile gets a caption and a 14-day ink sparkline derived from the tasks themselves.
+  const trend = useMemo(() => {
+    const days = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13));
+    const all = tasks ?? [];
+    const dueOf = (r: RowDTO) => read.date(r, tasksDb?.p("task.due"))?.start?.slice(0, 10);
+    const st = (r: RowDTO) => read.opt(r, tasksDb?.p("task.status"))?.name;
+    const doneOn = (r: RowDTO) => (st(r) === "Done" ? read.date(r, tasksDb?.p("task.completed"))?.start?.slice(0, 10) ?? "" : null);
+    const created = (r: RowDTO) => localDay(new Date(r.createdAt));
+    const inbox = all.filter((r) => st(r) === "Inbox");
+    const overdueOpen = all.filter((r) => st(r) !== "Done" && (dueOf(r) ?? "9999") < today);
+    const oldest = overdueOpen.reduce((m, r) => Math.max(m, Math.round((Date.parse(`${today}T12:00:00`) - Date.parse(`${dueOf(r)}T12:00:00`)) / 86_400_000)), 0);
+    const weekAgo = addDays(today, -6);
+    const twoWeeksAgo = addDays(today, -13);
+    return {
+      due: days.map((d) => all.filter((r) => dueOf(r) === d).length),
+      overdue: days.map(
+        (d) =>
+          all.filter((r) => {
+            const x = dueOf(r);
+            if (!x || x >= d) return false;
+            const c = doneOn(r);
+            return c === null || (c !== "" && c > d);
+          }).length,
+      ),
+      inbox: days.map((d) => inbox.filter((r) => created(r) <= d).length),
+      done: days.map((d) => all.filter((r) => doneOn(r) === d).length),
+      tomorrow: all.filter((r) => st(r) !== "Done" && dueOf(r) === addDays(today, 1)).length,
+      oldest,
+      inboxNew: inbox.filter((r) => created(r) >= weekAgo).length,
+      lastWeek: all.filter((r) => {
+        const c = doneOn(r);
+        return !!c && c >= twoWeeksAgo && c < weekAgo;
+      }).length,
+    };
+  }, [tasks, tasksDb, today]);
+  const ready = !!metrics && !!tasks;
+
   const kpis = (
     <>
-      <KpiTile label="Due today" value={Number(metrics?.due_today?.value ?? 0)} loading={!metrics} format={(n) => String(Math.round(n))} />
-      <KpiTile label="Overdue" value={Number(metrics?.overdue_count?.value ?? 0)} loading={!metrics} format={(n) => String(Math.round(n))} info="Open tasks with a due date before today." />
-      <KpiTile label="Inbox" value={Number(metrics?.inbox_count?.value ?? 0)} loading={!metrics} format={(n) => String(Math.round(n))} />
-      <KpiTile label="Done this week" value={Number(metrics?.done_7d?.value ?? 0)} loading={!metrics} format={(n) => String(Math.round(n))} />
+      <KpiTile label="Due today" value={Number(metrics?.due_today?.value ?? 0)} loading={!ready} format={(n) => String(Math.round(n))} spark={trend.due} countUpKey={`lo-due-${instance.id}`} onClick={() => setTab("tasks")} footer={<span className="tabular">{trend.tomorrow ? `${trend.tomorrow} more due tomorrow` : "Nothing due tomorrow"}</span>} />
+      <KpiTile label="Overdue" value={Number(metrics?.overdue_count?.value ?? 0)} loading={!ready} format={(n) => String(Math.round(n))} spark={trend.overdue} info="Open tasks with a due date before today." countUpKey={`lo-over-${instance.id}`} onClick={() => setTab("tasks")} footer={<span className="tabular">{trend.oldest ? `Oldest ${trend.oldest} ${trend.oldest === 1 ? "day" : "days"} late` : "All caught up"}</span>} />
+      <KpiTile label="Inbox" value={Number(metrics?.inbox_count?.value ?? 0)} loading={!ready} format={(n) => String(Math.round(n))} spark={trend.inbox} countUpKey={`lo-inbox-${instance.id}`} onClick={() => setTab("tasks")} footer={<span className="tabular">{trend.inboxNew ? `${trend.inboxNew} added this week` : "Nothing new this week"}</span>} />
+      <KpiTile label="Done this week" value={Number(metrics?.done_7d?.value ?? 0)} loading={!ready} format={(n) => String(Math.round(n))} spark={trend.done} countUpKey={`lo-done-${instance.id}`} onClick={() => setTab("review")} footer={<span className="tabular">vs {trend.lastWeek} last week</span>} />
     </>
   );
 
@@ -412,17 +451,17 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
                 {!tasks ? (
                   <Skeleton height={96} radius={10} />
                 ) : (
-                  <div className="flex flex-col">
-                    <AnimatePresence initial={false}>
+                  <div className="relative flex flex-col">
+                    <AnimatePresence initial={false} mode="popLayout">
                       {top3.map((r) => (
                         <TaskRow key={r.id} row={r} db={tasksDb!} today={today} projectName={projectName.get(read.rel(r, tasksDb?.p("task.project"))[0] ?? "")} onToggle={toggle} />
                       ))}
                     </AnimatePresence>
                     {Array.from({ length: Math.max(0, 3 - top3.length) }, (_, i) => (
-                      <div key={i} className="lo-task text-tertiary">
+                      <m.div key={`slot-${i}`} layout="position" transition={spring.glide} className="lo-task text-tertiary">
                         <CircleDashed size={18} className="flex-none opacity-50" aria-hidden />
                         <span className="text-body-sm">Star a task to add it here</span>
-                      </div>
+                      </m.div>
                     ))}
                   </div>
                 )}
@@ -431,8 +470,8 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
                 {!tasks ? (
                   <Skeleton height={120} radius={10} />
                 ) : dueSoon.length || recentlyDone.length ? (
-                  <div className="flex flex-col">
-                    <AnimatePresence initial={false}>
+                  <div className="relative flex flex-col">
+                    <AnimatePresence initial={false} mode="popLayout">
                       {[...dueSoon, ...recentlyDone].map((r) => (
                         <TaskRow key={r.id} row={r} db={tasksDb!} today={today} projectName={projectName.get(read.rel(r, tasksDb?.p("task.project"))[0] ?? "")} onToggle={toggle} />
                       ))}
@@ -491,8 +530,8 @@ function TasksTab({ db, rows, today, projectName, onToggle }: { db: AppDb | unde
         {!rows || !db ? (
           <Skeleton height={200} radius={10} />
         ) : shown.length ? (
-          <div className="flex flex-col">
-            <AnimatePresence initial={false}>
+          <div className="relative flex flex-col">
+            <AnimatePresence initial={false} mode="popLayout">
               {shown.map((r) => (
                 <TaskRow key={r.id} row={r} db={db} today={today} projectName={projectName.get(read.rel(r, db.p("task.project"))[0] ?? "")} onToggle={onToggle} />
               ))}
@@ -522,7 +561,8 @@ function ProjectsTab({ db, rows, tasksDb, tasks, areas, areasDb, today }: { db: 
         const days = deadline ? Math.round((new Date(`${deadline}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86_400_000) : null;
         const pct = ts.length ? done / ts.length : 0;
         return (
-          <m.button key={p.id} type="button" className="lo-project" onClick={() => useUi.getState().openPeek({ t: "row", id: p.id })} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { ...spring.gentle, delay: i * 0.04 } }}>
+          <m.button key={p.id} type="button" className="lo-project panel" data-raise="" data-light="" onClick={() => useUi.getState().openPeek({ t: "row", id: p.id })} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { ...spring.settle, delay: Math.min(i, 7) * 0.04 } }}>
+            <EdgeLight />
             <div className="flex items-center gap-2">
               <span className="text-[20px] leading-none">{p.icon?.t === "emoji" ? p.icon.v : "📁"}</span>
               <span className="min-w-0 flex-1 truncate text-body font-semibold text-primary">{read.text(p, db.p("project.name"))}</span>
@@ -538,7 +578,7 @@ function ProjectsTab({ db, rows, tasksDb, tasks, areas, areasDb, today }: { db: 
               <span className="flex-1" />
               {days !== null ? <span className={cn("tabular", days < 7 && "text-warning-text font-semibold")}>{days >= 0 ? `${days} days left` : `${-days} days late`}</span> : null}
             </div>
-            <div className="flex items-center gap-1.5 border-t border-subtle pt-2 text-caption">
+            <div className="groove-top flex items-center gap-1.5 pt-2.5 text-caption">
               <ArrowRight size={12} className={next ? "text-accent-text" : "text-warning-text"} aria-hidden />
               <span className={cn("truncate", next ? "text-primary" : "text-warning-text")}>{next ? read.text(next, tasksDb?.p("task.title")) : "No next action"}</span>
             </div>
@@ -577,13 +617,15 @@ function ReviewTab({ instance, metrics, tasksDb, tasks, areas, areasDb, today }:
     <div className="lo-grid">
       <Card title="Weekly review" subtitle={`Last done: ${last}`}>
         <div className="flex items-center gap-4">
-          <div className={cn("flex h-16 w-16 flex-none items-center justify-center rounded-2xl text-h3 tabular", days > 7 ? "bg-warning-soft text-warning-text" : "bg-gain-soft text-gain-text")}>{days}</div>
+          <div className={cn("lo-days well", days > 7 ? "is-late" : "is-ok")} data-static="">
+            <RollingNumber value={days} format={(n) => String(Math.round(n))} />
+          </div>
           <p className="text-body-sm text-secondary">{days > 7 ? "days since your last review. Thirty calm minutes now makes next week lighter." : "days since your last review. You’re on rhythm."}</p>
         </div>
         <ol className="mt-4 flex flex-col gap-2 text-body-sm">
           {["Get clear — inbox to zero", "Get current — calendar, projects, waiting", "Get creative — someday list", "Choose next week’s Top 3"].map((s, i) => (
             <li key={s} className="flex items-center gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-caption font-semibold tabular text-secondary">{i + 1}</span>
+              <span className="lo-stepnum well" data-static="">{i + 1}</span>
               {s}
             </li>
           ))}

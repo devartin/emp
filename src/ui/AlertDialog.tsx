@@ -81,6 +81,7 @@ export function AlertDialog({
             loading={busy}
             disabled={locked}
             data-autofocus={danger || confirmText ? undefined : ""}
+            data-glow={danger ? "" : undefined}
             onClick={() => void run()}
           >
             {confirmLabel}

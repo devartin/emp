@@ -4,7 +4,7 @@
  * (e.g. Life OS "Today") open the hub on their tab. The wizard is mounted for tune-ups.
  */
 import { Sparkles } from "lucide-react";
-import { lazy, Suspense, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Id } from "@/backend/types";
 import { navigate, useRoute } from "@/app/router";
@@ -14,6 +14,7 @@ import { useWorkspace } from "@/stores/workspace";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { useInstance } from "./data";
+import { claimHandoff, hasPendingHandoff } from "./handoff";
 import { WizardSheet } from "./WizardSheet";
 import "./lifeapps.css";
 
@@ -43,6 +44,25 @@ export default function AppPage({ instanceId, tab }: AppPageProps) {
   const anyLoaded = useWorkspace((s) => !!s.workspace);
   const route = useRoute();
   const pageTitle = useTree(useShallow((s) => (route.t === "page" ? s.byId.get(route.id)?.title ?? null : null)));
+  const instId = inst?.id;
+
+  // S6 landing: once the hub has painted (its AppHeader tile exists, or the hub has had a moment to render), lift the
+  // hand-off veil off this page and fly the build stage's tile into the header.
+  useEffect(() => {
+    if (!instId || !hasPendingHandoff(instId)) return;
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = () => {
+      const ready = document.querySelector("[data-app-tile]") || performance.now() - t0 > 900;
+      if (ready) {
+        raf = requestAnimationFrame(() => claimHandoff(instId));
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [instId]);
 
   if (!inst) {
     if (!anyLoaded) return <RouteSkeleton variant="dashboard" label="Loading app" />;

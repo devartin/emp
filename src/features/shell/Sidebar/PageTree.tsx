@@ -4,9 +4,9 @@
  * the side peek, F2 renames, Delete moves to Trash (with an Undo toast). Drag to reorder or nest (useTreeDrag),
  * double-click to rename inline, right-click for the page menu.
  */
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { observeElementRect, useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight, Ellipsis, Plus } from "lucide-react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { navigate, routePageId, useRoute } from "@/app/router";
 import { preloadRoute } from "@/app/routes";
 import type { Id, PageMeta } from "@/backend/types";
@@ -21,6 +21,15 @@ import { PageContextItems, PageMenuItems, pageActions, routeForPage } from "../P
 import { useTreeDrag, type DragState } from "./useTreeDrag";
 
 const INDENT = 12;
+
+const heightOnlyRect: typeof observeElementRect<HTMLElement> = (instance, cb) => {
+  let h = -1;
+  return observeElementRect(instance, (rect) => {
+    if (Math.abs(rect.height - h) < 0.5) return;
+    h = rect.height;
+    cb(rect);
+  });
+};
 export const pagesFilter = (m: PageMeta) => isTreeVisible(m) && !(m.appInstanceId && m.parentId === null);
 
 export interface PageTreeProps {
@@ -41,26 +50,49 @@ export function PageTree({ scrollEl, renameId, onRenameDone, drag }: PageTreePro
   const [margin, setMargin] = useState(0);
   const [focusId, setFocusId] = useState<Id | null>(null);
   const [renaming, setRenaming] = useState<Id | null>(null);
+  const [ctxId, setCtxId] = useState<Id | null>(null);
   const seen = useRef<Set<Id> | null>(null);
 
   useEffect(() => {
     if (renameId) setRenaming(renameId);
   }, [renameId]);
 
-  // Offset of the list inside the scroll container (sections above it change height).
+  // Offset of the list inside the scroll container (sections above it change height). The scroll container is a
+  // parent, so its ref may attach after this layout effect runs: retry on the next frame until it exists.
   useLayoutEffect(() => {
-    const list = listRef.current;
-    const sc = scrollEl();
-    if (!list || !sc) return;
-    const measure = () => {
-      const top = list.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
-      setMargin((m) => (Math.abs(m - top) > 0.5 ? top : m));
+    let ro: ResizeObserver | null = null;
+    let raf = 0;
+    const setup = () => {
+      const list = listRef.current;
+      const sc = scrollEl();
+      if (!list || !sc) {
+        raf = requestAnimationFrame(setup);
+        return;
+      }
+      // Layout offsets, not rects: the sections above ride a transform-based layout morph, and a rect read
+      // mid-morph would bake the in-flight transform into the virtualiser's scroll margin.
+      const measure = () => {
+        let top = 0;
+        let el: HTMLElement | null = list;
+        while (el && el !== sc) {
+          top += el.offsetTop;
+          const parent = el.offsetParent as HTMLElement | null;
+          if (!parent || !sc.contains(parent)) break;
+          el = parent;
+        }
+        if (el !== sc) top = list.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+        setMargin((m) => (Math.abs(m - top) > 0.5 ? top : m));
+      };
+      measure();
+      ro = new ResizeObserver(measure);
+      ro.observe(sc);
+      if (sc.firstElementChild) ro.observe(sc.firstElementChild);
     };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(sc);
-    if (sc.firstElementChild) ro.observe(sc.firstElementChild);
-    return () => ro.disconnect();
+    setup();
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+    };
   }, [scrollEl]);
 
   const virtualizer = useVirtualizer({
@@ -70,6 +102,9 @@ export function PageTree({ scrollEl, renameId, onRenameDone, drag }: PageTreePro
     overscan: 8,
     scrollMargin: margin,
     getItemKey: (i) => rows[i]?.id ?? i,
+    // Vertical list: only height changes matter. Forwarding width changes re-rendered every row on each frame of a
+    // sidebar resize drag.
+    observeElementRect: heightOnlyRect,
   });
 
   useEffect(() => {
@@ -154,7 +189,12 @@ export function PageTree({ scrollEl, renameId, onRenameDone, drag }: PageTreePro
   const items = virtualizer.getVirtualItems();
   const dragState = drag.drag;
 
+  // One context menu for the whole tree (a Radix menu root per row would add a document keydown listener per row):
+  // the right-clicked row is resolved from the event target.
+  const ctxMeta = ctxId ? (rows.find((r) => r.id === ctxId)?.meta ?? useTree.getState().byId.get(ctxId)) : undefined;
   return (
+    <ContextMenu onOpenChange={(o) => !o && setCtxId(null)}>
+      <ContextMenuTrigger asChild disabled={!!renaming}>
     <div
       ref={listRef}
       role="tree"
@@ -162,13 +202,18 @@ export function PageTree({ scrollEl, renameId, onRenameDone, drag }: PageTreePro
       className="relative"
       style={{ height: virtualizer.getTotalSize() }}
       onKeyDown={onKeyDown}
+      onContextMenu={(e) => {
+        const id = (e.target as HTMLElement).closest<HTMLElement>("[data-tree-row]")?.dataset.id;
+        if (!id) e.preventDefault();
+        else setCtxId(id);
+      }}
       data-drop-root
     >
       {items.map((v) => {
         const row = rows[v.index];
         if (!row) return null;
         return (
-          <div key={v.key} data-index={v.index} style={{ position: "absolute", top: 0, left: 0, right: 0, height: rowH, transform: `translateY(${v.start - margin}px)` }}>
+          <div key={v.key} data-index={v.index} className="emp-tree-slot" style={{ position: "absolute", top: 0, left: 0, right: 0, height: rowH, transform: `translateY(${v.start - margin}px)` }}>
             <TreeItem
               row={row}
               selected={row.id === currentId}
@@ -177,6 +222,7 @@ export function PageTree({ scrollEl, renameId, onRenameDone, drag }: PageTreePro
               renaming={renaming === row.id}
               dragging={dragState?.id === row.id}
               drop={dragState?.target?.id === row.id && dragState.target.zone === "inside"}
+              ctxOpen={ctxId === row.id}
               onFocusRow={setFocusId}
               onRename={() => setRenaming(row.id)}
               onRenameEnd={() => {
@@ -191,6 +237,13 @@ export function PageTree({ scrollEl, renameId, onRenameDone, drag }: PageTreePro
       })}
       {dragState ? <DropLine drag={dragState} rows={rows} rowH={rowH} indexOf={indexOf} offset={(i) => (virtualizer.measurementsCache[i]?.start ?? i * rowH) - margin} /> : null}
     </div>
+      </ContextMenuTrigger>
+      {ctxMeta ? (
+        <ContextMenuContent width={264}>
+          <PageContextItems actions={pageActions(ctxMeta, { onRename: () => setRenaming(ctxMeta.id) })} />
+        </ContextMenuContent>
+      ) : null}
+    </ContextMenu>
   );
 }
 
@@ -220,15 +273,19 @@ interface TreeItemProps {
   renaming: boolean;
   dragging: boolean;
   drop: boolean;
+  /** The shared tree context menu is open for this row. */
+  ctxOpen: boolean;
   onFocusRow: (id: Id) => void;
   onRename: () => void;
   onRenameEnd: () => void;
   onPointerDown: (id: Id, e: ReactPointerEvent) => void;
 }
 
-const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renaming, dragging, drop, onFocusRow, onRename, onRenameEnd, onPointerDown }: TreeItemProps) {
+const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renaming, dragging, drop, ctxOpen, onFocusRow, onRename, onRenameEnd, onPointerDown }: TreeItemProps) {
   const { meta, depth, hasChildren, expanded } = row;
   const [menuOpen, setMenuOpen] = useState(false);
+  // The row's dropdown mounts on first hover/focus (see LazyMenu).
+  const [armed, setArmed] = useState(false);
   const pad = 8 + Math.min(depth, MAX_INDENT_LEVELS) * INDENT;
   const title = meta.title || "Untitled";
 
@@ -247,8 +304,6 @@ const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renami
   const actions = () => pageActions(meta, { onRename });
 
   return (
-    <ContextMenu onOpenChange={setMenuOpen}>
-      <ContextMenuTrigger asChild disabled={renaming}>
         <div
           role="treeitem"
           aria-level={depth + 1}
@@ -262,7 +317,7 @@ const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renami
           data-depth={depth}
           data-dragging={dragging ? "" : undefined}
           data-drop={drop ? "inside" : undefined}
-          data-menu-open={menuOpen ? "" : undefined}
+          data-menu-open={menuOpen || ctxOpen ? "" : undefined}
           className={"emp-sb-row" + (fresh ? " emp-row-in" : "")}
           style={{ paddingLeft: pad }}
           onClick={open}
@@ -270,9 +325,15 @@ const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renami
             e.preventDefault();
             onRename();
           }}
-          onFocus={() => onFocusRow(meta.id)}
+          onFocus={() => {
+            onFocusRow(meta.id);
+            setArmed(true);
+          }}
           onPointerDown={(e) => onPointerDown(meta.id, e)}
-          onPointerEnter={() => preloadRoute(routeForPage(meta))}
+          onPointerEnter={() => {
+            preloadRoute(routeForPage(meta));
+            setArmed(true);
+          }}
         >
           <span className="relative flex h-[18px] w-[18px] flex-none items-center justify-center">
             <span className={"ico" + (hasChildren ? " swap-on-hover" : "")} style={{ transition: "opacity 120ms var(--ease-out)" }}>
@@ -298,18 +359,9 @@ const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renami
           {renaming ? <RenameInput meta={meta} onDone={onRenameEnd} /> : <span className="label">{title}</span>}
           {!renaming ? (
             <span className="trail hover-only" data-no-drag="">
-              <Menu onOpenChange={setMenuOpen}>
-                <MenuTrigger asChild>
-                  <button type="button" tabIndex={-1} className="emp-sb-mini" aria-label={`Actions for ${title}`} onClick={(e) => e.stopPropagation()}>
-                    <Ellipsis aria-hidden />
-                  </button>
-                </MenuTrigger>
-                {menuOpen ? (
-                  <MenuContent align="start" width={264}>
-                    <PageMenuItems actions={actions()} />
-                  </MenuContent>
-                ) : null}
-              </Menu>
+              <LazyMenu armed={armed} open={menuOpen} onOpenChange={setMenuOpen} label={`Actions for ${title}`} align="start">
+                <PageMenuItems actions={actions()} />
+              </LazyMenu>
               {meta.kind === "doc" || meta.kind === "dashboard" ? (
                 <Tooltip content="Add a page inside">
                   <button type="button" tabIndex={-1} className="emp-sb-mini" aria-label={`Add a page inside ${title}`} onClick={(e) => void addChild(e)}>
@@ -320,15 +372,31 @@ const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renami
             </span>
           ) : null}
         </div>
-      </ContextMenuTrigger>
-      {menuOpen ? (
-        <ContextMenuContent width={264}>
-          <PageContextItems actions={actions()} />
-        </ContextMenuContent>
-      ) : null}
-    </ContextMenu>
   );
 });
+
+/**
+ * A row's "…" dropdown. The Radix menu root (and its document keydown listener) only mounts once the row has been
+ * hovered or focused; before that the trigger is a plain button that looks identical.
+ */
+export function LazyMenu({ armed, open, onOpenChange, label, align, children }: { armed: boolean; open: boolean; onOpenChange: (o: boolean) => void; label: string; align?: "start" | "end"; children: ReactNode }) {
+  const button = (
+    <button type="button" tabIndex={-1} className="emp-sb-mini" aria-label={label} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+      <Ellipsis aria-hidden />
+    </button>
+  );
+  if (!armed && !open) return button;
+  return (
+    <Menu open={open} onOpenChange={onOpenChange}>
+      <MenuTrigger asChild>{button}</MenuTrigger>
+      {open ? (
+        <MenuContent align={align} width={264}>
+          {children}
+        </MenuContent>
+      ) : null}
+    </Menu>
+  );
+}
 
 function RenameInput({ meta, onDone }: { meta: PageMeta; onDone: () => void }) {
   const [value, setValue] = useState(meta.title);

@@ -36,7 +36,7 @@ export function EmojiPicker({ onSelect, children, open: openProp, onOpenChange, 
     <RP.Root open={open} onOpenChange={setOpen}>
       <RP.Trigger asChild>{children}</RP.Trigger>
       <RP.Portal>
-        <RP.Content className="emp-popover emp-pop" style={{ ...z, padding: 0, maxWidth: "none" }} side={side} align={align} sideOffset={6} collisionPadding={8}>
+        <RP.Content className="emp-popover emp-pop" data-opaque={z ? "" : undefined} style={{ ...z, padding: 0, maxWidth: "none" }} side={side} align={align} sideOffset={6} collisionPadding={8}>
           <Suspense fallback={<PanelSkeleton />}>
             <Panel
               recent={recentMemory}

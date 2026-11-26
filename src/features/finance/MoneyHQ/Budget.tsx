@@ -2,9 +2,9 @@
  * Budget (§15.3): per-month envelopes grouped by category group. Assigned is edited inline (MoneyField with `=`
  * expressions); Available = rollover + assigned + activity; To be assigned updates live from `finance_budget_assign`.
  */
-import { ChevronRight, RotateCcw, Sparkles, Target } from "lucide-react";
+import { Check, ChevronRight, RotateCcw, Sparkles, Target } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
 import type { BudgetMonth } from "@/backend/types";
 import { cn } from "@/lib/cn";
@@ -13,12 +13,14 @@ import { Amount } from "@/ui/Amount";
 import { Button } from "@/ui/Button";
 import { MoneyField } from "@/ui/MoneyField";
 import { BudgetProgress } from "@/ui/Progress";
-import { Sensitive } from "@/ui/Sensitive";
+import { burst } from "@/ui/motion/Celebrate";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
+import { spring } from "@/ui/motion/tokens";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
 import { fmtMoney, monthLabel, num, toMoney, todayIso } from "../shared/format";
-import { useAsync, useDbChanged } from "../shared/hooks";
-import { Glyph } from "../shared/ui";
+import { useAsync, useDbChanged, useFlip } from "../shared/hooks";
+import { disclose, Glyph } from "../shared/ui";
 import { useLedgerCtx } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 import { HeroMoney } from "./widgets";
@@ -29,6 +31,8 @@ export default function Budget() {
   const bm = useAsync(() => api.finance.budgetMonth({ instanceId, month }), [instanceId, month]);
   useDbChanged([l.schemas.txns?.database.id, l.schemas.categories?.database.id], bm.reload, 300);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // groups below a collapsing/expanding group glide on the compositor (no height animation)
+  const tableRef = useFlip<HTMLElement>(collapsed);
   const rows = useMemo(() => {
     const byCat = new Map((bm.data?.categories ?? []).map((c) => [c.categoryId, c]));
     const groups = new Map<string, { id: string; name: string; icon: string; color: string; target: number; rollover: boolean; assigned: number; activity: number; available: number; carry: number }[]>();
@@ -80,6 +84,17 @@ export default function Budget() {
   };
   const overCount = rows.flatMap(([, cs]) => cs).filter((c) => c.available < -0.004).length;
 
+  // "Balanced" moment: when To be assigned reaches exactly zero, the hero figure gets an 8-ray burst (S13 rays).
+  const heroRef = useRef<HTMLDivElement>(null);
+  const prevTba = useRef<number | null>(null);
+  useEffect(() => {
+    if (!bm.data) return;
+    const was = prevTba.current;
+    prevTba.current = tba;
+    if (was !== null && Math.abs(was) > 0.004 && Math.abs(tba) <= 0.004 && heroRef.current) burst(heroRef.current, { rays: 10, radius: 34 });
+  }, [tba, bm.data]);
+  let rowIndex = 0;
+
   return (
     <div className="flex flex-col gap-4">
       <section className="fh-card fh-budget-hero">
@@ -87,8 +102,13 @@ export default function Budget() {
           <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
             To be assigned · {monthLabel(month)}
           </div>
-          <div className="mt-1 flex items-baseline gap-3">
+          <div className="mt-1 flex items-baseline gap-3" ref={heroRef}>
             {bm.data ? <HeroMoney value={tba} /> : <Skeleton width={180} height={36} radius={8} />}
+            {bm.data && Math.abs(tba) <= 0.004 ? (
+              <m.span className="fh-balanced" initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.pop}>
+                <Check size={12} strokeWidth={3} /> Balanced
+              </m.span>
+            ) : null}
           </div>
           <div className={cn("mt-1 text-body-sm", tba < -0.004 ? "text-warning-text" : "text-tertiary")}>
             {tba > 0.004 ? "Give these dollars a job — assign them to a category or a goal." : tba < -0.004 ? "You've assigned more than you have. Lower an assignment to rebalance." : "Every dollar has a job. Zero-based and balanced."}
@@ -109,7 +129,7 @@ export default function Budget() {
         </div>
       </section>
 
-      <section className="fh-card fh-card-flush">
+      <section className="fh-card fh-card-flush" ref={tableRef}>
         <div className="fh-bud-row fh-bud-head">
           <span className="flex-1">Category</span>
           <span className="fh-bud-num">Assigned</span>
@@ -143,7 +163,7 @@ export default function Budget() {
                     aria-expanded={open}
                   >
                     <span className="flex-1 flex items-center gap-1.5 text-left">
-                      <ChevronRight size={14} className="text-tertiary" style={{ transform: open ? "rotate(90deg)" : undefined, transition: "transform 160ms cubic-bezier(.2,0,0,1)" }} />
+                      <ChevronRight size={14} className="text-tertiary" style={{ transform: open ? "rotate(90deg)" : undefined, transition: "transform var(--dur-release) var(--spring-release)" }} />
                       {group}
                     </span>
                     <span className="fh-bud-num">
@@ -157,11 +177,11 @@ export default function Budget() {
                       <Amount value={toMoney(g.available)} align="end" />
                     </span>
                   </button>
-                  <AnimatePresence initial={false}>
+                  <AnimatePresence initial={false} mode="popLayout">
                     {open ? (
-                      <m.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }} className="overflow-hidden">
+                      <m.div key="rows" {...disclose}>
                         {cs.map((c) => (
-                          <div key={c.id} className="fh-bud-row">
+                          <div key={c.id} className="fh-bud-row fh-cascade" style={{ ["--i" as string]: Math.min(12, rowIndex++) }}>
                             <span className="flex-1 min-w-0 flex items-center gap-2.5">
                               <Glyph name={c.icon} color={c.color} size={24} />
                               <span className="truncate text-body-sm font-medium">{c.name}</span>
@@ -188,8 +208,8 @@ export default function Budget() {
                             </span>
                             <span className="fh-bud-bar">{savings ? <BudgetProgress spent={Math.max(0, c.available)} budget={Math.max(c.target * 12, 1)} pace={null} size={4} /> : <BudgetProgress spent={-c.activity} budget={c.assigned + Math.max(0, c.carry)} pace={pace} size={4} />}</span>
                             <span className="fh-bud-num">
-                              <span className="fh-avail" data-tone={c.available < -0.004 ? "over" : c.available < 0.004 ? "zero" : savings ? "saved" : "ok"}>
-                                <Sensitive>{fmtMoney(c.available)}</Sensitive>
+                              <span className="fh-avail" data-tone={c.available < -0.004 ? "over" : c.available < 0.004 ? "zero" : savings ? "saved" : "ok"} data-sensitive="">
+                                <RollingNumber value={c.available} format={(n) => fmtMoney(n)} countUp={false} sensitive />
                               </span>
                             </span>
                           </div>
@@ -211,8 +231,8 @@ function Fig({ label, value }: { label: string; value: number }) {
       <span className="text-caption text-tertiary" style={{ fontWeight: 500 }}>
         {label}
       </span>
-      <span className="text-title tabular" style={{ fontWeight: 600 }}>
-        <Sensitive>{fmtMoney(value, "USD", { noCents: true })}</Sensitive>
+      <span className="text-title tabular" style={{ fontWeight: 620 }} data-sensitive="">
+        <RollingNumber value={value} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive />
       </span>
     </div>
   );

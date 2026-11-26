@@ -3,8 +3,9 @@
  * preview → review with dedupe (exact skipped, possible duplicates in a review lane), transfer pairs and
  * categorisation (rule / learned / none, overridable) → rules & profile → import with progress.
  */
-import { AlertTriangle, ArrowLeftRight, ArrowRight, Check, CheckCircle2, ChevronLeft, Copy, FileSpreadsheet, FileUp, Sparkles, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, ArrowRight, Check, ChevronLeft, Copy, FileSpreadsheet, FileUp, Sparkles, Wand2 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
+import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
 import type { FinanceImportPreview, FinanceImportStart, Id, ImportMapping } from "@/backend/types";
@@ -17,6 +18,10 @@ import { Checkbox } from "@/ui/Checkbox";
 import { FileDropZone } from "@/ui/FileDropZone";
 import { Input } from "@/ui/Input";
 import { celebrate } from "@/ui/motion/Celebrate";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
+import { spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
+import { SlabGlyph } from "@/ui/SlabGlyph";
 import { Progress, Stepper } from "@/ui/Progress";
 import { Segmented } from "@/ui/Segmented";
 import { Select } from "@/ui/Select";
@@ -53,6 +58,15 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
   const [result, setResult] = useState<{ inserted: number; skipped: number; transfersLinked: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const doneRef = useRef<HTMLDivElement>(null);
+  const doneBadgeRef = useRef<HTMLSpanElement>(null);
+  // lateral step transitions in the direction of travel (§5.4.3)
+  const stepIdx = STEPS.indexOf(step);
+  const prevStep = useRef(stepIdx);
+  const stepDir = stepIdx === prevStep.current ? 1 : stepIdx > prevStep.current ? 1 : -1;
+  useEffect(() => {
+    prevStep.current = stepIdx;
+  }, [stepIdx]);
+  const reduced = useReducedMotionPref();
 
   const pick = async () => {
     setError(null);
@@ -118,7 +132,9 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
       });
       const r = await job.result;
       setResult(r);
-      requestAnimationFrame(() => doneRef.current && celebrate(doneRef.current));
+      // the check pops (pop spring), then the mini-slabs burst from it and the toast drains at +400ms (S8 timing)
+      window.setTimeout(() => doneBadgeRef.current && celebrate(doneBadgeRef.current, { badge: false, particles: 18 }), 240);
+      window.setTimeout(() => notify.success(`${r.inserted.toLocaleString()} ${r.inserted === 1 ? "row" : "rows"} imported`, { description: l.acct.get(accountId)?.name }), 640);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed");
       setStep("rules");
@@ -157,25 +173,36 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
   return (
     <Sheet open={open} onOpenChange={onOpenChange} size="wizard" title="Import transactions" description={TITLES[step]} footer={footer} dismissible={step !== "import" || !!result}>
       <div className="flex flex-col gap-5">
-        <Stepper total={STEPS.length} current={idx} />
+        <Stepper total={STEPS.length} current={result ? STEPS.length : idx} />
         {error ? (
           <div className="fh-alert" data-tone="warn">
             <AlertTriangle size={16} />
             <span className="text-body-sm">{error}</span>
           </div>
         ) : null}
-        <AnimatePresence mode="wait" initial={false}>
-          <m.div key={step} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}>
+        <AnimatePresence mode="wait" initial={false} custom={stepDir}>
+          <m.div
+            key={step}
+            custom={stepDir}
+            variants={{
+              in: (d: number) => (reduced ? { opacity: 0 } : { opacity: 0, x: d * 24 }),
+              at: { opacity: 1, x: 0, transition: reduced ? { duration: 0.14 } : { duration: 0.24, ease: [0.2, 0, 0, 1] } },
+              out: (d: number) => (reduced ? { opacity: 0, transition: { duration: 0.08 } } : { opacity: 0, x: d * -16, transition: { duration: 0.1, ease: [0.4, 0, 1, 1] } }),
+            }}
+            initial="in"
+            animate="at"
+            exit="out"
+          >
             {step === "file" ? (
               <div className="flex flex-col gap-4">
-                <FileDropZone title={busy ? "Reading…" : "Drop a bank statement or click to choose"} hint="CSV, OFX, QFX or QIF · nothing leaves this device" icon={busy ? FileSpreadsheet : FileUp} onBrowse={() => void pick()} onFiles={() => void pick()} disabled={busy} />
+                <FileDropZone title={busy ? "Reading the statement…" : "Drop a bank statement or click to choose"} hint="CSV, OFX, QFX or QIF · nothing leaves this device" progress={busy ? null : undefined} onBrowse={() => void pick()} onFiles={() => void pick()} disabled={busy} />
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { t: "Sniffs the format", d: "CSV delimiters, OFX 1 & 2, QFX and QIF are detected automatically." },
                     { t: "Never double-counts", d: "Exact repeats are skipped; near-matches wait for your review." },
                     { t: "Learns as you go", d: "Rules and past choices categorise most rows for you." },
-                  ].map((x) => (
-                    <div key={x.t} className="fh-fact">
+                  ].map((x, i) => (
+                    <div key={x.t} className="fh-fact fh-cascade" style={{ ["--i" as string]: i * 3 }}>
                       <div className="text-body-sm font-semibold">{x.t}</div>
                       <div className="text-caption text-tertiary mt-0.5" style={{ fontWeight: 400 }}>
                         {x.d}
@@ -222,10 +249,12 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
               <div className="flex flex-col items-center text-center gap-4 py-10" ref={doneRef}>
                 {result ? (
                   <>
-                    <m.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 22 }} className="fh-quiet-icon" style={{ width: 56, height: 56, borderRadius: 16, color: "var(--gain-text)", background: "var(--gain-soft)" }}>
-                      <CheckCircle2 size={28} />
+                    <m.span ref={doneBadgeRef} initial={reduced ? { opacity: 0 } : { scale: 0.2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={reduced ? { duration: 0.14 } : spring.pop} className="fh-done-badge">
+                      <Check size={30} strokeWidth={3} />
                     </m.span>
-                    <div className="text-h3">Imported {result.inserted.toLocaleString()} transactions</div>
+                    <div className="text-h3 tabular fh-baseline">
+                      Imported <RollingNumber value={result.inserted} format={(n) => Math.round(n).toLocaleString()} countUp countUpDuration={0.9} /> transactions
+                    </div>
                     <div className="text-body text-secondary max-w-[420px]">
                       {result.skipped ? `${result.skipped} skipped as duplicates. ` : ""}
                       {result.transfersLinked ? `${result.transfersLinked} linked as transfers between your accounts. ` : ""}
@@ -234,13 +263,19 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
                   </>
                 ) : (
                   <>
-                    <Spinner size={22} />
-                    <div className="text-title">Importing…</div>
+                    <SlabGlyph size={56} animate exploded />
+                    <div className="text-title">Committing to your ledger…</div>
                     <div className="w-[360px]">
-                      <Progress value={progress ? progress.done / Math.max(1, progress.total) : 0} size={4} aria-label="Import progress" />
+                      <Progress value={progress ? progress.done / Math.max(1, progress.total) : 0} size={8} aria-label="Import progress" />
                     </div>
                     <div className="text-caption text-tertiary tabular" style={{ fontWeight: 400 }}>
-                      {progress ? `${progress.done.toLocaleString()} of ${progress.total.toLocaleString()}` : ""}
+                      {progress ? (
+                        <>
+                          <RollingNumber value={progress.done} format={(n) => Math.round(n).toLocaleString()} countUp={false} /> of {progress.total.toLocaleString()}
+                        </>
+                      ) : (
+                        ""
+                      )}
                     </div>
                   </>
                 )}
@@ -310,7 +345,7 @@ function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts
             {start.sample.slice(0, 6).map((r, i) => (
               <tr key={i}>
                 {cols.map((_, j) => (
-                  <td key={j} className={cn("text-secondary", roleOf(j) === "ignore" && "opacity-40")} style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <td key={j} className={cn("text-secondary fh-cell-role", roleOf(j) === "ignore" && "opacity-40")} data-role={roleOf(j)} style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", transition: "opacity 200ms var(--ease-out)" }}>
                     {r[j] ?? ""}
                   </td>
                 ))}
@@ -324,8 +359,9 @@ function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts
           How EMP reads it
         </div>
         <div className="fh-parsed">
-          {(preview?.rows ?? []).slice(0, 4).map((r) => (
-            <div key={r.idx} className="flex items-center gap-3 text-body-sm">
+          {(preview?.rows ?? []).slice(0, 4).map((r, i) => (
+            <div key={`${r.idx}:${r.payee}:${r.amount}`} className="flex items-center gap-3 text-body-sm fh-decode" style={{ ["--i" as string]: i }}>
+              <Check size={13} strokeWidth={2.6} className="fh-decode-tick" />
               <span className="w-[86px] text-tertiary tabular">{dayLabel(r.date, true)}</span>
               <span className="flex-1 truncate font-medium">{r.payee}</span>
               <Amount value={toMoney(r.amount)} colored={num(r.amount) > 0} signed={num(r.amount) > 0} align="end" />
@@ -350,9 +386,11 @@ function Summary({ preview, skip }: { preview: FinanceImportPreview; skip: Set<n
   ];
   return (
     <div className="fh-import-sum">
-      {items.map((x) => (
-        <div key={x.l} className="fh-import-stat" data-tone={x.tone}>
-          <span className="tabular">{x.n.toLocaleString()}</span>
+      {items.map((x, i) => (
+        <div key={x.l} className="fh-import-stat fh-cascade" data-tone={x.tone} style={{ ["--i" as string]: i * 2 }}>
+          <span className="tabular">
+            <RollingNumber value={x.n} format={(n) => Math.round(n).toLocaleString()} countUpKey={`import:${x.l}`} countUpDuration={0.8} />
+          </span>
           <span>{x.l}</span>
         </div>
       ))}
@@ -395,12 +433,12 @@ function ReviewStep({ preview, skip, setSkip, overrides, setOverrides, ledger }:
         ]}
       />
       <div className="fh-review">
-        {rows.slice(0, 400).map((r) => {
+        {rows.slice(0, 400).map((r, ri) => {
           const catId = overrides[r.idx]?.categoryId ?? r.categoryId;
           const cat = catId ? ledger.cat.get(catId) : undefined;
           const skipped = skip.has(r.idx);
           return (
-            <div key={r.idx} className="fh-review-row" data-skipped={skipped ? "" : undefined}>
+            <div key={r.idx} className={cn("fh-review-row", ri < 14 && "fh-cascade")} style={ri < 14 ? { ["--i" as string]: Math.min(12, ri) } : undefined} data-skipped={skipped ? "" : undefined}>
               <Checkbox checked={!skipped} onCheckedChange={() => toggle(r.idx)} aria-label={skipped ? "Include" : "Skip"} disabled={!!r.duplicateOf} />
               <span className="w-[64px] text-caption text-tertiary tabular">{dayLabel(r.date)}</span>
               <span className="flex-1 min-w-0">
@@ -431,7 +469,7 @@ function ReviewStep({ preview, skip, setSkip, overrides, setOverrides, ledger }:
                   value={catId ?? null}
                   onChange={(c) => setOverrides({ ...overrides, [r.idx]: { categoryId: c ?? undefined } })}
                   trigger={
-                    <button type="button" className="fh-chip" data-kind={cat ? "cat" : "none"} style={cat ? { color: `var(--block-${cat.color}-text)`, background: `var(--block-${cat.color}-bg)` } : undefined}>
+                    <button type="button" className="fh-chip" data-kind={cat ? "cat" : "none"} style={cat ? ({ "--chip-c": `var(--block-${cat.color}-text)`, "--chip-bg": `var(--block-${cat.color}-bg)` } as React.CSSProperties) : undefined}>
                       {cat ? <Glyph name={cat.icon} color={cat.color} size={14} className="!bg-transparent" /> : null}
                       <span className="truncate max-w-[130px]">{cat ? cat.name : "Categorise"}</span>
                       {cat && !overrides[r.idx] ? <span className="fh-conf" data-c={r.confidence}>{r.confidence === "rule" ? "rule" : r.confidence === "learned" ? "learned" : ""}</span> : null}

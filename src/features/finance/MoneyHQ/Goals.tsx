@@ -2,9 +2,9 @@
  * Goals (§15.5, §16.2): emergency fund and sinking funds as progress rings with the monthly amount each needs
  * (`finance_goal_plan`, annuity form when a yield is set), on-track status, and a quick "add goal".
  */
-import { CalendarDays, CheckCircle2, ExternalLink, Plus, Target } from "lucide-react";
-import { m } from "motion/react";
-import { useState } from "react";
+import { CalendarDays, Check, CheckCircle2, ExternalLink, Plus, Target } from "lucide-react";
+import { AnimatePresence, m } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/backend";
 import { navigate } from "@/app/router";
 import { notify } from "@/stores/toasts";
@@ -13,10 +13,14 @@ import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { Input } from "@/ui/Input";
 import { MoneyField } from "@/ui/MoneyField";
+import { celebrate } from "@/ui/motion/Celebrate";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { staggerItem, staggerList } from "@/ui/motion/presets";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
+import { spring } from "@/ui/motion/tokens";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { dayLabel, daysBetween, fmtMoney, fmtPct, num, todayIso } from "../shared/format";
+import { dayLabel, daysBetween, fmtMoney, num, todayIso } from "../shared/format";
 import { useAsync, V } from "../shared/hooks";
 import { Glyph, Quiet } from "../shared/ui";
 import { useLedgerCtx, type GoalRow } from "./ledger";
@@ -42,16 +46,20 @@ export default function Goals() {
   if (l.loading) return <Skeleton height={360} radius={14} />;
   return (
     <div className="flex flex-col gap-4">
-      <section className="fh-card flex items-center gap-6" style={{ padding: "18px 22px" }}>
-        <BudgetRing ratio={totalTarget ? totalSaved / totalTarget : 0} size={72} stroke={7} color="var(--accent-solid)">
-          <span className="text-body-sm font-semibold tabular">{totalTarget ? fmtPct(totalSaved / totalTarget, 0) : "0%"}</span>
+      <section className="fh-card flex items-center gap-6" style={{ padding: "20px 24px" }}>
+        <BudgetRing ratio={totalTarget ? totalSaved / totalTarget : 0} size={76} stroke={7} color="var(--chart-line)">
+          <span className="text-body-sm font-semibold tabular">
+            <RollingNumber value={totalTarget ? Math.round((totalSaved / totalTarget) * 100) : 0} format={(n) => `${Math.round(n)}%`} countUp={false} />
+          </span>
         </BudgetRing>
         <div className="flex-1">
           <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
             Saved toward {l.goals.length} goals
           </div>
           <div className="tabular" style={{ fontSize: 26, lineHeight: "32px", fontWeight: 640, letterSpacing: "-0.022em" }}>
-            <Sensitive>{fmtMoney(totalSaved, "USD", { noCents: true })}</Sensitive>
+            <span data-sensitive="">
+              <RollingNumber value={totalSaved} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUpKey="money:goals" sensitive />
+            </span>
             <span className="text-tertiary" style={{ fontSize: 16, fontWeight: 500 }}>
               {" "}
               of <Sensitive>{fmtMoney(totalTarget, "USD", { noCents: true })}</Sensitive>
@@ -62,7 +70,7 @@ export default function Goals() {
             {overview ? ` · emergency fund covers ${overview.efMonths.toFixed(1)} months of essentials` : ""}
           </div>
         </div>
-        <Button variant="primary" size="sm" icon={Plus} onClick={() => setAdding(true)}>
+        <Button variant="primary" size="sm" icon={Plus} iconMotion="plus" onClick={() => setAdding(true)}>
           New goal
         </Button>
       </section>
@@ -72,64 +80,9 @@ export default function Goals() {
         </section>
       ) : (
         <m.div className="fh-goals" variants={staggerList(0.05)} initial="hidden" animate="show">
-          {l.goals.map((g, i) => {
-            const s = saved(g);
-            const ratio = g.target ? s / g.target : 0;
-            const plan = plans.data?.[i];
-            const left = g.date ? daysBetween(todayIso(), g.date) : null;
-            const done = s >= g.target;
-            return (
-              <m.article key={g.id} variants={staggerItem} className="fh-goal">
-                <div className="flex items-start gap-3">
-                  <BudgetRing ratio={ratio} size={64} stroke={6} color={done ? "var(--gain)" : "var(--accent-solid)"}>
-                    <Glyph name={g.icon} color={g.kind === "emergency" ? "green" : g.kind === "sinking" ? "blue" : "purple"} size={32} />
-                  </BudgetRing>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="m-0 truncate text-body font-semibold">{g.name}</h3>
-                    </div>
-                    <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                      {g.kind === "emergency" ? "Emergency fund" : g.kind === "sinking" ? "Sinking fund" : "Savings goal"}
-                      {g.accountId ? ` · ${l.acct.get(g.accountId)?.name ?? ""}` : ""}
-                    </div>
-                    <div className="mt-2 tabular text-title" style={{ fontWeight: 620 }}>
-                      <Sensitive>{fmtMoney(Math.min(s, g.target), "USD", { noCents: true })}</Sensitive>
-                      <span className="text-tertiary text-body-sm font-normal">
-                        {" "}
-                        / <Sensitive>{fmtMoney(g.target, "USD", { noCents: true })}</Sensitive>
-                      </span>
-                    </div>
-                  </div>
-                  {done ? (
-                    <Badge tone="gain" icon={CheckCircle2}>
-                      Funded
-                    </Badge>
-                  ) : (
-                    <span className="text-caption text-secondary tabular" style={{ fontWeight: 600 }}>
-                      {fmtPct(ratio, 0)}
-                    </span>
-                  )}
-                </div>
-                <div className="fh-goal-foot">
-                  <span className="inline-flex items-center gap-1.5">
-                    <CalendarDays size={13} />
-                    {g.date ? `${dayLabel(g.date, true)}${left !== null && left > 0 ? ` · ${left < 60 ? `${left} days` : `${Math.round(left / 30.44)} months`}` : ""}` : "No date"}
-                  </span>
-                  <span className="ml-auto tabular">
-                    {done ? "Nothing more needed" : plan ? (
-                      <>
-                        <Sensitive>{fmtMoney(plan.monthlyRequired, "USD", { noCents: true })}</Sensitive>/mo needed
-                      </>
-                    ) : g.kind === "emergency" ? (
-                      `${fmtMoney(g.target - s, "USD", { noCents: true })} to go`
-                    ) : (
-                      "Add a date to plan"
-                    )}
-                  </span>
-                </div>
-              </m.article>
-            );
-          })}
+          {l.goals.map((g, i) => (
+            <GoalCard key={g.id} g={g} saved={saved(g)} plan={plans.data?.[i] ?? null} />
+          ))}
         </m.div>
       )}
       {l.schemas.goals ? (
@@ -141,6 +94,168 @@ export default function Goals() {
       ) : null}
       {adding ? <AddGoal onClose={() => setAdding(false)} /> : null}
     </div>
+  );
+}
+
+type Plan = Awaited<ReturnType<typeof api.finance.goalPlan>> | null;
+
+/**
+ * A goal plate. Unlinked goals take contributions inline ("Add money"); the one that crosses its target gets the S8
+ * moment: the ring settles full, the figure rolls, the centre check pops with --glow-gain, then mini-slabs burst from
+ * the ring and a toast follows at +400ms.
+ */
+function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan }) {
+  const l = useLedgerCtx();
+  const ringRef = useRef<HTMLDivElement>(null);
+  const [adding, setAdding] = useState(false);
+  const [amount, setAmountState] = useState<string | null>(null);
+  // the money field commits on blur/Enter; mirror it in a ref so submit can read the committed value at once
+  const amountRef = useRef<string | null>(null);
+  const setAmount = (v: string | null) => {
+    amountRef.current = v;
+    setAmountState(v);
+  };
+  const [busy, setBusy] = useState(false);
+  const [moment, setMoment] = useState(0);
+  const ratio = g.target ? s / g.target : 0;
+  const left = g.date ? daysBetween(todayIso(), g.date) : null;
+  const done = s >= g.target - 0.004;
+  const G = l.schemas.goals;
+  const canAdd = !done && !g.accountId && !!G?.database.roles["goal.saved"];
+
+  // fire the celebration once the new value has landed (after the ring's settle)
+  const prevDone = useRef(done);
+  useEffect(() => {
+    const was = prevDone.current;
+    prevDone.current = done;
+    if (!was && done && moment > 0) {
+      const t1 = window.setTimeout(() => ringRef.current && celebrate(ringRef.current, { glow: true, particles: 20 }), 620);
+      const t2 = window.setTimeout(() => notify.success(`${g.name} is fully funded`), 1020);
+      return () => {
+        window.clearTimeout(t1);
+        window.clearTimeout(t2);
+      };
+    }
+  }, [done, moment, g.name]);
+
+  const contribute = async () => {
+    const amt = num(amountRef.current);
+    if (!G || amt <= 0) return;
+    setBusy(true);
+    try {
+      const next = (s + amt).toFixed(2);
+      await api.db.rowsUpdate({ updates: [{ id: g.id, values: { [G.database.roles["goal.saved"]]: V.money(next) } }] });
+      setMoment((n) => n + 1);
+      setAdding(false);
+      setAmount(null);
+      l.reload();
+    } catch (e) {
+      notify.fromError(e, "Couldn't add to the goal");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <m.article variants={staggerItem} className="fh-goal panel" data-raise="" data-light="" data-tilt="2" data-done={done ? "" : undefined}>
+      <EdgeLight />
+      <div className="flex items-start gap-3">
+        <div ref={ringRef} className="relative flex-none">
+          <BudgetRing ratio={ratio} size={64} stroke={6} color={done ? "var(--gain)" : "var(--chart-line)"}>
+            <AnimatePresence initial={false} mode="popLayout">
+              {done ? (
+                <m.span key="done" className="fh-goal-check" initial={moment ? { scale: 0.2, opacity: 0 } : false} animate={{ scale: 1, opacity: 1 }} transition={{ ...spring.pop, delay: moment ? 0.5 : 0 }}>
+                  <Check size={18} strokeWidth={3} />
+                </m.span>
+              ) : (
+                <m.span key="glyph" exit={{ scale: 0.6, opacity: 0, transition: { duration: 0.12 } }}>
+                  <Glyph name={g.icon} color={g.kind === "emergency" ? "green" : g.kind === "sinking" ? "blue" : "purple"} size={32} />
+                </m.span>
+              )}
+            </AnimatePresence>
+          </BudgetRing>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <h3 className="m-0 truncate text-body font-semibold">{g.name}</h3>
+          </div>
+          <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
+            {g.kind === "emergency" ? "Emergency fund" : g.kind === "sinking" ? "Sinking fund" : "Savings goal"}
+            {g.accountId ? ` · ${l.acct.get(g.accountId)?.name ?? ""}` : ""}
+          </div>
+          <div className="mt-2 tabular text-title" style={{ fontWeight: 640 }}>
+            <span data-sensitive="">
+              <RollingNumber value={Math.min(s, g.target)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive />
+            </span>
+            <span className="text-tertiary text-body-sm font-normal">
+              {" "}
+              / <Sensitive>{fmtMoney(g.target, "USD", { noCents: true })}</Sensitive>
+            </span>
+          </div>
+        </div>
+        {done ? (
+          <Badge tone="gain" icon={CheckCircle2}>
+            Funded
+          </Badge>
+        ) : (
+          <span className="text-caption text-secondary tabular" style={{ fontWeight: 620 }}>
+            <RollingNumber value={Math.round(ratio * 100)} format={(n) => `${Math.round(n)}%`} countUp={false} />
+          </span>
+        )}
+      </div>
+      <div className="fh-goal-foot">
+        <AnimatePresence mode="popLayout" initial={false}>
+          {adding ? (
+            <m.form
+              key="add"
+              className="flex items-center gap-2 w-full"
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 12, transition: { duration: 0.1 } }}
+              transition={spring.settle}
+              onSubmit={(e) => {
+                e.preventDefault();
+                (document.activeElement as HTMLElement | null)?.blur();
+                window.setTimeout(() => void contribute(), 0);
+              }}
+            >
+              <MoneyField size="sm" value={amount} onChange={setAmount} aria-label={`Amount to add to ${g.name}`} autoFocus placeholder={(g.target - s).toFixed(2)} wrapperClassName="flex-1" />
+              <Button size="sm" variant="ghost" type="button" onClick={() => setAdding(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" variant="primary" type="submit" loading={busy}>
+                Add
+              </Button>
+            </m.form>
+          ) : (
+            <m.div key="info" className="flex items-center gap-2 w-full" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12, transition: { duration: 0.1 } }} transition={spring.settle}>
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarDays size={13} />
+                {g.date ? `${dayLabel(g.date, true)}${left !== null && left > 0 ? ` · ${left < 60 ? `${left} days` : `${Math.round(left / 30.44)} months`}` : ""}` : "No date"}
+              </span>
+              <span className="ml-auto tabular">
+                {done ? (
+                  "Nothing more needed"
+                ) : plan ? (
+                  <>
+                    <Sensitive>{fmtMoney(plan.monthlyRequired, "USD", { noCents: true })}</Sensitive>/mo needed
+                  </>
+                ) : g.kind === "emergency" ? (
+                  `${fmtMoney(g.target - s, "USD", { noCents: true })} to go`
+                ) : (
+                  "Add a date to plan"
+                )}
+              </span>
+              {canAdd ? (
+                <Button size="xs" variant="secondary" icon={Plus} iconMotion="plus" onClick={() => setAdding(true)}>
+                  Add money
+                </Button>
+              ) : null}
+            </m.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </m.article>
   );
 }
 

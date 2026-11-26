@@ -151,13 +151,19 @@ export function useRows(databaseId: Id | null | undefined): { rows: RowDTO[] | n
   const refresh = useCallback(() => {
     if (!databaseId) return;
     const n = ++seq.current;
-    api.db
-      .query({ databaseId, window: { offset: 0, limit: 500 }, reqId: n })
-      .then((res) => {
+    // Page through the whole database: hubs compute streaks and totals from every row (a habit log easily passes 500).
+    const PAGE = 500;
+    const load = async () => {
+      const all: RowDTO[] = [];
+      for (let page = 0; page < 100; page++) {
+        const res = await api.db.query({ databaseId, window: { offset: all.length, limit: PAGE }, reqId: n });
         if (n !== seq.current || "notModified" in res) return;
-        setRowsState(res.rows);
-      })
-      .catch(() => n === seq.current && setRowsState((p) => p ?? []));
+        all.push(...res.rows);
+        if (!res.rows.length || all.length >= res.total) break;
+      }
+      if (n === seq.current) setRowsState(all);
+    };
+    load().catch(() => n === seq.current && setRowsState((p) => p ?? []));
   }, [databaseId]);
   useEffect(() => {
     setRowsState(null);

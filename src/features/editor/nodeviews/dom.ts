@@ -18,6 +18,8 @@ import { cachedAsset, loadAsset, pickFiles, uploadBlob } from '../lib/assets';
 import { editorContext, prefersReducedMotion } from '../lib/context';
 import { domIcon, el } from '../lib/domIcons';
 import { pageInfo, subscribePageInfo } from '../lib/pageInfo';
+import { riseStagger } from '../lib/fx';
+import { burst } from '@/ui/motion/Celebrate';
 import { openOverlay, rectOf } from '../menus/overlay';
 import { renderKatex } from '../lib/katex';
 import { languageLabel } from '../lib/languages';
@@ -79,7 +81,11 @@ export const containerView: NodeViewRenderer = ({ node }) => {
 
 // ───────────────────────────────────────────────────────────────────────────── toggles
 
-/** Expand/collapse with the §4.2 toggle motion (height 0→auto + opacity, 200ms; exit shorter). */
+/**
+ * Expand/collapse (S22 language, §5.4.5): compositor-only. Collapsing lifts the children out (opacity → 0, y −4, 120ms
+ * ease-in) before the attribute flips; expanding flips first, then the children rise in from under the header on the
+ * settle spring with a 16ms stagger (cap 12). Height is never animated.
+ */
 export function setToggleCollapsed(view: EditorView, contentPos: number, collapsed: boolean): void {
   const content = view.state.doc.nodeAt(contentPos);
   if (!content || !isToggleLike(content)) return;
@@ -96,26 +102,34 @@ export function setToggleCollapsed(view: EditorView, contentPos: number, collaps
     apply();
     return;
   }
-  const many = group.querySelectorAll(':scope > .emp-block').length > 40;
+  const kids = (g: HTMLElement) => Array.from(g.querySelectorAll<HTMLElement>(':scope > .emp-block')).slice(0, 14);
   if (collapsed) {
-    if (many) return apply();
-    const h = group.offsetHeight;
-    group.style.overflow = 'hidden';
-    const a = group.animate([{ height: `${h}px`, opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 140, easing: css.easeIn });
-    a.onfinish = () => {
-      group.style.overflow = '';
+    const list = kids(group);
+    if (!list.length) return apply();
+    let left = list.length;
+    let applied = false;
+    const finish = () => {
+      if (applied) return;
+      applied = true;
       apply();
     };
+    list.forEach((k, i) => {
+      const a = k.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-4px)' }], { duration: 120, delay: Math.min(i, 6) * 8, easing: css.easeIn, fill: 'forwards' });
+      a.onfinish = () => {
+        left -= 1;
+        if (left <= 0) {
+          finish();
+          // the fill is dropped once the group is hidden, so a later expand starts clean
+          requestAnimationFrame(() => list.forEach((x) => x.getAnimations().forEach((an) => an.cancel())));
+        }
+      };
+    });
+    window.setTimeout(finish, 400);
   } else {
     apply();
     const g = containerEl.querySelector<HTMLElement>(':scope > .emp-group');
-    if (!g || many) return;
-    const h = g.scrollHeight;
-    g.style.overflow = 'hidden';
-    const a = g.animate([{ height: '0px', opacity: 0 }, { height: `${h}px`, opacity: 1 }], { duration: 200, easing: css.easeOut });
-    a.onfinish = () => {
-      g.style.overflow = '';
-    };
+    if (!g) return;
+    riseStagger(kids(g), { step: 16, cap: 12, y: -5 });
   }
 }
 
@@ -221,11 +235,38 @@ export const headingView: NodeViewRenderer = ({ node, view, getPos, editor }) =>
 
 // ───────────────────────────────────────────────────────────────────────────── to-do
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** The kit checkbox's inner structure (lit cap + drawn tick), built in plain DOM for the hot to-do node view. */
+function checkFace(box: HTMLElement) {
+  const cap = el('span', 'emp-check-cap');
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', 'M5 12.5l4.5 4.5L19 7.5');
+  path.setAttribute('pathLength', '1');
+  path.setAttribute('class', 'emp-check-tick');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '3.2');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  svg.appendChild(path);
+  const ind = el('span', 'emp-check-ind');
+  ind.appendChild(svg);
+  box.append(cap, ind);
+}
+
+/**
+ * To-do (S13 task completion): the box is the kit checkbox (well at rest, lit cap when done); checking pops it on the
+ * `pop` spring, fires the 8-ray burst, and draws the strike-through left → right while the text fades to tertiary.
+ */
 export const todoView: NodeViewRenderer = ({ node, getPos, editor }) => {
   const dom = el('div', 'emp-todo');
   dom.setAttribute('data-content-type', 'todoItem');
   const box = el('button', 'emp-check', { type: 'button', contenteditable: 'false', role: 'checkbox', tabindex: '-1' });
-  box.appendChild(domIcon('check', 12, 3));
+  checkFace(box);
   const text = el('div', 'emp-todo-text');
   const inline = el('span', 'emp-todo-inline');
   text.appendChild(inline);
@@ -235,6 +276,7 @@ export const todoView: NodeViewRenderer = ({ node, getPos, editor }) => {
     const on = !!current.attrs.checked;
     dom.setAttribute('data-checked', on ? 'true' : 'false');
     box.setAttribute('aria-checked', on ? 'true' : 'false');
+    box.setAttribute('data-state', on ? 'checked' : 'unchecked');
   };
   sync();
   box.addEventListener('mousedown', (e) => e.preventDefault());
@@ -245,12 +287,16 @@ export const todoView: NodeViewRenderer = ({ node, getPos, editor }) => {
     const checked = !current.attrs.checked;
     if (checked && !prefersReducedMotion()) {
       box.classList.remove('is-popping');
+      dom.classList.remove('is-striking');
       void box.offsetWidth;
       box.classList.add('is-popping');
+      dom.classList.add('is-striking');
+      burst(box, { radius: 10 });
     }
     editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, checked }));
   });
   box.addEventListener('animationend', () => box.classList.remove('is-popping'));
+  inline.addEventListener('transitionend', () => dom.classList.remove('is-striking'));
   return {
     dom,
     contentDOM: inline,
@@ -331,7 +377,14 @@ export const codeBlockView: NodeViewRenderer = ({ node, getPos, editor }) => {
   const copy = el('button', 'emp-code-btn', { type: 'button', tabindex: '-1', 'aria-label': 'Copy code' });
   const copyLabel = el('span', 'emp-code-copy-label');
   copyLabel.textContent = 'Copy';
-  copy.append(domIcon('copy', 14), copyLabel);
+  // copy → check success morph: both glyphs live in one slot and swap by rotate/scale/opacity (data-done)
+  const copySlot = el('span', 'emp-code-copy-icon');
+  const copyA = domIcon('copy', 14);
+  copyA.classList.add('is-copy');
+  const copyB = domIcon('check', 14, 2.25);
+  copyB.classList.add('is-check');
+  copySlot.append(copyA, copyB);
+  copy.append(copySlot, copyLabel);
   bar.append(lang, spacer, wrapBtn, copy);
   const pre = el('pre', 'emp-code-pre');
   const code = el('code');
@@ -365,13 +418,11 @@ export const codeBlockView: NodeViewRenderer = ({ node, getPos, editor }) => {
     void navigator.clipboard?.writeText(current.textContent).then(() => {
       copy.setAttribute('data-done', '');
       copyLabel.textContent = 'Copied';
-      copy.replaceChild(domIcon('check', 14, 2.25), copy.firstChild as Node);
       if (copyTimer) clearTimeout(copyTimer);
       copyTimer = setTimeout(() => {
         copy.removeAttribute('data-done');
         copyLabel.textContent = 'Copy';
-        copy.replaceChild(domIcon('copy', 14), copy.firstChild as Node);
-      }, 1200);
+      }, 1400);
     });
   });
   caption.addEventListener('keydown', (e) => {

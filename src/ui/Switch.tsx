@@ -1,9 +1,6 @@
 import * as RS from "@radix-ui/react-switch";
-import { m } from "motion/react";
 import { useId, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { spring } from "./motion/tokens";
-import { useReducedMotionPref } from "./motion/useReducedEffects";
 
 export interface SwitchProps {
   checked?: boolean;
@@ -20,11 +17,9 @@ export interface SwitchProps {
   "aria-label"?: string;
 }
 
-const DIMS = { sm: { thumb: 12, travel: 10 }, md: { thumb: 14, travel: 14 } } as const;
-
 /**
- * Switch (§5.4, §4.2): thumb travels with spring.snappy and stretches +4px while pressed
- * (anchored to the travel direction); track crossfades over 150ms.
+ * Switch (docs/DESIGN.md §6.2): a recessed well track whose lit fill crossfades in (180ms); the dome thumb travels
+ * on the `thumb` spring and stretches ×1.28 from its leading edge while held. All CSS — transform/opacity only.
  */
 export function Switch({ checked, defaultChecked, onCheckedChange, disabled, size = "md", label, description, labelFirst, id, className, ...aria }: SwitchProps) {
   const auto = useId();
@@ -32,16 +27,13 @@ export function Switch({ checked, defaultChecked, onCheckedChange, disabled, siz
   const [inner, setInner] = useState(!!defaultChecked);
   const on = checked ?? inner;
   const [pressed, setPressed] = useState(false);
-  const reduced = useReducedMotionPref();
-  const d = DIMS[size];
-  const stretch = pressed && !reduced ? 4 : 0;
-  const x = on ? d.travel - stretch : 0;
 
   const sw = (
     <RS.Root
       id={sid}
       className={cn("emp-switch", !label && className)}
       data-size={size === "sm" ? "sm" : undefined}
+      data-pressing={pressed ? "" : undefined}
       checked={on}
       onCheckedChange={(v) => {
         setInner(v);
@@ -52,17 +44,12 @@ export function Switch({ checked, defaultChecked, onCheckedChange, disabled, siz
       onPointerDown={() => setPressed(true)}
       onPointerUp={() => setPressed(false)}
       onPointerLeave={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
       onKeyDown={(e) => (e.key === " " || e.key === "Enter") && setPressed(true)}
       onKeyUp={() => setPressed(false)}
+      onBlur={() => setPressed(false)}
     >
-      <RS.Thumb asChild>
-        <m.span
-          className="emp-switch-thumb"
-          initial={false}
-          animate={{ x, width: d.thumb + stretch }}
-          transition={spring.snappy}
-        />
-      </RS.Thumb>
+      <RS.Thumb className="emp-switch-thumb" />
     </RS.Root>
   );
   if (!label) return sw;

@@ -1,7 +1,8 @@
-import { X } from "lucide-react";
-import type { ReactNode } from "react";
+import { Check, X } from "lucide-react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { BLOCK_COLORS, fnv1a, type BlockColorName } from "@/lib/hash";
+import { renderIcon, type IconComponent } from "./Button";
 
 export type TagColor = BlockColorName | "default";
 
@@ -15,7 +16,7 @@ export interface TagProps {
   title?: string;
 }
 
-/** Select/multi-select tag pill (§5.3): 20px, px 6, radius 4, 12/16 500, block colours (§3.4). */
+/** Tag (docs/DESIGN.md §6.3): printed, not raised — 20px, radius 5, block-colour face with a 1px inner rim. */
 export function Tag({ children, color = "gray", onRemove, removeOnHover, className, title }: TagProps) {
   const c = color === "default" ? "gray" : color;
   return (
@@ -44,4 +45,30 @@ export function nextTagColor(seed: string, existing: readonly TagColor[] = []): 
     if (!existing.includes(c)) return c;
   }
   return palette[(start + existing.length) % palette.length];
+}
+
+export interface FilterChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+  /** Latched (on). */
+  active?: boolean;
+  children: ReactNode;
+  icon?: IconComponent | ReactNode;
+  /** Trailing count (tertiary). */
+  count?: number;
+}
+
+/**
+ * Filter chip (docs/DESIGN.md §6.3): a tag-shaped keycap (`.slab`, 1.5px edge). Active = latched half-down with a
+ * check sliding in (x −4 → 0, 120ms). Use for database / Money HQ filter rows; give the row 4px of bottom room.
+ */
+export function FilterChip({ active, children, icon, count, className, ...rest }: FilterChipProps) {
+  return (
+    <button type="button" className={cn("emp-chip slab", className)} aria-pressed={!!active} data-check="" {...rest}>
+      <span className="emp-chip-check" aria-hidden>
+        <Check strokeWidth={2.6} />
+      </span>
+      {renderIcon(icon)}
+      <span>{children}</span>
+      {count !== undefined ? <span className="emp-chip-count tabular">{count}</span> : null}
+    </button>
+  );
 }

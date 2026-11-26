@@ -17,7 +17,7 @@ import {
   Sparkles,
   Wand2,
 } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
+import { AnimatePresence, m, useIsPresent } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, errorMessage } from "@/backend";
 import type { PasswordStrength } from "@/backend/types";
@@ -33,6 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
 import { Segmented } from "@/ui/Segmented";
 import { Spinner } from "@/ui/Spinner";
 import { Switch } from "@/ui/Switch";
+import { Magnetic } from "@/ui/motion/primitives";
 import { switchThemeWithReveal } from "@/ui/motion/themeTransition";
 import { ease, spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
@@ -100,8 +101,8 @@ export function LaunchStep({ onDone }: { onDone: () => void }) {
   }, [onDone, reduced]);
   return (
     <div className="flex flex-col items-center gap-5 py-6" aria-label="EMP">
-      <AppMark size={112} />
-      <Wordmark className="text-[34px] leading-none" delay={0.42} />
+      <AppMark size={112} stage="drop" />
+      <Wordmark className="text-[34px] leading-none" delay={0.5} />
     </div>
   );
 }
@@ -111,7 +112,7 @@ export function LaunchStep({ onDone }: { onDone: () => void }) {
 export function WelcomeStep({ next, update }: StepProps) {
   return (
     <div className="flex flex-col items-center text-center">
-      <AppMark size={88} animate={false} className="emp-onb-hero-mark" />
+      <AppMark size={88} stage="rest" className="emp-onb-hero-mark" />
       <div className="mt-7">
         <StepHeading title="Welcome to EMP" sub="Your notes, money, plans and life admin, in one private place on your device." center />
       </div>
@@ -383,16 +384,14 @@ export function PasswordStep({
         {creating ? (
           <m.div
             key="securing"
-            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-[20px]"
-            style={{ background: "color-mix(in oklab, var(--bg-overlay) 88%, transparent)" }}
+            className="emp-forge"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1, transition: { duration: 0.16 } }}
-            exit={{ opacity: 0, transition: { duration: 0.16 } }}
+            animate={{ opacity: 1, transition: { duration: 0.18 } }}
+            exit={{ opacity: 0, transition: { duration: 0.28, delay: 0.12 } }}
             role="status"
             aria-live="polite"
           >
-            <SecuringGlyph />
-            <span className="text-body text-secondary">Securing your workspace…</span>
+            <ForgeGlyph />
           </m.div>
         ) : null}
       </AnimatePresence>
@@ -400,22 +399,41 @@ export function PasswordStep({
   );
 }
 
-function SecuringGlyph() {
+/**
+ * S3 "forge your vault": three exploded slabs assemble into the EMP stack while the key-derivation groove fills.
+ * Key derivation reports no intermediate progress, so the groove eases toward 92% on the KDF's time scale and closes
+ * the last stretch when the vault exists (the overlay's exit) — it never claims completion early.
+ */
+function ForgeGlyph() {
   const reduced = useReducedMotionPref();
+  const present = useIsPresent();
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    if (!present) {
+      setP(1);
+      return;
+    }
+    const t0 = performance.now();
+    let raf = 0;
+    const tick = () => {
+      const t = (performance.now() - t0) / 1000;
+      setP(Math.min(0.92, 1 - Math.exp(-t / 0.42)));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [present]);
+  const shown = reduced ? (present ? 0.5 : 1) : p;
   return (
-    <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-accent">
-      <Lock size={24} aria-hidden />
-      {!reduced ? (
-        <m.span
-          className="absolute inset-0 rounded-2xl"
-          style={{ boxShadow: "0 0 0 2px var(--accent-solid)" }}
-          initial={{ opacity: 0.6, scale: 1 }}
-          animate={{ opacity: 0, scale: 1.35 }}
-          transition={{ duration: 1.2, repeat: Infinity, ease: ease.out }}
-          aria-hidden
-        />
-      ) : null}
-    </span>
+    <>
+      <AppMark size={72} stage="exploded" assemble={shown} />
+      <div className="mt-6 flex w-[220px] flex-col items-center gap-3">
+        <span className="emp-forge-groove" aria-hidden>
+          <i style={{ transform: `scaleX(${shown})` }} />
+        </span>
+        <span className="text-body-sm text-secondary">{present ? "Forging your encryption key…" : "Vault sealed"}</span>
+      </div>
+    </>
   );
 }
 
@@ -686,10 +704,12 @@ export function BuildingStep({ tasks, onOpen, opening }: { tasks: BuildTask[]; o
         <span className="flex-1" />
         <AnimatePresence>
           {done ? (
-            <m.div key="open" initial={{ opacity: 0, y: reduced ? 0 : 4 }} animate={{ opacity: 1, y: 0, transition: spring.gentle }}>
-              <Button variant="primary" size="xl" icon={Sparkles} onClick={onOpen} loading={opening} kbd="enter" autoFocus>
-                Open EMP
-              </Button>
+            <m.div key="open" initial={{ opacity: 0, y: reduced ? 0 : 6, scale: reduced ? 1 : 0.96 }} animate={{ opacity: 1, y: 0, scale: 1, transition: spring.settle }}>
+              <Magnetic strength={3}>
+                <Button variant="primary" size="xl" icon={Sparkles} iconMotion="sparkle" onClick={onOpen} loading={opening} kbd="enter" autoFocus>
+                  Open EMP
+                </Button>
+              </Magnetic>
             </m.div>
           ) : null}
         </AnimatePresence>

@@ -12,7 +12,9 @@ import { cn } from '@/lib/cn';
 import { useUi } from '@/stores/ui';
 import { EmptyState } from '@/ui/EmptyState';
 import { Skeleton } from '@/ui/Skeleton';
-import { transitions } from '@/ui/motion/presets';
+import { ease } from '@/ui/motion/tokens';
+import { useRiseOnSwitch } from './useRiseOnSwitch';
+import { markRowOrigin, notePointer } from './rowMorph';
 import { DbViewContext, type DbViewCtx } from './context';
 import { normalizeRoot, defaultCondition } from './filter/FilterBuilder';
 import { groupChildren } from './engine/filter';
@@ -65,6 +67,14 @@ function useTotalRows(databaseId: Id, enabled: boolean): number | null {
   }, [databaseId, enabled]);
   return enabled ? n : null;
 }
+
+type Bez = [number, number, number, number];
+/** Lateral view switch (S21 / §5.4.3 "lateral"): out −16px·sign in 90ms ease-in, in from +16px·sign over 220ms ease-out. */
+const switchVariants = {
+  enter: (sign: number) => ({ opacity: 0, x: sign * 16 }),
+  center: { opacity: 1, x: 0, transition: { duration: 0.22, ease: [...ease.out] as Bez } },
+  exit: (sign: number) => ({ opacity: 0, x: sign * -16, transition: { duration: 0.09, ease: [...ease.in] as Bez } }),
+};
 
 function Body({ layout }: { layout: View['layout'] }) {
   switch (layout) {
@@ -127,6 +137,7 @@ export function DatabaseView({ databaseId, viewId, inline = false, readOnly = fa
   const openRow = useCallback(
     (rowId: Id, mode?: 'peek' | 'page') => {
       const m0 = mode ?? (view?.openIn === 'full_page' ? 'page' : 'peek');
+      markRowOrigin(rowId);
       if (m0 === 'page') {
         useUi.getState().closePeek();
         navigate({ t: 'row', id: rowId });
@@ -168,6 +179,16 @@ export function DatabaseView({ databaseId, viewId, inline = false, readOnly = fa
     const off = controller.subscribe(() => setShown(controller.getSnapshot().ready ? controller.getSnapshot().total : null));
     return () => void off();
   }, [controller]);
+
+  // S21: the view area switches laterally in the direction of the tab move; rows / cards then rise in (16ms, cap 12)
+  const viewIndex = schema && view ? schema.views.findIndex((v) => v.id === view.id) : 0;
+  const prevIndex = useRef(viewIndex);
+  const navSign = viewIndex === prevIndex.current ? 0 : viewIndex > prevIndex.current ? 1 : -1;
+  useEffect(() => {
+    prevIndex.current = viewIndex;
+  }, [viewIndex]);
+  const bodyHost = useRef<HTMLDivElement>(null);
+  useRiseOnSwitch(bodyHost, view ? view.id + view.layout : '');
 
   if (error && !schema) {
     return (
@@ -219,6 +240,7 @@ export function DatabaseView({ databaseId, viewId, inline = false, readOnly = fa
       <div
         className={cn('edb-root', inline && 'is-inline')}
         data-layout={view.layout}
+        onPointerDownCapture={(e) => notePointer(e.target)}
         onKeyDown={(e) => {
           // ⌥⇧N — new row from anywhere in the database (§8.7); the table grid handles its own keys first.
           if (e.altKey && e.shiftKey && e.code === 'KeyN' && !readOnly && !e.defaultPrevented) {
@@ -233,11 +255,13 @@ export function DatabaseView({ databaseId, viewId, inline = false, readOnly = fa
           <ViewTabs schema={schema} activeId={view.id} onSelect={select} readOnly={readOnly} compact={inline} />
           <Toolbar filterSignal={filterSignal} />
         </div>
-        <AnimatePresence mode="wait" initial={false}>
-          <m.div key={view.id + view.layout} className="edb-body" initial={{ opacity: 0 }} animate={{ opacity: 1, transition: transitions.crossfade }} exit={{ opacity: 0, transition: transitions.pageOut }}>
-            <Body layout={view.layout} />
-          </m.div>
-        </AnimatePresence>
+        <div className="edb-body-host" ref={bodyHost}>
+          <AnimatePresence mode="wait" initial={false} custom={navSign}>
+            <m.div key={view.id + view.layout} className="edb-body" custom={navSign} variants={switchVariants} initial="enter" animate="center" exit="exit">
+              <Body layout={view.layout} />
+            </m.div>
+          </AnimatePresence>
+        </div>
         {inline && total !== null ? (
           <div className="edb-inline-foot tabular-nums">
             {total} {total === 1 ? 'row' : 'rows'}

@@ -1,9 +1,11 @@
 /**
  * The reusable life-app wizard (§6.5): a 720px right sheet with questions on the left (400) and a live plan preview
- * on the right (320). Quick mode asks only `quick` steps; Guided asks everything. Steps slide (x ∓24 → 0); progress
- * is a segmented stepper; "Why?" chips explain recommendations. Create runs `lifeapp_install` as a job and turns the
- * body into a live build checklist, then celebrates and offers "Undo {App} setup" for 10 minutes.
- * Tune-up mode re-runs the same steps with stored answers and previews the PlanDiff.
+ * in a recessed preview bay on the right (320). Quick mode asks only `quick` steps; Guided asks everything. Steps slide
+ * laterally with direction on `settle` and their parts rise in at 16ms; progress is a row of grooves whose lit fills
+ * latch as steps complete; "Why?" chips explain recommendations. Create (S6): the questions compress into the app
+ * tile, the sheet closes and the build stage (BuildStage.tsx) builds the workspace in front of the user from the real
+ * install job, then hands off to the new app page. "Undo {App} setup" is offered for 10 minutes once it lands.
+ * Tune-up mode re-runs the same steps with stored answers, previews the PlanDiff and applies it in the sheet.
  */
 import { ArrowLeft, ArrowRight, Check, Lightbulb, Sparkles } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
@@ -23,11 +25,15 @@ import { Segmented } from "@/ui/Segmented";
 import { Sheet } from "@/ui/Sheet";
 import { Spinner } from "@/ui/Spinner";
 import { celebrate } from "@/ui/motion/Celebrate";
+import { Magnetic } from "@/ui/motion/primitives";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { loadManifest } from "./data";
 import { resolveAnswers, visibleSteps } from "./engine/plan";
 import { identity, appVars } from "./identity";
+import { AppTile } from "./AppTile";
+import { BuildStage } from "./BuildStage";
+import { beginHandoff } from "./handoff";
 import { PlanPreview } from "./PlanPreview";
 import { NumberStep, TextStep, ToggleStep } from "./steps/Basics";
 import { ChoiceCards } from "./steps/ChoiceCards";
@@ -112,8 +118,15 @@ export function WizardSheet() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ instanceId: string; rootPageId: string } | null>(null);
+  const [label, setLabel] = useState("");
+  /** Create pressed: the questions compress into the tile, then the sheet hands over to the build stage. */
+  const [compressing, setCompressing] = useState(false);
+  const [staged, setStaged] = useState(false);
+  const [origin, setOrigin] = useState<DOMRect | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const doneRef = useRef<HTMLDivElement>(null);
+  const tileRef = useRef<HTMLSpanElement>(null);
+  const notifyRef = useRef<(() => void) | null>(null);
 
   // ── open / reset
   useEffect(() => {
@@ -132,6 +145,10 @@ export function WizardSheet() {
     setProgress(0);
     setError(null);
     setResult(null);
+    setLabel("");
+    setCompressing(false);
+    setStaged(false);
+    setOrigin(null);
     setMode(initialMode);
     setEncChoice("encrypt");
     (async () => {
@@ -165,7 +182,6 @@ export function WizardSheet() {
   }, [manifest, answers, mode, tuneup, encrypted, today]);
   const step = steps[Math.min(index, steps.length - 1)];
   const isReview = step?.kind === "review";
-  const ident = identity(appId ?? "");
 
   // ── live preview (debounced)
   useEffect(() => {
@@ -208,11 +224,18 @@ export function WizardSheet() {
   // ── install / tune-up
   const create = async () => {
     if (!manifest || !workspace) return;
+    if (!tuneup) {
+      // S6: compress into the tile, then the build stage takes over from the sheet.
+      setOrigin(tileRef.current?.getBoundingClientRect() ?? null);
+      setCompressing(true);
+      if (reduced) setStaged(true);
+    }
     setPhase("installing");
     setBuild([{ label: tuneup ? "Comparing with what you have" : `Preparing ${manifest.title}`, done: false }]);
     const onEvent = (e: { kind: string; done?: number; total?: number; label?: string }) => {
       if (e.kind !== "progress" || !e.total) return;
       setProgress(e.done! / e.total);
+      if (e.label) setLabel(e.label);
       if (e.label && e.done !== e.total)
         setBuild((rows) => {
           if (rows.some((r) => r.label === e.label)) return rows;
@@ -226,13 +249,15 @@ export function WizardSheet() {
         void api.kv.set({ ns: "ui.lifeapps", key: `answers:${tuneup}`, value: { ...(stored ?? {}), ...answers } }).catch(() => undefined);
         setResult({ instanceId: tuneup, rootPageId: "" });
       } else {
+        // Warm the destination chunks so the hand-off lands on a rendered page.
+        void import("./AppPage").catch(() => undefined);
         const fileStep = manifest.steps.find((s) => s.kind === "file_import");
         const wantsSample = sample || (fileStep ? (valueFor(fileStep) as { source?: string } | undefined)?.source === "sample" : false);
         const job = await api.lifeapp.install({ appId: manifest.id, answers, mode, disabledKeys: disabled, workspaceId: workspace.id, sampleData: wantsSample, onEvent });
         const res = await job.result;
         setResult(res);
         void api.kv.set({ ns: "ui.lifeapps", key: `answers:${res.instanceId}`, value: resolved }).catch(() => undefined);
-        // Undo for 10 minutes (§13.4): inverse is lifeapp_uninstall {keepContent:false}.
+        // Undo for 10 minutes (§13.4): inverse is lifeapp_uninstall {keepContent:false}. The toast follows the landing.
         const title = manifest.title;
         const cmd = {
           label: `Undo ${title} setup`,
@@ -246,21 +271,34 @@ export function WizardSheet() {
           },
         };
         useUndo.getState().push(cmd);
-        notify.success(`${title} is ready`, {
-          description: "Everything was created in your sidebar.",
-          duration: 10_000,
-          action: { label: `Undo ${title} setup`, onClick: () => void useUndo.getState().undoCommand(cmd) },
-        });
+        notifyRef.current = () =>
+          notify.success(`${title} is ready`, {
+            description: "Everything was created in your sidebar.",
+            duration: 10_000,
+            action: { label: `Undo ${title} setup`, onClick: () => void useUndo.getState().undoCommand(cmd) },
+          });
       }
       await useWorkspace.getState().refreshLifeapps();
       setBuild((rows) => rows.map((r) => ({ ...r, done: true })));
       setProgress(1);
       setPhase("done");
-      requestAnimationFrame(() => doneRef.current && celebrate(doneRef.current));
+      if (tuneup) requestAnimationFrame(() => doneRef.current && celebrate(doneRef.current));
     } catch (e) {
       setError(errorMessage(e));
       setPhase("error");
     }
+  };
+
+  /** The stage finished: hand its veil + tile to the app page and land there. */
+  const land = (stage: { rect: DOMRect; tile: HTMLElement | null }) => {
+    const id = result?.instanceId;
+    if (!id || !manifest) return close();
+    beginHandoff({ instanceId: id, appId: manifest.id, tile: stage.tile, veil: { rect: stage.rect, app: identity(manifest.id).color }, install: true });
+    close();
+    navigate({ t: "app", instanceId: id });
+    const toast = notifyRef.current;
+    notifyRef.current = null;
+    if (toast) window.setTimeout(toast, 700);
   };
 
   const openApp = () => {
@@ -281,14 +319,11 @@ export function WizardSheet() {
   const busy = phase === "installing";
   const total = steps.length;
   const title = manifest ? (tuneup ? `Tune up ${manifest.title}` : `Set up ${manifest.title}`) : "Life app";
-  const Icon = ident.icon;
 
   const header = (
     <div className="la-wiz-header" style={appVars(appId ?? "")}>
       <div className="flex items-center gap-3 pr-10">
-        <span className="la-tile" style={{ background: ident.color }}>
-          <Icon size={18} strokeWidth={2.1} aria-hidden />
-        </span>
+        <AppTile ref={tileRef} appId={appId ?? ""} size="md" style={{ visibility: staged ? "hidden" : undefined }} />
         <div className="min-w-0 flex-1">
           <div className="text-title text-primary">{title}</div>
           <div className="truncate text-body-sm text-secondary">{manifest?.tagline ?? " "}</div>
@@ -310,15 +345,23 @@ export function WizardSheet() {
         ) : null}
       </div>
       <div className="la-wiz-progress" aria-hidden>
-        {phase === "questions" || phase === "loading"
-          ? Array.from({ length: Math.max(total, 1) }, (_, i) => <span key={i} className={cn(i < index && "is-done", i === index && "is-on")} />)
-          : <m.span className="la-wiz-progress-fill" initial={false} animate={{ scaleX: phase === "done" ? 1 : Math.max(0.04, progress) }} transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }} />}
+        {phase === "questions" || phase === "loading" ? (
+          Array.from({ length: Math.max(total, 1) }, (_, i) => (
+            <span key={i} className={cn("la-wiz-seg", i < index && "is-done", i === index && "is-on")}>
+              <i />
+            </span>
+          ))
+        ) : (
+          <span className="la-wiz-seg is-fill">
+            <i style={{ transform: `scaleX(${phase === "done" ? 1 : Math.max(0.04, progress)})` }} />
+          </span>
+        )}
       </div>
     </div>
   );
 
   const footer =
-    phase === "questions" && step ? (
+    (phase === "questions" || (compressing && !tuneup)) && step ? (
       <div className="flex w-full items-center gap-2">
         <span className="text-caption text-tertiary tabular">
           Step {Math.min(index + 1, total)} of {total}
@@ -330,20 +373,28 @@ export function WizardSheet() {
         ) : null}
         <span className="flex-1" />
         {index > 0 ? (
-          <Button variant="ghost" icon={ArrowLeft} onClick={() => go(-1)}>
+          <Button variant="ghost" icon={ArrowLeft} iconMotion="arrow" onClick={() => go(-1)}>
             Back
           </Button>
         ) : null}
         {isReview ? (
-          <Button variant="primary" icon={tuneup ? Check : Sparkles} onClick={create} disabled={!plan}>
-            {tuneup ? "Apply tune-up" : `Create ${manifest?.title} workspace`}
-          </Button>
+          tuneup ? (
+            <Button variant="primary" icon={Check} onClick={create} disabled={!plan}>
+              Apply tune-up
+            </Button>
+          ) : (
+            <Magnetic>
+              <Button variant="primary" size="lg" sheen icon={Sparkles} iconMotion="sparkle" onClick={create} disabled={!plan || compressing}>
+                {`Create ${manifest?.title} workspace`}
+              </Button>
+            </Magnetic>
+          )
         ) : step.id === ENCRYPT.id && encChoice === "encrypt" ? (
           <Button variant="ghost" onClick={() => go(1)}>
             Skip for now
           </Button>
         ) : (
-          <Button variant="primary" iconRight={ArrowRight} onClick={() => go(1)} kbd="↵">
+          <Button variant="primary" iconRight={ArrowRight} iconMotion="arrow" onClick={() => go(1)} kbd="↵">
             Continue
           </Button>
         )}
@@ -373,7 +424,8 @@ export function WizardSheet() {
   const why = step && (recFor(step) || step.why);
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && !busy && close()} size="wizard" header={header} footer={footer} dismissible={!busy} bodyClassName="la-wiz-body" className="la-wiz">
+    <>
+    <Sheet open={open && !staged} onOpenChange={(o) => !o && !busy && close()} size="wizard" header={header} footer={footer} dismissible={!busy} bodyClassName="la-wiz-body" className="la-wiz">
       <div className="contents" onKeyDown={onKeyDown}>
         {phase === "loading" ? (
           <div className="flex h-full items-center justify-center">
@@ -384,18 +436,25 @@ export function WizardSheet() {
             <p className="text-title text-primary">Something went wrong</p>
             <p className="max-w-[360px] text-body-sm text-secondary">{error}</p>
           </div>
-        ) : phase === "installing" || phase === "done" ? (
+        ) : tuneup && (phase === "installing" || phase === "done") ? (
           <BuildView rows={build} done={phase === "done"} appTitle={manifest?.title ?? ""} appId={appId ?? ""} tuneup={!!tuneup} refEl={doneRef} />
         ) : manifest && step ? (
-          <div className="la-wiz-grid">
+          <m.div
+            className="la-wiz-grid la-wiz-compress"
+            style={appVars(appId ?? "")}
+            initial={false}
+            animate={compressing ? { opacity: 0, scale: 0.9, y: -16, filter: "blur(3px)" } : { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+            transition={compressing ? { duration: 0.2, ease: [0.4, 0, 1, 1] } : { duration: 0 }}
+            onAnimationComplete={() => compressing && setStaged(true)}
+          >
             <div className="la-wiz-q">
               <AnimatePresence mode="wait" initial={false} custom={dir}>
                 <m.div
                   key={step.id}
                   custom={dir}
-                  initial={reduced ? { opacity: 0 } : { opacity: 0, x: 24 * dir }}
-                  animate={{ opacity: 1, x: 0, transition: { duration: 0.24, ease: [0.16, 1, 0.3, 1] } }}
-                  exit={reduced ? { opacity: 0 } : { opacity: 0, x: -24 * dir, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
+                  initial={reduced ? { opacity: 0 } : { opacity: 0, x: 28 * dir }}
+                  animate={{ opacity: 1, x: 0, transition: reduced ? { duration: 0.12 } : { ...spring.settle, opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] } } }}
+                  exit={reduced ? { opacity: 0, transition: { duration: 0.08 } } : { opacity: 0, x: -20 * dir, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }}
                   className="flex flex-col gap-5"
                 >
                   <div className="flex flex-col gap-1.5">
@@ -436,10 +495,29 @@ export function WizardSheet() {
               {tuneup && diff ? <DiffPreview diff={diff} /> : null}
               <PlanPreview manifest={manifest} plan={plan} answers={resolved} disabled={disabled} onToggle={(key, on) => setDisabled((d) => (on ? d.filter((k) => k !== key) : [...d, key]))} currency={currency} />
             </aside>
-          </div>
+          </m.div>
         ) : null}
       </div>
     </Sheet>
+    {staged && manifest && !tuneup ? (
+      <BuildStage
+        appId={manifest.id}
+        title={manifest.title}
+        items={(plan?.items ?? []).filter((i) => i.enabled && !disabled.includes(i.key))}
+        progress={progress}
+        label={label}
+        done={phase === "done"}
+        error={phase === "error" ? error : null}
+        origin={origin}
+        onLand={land}
+        onBack={() => {
+          setStaged(false);
+          setCompressing(false);
+          setPhase("questions");
+        }}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -448,7 +526,7 @@ function WhyChip({ text, source }: { text: string; source?: string }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="la-why" aria-label="Why this recommendation?">
+        <button type="button" className="la-why slab" aria-label="Why this recommendation?">
           <Lightbulb size={12} aria-hidden />
           Why?
         </button>
@@ -464,7 +542,7 @@ function WhyChip({ text, source }: { text: string; source?: string }) {
 function DiffPreview({ diff }: { diff: PlanDiff }) {
   const conflicts = diff.update.filter((u) => u.conflict);
   return (
-    <div className="la-diff">
+    <div className="la-diff panel" data-flat="">
       <span className="text-micro uppercase text-tertiary">Tune-up changes</span>
       <ul className="mt-2 flex flex-col gap-1 text-body-sm">
         {diff.add.map((a) => (
@@ -487,23 +565,26 @@ function DiffPreview({ diff }: { diff: PlanDiff }) {
 }
 
 function BuildView({ rows, done, appTitle, appId, tuneup, refEl }: { rows: BuildRow[]; done: boolean; appTitle: string; appId: string; tuneup: boolean; refEl: React.RefObject<HTMLDivElement | null> }) {
-  const ident = identity(appId);
-  const Icon = ident.icon;
+  const doneCount = rows.filter((r) => r.done).length;
   return (
     <div className="la-build" style={appVars(appId)}>
       <div className="la-build-hero">
-        <div ref={refEl} className={cn("la-build-tile", done && "is-done")} style={{ background: ident.color }}>
-          <Icon size={26} strokeWidth={2} aria-hidden />
+        <div ref={refEl} className="mb-2">
+          <AppTile appId={appId} size="hero" />
         </div>
         <h2 className="text-h3 text-primary" aria-live="polite">
           {done ? (tuneup ? `${appTitle} is tuned up` : `${appTitle} is ready`) : tuneup ? `Tuning up ${appTitle}…` : `Building ${appTitle}…`}
         </h2>
-        <p className="text-body-sm text-secondary">{done ? "Everything is on this device. Nothing was sent anywhere." : "Creating pages, databases and dashboards for you."}</p>
+        <p className="text-body-sm text-secondary">{done ? "Everything is on this device. Nothing was sent anywhere." : "Updating pages, databases and dashboards for you."}</p>
+      </div>
+      <div className="la-groove la-build-groove" aria-hidden>
+        <i style={{ transform: `scaleX(${done ? 1 : Math.max(0.06, (doneCount + 0.5) / Math.max(rows.length + 1, 2))})`, transition: "transform 320ms var(--ease-out)" }} />
+        {!done ? <b /> : null}
       </div>
       <ul className="la-build-list" aria-label="Progress">
         <AnimatePresence initial={false}>
           {rows.map((r) => (
-            <m.li key={r.label} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: spring.gentle }} className="la-build-row">
+            <m.li key={r.label} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: spring.settle }} className={cn("la-build-row", !r.done && "is-live")}>
               <span className="la-build-ico">
                 {r.done ? (
                   <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden>

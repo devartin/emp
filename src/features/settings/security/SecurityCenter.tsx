@@ -23,6 +23,7 @@ import { Kbd } from "@/ui/Kbd";
 import { Ring } from "@/ui/Ring";
 import { Select } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
+import { SlabGlyph } from "@/ui/SlabGlyph";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { ease, spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
@@ -146,6 +147,7 @@ export function SecurityCenter() {
 
       {/* Encryption */}
       <Group id="encryption" title="Encryption" description="Optional encryption at rest. Turning it on or off re-writes every record.">
+        <VaultVisual encrypted={enc} kdf={status.kdf} recovery={status.recoveryConfirmed} />
         <Row
           icon={enc ? <Lock size={16} /> : <LockOpen size={16} />}
           label={enc ? "Encryption is on" : "Encryption is off"}
@@ -222,6 +224,44 @@ export function SecurityCenter() {
 }
 
 // ───────────────────────────────────────────────────────────────────────────── hero
+
+/**
+ * Encryption status as the icon's three slabs: data (bottom), key (middle), recovery (top). Encrypted, the stack
+ * closes and a lit seal rings it; off, the slabs float apart and dim. Each slab maps to a layer row with a lit LED.
+ */
+function VaultVisual({ encrypted, kdf, recovery }: { encrypted: boolean; kdf?: KdfInfo; recovery: boolean }) {
+  const layers = [
+    { name: "Data", detail: encrypted ? "XChaCha20-Poly1305 · 256-bit, on this device" : "Stored as plain data on this device", on: encrypted, state: encrypted ? "Sealed" : "Open" },
+    { name: "Key", detail: encrypted ? `Wrapped by your password · Argon2id${kdf ? ` ${Math.round(kdf.mKiB / 1024)} MiB, t=${kdf.t}` : ""}` : "No password yet", on: encrypted && !kdf?.belowStandard, state: encrypted ? (kdf?.belowStandard ? "Weak" : "Strong") : "None" },
+    { name: "Recovery", detail: encrypted ? (recovery ? "24-word key confirmed" : "24-word key not confirmed yet") : "Created when you turn encryption on", on: encrypted && recovery, state: encrypted ? (recovery ? "Ready" : "Confirm") : "—" },
+  ];
+  return (
+    <div className="st-vault" data-enc={encrypted ? "1" : "0"} data-setting="vault">
+      <div className="st-vault-art" data-l0={layers[0].on ? "1" : "0"} data-l1={layers[1].on ? "1" : "0"} data-l2={layers[2].on ? "1" : "0"} aria-hidden>
+        <span className="st-vault-seal" />
+        <SlabGlyph size={84} animate exploded={!encrypted} />
+        <span className="st-vault-lock">{encrypted ? <Lock size={16} strokeWidth={2.2} /> : <LockOpen size={16} strokeWidth={2.2} />}</span>
+      </div>
+      <div className="min-w-0">
+        <div className="st-vault-eyebrow">
+          {encrypted ? <ShieldCheck size={13} aria-hidden /> : <ShieldAlert size={13} aria-hidden />}
+          {encrypted ? "Encrypted at rest" : "Not encrypted"}
+        </div>
+        <div className="st-vault-title">{encrypted ? "Your vault is sealed" : "Your vault is open on disk"}</div>
+        <ul className="st-layers" aria-label="Protection layers">
+          {layers.map((l, i) => (
+            <li key={l.name} className="st-layer" data-on={l.on ? "" : undefined} style={{ ["--i" as string]: i }}>
+              <span className="st-layer-led" aria-hidden />
+              <span className="st-layer-name">{l.name}</span>
+              <span className="st-layer-detail" title={l.detail}>{l.detail}</span>
+              <span className="st-layer-state">{l.state}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
 
 function Hero({ score, tone }: { score: number; tone: "ok" | "warn" | "bad" }) {
   const reduced = useReducedMotionPref();

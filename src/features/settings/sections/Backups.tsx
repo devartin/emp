@@ -22,8 +22,8 @@ import { Ring } from "@/ui/Ring";
 import { Segmented } from "@/ui/Segmented";
 import { Select } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
-import { Textarea } from "@/ui/Textarea";
 import { spring } from "@/ui/motion/tokens";
+import { Textarea } from "@/ui/Textarea";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PasswordField } from "@/features/vault/PasswordField";
 import { JobProgress, useJob } from "../JobProgress";
@@ -312,9 +312,10 @@ function CreateBackupDialog({ open, onOpenChange, encrypted }: { open: boolean; 
             </div>
           ) : null}
           <Checkbox checked={usePw} onCheckedChange={setUsePw} label={encrypted ? "Also add a separate backup password" : "Protect with a backup password"} description="Useful if you’ll restore on another computer or share the file with someone you trust." />
-          <AnimatePresence initial={false}>
+          {/* DESIGN §1.6: no height animation — the fields mount at full size and rise in; on removal they pop out of flow. */}
+          <AnimatePresence initial={false} mode="popLayout">
             {usePw ? (
-              <m.div key="pw" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <m.div key="pw" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0, transition: { opacity: { duration: 0.16 }, y: spring.settle } }} exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}>
                 <div className="flex flex-col gap-3 pt-1">
                   <PasswordField value={pw} onChange={setPw} label="Backup password" size="lg" purpose="new" helper="At least 8 characters. EMP can’t recover it." />
                   <PasswordField value={confirm} onChange={setConfirm} label="Confirm" size="lg" purpose="new" error={confirm && confirm !== pw ? "Passwords don’t match" : undefined} />
@@ -322,7 +323,13 @@ function CreateBackupDialog({ open, onOpenChange, encrypted }: { open: boolean; 
               </m.div>
             ) : null}
           </AnimatePresence>
-          {plain ? <Checkbox checked={ack} onCheckedChange={setAck} label="I understand this file is readable by anyone who has it" /> : null}
+          <AnimatePresence initial={false} mode="popLayout">
+            {plain ? (
+              <m.div key="ack" layout="position" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.1 } }}>
+                <Checkbox checked={ack} onCheckedChange={setAck} label="I understand this file is readable by anyone who has it" />
+              </m.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       )}
     </Dialog>

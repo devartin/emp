@@ -22,8 +22,18 @@ export interface RollingNumberProps {
   /** Scrub mode (chart hover): 90ms ease-out, no stagger, aria-live off. */
   scrubbing?: boolean;
   className?: string;
-  /** Mark as sensitive (masked under Hide numbers; never rolls while masked). */
+  /** Mark as sensitive (masked under Hide numbers; never rolls while masked, and screen readers hear "Hidden"). */
   sensitive?: boolean;
+  /**
+   * Pre-formatted text to show instead of `format(value)` (digits in it roll; `value` still sets the roll direction).
+   * Count-up is skipped in this mode.
+   */
+  display?: string;
+  /**
+   * Announce changes to screen readers (aria-live polite), throttled to one announcement per 5s. Off by default:
+   * live prices would otherwise talk constantly. Use for user-initiated results (calculator, "Balanced", goal reached).
+   */
+  announce?: boolean;
   "aria-label"?: string;
 }
 
@@ -43,7 +53,23 @@ const DigitColumn = memo(function DigitColumn({ digit, order, dir, mode, enter }
   useLayoutEffect(() => {
     const was = prev.current;
     prev.current = digit;
-    if (was === digit) return;
+    if (was === digit) {
+      // Same digit, but a roll may have been cut short: `dir`/`order`/`mode` changed mid-flight (common while scrubbing
+      // back and forth), the cleanup stopped it and nothing restarted it — the column would freeze between glyphs.
+      const p = pos.get();
+      if (p === digit || p === digit + 10) return;
+      if (isReducedMotion()) {
+        pos.set(digit);
+        setRolling(false);
+        return;
+      }
+      const settle = animate(pos, Math.abs(p - (digit + 10)) < Math.abs(p - digit) ? digit + 10 : digit, { duration: 0.09, ease: ease.out });
+      settle.then(() => {
+        pos.set(digit);
+        setRolling(false);
+      });
+      return () => settle.stop();
+    }
     if (isReducedMotion()) {
       pos.set(digit);
       return;
@@ -97,13 +123,15 @@ export function RollingNumber({
   scrubbing,
   className,
   sensitive,
+  display,
+  announce,
   ...rest
 }: RollingNumberProps) {
-  const text = format(value);
+  const text = display ?? format(value);
   const privacy = usePrivacy();
   const reduced = useReducedMotionPref();
   const [phase, setPhase] = useState<"count" | "roll">(() => {
-    if (!countUp || Math.abs(value) < 10 || isReducedMotion()) return "roll";
+    if (display !== undefined || !countUp || Math.abs(value) < 10 || isReducedMotion()) return "roll";
     if (countUpKey && seenKeys.has(countUpKey)) return "roll";
     return "count";
   });
@@ -152,7 +180,9 @@ export function RollingNumber({
 
   const chars = useMemo(() => Array.from(text), [text]);
   const mode: Mode = scrubbing ? "scrub" : "roll";
-  const live = scrubbing ? "off" : "polite";
+  const masked = !!(privacy && sensitive);
+  const live = announce && !scrubbing && !masked ? "polite" : "off";
+  const spoken = useThrottledText(masked ? "Hidden" : text, announce && !scrubbing && !masked ? ANNOUNCE_MS : 0);
 
   let body;
   if (phase === "count") {
@@ -161,7 +191,7 @@ export function RollingNumber({
         {format(startFrom)}
       </span>
     );
-  } else if (privacy && sensitive) {
+  } else if (masked) {
     body = <span aria-hidden>{text}</span>;
   } else if (reduced) {
     body = (
@@ -191,10 +221,29 @@ export function RollingNumber({
 
   return (
     <span className={cn("emp-roll", className)} data-sensitive={sensitive ? "" : undefined} aria-live={live} {...rest}>
-      <span className="sr-only">{text}</span>
+      <span className="sr-only">{spoken}</span>
       {body}
     </span>
   );
+}
+
+const ANNOUNCE_MS = 5000;
+
+/** `text`, updated at most once per `ms` (trailing edge); passes straight through when `ms` is 0. */
+function useThrottledText(text: string, ms: number): string {
+  const [shown, setShown] = useState(text);
+  const last = useRef(0);
+  useEffect(() => {
+    if (!ms) return;
+    if (text === shown) return;
+    const wait = Math.max(0, last.current + ms - Date.now());
+    const id = window.setTimeout(() => {
+      last.current = Date.now();
+      setShown(text);
+    }, wait);
+    return () => window.clearTimeout(id);
+  }, [text, ms, shown]);
+  return ms ? shown : text;
 }
 
 /** Alias for discoverability (KIT.md). */

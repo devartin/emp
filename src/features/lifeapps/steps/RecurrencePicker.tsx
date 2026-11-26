@@ -1,9 +1,6 @@
 /** Compact rule editor for ritual answers `{ rrule, time }`: Daily · Weekdays · Weekly (day chips) · Monthly, plus a time. */
-import { m } from "motion/react";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/cn";
 import { Segmented } from "@/ui/Segmented";
-import { spring } from "@/ui/motion/tokens";
 import { describeRRule } from "../engine/recurrence";
 
 export interface RecurrenceAnswer {
@@ -79,18 +76,16 @@ export function RecurrencePicker({ value, onChange, label }: { value: Recurrence
           {DAYS.map(([code, short]) => {
             const on = p.days.includes(code);
             return (
-              <m.button
+              <button
                 key={code}
                 type="button"
-                whileTap={{ scale: 0.92 }}
-                transition={spring.snappy}
-                className={cn("la-daychip", on && "is-on")}
+                className="la-daychip slab"
                 aria-pressed={on}
                 aria-label={code}
                 onClick={() => set({ days: on ? p.days.filter((d) => d !== code) : [...p.days, code] })}
               >
                 {short}
-              </m.button>
+              </button>
             );
           })}
         </div>

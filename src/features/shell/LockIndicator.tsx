@@ -11,7 +11,6 @@ import { navigate } from "@/app/router";
 import { shortcutLabel } from "@/lib/platform";
 import { useVault } from "@/stores/vault";
 import { IconButton } from "@/ui/IconButton";
-import { Tooltip } from "@/ui/Tooltip";
 
 let lastInput = Date.now();
 let tracking = false;
@@ -59,27 +58,33 @@ export function LockIndicator() {
     const c = 2 * Math.PI * r;
     const frac = Math.max(0, Math.min(1, secondsLeft / 60));
     return (
-      <Tooltip content={tip}>
-        <button type="button" className="emp-btn emp-lock-ring no-drag" data-variant="ghost" data-size="sm" data-icon-only="" aria-label={tip} onClick={() => runCommand("vault.lock")}>
-          <svg className="ring" width="28" height="28" viewBox="0 0 28 28" aria-hidden>
-            <circle cx="14" cy="14" r={r} fill="none" stroke="var(--border)" strokeWidth="2" />
-            <m.circle
-              cx="14"
-              cy="14"
-              r={r}
-              fill="none"
-              stroke="var(--warning)"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeDasharray={c}
-              initial={false}
-              animate={{ strokeDashoffset: c * (1 - frac) }}
-              transition={{ duration: 0.9, ease: "linear" }}
-            />
-          </svg>
-          <span className="tabular text-[10px] font-semibold text-warning-text">{secondsLeft}</span>
-        </button>
-      </Tooltip>
+      <IconButton
+        size="sm"
+        label={tip}
+        className="no-drag"
+        onClick={() => runCommand("vault.lock")}
+        icon={
+          <span className="emp-lock-ring" aria-hidden>
+            <svg className="ring" width="24" height="24" viewBox="0 0 28 28">
+              <circle cx="14" cy="14" r={r} fill="none" stroke="var(--groove-dark)" strokeWidth="2.5" />
+              <m.circle
+                cx="14"
+                cy="14"
+                r={r}
+                fill="none"
+                stroke="var(--warning)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeDasharray={c}
+                initial={false}
+                animate={{ strokeDashoffset: c * (1 - frac) }}
+                transition={{ duration: 0.9, ease: "linear" }}
+              />
+            </svg>
+            <span className="tabular text-[10px] font-semibold text-warning-text">{secondsLeft}</span>
+          </span>
+        }
+      />
     );
   }
 

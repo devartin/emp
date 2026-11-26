@@ -1,8 +1,6 @@
 import * as RR from "@radix-ui/react-radio-group";
-import { m } from "motion/react";
 import { useId, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { spring } from "./motion/tokens";
 
 export interface RadioOption<V extends string = string> {
   value: V;
@@ -23,7 +21,7 @@ export interface RadioGroupProps<V extends string = string> {
   "aria-label"?: string;
 }
 
-/** Radio group (§5.4): 16px, 1.5px border; checked = accent fill + 6px dot scaling in with spring.snappy. */
+/** Radio group (docs/DESIGN.md §6.2): a 16px circular well with a ≥3:1 rim; checked = a lit dome dot popping in on `thumb`. */
 export function RadioGroup<V extends string = string>({ value, defaultValue, onValueChange, options, orientation = "vertical", disabled, name, className, ...aria }: RadioGroupProps<V>) {
   const base = useId();
   return (
@@ -43,9 +41,7 @@ export function RadioGroup<V extends string = string>({ value, defaultValue, onV
           <div key={o.value} className="emp-check-row items-start" data-disabled={o.disabled || disabled ? "" : undefined}>
             <span className="emp-check-hit" style={{ marginTop: -2 }}>
               <RR.Item id={id} value={o.value} disabled={o.disabled} className="emp-radio">
-                <RR.Indicator asChild>
-                  <m.span className="emp-radio-dot" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={spring.snappy} />
-                </RR.Indicator>
+                <RR.Indicator className="emp-radio-dot" />
               </RR.Item>
             </span>
             <label htmlFor={id} className="flex flex-col gap-0.5" style={{ paddingLeft: 4 }}>
@@ -64,9 +60,7 @@ export const RadioGroupRoot = RR.Root;
 export function Radio({ value, disabled, id, "aria-label": label }: { value: string; disabled?: boolean; id?: string; "aria-label"?: string }) {
   return (
     <RR.Item value={value} disabled={disabled} id={id} className="emp-radio" aria-label={label}>
-      <RR.Indicator asChild>
-        <m.span className="emp-radio-dot" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={spring.snappy} />
-      </RR.Indicator>
+      <RR.Indicator className="emp-radio-dot" />
     </RR.Item>
   );
 }

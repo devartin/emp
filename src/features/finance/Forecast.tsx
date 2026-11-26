@@ -9,6 +9,8 @@ import type { Id } from "@/backend/types";
 import { FanChart } from "@/charts/Fan";
 import { Badge } from "@/ui/Badge";
 import { Segmented } from "@/ui/Segmented";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { dayLabel, fmtMoney, todayIso } from "./shared/format";
@@ -88,7 +90,9 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
           subtitle="Scheduled bills and income, plus your typical everyday spending. The band covers 80% of 1,000 simulated paths."
           actions={<Segmented size="sm" value={horizon} onValueChange={setHorizon} options={[{ value: "30", label: "30d" }, { value: "60", label: "60d" }, { value: "90", label: "90d" }]} aria-label="Horizon" />}
         >
+          <div className="fh-fan" key={`${horizon}:${fc.data ? 1 : 0}`} data-reveal="">
           <FanChart data={data} height={300} xFormat={(v) => dayLabel(String(v))} target={fc.data?.threshold !== undefined && p10min !== null && p10min < fc.data.threshold * 4 + 1500 ? { value: fc.data.threshold, label: "Low-balance threshold" } : undefined} loading={fc.loading && !fc.data} summaryLabel="Projected checking balance" />
+          </div>
           <div className="flex items-center gap-5 mt-3 text-caption text-tertiary" style={{ fontWeight: 400 }}>
             <span className="inline-flex items-center gap-1.5"><i className="fh-key" style={{ background: "var(--text-primary)" }} />Actual</span>
             <span className="inline-flex items-center gap-1.5"><i className="fh-key" style={{ background: "var(--accent-solid)", height: 2 }} />Median projection</span>
@@ -96,9 +100,9 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
           </div>
         </Section>
         <div className="fh-span-4 flex flex-col gap-3">
-          <Fact label={`In ${horizon} days`} value={fc.data ? fmtMoney(end, "USD", { noCents: true }) : null} sub={checking ? `from ${fmtMoney(checking.balance, "USD", { noCents: true })} today` : ""} />
-          <Fact label="Lowest point" value={fc.data ? fmtMoney(min, "USD", { noCents: true }) : null} sub={minIdx >= 0 && fc.data ? `around ${dayLabel(fc.data.t[minIdx])}` : ""} />
-          <Fact label="Cautious low (p10)" value={p10min !== null ? fmtMoney(p10min, "USD", { noCents: true }) : null} sub={p10min !== null && fc.data?.threshold !== undefined ? (p10min > fc.data.threshold ? "stays above your threshold" : "touches your threshold") : ""} icon={p10min !== null && fc.data?.threshold !== undefined && p10min > fc.data.threshold ? <CheckCircle2 size={16} className="text-gain" /> : undefined} />
+          <Fact label={`In ${horizon} days`} value={fc.data ? end : null} sub={checking ? `from ${fmtMoney(checking.balance, "USD", { noCents: true })} today` : ""} />
+          <Fact label="Lowest point" value={fc.data ? min : null} sub={minIdx >= 0 && fc.data ? `around ${dayLabel(fc.data.t[minIdx])}` : ""} />
+          <Fact label="Cautious low (p10)" value={p10min} sub={p10min !== null && fc.data?.threshold !== undefined ? (p10min > fc.data.threshold ? "stays above your threshold" : "touches your threshold") : ""} icon={p10min !== null && fc.data?.threshold !== undefined && p10min > fc.data.threshold ? <CheckCircle2 size={16} className="text-gain" /> : undefined} />
         </div>
       </div>
       <Section title="Scheduled in this window" subtitle={checking ? `From the Recurring database, for ${checking.name}` : undefined} actions={<CalendarRange size={16} className="text-tertiary" />} pad={false}>
@@ -128,9 +132,10 @@ function shift(day: string, n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function Fact({ label, value, sub, icon }: { label: string; value: string | null; sub?: string; icon?: React.ReactNode }) {
+function Fact({ label, value, sub, icon }: { label: string; value: number | null; sub?: string; icon?: React.ReactNode }) {
   return (
-    <div className="fh-card" style={{ padding: "14px 16px" }}>
+    <div className="fh-card" style={{ padding: "14px 16px" }} data-light="">
+      <EdgeLight />
       <div className="flex items-center justify-between">
         <span className="text-caption text-secondary" style={{ fontWeight: 500 }}>
           {label}
@@ -138,7 +143,13 @@ function Fact({ label, value, sub, icon }: { label: string; value: string | null
         {icon}
       </div>
       <div className="tabular mt-1" style={{ fontSize: 22, lineHeight: "28px", fontWeight: 620, letterSpacing: "-0.02em" }}>
-        {value === null ? <Skeleton width={120} height={22} /> : <Sensitive>{value}</Sensitive>}
+        {value === null ? (
+          <Skeleton width={120} height={22} />
+        ) : (
+          <span data-sensitive="">
+            <RollingNumber value={value} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive />
+          </span>
+        )}
       </div>
       {sub ? (
         <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>

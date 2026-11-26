@@ -25,6 +25,11 @@ export interface FanChartProps {
   /** Goal / target line. */
   target?: { value: number; label: string };
   summaryLabel?: string;
+  /**
+   * Entry reveal: the p10–p90 and p25–p75 bands open outward from the median (scaleY about the band's centre, settle
+   * spring, outer band 80ms later) when the chart first scrolls into view. Off under reduced motion.
+   */
+  reveal?: boolean;
   loading?: boolean;
   header?: ReactNode;
   className?: string;
@@ -34,7 +39,7 @@ export interface FanChartProps {
  * Fan chart for projections (§13.5): history solid; median dashed 4 4; p10–p90 band at .08 and p25–p75 at .14;
  * monotoneX curves; y-axis on the right.
  */
-export function FanChart({ data, height = 260, format = "money", currency = "USD", xFormat = (v) => String(v), target, summaryLabel = "Projection", loading, header, className }: FanChartProps) {
+export function FanChart({ data, height = 260, format = "money", currency = "USD", xFormat = (v) => String(v), target, summaryLabel = "Projection", reveal, loading, header, className }: FanChartProps) {
   const t = useChartTheme();
   const fmt = valueFormatter(format, currency);
   const animate = false;
@@ -57,8 +62,9 @@ export function FanChart({ data, height = 260, format = "money", currency = "USD
       loading={loading}
       empty={data.length < 2}
       header={header}
-      className={className}
-      table={{ columns: ["Period", "Actual", "P10", "Median", "P90"], rows: data.map((d) => [xFormat(d.x), d.actual !== undefined ? fmt(d.actual) : "—", d.p10 !== undefined ? fmt(d.p10) : "—", d.p50 !== undefined ? fmt(d.p50) : "—", d.p90 !== undefined ? fmt(d.p90) : "—"]), sensitiveCols: [1, 2, 3, 4] }}
+      className={className ? `${className}${reveal ? " emp-fan-reveal" : ""}` : reveal ? "emp-fan-reveal" : undefined}
+      title={summaryLabel}
+      table={() => ({ columns: ["Period", "Actual", "P10", "Median", "P90"], rows: data.map((d) => [xFormat(d.x), d.actual !== undefined ? fmt(d.actual) : "—", d.p10 !== undefined ? fmt(d.p10) : "—", d.p50 !== undefined ? fmt(d.p50) : "—", d.p90 !== undefined ? fmt(d.p90) : "—"]), sensitiveCols: [1, 2, 3, 4] })}
     >
       {(size) => {
         const vals = data.flatMap((d) => [d.actual, d.p10, d.p90, d.p50].filter((v): v is number => v !== undefined));
@@ -80,8 +86,8 @@ export function FanChart({ data, height = 260, format = "money", currency = "USD
                 label={{ value: target.label, position: "insideTopLeft", fontSize: 11, fill: t.textSecondary, fontFamily: t.fontFamily }}
               />
             ) : null}
-            <Area type="monotoneX" dataKey="outer" stroke="none" fill={t.accent} fillOpacity={0.08} isAnimationActive={animate} activeDot={false} connectNulls={false} />
-            <Area type="monotoneX" dataKey="inner" stroke="none" fill={t.accent} fillOpacity={0.14} isAnimationActive={animate} activeDot={false} connectNulls={false} />
+            <Area className="emp-fan-band emp-fan-outer" type="monotoneX" dataKey="outer" stroke="none" fill={t.accent} fillOpacity={0.08} isAnimationActive={animate} activeDot={false} connectNulls={false} />
+            <Area className="emp-fan-band emp-fan-inner" type="monotoneX" dataKey="inner" stroke="none" fill={t.accent} fillOpacity={0.14} isAnimationActive={animate} activeDot={false} connectNulls={false} />
             <Line type="monotoneX" dataKey="p50" stroke={t.accent} strokeWidth={2} strokeDasharray="4 4" dot={false} isAnimationActive={animate} activeDot={{ r: 4, fill: t.accent, stroke: t.canvas, strokeWidth: 2 }} />
             <Line type="monotoneX" dataKey="actual" stroke={t.text} strokeWidth={2} dot={false} isAnimationActive={animate} activeDot={{ r: 4, fill: t.text, stroke: t.canvas, strokeWidth: 2 }} connectNulls={false} />
             <Tooltip

@@ -92,18 +92,16 @@ export function ListBuilder({ step, value, onChange, currency }: StepProps) {
             const idx = has(o.label);
             const on = idx >= 0;
             return (
-              <m.button
+              <button
                 key={o.value}
                 type="button"
-                className={cn("la-chip la-chip-sm", on && "is-on")}
+                className="la-chip la-chip-sm slab"
                 aria-pressed={on}
-                whileTap={{ scale: 0.95 }}
-                transition={spring.snappy}
                 onClick={() => (on ? commit(items.filter((_, i) => i !== idx)) : commit([...items, { ...blank(), [nameKey]: o.label, ...hints(o.description) }]))}
               >
                 {on ? <Check size={12} strokeWidth={3} aria-hidden /> : <Plus size={12} strokeWidth={2.5} aria-hidden />}
                 {o.label}
-              </m.button>
+              </button>
             );
           })}
         </div>
@@ -117,7 +115,7 @@ export function ListBuilder({ step, value, onChange, currency }: StepProps) {
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0, transition: spring.gentle }}
               exit={{ opacity: 0, transition: { duration: 0.12 } }}
-              className="la-item"
+              className="la-item panel"
             >
               <div className="la-item-row">
                 <FieldInput name={nameKey} type={schema[nameKey] ?? "text"} value={it[nameKey]} onChange={(v) => commit(items.map((x, j) => (j === i ? { ...x, [nameKey]: v } : x)))} label={false} className="min-w-0 flex-1" />
@@ -138,7 +136,7 @@ export function ListBuilder({ step, value, onChange, currency }: StepProps) {
               </div>
               <AnimatePresence initial={false}>
                 {open === i && rest.length ? (
-                  <m.div key="more" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }} className="overflow-hidden">
+                  <m.div key="more" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0, transition: spring.gentle }} exit={{ opacity: 0, y: -4, transition: { duration: 0.1, ease: [0.4, 0, 1, 1] } }}>
                     <div className="grid grid-cols-2 gap-3 pt-3">
                       {rest.map((k) => (
                         <FieldInput key={k} name={k} type={schema[k]} value={it[k]} onChange={(v) => commit(items.map((x, j) => (j === i ? { ...x, [k]: v } : x)))} currency={currency} />

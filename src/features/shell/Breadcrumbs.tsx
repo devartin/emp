@@ -2,8 +2,9 @@
  * Breadcrumbs (§5.11): 28px ghost-sm items, "/" separators in tertiary. More than 4 levels collapse the middle into a
  * "…" menu. The current page's crumb opens an inline rename popover (title + icon live in the editor too).
  */
-import { CalendarDays, CandlestickChart, Ellipsis, House, Settings, Sparkles, Trash2, Calendar } from "lucide-react";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { CalendarDays, CandlestickChart, ChevronRight, Ellipsis, House, Settings, Sparkles, Trash2, Calendar } from "lucide-react";
+import { AnimatePresence, m } from "motion/react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { navigate, routePageId, useRoute, type AppRoute } from "@/app/router";
 import { api, listen } from "@/backend";
@@ -15,6 +16,8 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/ui/Menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
 import { PageIcon } from "./PageIcon";
 import { lifeAppIdentity } from "./Sidebar/lifeAppIdentity";
+import { ease } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { SECTIONS, resolveSection } from "@/features/settings/meta";
 
 const SETTINGS_TITLES: Record<string, string> = {
@@ -132,50 +135,57 @@ function useCrumbs(): Crumb[] {
 
 export function Breadcrumbs() {
   const crumbs = useCrumbs();
+  const reduced = useReducedMotionPref();
   if (!crumbs.length) return null;
   const collapse = crumbs.length > 4;
   const visible = collapse ? [crumbs[0], null, ...crumbs.slice(-2)] : crumbs;
   const hidden = collapse ? crumbs.slice(1, -2) : [];
   return (
     <nav className="emp-crumbs no-drag" aria-label="Breadcrumbs">
-      {visible.map((c, i) => (
-        <Fragment key={c?.key ?? "more"}>
-          {i > 0 ? (
-            <span className="emp-crumb-sep" aria-hidden>
-              /
-            </span>
-          ) : null}
-          {c === null ? (
-            <Menu>
-              <MenuTrigger asChild>
-                <button type="button" className="emp-crumb" aria-label={`${hidden.length} more`}>
-                  <Ellipsis size={15} aria-hidden />
-                </button>
-              </MenuTrigger>
-              <MenuContent>
-                {hidden.map((h) => (
-                  <MenuItem key={h.key} icon={h.icon} onSelect={() => h.route && navigate(h.route)}>
-                    {h.label}
-                  </MenuItem>
-                ))}
-              </MenuContent>
-            </Menu>
-          ) : i === visible.length - 1 && c.meta ? (
-            <CurrentCrumb crumb={c} meta={c.meta} />
-          ) : (
-            <button
-              type="button"
-              className="emp-crumb"
-              aria-current={i === visible.length - 1 ? "page" : undefined}
-              onClick={() => c.route && navigate(c.route)}
-              disabled={!c.route}
-            >
-              {c.icon}
-              <span>{c.label}</span>
-            </button>
-          )}
-        </Fragment>
-      ))}
+      <AnimatePresence initial={false} mode="popLayout">
+        {visible.map((c, i) => (
+          <m.span
+            key={c?.key ?? "more"}
+            className="emp-crumb-slot"
+            layout={reduced ? false : "position"}
+            initial={{ opacity: 0, x: reduced ? 0 : -6 }}
+            animate={{ opacity: 1, x: 0, transition: { duration: 0.22, ease: ease.out, delay: reduced ? 0 : Math.min(i, 4) * 0.03 } }}
+            exit={{ opacity: 0, transition: { duration: 0.1, ease: ease.in } }}
+            transition={{ layout: { type: "spring", stiffness: 380, damping: 36 } }}
+          >
+            {i > 0 ? <ChevronRight className="emp-crumb-sep" size={13} strokeWidth={2} aria-hidden /> : null}
+            {c === null ? (
+              <Menu>
+                <MenuTrigger asChild>
+                  <button type="button" className="emp-crumb" aria-label={`${hidden.length} more`}>
+                    <Ellipsis size={15} aria-hidden />
+                  </button>
+                </MenuTrigger>
+                <MenuContent>
+                  {hidden.map((h) => (
+                    <MenuItem key={h.key} icon={h.icon} onSelect={() => h.route && navigate(h.route)}>
+                      {h.label}
+                    </MenuItem>
+                  ))}
+                </MenuContent>
+              </Menu>
+            ) : i === visible.length - 1 && c.meta ? (
+              <CurrentCrumb crumb={c} meta={c.meta} />
+            ) : (
+              <button
+                type="button"
+                className="emp-crumb"
+                aria-current={i === visible.length - 1 ? "page" : undefined}
+                onClick={() => c.route && navigate(c.route)}
+                disabled={!c.route}
+              >
+                {c.icon}
+                <span>{c.label}</span>
+              </button>
+            )}
+          </m.span>
+        ))}
+      </AnimatePresence>
     </nav>
   );
 }

@@ -4,6 +4,7 @@ import { Check, Plus } from "lucide-react";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Field } from "./Field";
+import { GlideHighlight } from "./GlideHighlight";
 import { floatingZ, useInOverlay } from "./layer";
 import { Tag, type TagColor } from "./Tag";
 
@@ -104,6 +105,7 @@ export function Combobox({ value, onValueChange, options, onCreate, placeholder 
       <RP.Portal>
         <RP.Content
           className="emp-menu emp-pop emp-listbox"
+          data-opaque={z ? "" : undefined}
           align="start"
           sideOffset={6}
           collisionPadding={8}
@@ -116,6 +118,7 @@ export function Combobox({ value, onValueChange, options, onCreate, placeholder 
           <Command loop data-combobox-for={ids.id} className="outline-none" filter={(v, s, k) => ((k?.join(" ") ?? v).toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}>
             <Command.Input value={query} onValueChange={setQuery} style={{ position: "absolute", opacity: 0, pointerEvents: "none", height: 0 }} tabIndex={-1} aria-hidden />
             <Command.List>
+              <GlideHighlight selector={'[cmdk-item][data-selected="true"]'} />
               {!onCreate ? <Command.Empty>No matches</Command.Empty> : null}
               {options.map((o) => (
                 <Command.Item key={o.value} value={o.value} keywords={[o.label]} className="emp-menu-item" onSelect={() => toggle(o.value)}>

@@ -5,8 +5,12 @@
  *              painted per pane (frozen corner / frozen rows / frozen cols / main).
  *   overlay  — headers, selection (2px accent border, accent fill at .08, 6×6 fill handle), the copy marquee
  *              (marching ants), formula reference highlights, find matches, spill outline, resize guides.
- * The selection glides between cells over 110ms (none under reduced motion). Colours come from CSS tokens and are
- * re-read when the theme / accent changes; stored hex fills are adapted for dark themes.
+ * S15 (docs/DESIGN.md): the selection rectangle and active-cell border glide between cells on the `glide` spring
+ * (none under reduced motion), the primary range carries a soft lit halo, the fill handle is a small lit dome that
+ * grows under the pointer, the fill drag shows a ghost range with a count badge, headers ghost-highlight the row and
+ * column under the pointer, and committed numeric results roll their changed digits (`roll` spring, 28ms stagger,
+ * right to left). Colours come from CSS tokens and are re-read when the theme / accent changes; stored hex fills are
+ * adapted for dark themes.
  */
 import type { CellStyle, Rect } from '@/backend/types';
 import { subscribeRootAttrs, isReducedMotion } from '@/ui/motion/useReducedEffects';
@@ -22,6 +26,10 @@ interface Theme {
   text3: string;
   grid: string;
   headerBg: string;
+  headerTop: string;
+  headerHl: string;
+  ghost: string;
+  ghostStrong: string;
   headerBorder: string;
   headerText: string;
   headerSelBg: string;
@@ -84,6 +92,10 @@ function readTheme(): Theme {
     text3: v('--text-tertiary', '#6E6E77'),
     grid: dark ? 'rgba(255,255,255,0.075)' : 'rgba(24,24,27,0.085)',
     headerBg: v('--bg-surface-2', dark ? '#1D1D22' : '#F4F4F5'),
+    headerTop: mixColor(v('--panel-top', dark ? '#232329' : '#FFFFFF'), v('--bg-surface-2', dark ? '#1D1D22' : '#F4F4F5'), 0.55),
+    headerHl: dark ? 'rgba(255,255,255,0.045)' : 'rgba(255,255,255,0.9)',
+    ghost: dark ? 'rgba(255,255,255,0.05)' : 'rgba(16,16,24,0.035)',
+    ghostStrong: dark ? 'rgba(255,255,255,0.09)' : 'rgba(16,16,24,0.07)',
     headerBorder: v('--border', dark ? 'rgba(255,255,255,.10)' : 'rgba(24,24,27,.10)'),
     headerText: v('--text-tertiary', '#6E6E77'),
     headerSelBg: mixColor(accent, v('--bg-surface-2', '#F4F4F5'), dark ? 0.2 : 0.1),
@@ -187,6 +199,33 @@ interface AnimRect {
 
 const PAD = 6;
 
+/** Display-only: numeric cells paint a true minus (U+2212) instead of the ASCII hyphen the engine emits for export/formula-bar use. */
+function shownText(cd: CellData): string {
+  return cd.k === 1 && cd.d.charCodeAt(0) === 45 ? '\u2212' + cd.d.slice(1) : cd.d;
+}
+
+/**
+ * Damped-spring step response (0 → 1) at `ms`, matching the motion token table (`glide` 420/34, `roll` 200/24).
+ * Drives canvas glides without a JS animation library; transform-free because it is a canvas.
+ */
+function springAt(ms: number, k: number, c: number): number {
+  const t = Math.max(0, ms) / 1000;
+  const w0 = Math.sqrt(k);
+  const z = c / (2 * w0);
+  if (z >= 1) return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
+  const wd = w0 * Math.sqrt(1 - z * z);
+  return 1 - Math.exp(-z * w0 * t) * (Math.cos(wd * t) + ((z * w0) / wd) * Math.sin(wd * t));
+}
+const GLIDE = { k: 420, c: 34, ms: 460 };
+const ROLL = { k: 200, c: 24, ms: 600, stagger: 28 };
+
+export interface GridHover {
+  zone: 'cell' | 'colhead' | 'rowhead' | 'corner';
+  r: number;
+  c: number;
+  fill: boolean;
+}
+
 export class GridCanvas {
   private ctrl: GridController;
   private base: HTMLCanvasElement;
@@ -204,6 +243,8 @@ export class GridCanvas {
   private lastPrimary: AnimRect | null = null;
   private lastActive: AnimRect | null = null;
   private loopRaf = 0;
+  private hover: GridHover | null = null;
+  private roll: { r: number; c: number; sheetId: string; before: string; t0: number; dir: number } | null = null;
   private measureCache = new Map<string, number>();
   private mq: MediaQueryList | null = null;
 
@@ -215,6 +256,7 @@ export class GridCanvas {
     this.octx = over.getContext('2d')!;
     this.theme = readTheme();
     this.offPaint = ctrl.onPaint((layer) => this.draw(layer));
+    ctrl.onCommitted = (r, c, before, sheetId) => this.startRoll(r, c, before, sheetId);
     this.offTheme = subscribeRootAttrs(() => {
       this.theme = readTheme();
       fillCache.clear();
@@ -241,6 +283,7 @@ export class GridCanvas {
   };
 
   dispose(): void {
+    if (this.ctrl.onCommitted) this.ctrl.onCommitted = null;
     this.offPaint();
     this.offTheme();
     this.mq?.removeEventListener('change', this.onDpr);
@@ -259,6 +302,33 @@ export class GridCanvas {
     }
     this.draw('base');
     this.draw('overlay');
+  }
+
+  /** Pointer hover (header ghosts, fill-handle dome); repaints the overlay on the next frame when it changes. */
+  setHover(h: GridHover | null): void {
+    const a = this.hover;
+    const same = a === h || (!!a && !!h && a.zone === h.zone && a.r === h.r && a.c === h.c && a.fill === h.fill);
+    if (same) return;
+    this.hover = h;
+    this.loop();
+  }
+
+  /** S15: roll the changed digits of a committed numeric result. */
+  private startRoll(r: number, c: number, before: string, sheetId: string): void {
+    const cd = this.ctrl.cell(r, c);
+    if (!cd || cd.k !== 1 || sheetId !== this.ctrl.sheetId || cd.d === before || isReducedMotion()) return;
+    if (!/\d/.test(cd.d) || cd.d.length > 24) return;
+    const num = (t: string) => parseFloat(t.replace(/[−–]/g, '-').replace(/[^0-9.\-]/g, ''));
+    const a = num(before);
+    const b = num(cd.d);
+    this.roll = { r, c, sheetId, before: /\d/.test(before) ? before.replace(/^-/, '\u2212') : '', t0: performance.now(), dir: Number.isFinite(a) && Number.isFinite(b) && b < a ? -1 : 1 };
+    this.draw('base');
+    this.draw('overlay');
+  }
+
+  private rollMatches(r: number, c: number): boolean {
+    const ro = this.roll;
+    return !!ro && ro.r === r && ro.c === c && ro.sheetId === this.ctrl.sheetId;
   }
 
   /** x of a 1-device-pixel-crisp line. */
@@ -513,6 +583,7 @@ export class GridCanvas {
   }
 
   private paintText(ctx: CanvasRenderingContext2D, cd: CellData, r: number, c: number, x: number, y: number, w: number, h: number, p: PaneRect, l: Layout, merged = false): void {
+    if (this.rollMatches(r, c)) return; // the overlay draws the rolling digits
     const th = this.theme;
     const ctrl = this.ctrl;
     const st = this.effStyle(cd);
@@ -526,7 +597,8 @@ export class GridCanvas {
     if (/\[red\]/i.test(numFmt) && /^[-(−]/.test(cd.d)) color = th.lossText;
     const hAlign = st.align?.h ?? (cd.k === 1 ? 'right' : cd.k === 3 || cd.k === 4 ? 'center' : 'left');
     const vAlign = st.align?.v ?? 'middle';
-    let text = cd.d;
+    const shown = shownText(cd);
+    let text = shown;
     const tw = this.measure(ctx, text, font);
     let clipX0 = x;
     let clipX1 = x + w;
@@ -583,7 +655,7 @@ export class GridCanvas {
         ty += lh;
       }
     } else {
-      const drawW = text === cd.d ? tw : this.measure(ctx, text, font);
+      const drawW = text === shown ? tw : this.measure(ctx, text, font);
       const tx = hAlign === 'right' ? x + w - PAD - drawW : hAlign === 'center' ? x + (w - drawW) / 2 : x + PAD;
       const ty = vAlign === 'top' ? y + 4 + size / 2 : vAlign === 'bottom' ? y + h - 4 - size / 2 : y + h / 2 + 0.5;
       ctx.fillText(text, tx, ty);
@@ -658,6 +730,15 @@ export class GridCanvas {
       });
     }
 
+    // Committed result rolling its digits (base skips this cell's text meanwhile).
+    if (this.roll) {
+      if (this.drawRoll(ctx, l, now)) animating = true;
+      else {
+        this.roll = null;
+        this.draw('base');
+      }
+    }
+
     const ranges = ctrl.sel.ranges;
     const primaryIdx = ranges.length - 1;
     ranges.forEach((range, i) => {
@@ -677,6 +758,14 @@ export class GridCanvas {
           ctx.fillStyle = th.accent;
           ctx.globalAlpha = th.dark ? 0.14 : 0.08;
           ctx.fillRect(rp.x, rp.y, rp.w, rp.h);
+          ctx.globalAlpha = 1;
+        }
+        if (i === primaryIdx && !editing) {
+          // A soft lit halo outside the border: the selection reads as a raised, lit frame.
+          ctx.strokeStyle = th.accent;
+          ctx.globalAlpha = th.dark ? 0.26 : 0.14;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(rp.x - 2.5, rp.y - 2.5, rp.w + 4, rp.h + 4);
           ctx.globalAlpha = 1;
         }
         ctx.strokeStyle = th.accent;
@@ -726,27 +815,39 @@ export class GridCanvas {
       const pr = this.clampRect(ctrl.primary);
       const full = ctrl.primary.r1 >= MAX_ROWS - 1 || ctrl.primary.c1 >= MAX_COLS - 1;
       if (!full) {
-        const rp = this.lastPrimary ? this.toScreen(this.lastPrimary, pr, l) : ctrl.rectPx(pr, l);
-        const hx = rp.x + rp.w - 4;
-        const hy = rp.y + rp.h - 4;
-        if (hx > l.headerW && hy > l.headerH) {
-          ctx.fillStyle = th.bg;
-          ctx.fillRect(hx - 1, hy - 1, 8, 8);
-          ctx.fillStyle = th.accent;
-          ctx.fillRect(hx, hy, 6, 6);
-        }
+        const glide = this.anim ? this.toScreen(this.interp(this.anim, now), pr, l) : null;
+        const rp = glide ?? (this.lastPrimary ? this.toScreen(this.lastPrimary, pr, l) : ctrl.rectPx(pr, l));
+        const cx = rp.x + rp.w - 1;
+        const cy = rp.y + rp.h - 1;
+        if (cx > l.headerW + 2 && cy > l.headerH + 2) this.drawFillDome(ctx, cx, cy, !!this.hover?.fill || !!ctrl.fillPreview);
       }
     }
 
-    // Fill drag preview
+    // Fill drag preview: a ghost range (tint + dashed rim) with a count badge at the far corner.
     if (ctrl.fillPreview) {
-      const rp = ctrl.rectPx(ctrl.fillPreview, l);
+      const fp = ctrl.fillPreview;
+      const rp = ctrl.rectPx(fp, l);
+      const p = ctrl.primary;
       ctx.save();
-      ctx.setLineDash([3, 3]);
-      ctx.strokeStyle = th.text3;
+      ctx.fillStyle = th.accent;
+      ctx.globalAlpha = th.dark ? 0.1 : 0.06;
+      ctx.fillRect(rp.x, rp.y, rp.w, rp.h);
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = th.accent;
       ctx.lineWidth = 1.5;
       ctx.strokeRect(rp.x + 0.75, rp.y + 0.75, rp.w - 1.5, rp.h - 1.5);
       ctx.restore();
+      const rows = fp.r1 - fp.r0 - (p.r1 - p.r0);
+      const cols = fp.c1 - fp.c0 - (p.c1 - p.c0);
+      const n = rows > 0 ? rows : cols;
+      if (n > 0) {
+        const label = `+${n.toLocaleString()} ${rows > 0 ? (n === 1 ? 'row' : 'rows') : n === 1 ? 'column' : 'columns'}`;
+        const down = fp.r1 > p.r1 || fp.c1 > p.c1;
+        const ax = down ? rp.x + rp.w : rp.x;
+        const ay = down ? rp.y + rp.h : rp.y;
+        this.drawBadge(ctx, label, ax, ay, down, l);
+      }
     }
 
     // Copy marquee: marching ants.
@@ -788,6 +889,133 @@ export class GridCanvas {
     }
 
     if (animating) this.loop();
+  }
+
+  /** The fill handle as a small lit dome (keycap family), with a bg ring so it reads on any fill. */
+  private drawFillDome(ctx: CanvasRenderingContext2D, cx: number, cy: number, hot: boolean): void {
+    const th = this.theme;
+    const s = hot ? 10 : 8;
+    const x = cx - s / 2;
+    const y = cy - s / 2;
+    ctx.save();
+    // contact shadow
+    ctx.fillStyle = th.dark ? 'rgba(0,0,0,0.55)' : 'rgba(16,16,24,0.22)';
+    roundRect(ctx, x - 0.5, y + 1, s + 1, s + 1, 3);
+    ctx.fill();
+    // bg ring
+    ctx.fillStyle = th.bg;
+    roundRect(ctx, x - 1.5, y - 1.5, s + 3, s + 3, 3.5);
+    ctx.fill();
+    // lit face
+    const g = ctx.createLinearGradient(0, y, 0, y + s);
+    g.addColorStop(0, mixColor('#ffffff', th.accent, th.dark ? 0.1 : 0.22));
+    g.addColorStop(1, th.accent);
+    ctx.fillStyle = g;
+    roundRect(ctx, x, y, s, s, 2.5);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.fillRect(x + 2, y + 0.75, s - 4, 1);
+    ctx.restore();
+  }
+
+  /** A small ink pill (fill count) anchored at a range corner, kept inside the grid. */
+  private drawBadge(ctx: CanvasRenderingContext2D, label: string, ax: number, ay: number, after: boolean, l: Layout): void {
+    const th = this.theme;
+    const font = `600 ${11 * th.scale}px ${th.font}`;
+    const tw = this.measure(ctx, label, font);
+    const w = tw + 14;
+    const h = 20;
+    let x = after ? ax + 6 : ax - w - 6;
+    let y = after ? ay + 6 : ay - h - 6;
+    x = Math.min(Math.max(l.headerW + 4, x), this.w - w - 4);
+    y = Math.min(Math.max(l.headerH + 4, y), this.h - h - 4);
+    ctx.save();
+    ctx.fillStyle = th.dark ? 'rgba(0,0,0,0.5)' : 'rgba(16,16,24,0.18)';
+    roundRect(ctx, x, y + 1.5, w, h, 10);
+    ctx.fill();
+    ctx.fillStyle = th.text;
+    roundRect(ctx, x, y, w, h, 10);
+    ctx.fill();
+    ctx.fillStyle = th.bg;
+    ctx.font = font;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, x + 7, y + h / 2 + 0.5);
+    ctx.restore();
+  }
+
+  /** Draws the rolling digits of `this.roll`; returns false once settled. */
+  private drawRoll(ctx: CanvasRenderingContext2D, l: Layout, now: number): boolean {
+    const ro = this.roll;
+    const ctrl = this.ctrl;
+    if (!ro || ro.sheetId !== ctrl.sheetId) return false;
+    const cd = ctrl.cell(ro.r, ro.c);
+    if (!cd || cd.k !== 1) return false;
+    const elapsed = now - ro.t0;
+    const text = shownText(cd);
+    const total = ROLL.ms + ROLL.stagger * Math.min(text.length, 10);
+    if (elapsed > total) return false;
+    const th = this.theme;
+    const st = this.effStyle(cd);
+    const font = this.fontFor(st);
+    let color = th.text;
+    if (st.font?.color) color = adaptText(st.font.color, th.dark);
+    else if (st.role === 'input') color = th.inputText;
+    const numFmt = ctrl.style(cd.s).numFmt ?? '';
+    if (/\[red\]/i.test(numFmt) && /^[-(−]/.test(text)) color = th.lossText;
+    const rect = { r0: ro.r, c0: ro.c, r1: ro.r, c1: ro.c };
+    const m = ctrl.mergeAt(ro.r, ro.c);
+    const rp = ctrl.rectPx(m ?? rect, l);
+    const tw = this.measure(ctx, text, font);
+    if (tw > rp.w - PAD * 2) return false;
+    const hAlign = st.align?.h ?? 'right';
+    const size = (st.font?.size ?? 13) * th.scale;
+    const vAlign = st.align?.v ?? 'middle';
+    const ty = vAlign === 'top' ? rp.y + 4 + size / 2 : vAlign === 'bottom' ? rp.y + rp.h - 4 - size / 2 : rp.y + rp.h / 2 + 0.5;
+    const xFor = (w: number) => (hAlign === 'left' ? rp.x + PAD : hAlign === 'center' ? rp.x + (rp.w - w) / 2 : rp.x + rp.w - PAD - w);
+    const before = ro.before;
+    const bw = before ? this.measure(ctx, before, font) : 0;
+    const nx = xFor(tw);
+    const bx = xFor(bw);
+    const travel = Math.min(rp.h * 0.72, size * 1.25);
+    this.withPaneClip(ctx, m ?? rect, l, () => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rp.x + 1, rp.y + 1, rp.w - 3, rp.h - 3);
+      ctx.clip();
+      ctx.font = font;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = color;
+      const n = Math.max(text.length, before.length);
+      let order = 0;
+      for (let j = 0; j < n; j++) {
+        const ni = text.length - 1 - j;
+        const bi = before.length - 1 - j;
+        const nc = ni >= 0 ? text[ni] : '';
+        const bc = bi >= 0 ? before[bi] : '';
+        const npos = ni >= 0 ? nx + this.measure(ctx, text.slice(0, ni), font) : 0;
+        const bpos = bi >= 0 ? bx + this.measure(ctx, before.slice(0, bi), font) : 0;
+        if (nc === bc && Math.abs(npos - bpos) < 0.5) {
+          ctx.globalAlpha = 1;
+          ctx.fillText(nc, npos, ty);
+          continue;
+        }
+        const p = Math.min(1, springAt(elapsed - order * ROLL.stagger, ROLL.k, ROLL.c));
+        const q = Math.max(0, Math.min(1, (elapsed - order * ROLL.stagger) / 140));
+        order++;
+        if (bc) {
+          ctx.globalAlpha = Math.max(0, 1 - q);
+          ctx.fillText(bc, bpos, ty - ro.dir * travel * p);
+        }
+        if (nc) {
+          ctx.globalAlpha = Math.min(1, q * 1.2);
+          ctx.fillText(nc, npos, ty + ro.dir * travel * (1 - p));
+        }
+      }
+      ctx.restore();
+    });
+    return true;
   }
 
   private loop(): void {
@@ -832,9 +1060,7 @@ export class GridCanvas {
       this.lastActive = to;
     }
     if (!cur || straddles) return { rect: target, animating: false };
-    const DUR = 110;
-    const t = Math.min(1, (now - cur.t0) / DUR);
-    if (t >= 1) {
+    if (now - cur.t0 >= GLIDE.ms) {
       if (which === 'primary') this.anim = null;
       else this.animActive = null;
       return { rect: target, animating: false };
@@ -843,8 +1069,7 @@ export class GridCanvas {
   }
 
   private interp(a: { from: AnimRect; to: AnimRect; t0: number }, now: number): AnimRect {
-    const t = Math.min(1, (now - a.t0) / 110);
-    const e = 1 - (1 - t) ** 3;
+    const e = now - a.t0 >= GLIDE.ms ? 1 : springAt(now - a.t0, GLIDE.k, GLIDE.c);
     const lerp = (x: number, y: number) => x + (y - x) * e;
     return { x0: lerp(a.from.x0, a.to.x0), y0: lerp(a.from.y0, a.to.y0), x1: lerp(a.from.x1, a.to.x1), y1: lerp(a.from.y1, a.to.y1) };
   }
@@ -955,9 +1180,15 @@ export class GridCanvas {
       }
       return s;
     };
-    // Column header strip
-    ctx.fillStyle = th.headerBg;
+    const hv = this.hover;
+    // Column header strip: a machined plate (lit top, slightly darker foot).
+    const hg = ctx.createLinearGradient(0, 0, 0, l.headerH);
+    hg.addColorStop(0, th.headerTop);
+    hg.addColorStop(1, th.headerBg);
+    ctx.fillStyle = hg;
     ctx.fillRect(l.headerW, 0, this.w - l.headerW, l.headerH);
+    ctx.fillStyle = th.headerHl;
+    ctx.fillRect(l.headerW, 0, this.w - l.headerW, 1);
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     const colsToDraw: number[] = [];
@@ -977,7 +1208,11 @@ export class GridCanvas {
         ctx.fillStyle = s === 2 ? th.headerSelFullBg : th.headerSelBg;
         ctx.fillRect(x, 0, w, l.headerH);
         ctx.fillStyle = th.accent;
-        ctx.fillRect(x, l.headerH - 2, w, 2);
+        roundRect(ctx, x + 2, l.headerH - 2.5, Math.max(2, w - 4), 2.5, 1.25);
+        ctx.fill();
+      } else if (hv && hv.c === c && hv.zone !== 'rowhead' && hv.zone !== 'corner') {
+        ctx.fillStyle = hv.zone === 'colhead' ? th.ghostStrong : th.ghost;
+        ctx.fillRect(x, 0, w, l.headerH);
       }
       ctx.font = s ? fontSel : font;
       ctx.fillStyle = s ? th.headerSelText : th.headerText;
@@ -990,7 +1225,10 @@ export class GridCanvas {
     ctx.fillRect(0, l.headerH - 1 / this.dpr, this.w, 1 / this.dpr);
 
     // Row header strip
-    ctx.fillStyle = th.headerBg;
+    const rg = ctx.createLinearGradient(0, 0, l.headerW, 0);
+    rg.addColorStop(0, th.headerTop);
+    rg.addColorStop(1, th.headerBg);
+    ctx.fillStyle = rg;
     ctx.fillRect(0, l.headerH, l.headerW, this.h - l.headerH);
     ctx.textAlign = 'right';
     const rowsToDraw: number[] = [];
@@ -1010,7 +1248,11 @@ export class GridCanvas {
         ctx.fillStyle = s === 2 ? th.headerSelFullBg : th.headerSelBg;
         ctx.fillRect(0, y, l.headerW, h);
         ctx.fillStyle = th.accent;
-        ctx.fillRect(l.headerW - 2, y, 2, h);
+        roundRect(ctx, l.headerW - 2.5, y + 2, 2.5, Math.max(2, h - 4), 1.25);
+        ctx.fill();
+      } else if (hv && hv.r === r && hv.zone !== 'colhead' && hv.zone !== 'corner') {
+        ctx.fillStyle = hv.zone === 'rowhead' ? th.ghostStrong : th.ghost;
+        ctx.fillRect(0, y, l.headerW, h);
       }
       ctx.font = s ? fontSel : font;
       ctx.fillStyle = s ? th.headerSelText : th.headerText;
@@ -1026,7 +1268,7 @@ export class GridCanvas {
     if (l.fc) ctx.fillRect(fx - 1, 0, 2, l.headerH);
     if (l.fr) ctx.fillRect(0, fy - 1, l.headerW, 2);
     // Corner: select-all triangle.
-    ctx.fillStyle = th.headerBg;
+    ctx.fillStyle = hv?.zone === 'corner' ? mixColor(th.text, th.headerBg, th.dark ? 0.08 : 0.05) : th.headerBg;
     ctx.fillRect(0, 0, l.headerW - 1 / this.dpr, l.headerH - 1 / this.dpr);
     const all = ctrl.sel.ranges.some((r) => r.r0 === 0 && r.c0 === 0 && r.r1 >= MAX_ROWS - 1 && r.c1 >= MAX_COLS - 1);
     ctx.fillStyle = all ? th.accent : th.text3;

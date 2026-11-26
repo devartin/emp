@@ -1,6 +1,7 @@
 /**
  * Floating panel anchored to a virtual rect (caret, selection, node view control). floating-ui flip/shift, fixed
- * strategy, §4.2 menu motion (opacity + scale from the anchor, 120–160ms ease.outExpo; exit 100ms ease.in).
+ * strategy, glass-1, origin-aware motion (§5.4.1: scale .96 → 1 and 4px toward the anchor on the glide spring; exit
+ * 100ms ease-in). The slash menu's anchor is the caret, so it grows from the caret (S22).
  * Closes on outside pointer down and Esc when `onClose` is given.
  */
 import { autoUpdate, flip, offset, shift, size, useFloating, type Placement } from '@floating-ui/react';
@@ -8,7 +9,7 @@ import { AnimatePresence, m } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { ease } from '@/ui/motion/tokens';
+import { ease, spring } from '@/ui/motion/tokens';
 
 export type RectLike = { x: number; y: number; width: number; height: number };
 
@@ -103,9 +104,9 @@ export function Floating({ open, anchor, context, placement = 'bottom-start', of
           <m.div
             className={cn('emp-floating', className)}
             style={{ transformOrigin: origin, ...style }}
-            initial={{ opacity: 0, scale: 0.98, y: side === 'top' ? 3 : -3 }}
-            animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.14, ease: [...ease.outExpo] as [number, number, number, number] } }}
-            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.1, ease: [...ease.in] as [number, number, number, number] } }}
+            initial={{ opacity: 0, scale: 0.96, y: side === 'top' ? 4 : side === 'bottom' ? -4 : 0, x: side === 'left' ? 4 : side === 'right' ? -4 : 0 }}
+            animate={{ opacity: 1, scale: 1, y: 0, x: 0, transition: { ...spring.glide, opacity: { duration: 0.12, ease: [...ease.out] as [number, number, number, number] } } }}
+            exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.1, ease: [...ease.in] as [number, number, number, number] } }}
           >
             {children}
           </m.div>

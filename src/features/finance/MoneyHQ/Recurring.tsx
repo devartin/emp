@@ -236,9 +236,9 @@ function Detected({ list, onAccepted }: { list: RecurringCandidate[]; onAccepted
   return (
     <Section title={<span className="inline-flex items-center gap-2"><Radar size={15} className="text-accent-text" />We spotted {visible.length} recurring {visible.length === 1 ? "payment" : "payments"}</span>} subtitle="Found in your transactions — add them so they show up in forecasts and reminders.">
       <div className="flex flex-col gap-2">
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} mode="popLayout">
           {visible.map((c) => (
-            <m.div key={c.payee} layout exit={{ opacity: 0, height: 0 }} className="fh-detect">
+            <m.div key={c.payee} layout exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }} className="fh-detect">
               <Sparkles size={15} className="text-accent-text flex-none" />
               <div className="flex-1 min-w-0">
                 <div className="text-body-sm font-medium truncate">{c.payee}</div>

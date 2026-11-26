@@ -5,7 +5,7 @@
  * On success the vault store flips to unlocked and boot.ts enters the shell (App animates the hand-off).
  */
 import { ArrowLeft, KeyRound, Lock } from "lucide-react";
-import { AnimatePresence, m, useAnimationControls } from "motion/react";
+import { AnimatePresence, m, useAnimationControls, useIsPresent } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { hasCode, isApiError, errorMessage } from "@/backend";
 import { preloadShell } from "@/app/boot";
@@ -57,6 +57,14 @@ function fmtWait(s: number): string {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** A row of the lock card rising into place after the slabs land (S2: the password well rises +160ms). */
+function rise(reduced: boolean, scaleFrom = 1) {
+  return {
+    hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 8, scale: scaleFrom },
+    show: { opacity: 1, y: 0, scale: 1, transition: reduced ? { duration: 0.12 } : { ...spring.settle, opacity: { duration: 0.24, ease: ease.out } } },
+  };
+}
+
 export default function LockScreen() {
   const status = useVault((s) => s.status);
   const unlocking = useVault((s) => s.unlocking);
@@ -70,6 +78,11 @@ export default function LockScreen() {
   const wait = useCountdown(lockoutUntil);
   const controls = useAnimationControls();
   const inputRef = useRef<HTMLInputElement>(null);
+  // S2: the slab stack drops in, presses on success, jolts on a wrong password and separates as the vault opens.
+  const present = useIsPresent();
+  const [markStage, setMarkStage] = useState<"drop" | "rest" | "press" | "jolt">("drop");
+  const [markKey, setMarkKey] = useState(0);
+  const stage = present ? markStage : "open";
 
   useEffect(() => {
     // Warm the shell while the user types (§12: preload shell chunks during the KDF).
@@ -91,12 +104,16 @@ export default function LockScreen() {
     void preloadShell();
     try {
       await useVault.getState().unlock(password);
+      setMarkStage("press");
+      setMarkKey((n) => n + 1);
     } catch (e) {
       const retry = isApiError(e) ? e.details?.retryAfterMs : undefined;
       if (retry) setLockoutUntil(Date.now() + retry);
       if (hasCode(e, "BAD_PASSWORD")) {
         setError("Incorrect password");
         setPassword("");
+        setMarkStage("jolt");
+        setMarkKey((n) => n + 1);
         if (!reduced) void controls.start(shake);
       } else if (hasCode(e, "RATE_LIMITED")) {
         setError(null);
@@ -111,7 +128,15 @@ export default function LockScreen() {
   const name = identity.workspaceName || "EMP";
 
   return (
-    <m.div className="emp-stage emp-aurora" onScroll={(e) => e.currentTarget.scrollLeft && (e.currentTarget.scrollLeft = 0)} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: 0.24 } }} exit={{ opacity: 0, transition: { duration: 0.32, ease: ease.out } }}>
+    <m.div
+      className="emp-stage emp-vault-stage"
+      onScroll={(e) => e.currentTarget.scrollLeft && (e.currentTarget.scrollLeft = 0)}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: 0.24 } }}
+      exit={{ opacity: 0, transition: reduced ? { duration: 0.14 } : { duration: 0.52, delay: 0.3, ease: ease.out } }}
+      style={{ pointerEvents: present ? undefined : "none" }}
+    >
+      <span className="emp-stage-light" aria-hidden />
       <div className="emp-stage-drag drag-region" data-tauri-drag-region />
       <WindowControls className="absolute right-0 top-0" />
       <m.div
@@ -119,9 +144,9 @@ export default function LockScreen() {
         data-wide={mode === "recovery" ? "" : undefined}
         layout={!reduced}
         transition={spring.gentle}
-        initial={{ opacity: 0, scale: reduced ? 1 : 0.98, y: reduced ? 0 : 6 }}
-        animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.32, ease: ease.outExpo } }}
-        exit={{ opacity: 0, scale: reduced ? 1 : 0.96, transition: { duration: 0.32, ease: ease.out } }}
+        initial={{ opacity: 0, scale: reduced ? 1 : 0.97, y: reduced ? 0 : 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0, transition: { ...spring.settle, opacity: { duration: 0.3, ease: ease.out } } }}
+        exit={reduced ? { opacity: 0, transition: { duration: 0.12 } } : { opacity: 0, scale: 1.035, y: -6, filter: "blur(6px)", transition: { duration: 0.42, delay: 0.24, ease: ease.out } }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="lock-title"
@@ -133,31 +158,33 @@ export default function LockScreen() {
                 key="pw"
                 aria-busy={unlocking || undefined}
                 className="flex flex-col items-center"
-                initial={{ opacity: 0, x: reduced ? 0 : -12 }}
-                animate={{ opacity: 1, x: 0, transition: { duration: 0.22, ease: ease.out } }}
-                exit={{ opacity: 0, x: reduced ? 0 : -12, transition: { duration: 0.12, ease: ease.in } }}
+                variants={{
+                  hidden: { opacity: 0, x: 0 },
+                  show: { opacity: 1, x: 0, transition: { duration: 0.2, ease: ease.out, staggerChildren: reduced ? 0 : 0.05, delayChildren: reduced || markStage !== "drop" ? 0 : 0.34 } },
+                  leave: { opacity: 0, x: reduced ? 0 : -12, transition: { duration: 0.12, ease: ease.in } },
+                }}
+                initial="hidden"
+                animate="show"
+                exit="leave"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void submit();
                 }}
               >
-                <div className="relative">
-                  {identity.workspaceName ? (
-                    <span className="emp-lock-avatar" role="img" aria-label={identity.workspaceName}>
-                      {identity.emoji ?? (identity.workspaceName.trim()[0] ?? "E").toUpperCase()}
-                    </span>
-                  ) : (
-                    <AppMark size={64} animate={false} />
-                  )}
-                  <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[var(--bg-overlay)] bg-inverse text-on-inverse" aria-hidden>
+                <div className="emp-lock-hero">
+                  <AppMark size={76} stage={stage} stageKey={markKey} />
+                  <m.span className="emp-lock-badge" aria-hidden variants={rise(reduced, 0.9)}>
                     <Lock size={11} strokeWidth={2.5} />
-                  </span>
+                  </m.span>
                 </div>
-                <h1 id="lock-title" className="mt-4 text-title text-primary">
+                <m.h1 id="lock-title" className="emp-lock-title" variants={rise(reduced)}>
+                  {identity.emoji ? <span className="mr-1.5" aria-hidden>{identity.emoji}</span> : null}
                   {name}
-                </h1>
-                <p className="mt-0.5 text-body-sm text-tertiary">Enter your password to unlock</p>
-                <div className="mt-6 w-full">
+                </m.h1>
+                <m.p className="mt-1 text-body-sm text-tertiary" variants={rise(reduced)}>
+                  Enter your password to unlock
+                </m.p>
+                <m.div className="mt-6 w-full" variants={rise(reduced)}>
                   <PasswordField
                     inputRef={inputRef}
                     value={password}
@@ -172,7 +199,8 @@ export default function LockScreen() {
                     error={error}
                     helper={!error && attempts >= 3 && wait === 0 ? `${attempts} incorrect attempts. Waits get longer after 5.` : undefined}
                   />
-                </div>
+                </m.div>
+                <m.div className="w-full" variants={rise(reduced)}>
                 <Button
                   type="submit"
                   variant="primary"
@@ -187,12 +215,15 @@ export default function LockScreen() {
                   {wait > 0 ? <span className="tabular">Try again in {fmtWait(wait)}</span> : unlocking ? "Unlocking…" : "Unlock"}
                   {unlocking ? <span className="emp-kdf-shimmer" aria-hidden /> : null}
                 </Button>
-                <Button variant="ghost" size="md" className="mt-2" icon={KeyRound} onClick={() => setMode("recovery")}>
-                  Use recovery key
-                </Button>
-                <p className="mt-5 text-caption text-tertiary" style={{ fontWeight: 400 }}>
+                </m.div>
+                <m.div variants={rise(reduced)}>
+                  <Button variant="ghost" size="md" className="mt-2" icon={KeyRound} onClick={() => setMode("recovery")}>
+                    Use recovery key
+                  </Button>
+                </m.div>
+                <m.p className="emp-lock-caption" variants={rise(reduced)}>
                   {captionFor(reason, status?.autoLock.idleMinutes ?? 15)}
-                </p>
+                </m.p>
               </m.form>
             ) : (
               <m.div

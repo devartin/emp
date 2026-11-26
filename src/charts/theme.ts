@@ -28,6 +28,9 @@ export interface ChartTheme {
   categorical: string[];
   other: string;
   areaTop: number;
+  /** Ink for single-series trend lines (§5.6) and its area-fill top stop. */
+  chartLine: string;
+  chartFillTop: string;
   fontFamily: string;
   privacy: boolean;
   reducedMotion: boolean;
@@ -66,6 +69,8 @@ function read(): ChartTheme {
     categorical: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => v(`--cat-${i}`)),
     other: v("--cat-other"),
     areaTop: parseFloat(v("--chart-area-top")) || 0.22,
+    chartLine: v("--chart-line") || v("--text-primary"),
+    chartFillTop: v("--chart-fill-top") || "rgba(16,16,24,.13)",
     fontFamily: v("--font-ui") || "Inter Variable, sans-serif",
     privacy: root.getAttribute("data-privacy") === "on",
     reducedMotion: root.getAttribute("data-motion") === "reduced",
@@ -86,6 +91,14 @@ export function useChartTheme(): ChartTheme {
 /** Series colour for index i (categorical order, §3.5). */
 export function seriesColor(t: ChartTheme, i: number): string {
   return i < 0 ? t.other : t.categorical[i % 8];
+}
+
+/**
+ * Default colour for an uncoloured series: a single series is ink (--chart-line, DESIGN §2.3 — the app is monochrome
+ * and a lone series has nothing to be told apart from); the categorical palette only starts at 2+ series.
+ */
+export function defaultSeriesColor(t: ChartTheme, i: number, count: number): string {
+  return count <= 1 ? t.chartLine : seriesColor(t, i);
 }
 
 /** Sequential palette: accent at .12/.28/.48/.70/1 (zero → surface-2). */

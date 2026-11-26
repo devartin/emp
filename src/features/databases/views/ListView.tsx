@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn';
 import { IconButton } from '@/ui/IconButton';
 import { Skeleton } from '@/ui/Skeleton';
 import { Tag } from '@/ui/Tag';
+import { spring } from '@/ui/motion/tokens';
 import { useDbView } from '../context';
 import { cellFor } from '../engine/filter';
 import { NO_VALUE } from '../engine/group';
@@ -73,7 +74,7 @@ export function ListView() {
             <section key={g.key} className="edb-list-group">
               <div className="edb-group-head">
                 <button type="button" className="edb-group-toggle" aria-expanded={!isC} onClick={() => patchView({ collapsedGroups: isC ? view.collapsedGroups.filter((k) => k !== g.key) : [...view.collapsedGroups, g.key] })}>
-                  <m.span animate={{ rotate: isC ? 0 : 90 }} transition={{ duration: 0.16 }} className="flex">
+                  <m.span animate={{ rotate: isC ? 0 : 90 }} transition={spring.release} className="flex">
                     <ChevronRight size={14} aria-hidden />
                   </m.span>
                   {g.color ? <Tag color={g.color}>{g.label}</Tag> : <span className={cn('font-medium', g.key === NO_VALUE && 'text-tertiary')}>{g.label}</span>}

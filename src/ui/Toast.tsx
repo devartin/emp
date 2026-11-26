@@ -1,4 +1,4 @@
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 import { animate, AnimatePresence, m, useMotionValue, type PanInfo } from "motion/react";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "./Button";
@@ -138,17 +138,24 @@ function useToasts() {
 
 /* ───────────────────────── view ───────────────────────── */
 
+const TICK = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path pathLength={1} d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+);
 const ICONS: Record<ToastType, ReactNode> = {
   info: <Info aria-hidden />,
-  success: <CheckCircle2 aria-hidden />,
+  success: <span className="emp-toast-dome">{TICK}</span>,
   warning: <AlertTriangle aria-hidden />,
   error: <AlertCircle aria-hidden />,
 };
+
 const MAX_VISIBLE = 3;
 const GAP = 8;
 
 /**
- * Toaster (§5.7, §4.2): bottom-right stack (bottom-centre < 900px), max 3 visible. Cards behind the newest sit at
+ * Toaster (docs/DESIGN.md §6.3): glass-1 toasts rising from the bottom-centre dock on the `thumb` spring, max 3 visible;
+ * a groove progress bar drains over each toast's lifetime. Cards behind the newest sit at
  * y −8n, scale 1−0.05n, opacity 1−0.2n; hovering expands the stack with 8px gaps. Timers pause on hover, focus-within
  * and window blur. Swipe right to dismiss (45% width or 0.11px/ms). ⌘⇧. focuses the newest toast.
  */
@@ -308,13 +315,14 @@ function ToastCard({
       layout={false}
       className="emp-toast"
       data-type={t.type}
+      data-behind={hiddenBehind ? "" : undefined}
       role={t.type === "error" ? "alert" : "status"}
       aria-atomic="true"
       tabIndex={0}
       style={{ zIndex: 10 - n, height: hiddenBehind ? frontHeight : undefined }}
-      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.96 }}
-      animate={{ opacity, y, scale, transition: spring.ui }}
-      exit={reduced ? { opacity: 0, transition: { duration: 0.12 } } : { opacity: 0, x: 24, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.92 }}
+      animate={{ opacity, y, scale, transition: n === 0 ? spring.thumb : spring.glide }}
+      exit={reduced ? { opacity: 0, transition: { duration: 0.12 } } : { opacity: 0, y: 8, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
       drag={reduced ? false : "x"}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={{ left: 0.05, right: 0.9 }}
@@ -335,8 +343,7 @@ function ToastCard({
         {t.action ? (
           <Button
             size="sm"
-            variant="ghost"
-            className="text-primary"
+            variant="secondary"
             onClick={() => {
               t.action?.onClick();
               dismiss(t.id);
@@ -347,8 +354,10 @@ function ToastCard({
         ) : null}
         <IconButton icon={X} label="Dismiss" size="xs" noTooltip onClick={() => dismiss(t.id)} />
       </div>
-      {t.action && Number.isFinite(t.duration) ? (
-        <m.span className="emp-toast-progress" style={{ scaleX: progress }} />
+      {Number.isFinite(t.duration) && !hiddenBehind ? (
+        <span className="emp-toast-track" aria-hidden>
+          <m.span className="emp-toast-progress" style={{ scaleX: progress }} />
+        </span>
       ) : null}
     </m.li>
   );

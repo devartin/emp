@@ -8,6 +8,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Cover as CoverT, PageFlags, PageMeta } from '@/backend/types';
 import { PageIcon } from '@/features/shell/PageIcon';
 import { cn } from '@/lib/cn';
+import { spring } from '@/ui/motion/tokens';
+import { vt, vtStyle } from '@/ui/motion/viewTransition';
 import { EmojiPicker } from '@/ui/EmojiPicker';
 import { Tooltip } from '@/ui/Tooltip';
 import type { SaverSnapshot } from '../useDocSave';
@@ -27,6 +29,9 @@ export interface PageHeaderProps {
   onCover: (c: CoverT | null) => void;
   onFlags: (patch: Partial<PageFlags>) => void;
   onHistory: () => void;
+  /** Backlinks list expanded — owned by PageView so the body below can FLIP when it changes. */
+  backlinksOpen: boolean;
+  onBacklinksOpen: (open: boolean) => void;
   titleRef?: React.RefObject<HTMLTextAreaElement | null>;
 }
 
@@ -81,7 +86,7 @@ function SaveIndicator({ status }: { status: SaverSnapshot | null }) {
   );
 }
 
-export function PageHeader({ meta, readOnly, status, onTitle, onTitleExit, onIcon, onCover, onFlags, onHistory, titleRef }: PageHeaderProps) {
+export function PageHeader({ meta, readOnly, status, onTitle, onTitleExit, onIcon, onCover, onFlags, onHistory, backlinksOpen, onBacklinksOpen, titleRef }: PageHeaderProps) {
   const [title, setTitle] = useState(meta.title);
   const localRef = useRef<HTMLTextAreaElement>(null);
   const ref = titleRef ?? localRef;
@@ -119,10 +124,10 @@ export function PageHeader({ meta, readOnly, status, onTitle, onTitleExit, onIco
               className="emp-page-icon"
               aria-label="Change icon"
               disabled={readOnly}
-              whileTap={readOnly ? undefined : { scale: 0.94 }}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+              style={vtStyle(vt.pageIcon(meta.id))}
+              initial={{ opacity: 0, scale: 0.9, y: 4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={spring.pop}
             >
               <PageIcon icon={icon} size={78} />
             </m.button>
@@ -167,6 +172,7 @@ export function PageHeader({ meta, readOnly, status, onTitle, onTitleExit, onIco
         <textarea
           ref={ref}
           className="emp-title"
+          style={vtStyle(vt.pageTitle(meta.id))}
           rows={1}
           value={title}
           placeholder="Untitled"
@@ -197,7 +203,7 @@ export function PageHeader({ meta, readOnly, status, onTitle, onTitleExit, onIco
             }
           }}
         />
-        <Backlinks pageId={meta.id} />
+        <Backlinks pageId={meta.id} open={backlinksOpen} onOpenChange={onBacklinksOpen} />
       </div>
     </>
   );

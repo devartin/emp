@@ -1,6 +1,6 @@
 /** Display helpers shared by Money HQ, Portfolio, Markets and Taxes. Money stays decimal strings until display. */
-import { formatCompact, formatNumber, formatPercent, MINUS } from "@/lib/format";
-import { formatMoney, type Money } from "@/lib/money";
+import { formatCompact, formatNumber, formatPercent, getFormatLocale, MINUS } from "@/lib/format";
+import { currencyDecimals, formatMoney, moneyParts, type Money } from "@/lib/money";
 
 export const toMoney = (amount: string | number, currency = "USD"): Money => ({
   amount: typeof amount === "number" ? (Number.isFinite(amount) ? amount.toFixed(2) : "0") : amount,
@@ -13,9 +13,34 @@ export const num = (s: string | number | null | undefined): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+// Per-locale+currency symbol placement, resolved once: moneyParts builds Intl formatters on every call, which made
+// per-frame readouts (scrub, count-ups) spend most of their time constructing formatters.
+const shapes = new Map<string, { symbol: string; prefix: boolean; decimal: string; digits: number }>();
+function moneyShape(currency: string) {
+  const key = `${getFormatLocale()}|${currency}`;
+  let sh = shapes.get(key);
+  if (!sh) {
+    const p = moneyParts(toMoney(1.5, currency));
+    sh = { symbol: p.symbol, prefix: p.symbolPosition === "prefix", decimal: p.decimal, digits: currencyDecimals(currency) };
+    shapes.set(key, sh);
+  }
+  return sh;
+}
+
 /** $1,234.56 · −$12.00 */
 export function fmtMoney(v: string | number, currency = "USD", opts: { noCents?: boolean; signed?: boolean } = {}): string {
-  return formatMoney(toMoney(v, currency), opts);
+  // Strings keep the exact decimal path; numbers (UI maths, animated readouts) take the cached fast path below, which
+  // matches formatMoney's output: cents first, then half-up to the shown digits.
+  if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) >= 1e15) return formatMoney(toMoney(v, currency), opts);
+  const sh = moneyShape(currency);
+  const digits = opts.noCents ? 0 : sh.digits;
+  const cents = Number(Math.abs(v).toFixed(2));
+  const f = 10 ** digits;
+  const [i, frac = ""] = (Math.round(cents * f) / f).toFixed(digits).split(".");
+  const zero = cents === 0;
+  const sign = v < 0 && !zero ? MINUS : opts.signed && !zero ? "+" : "";
+  const body = formatNumber(Number(i), { maximumFractionDigits: 0 }) + (frac ? sh.decimal + frac : "");
+  return sign + (sh.prefix ? sh.symbol + body : body + sh.symbol);
 }
 
 /** $12.4k · −$340 */

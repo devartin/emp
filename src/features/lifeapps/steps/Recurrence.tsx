@@ -19,7 +19,7 @@ export function Recurrence({ step, value, onChange, currency }: StepProps) {
   return (
     <div className="flex flex-col gap-3">
       {rec.map((k) => (
-        <div key={k} className="la-card-row">
+        <div key={k} className="la-card-row panel" data-flat="">
           <RecurrencePicker label={LABEL[k] ?? humanize(k)} value={obj[k] as RecurrenceAnswer} onChange={(v) => onChange({ ...obj, [k]: v })} />
         </div>
       ))}

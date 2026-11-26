@@ -229,7 +229,7 @@ export default function ChartGallery() {
       </Card>
       <div className="grid grid-cols-2 gap-4">
         <Card title="Retirement projection" subtitle="Median with p25–p75 and p10–p90 bands">
-          <FanChart data={fan} height={240} target={{ value: 130_000, label: "Goal $130k" }} summaryLabel="Investment projection" />
+          <FanChart reveal data={fan} height={240} target={{ value: 130_000, label: "Goal $130k" }} summaryLabel="Investment projection" />
         </Card>
         <Card title="Monthly net" subtitle="Signed bars">
           <BarChart data={netByMonth} x="month" series={[{ key: "net", label: "Net" }]} colorBySign height={240} summaryLabel="Monthly net" />

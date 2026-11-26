@@ -5,7 +5,7 @@
  */
 import { ArrowUpLeft, Info, RotateCcw, Trash2 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { navigate } from "@/app/router";
 import { api, latestRequest } from "@/backend";
 import type { Id, PageMeta } from "@/backend/types";
@@ -20,7 +20,8 @@ import { EmptyState } from "@/ui/EmptyState";
 import { IconButton } from "@/ui/IconButton";
 import { SearchField } from "@/ui/SearchField";
 import { SkeletonSwap, Skeleton } from "@/ui/Skeleton";
-import { spring } from "@/ui/motion/tokens";
+import { ease, spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PageIcon } from "./PageIcon";
 import "./shell.css";
 
@@ -80,8 +81,12 @@ export default function TrashPage() {
   }, [items, now]);
 
   const removeLocal = (ids: Id[]) => setItems((cur) => (cur ? cur.filter((p) => !ids.includes(p.id)) : cur));
+  // Restored rows slide back toward the sidebar; purged rows sink into the page.
+  const exitKind = useRef<"restore" | "purge">("purge");
+  const reduced = useReducedMotionPref();
 
   const restore = async (meta: PageMeta) => {
+    exitKind.current = "restore";
     removeLocal([meta.id]);
     try {
       const restored = await api.page.restore({ ids: [meta.id] });
@@ -100,6 +105,7 @@ export default function TrashPage() {
   };
 
   const purge = async (meta: PageMeta) => {
+    exitKind.current = "purge";
     removeLocal([meta.id]);
     try {
       await api.page.purge({ ids: [meta.id] });
@@ -138,7 +144,7 @@ export default function TrashPage() {
             Pages in Trash are deleted forever after {retention} days.
           </p>
         </div>
-        <Button variant="destructive-ghost" icon={Trash2} disabled={!count || emptying !== null} loading={emptying !== null} onClick={() => setConfirm({ kind: "all" })}>
+        <Button variant="destructive-ghost" icon={Trash2} iconMotion="trash" disabled={!count || emptying !== null} loading={emptying !== null} onClick={() => setConfirm({ kind: "all" })}>
           Empty Trash
         </Button>
       </div>
@@ -174,19 +180,30 @@ export default function TrashPage() {
           <div className="mt-6 flex flex-col gap-6">
             {groups.map((g) => (
               <section key={g.label} aria-label={g.label}>
-                <h2 className="mb-1 px-2.5 text-micro uppercase text-tertiary">{g.label}</h2>
+                <h2 className="emp-trash-group">{g.label}</h2>
                 <ul className="flex flex-col">
-                  <AnimatePresence initial={false}>
-                    {g.items.map((p) => {
+                  <AnimatePresence initial={false} custom={exitKind.current}>
+                    {g.items.map((p, i) => {
                       const parent = p.parentId ? byId.get(p.parentId) : null;
                       return (
                         <m.li
                           key={p.id}
-                          layout
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0, x: 16, transition: { duration: 0.16 } }}
-                          transition={spring.layout}
+                          layout={reduced ? false : "position"}
+                          custom={exitKind.current}
+                          variants={{
+                            in: { opacity: 0, y: reduced ? 0 : 6 },
+                            on: { opacity: 1, y: 0, transition: { ...spring.settle, delay: reduced ? 0 : Math.min(i, 11) * 0.016 } },
+                            out: (k: "restore" | "purge") =>
+                              reduced
+                                ? { opacity: 0, transition: { duration: 0.1 } }
+                                : k === "restore"
+                                  ? { opacity: 0, x: -28, transition: { duration: 0.2, ease: ease.in } }
+                                  : { opacity: 0, scale: 0.96, y: 4, transition: { duration: 0.16, ease: ease.in } },
+                          }}
+                          initial="in"
+                          animate="on"
+                          exit="out"
+                          transition={spring.morph}
                         >
                           <div className="emp-trash-row" tabIndex={0} aria-label={`${p.title || "Untitled"}, deleted ${formatRelative(p.deletedAt ?? now)}`}>
                             <span className="emp-trash-tile">
@@ -210,7 +227,7 @@ export default function TrashPage() {
                               </p>
                             </div>
                             <div className="actions">
-                              <Button size="sm" icon={RotateCcw} onClick={() => restore(p)}>
+                              <Button size="sm" variant="ghost" icon={RotateCcw} iconMotion="refresh" onClick={() => restore(p)}>
                                 Restore
                               </Button>
                               <IconButton size="sm" variant="destructive-ghost" icon={Trash2} label="Delete forever" onClick={() => setConfirm({ kind: "one", meta: p })} />

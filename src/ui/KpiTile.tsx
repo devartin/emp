@@ -20,7 +20,10 @@ export interface KpiTileProps {
   noCents?: boolean;
   delta?: { value: number; label?: ReactNode; invert?: boolean; format?: "percent" | ((v: number) => string) };
   spark?: readonly number[];
-  sparkColor?: "trend" | "accent" | string;
+  /** Sparkline colour: "ink" (default, §5.6 single-series trend lines are ink), "trend", "accent" or any CSS colour. */
+  sparkColor?: "ink" | "trend" | "accent" | string;
+  /** Count up only once per session for this key (hero numbers). */
+  countUpKey?: string;
   info?: ReactNode;
   stale?: boolean | string;
   loading?: boolean;
@@ -35,10 +38,11 @@ export interface KpiTileProps {
 }
 
 /**
- * KPI tile (§5.10): min 200×112 (128 with sparkline), radius 14, padding 16; label 12/16 500; value in `kpi` style
- * with rolling digits + first-mount count-up; delta chip; 32px sparkline; stale → secondary value + clock.
+ * KPI tile (docs/DESIGN.md §6.3): a machined panel; when clickable it lifts, catches the pointer light (edge + specular)
+ * and tilts ≤ 3°. Value is a RollingNumber (count-up once, then rolls); delta pill; 32px ink sparkline; stale →
+ * secondary value + clock. Min 200×112 (128 with sparkline).
  */
-export function KpiTile({ label, value, format, noCents, delta, spark, sparkColor = "trend", info, stale, loading, size = "md", from, sensitive, footer, onClick, className }: KpiTileProps) {
+export function KpiTile({ label, value, format, noCents, delta, spark, sparkColor = "ink", countUpKey, info, stale, loading, size = "md", from, sensitive, footer, onClick, className }: KpiTileProps) {
   const isMoney = value !== null && typeof value === "object";
   const sens = sensitive ?? isMoney;
   let body: ReactNode;
@@ -54,7 +58,7 @@ export function KpiTile({ label, value, format, noCents, delta, spark, sparkColo
       <>
         {parts.sign ? <span>{parts.sign}</span> : null}
         {parts.symbolPosition === "prefix" ? <span className="emp-kpi-sym">{parts.symbol}</span> : null}
-        <RollingNumber value={n} format={fmt} from={from} />
+        <RollingNumber value={n} format={fmt} from={from} countUpKey={countUpKey} sensitive={sens} />
         {parts.symbolPosition === "suffix" ? (
           <span className="emp-kpi-sym" data-pos="suffix">
             {parts.symbol.trim()}
@@ -63,12 +67,20 @@ export function KpiTile({ label, value, format, noCents, delta, spark, sparkColo
       </>
     );
   } else {
-    body = <RollingNumber value={value as number} format={format} from={from} />;
+    body = <RollingNumber value={value as number} format={format} from={from} countUpKey={countUpKey} sensitive={sens} />;
   }
 
   const staleText = typeof stale === "string" ? stale : "Showing cached data";
   return (
-    <Card className={cn("emp-kpi", className)} data-spark={spark ? "" : undefined} interactive={!!onClick} onClick={onClick}>
+    <Card
+      className={cn("emp-kpi", className)}
+      data-spark={spark ? "" : undefined}
+      interactive={!!onClick}
+      light={!!onClick}
+      specular={!!onClick}
+      tilt={!!onClick}
+      onClick={onClick}
+    >
       <div>
         <div className="emp-kpi-label">
           <span className="truncate">{label}</span>
@@ -98,7 +110,7 @@ export function KpiTile({ label, value, format, noCents, delta, spark, sparkColo
           {footer}
         </div>
       ) : null}
-      {spark ? <div className="emp-kpi-spark">{loading ? <Skeleton height={24} /> : <Sparkline data={spark} height={32} color={sparkColor} />}</div> : null}
+      {spark ? <div className="emp-kpi-spark">{loading ? <Skeleton height={24} /> : <Sparkline data={spark} height={32} color={sparkColor === "ink" ? "var(--chart-line)" : sparkColor} />}</div> : null}
     </Card>
   );
 }

@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { formatNumber, getFormatLocale } from "@/lib/format";
 import { evaluateExpression } from "./expression";
@@ -17,6 +18,8 @@ export interface NumberFieldProps extends Omit<InputProps, "value" | "defaultVal
   parse?: (text: string) => number | null;
   prefix?: ReactNode;
   suffix?: ReactNode;
+  /** Two stacked mini keycaps inside the well's right end; hold to auto-repeat (400ms → 60ms). */
+  steppers?: boolean;
 }
 
 function clamp(n: number, min?: number, max?: number) {
@@ -51,6 +54,7 @@ export function NumberField({
   onBlur,
   onFocus,
   onKeyDown,
+  steppers,
   ...rest
 }: NumberFieldProps) {
   const fmt = (n: number | null) => (n === null ? "" : format ? format(n) : formatNumber(n, formatOptions));
@@ -71,16 +75,65 @@ export function NumberField({
     setText(fmt(v));
   };
 
+  const textRef = useRef(text);
+  textRef.current = text;
   const stepBy = (delta: number) => {
-    const base = parse(text) ?? value ?? 0;
+    const base = parse(textRef.current) ?? value ?? 0;
     const next = clamp(+(base + delta).toPrecision(12), min, max);
+    textRef.current = String(next);
     setText(String(next));
     onChange(next);
   };
 
+  const repeat = useRef<number | undefined>(undefined);
+  const stopRepeat = () => window.clearTimeout(repeat.current);
+  useEffect(() => stopRepeat, []);
+  const hold = (dir: 1 | -1) => {
+    stepBy(dir * step);
+    let delay = 400;
+    const tick = () => {
+      stepBy(dir * step);
+      delay = Math.max(60, delay * 0.7);
+      repeat.current = window.setTimeout(tick, delay);
+    };
+    repeat.current = window.setTimeout(tick, delay);
+  };
+  const stepperKeys = steppers ? (
+    <span className="emp-stepper-keys">
+      {([1, -1] as const).map((dir) => (
+        <button
+          key={dir}
+          type="button"
+          tabIndex={-1}
+          aria-label={dir > 0 ? "Increase" : "Decrease"}
+          className="emp-stepper-key slab"
+          disabled={rest.disabled || rest.readOnly}
+          onMouseDown={(e) => e.preventDefault()}
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            hold(dir);
+          }}
+          onPointerUp={stopRepeat}
+          onPointerLeave={stopRepeat}
+          onPointerCancel={stopRepeat}
+        >
+          {dir > 0 ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+        </button>
+      ))}
+    </span>
+  ) : null;
+
   return (
     <Input
       {...rest}
+      trailing={
+        stepperKeys || rest.trailing ? (
+          <>
+            {rest.trailing}
+            {stepperKeys}
+          </>
+        ) : undefined
+      }
       inputMode="decimal"
       align="end"
       className={rest.className ?? "tabular"}
@@ -120,7 +173,17 @@ export function NumberField({
           const mult = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
           stepBy((e.key === "ArrowUp" ? 1 : -1) * step * mult);
         } else if (e.key === "Enter") {
-          (e.currentTarget as HTMLInputElement).blur();
+          const input = e.currentTarget as HTMLInputElement;
+          const form = input.form;
+          // Inside a form, Enter would submit before the parent saw the committed value (the commit happens on
+          // blur and React hasn't re-rendered yet). Commit first, then submit once the new value has landed.
+          if (form && !text.trim().startsWith("=") && !e.defaultPrevented) {
+            e.preventDefault();
+            input.blur();
+            window.setTimeout(() => {
+              if (form.isConnected) form.requestSubmit();
+            }, 0);
+          } else input.blur();
         }
         onKeyDown?.(e);
       }}

@@ -35,7 +35,7 @@ export function SidePeek() {
       bodyClassName="!p-0 emp-peek-body"
       header={
         peek ? (
-          <div className="flex h-12 flex-none items-center gap-2 border-b border-subtle pl-4 pr-12">
+          <div className="groove-bottom flex h-12 flex-none items-center gap-2 pl-4 pr-12">
             <PeekTitle route={peek} />
             <span className="flex-1" />
             <Button

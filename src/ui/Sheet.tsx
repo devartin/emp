@@ -1,11 +1,15 @@
 import * as RD from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { pauseFrameMonitor } from "@/lib/perf";
+import { OriginPanel } from "./Dialog";
 import { IconButton } from "./IconButton";
 import { OverlayLayer } from "./layer";
 import { presets } from "./motion/presets";
+import { css } from "./motion/tokens";
+import { isReducedMotion } from "./motion/useReducedEffects";
 
 export interface SheetProps {
   open: boolean;
@@ -24,8 +28,42 @@ export interface SheetProps {
   dismissible?: boolean;
 }
 
-/** Sheet / side peek (§5.7, §4.2): from the right, inset 8, radius 14; x 100%→0 spring.gentle, exit 180ms ease.in. */
+/**
+ * Sheet / side peek (docs/DESIGN.md §6.3): glass-2 from the right, inset 8, radius 14; x 100% → 0 on `settle`, exit
+ * 180ms ease-in; content rows rise at 16ms after 120ms. Drag the header right to dismiss (released on `drag`).
+ */
 export function Sheet({ open, onOpenChange, title, description, size = "default", header, footer, children, className, bodyClassName, scrim = true, dismissible = true }: SheetProps) {
+  const panel = useRef<HTMLDivElement | null>(null);
+  const drag = useRef<{ x0: number; t0: number; dx: number } | null>(null);
+  useEffect(() => {
+    if (open) pauseFrameMonitor();
+  }, [open]);
+
+  const onDown = (e: RPointerEvent<HTMLDivElement>) => {
+    if (!dismissible || e.button !== 0 || isReducedMotion() || (e.target as HTMLElement).closest("button, a, input, textarea, [role='button']")) return;
+    drag.current = { x0: e.clientX, t0: performance.now(), dx: 0 };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: RPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || !panel.current) return;
+    d.dx = Math.max(0, e.clientX - d.x0);
+    panel.current.style.transform = `translateX(${d.dx}px)`;
+  };
+  const onUp = () => {
+    const d = drag.current;
+    drag.current = null;
+    const el = panel.current;
+    if (!d || !el) return;
+    const v = d.dx / Math.max(1, performance.now() - d.t0); // px/ms
+    if (d.dx > el.offsetWidth * 0.35 || (v > 0.6 && d.dx > 24)) {
+      onOpenChange(false);
+      return;
+    }
+    el.animate([{ transform: `translateX(${d.dx}px)` }, { transform: "translateX(0)" }], { duration: 420, easing: css.easeOutExpo });
+    el.style.transform = "";
+  };
+
   return (
     <RD.Root open={open} onOpenChange={onOpenChange} modal={scrim}>
       <AnimatePresence>
@@ -42,10 +80,14 @@ export function Sheet({ open, onOpenChange, title, description, size = "default"
               onEscapeKeyDown={(e) => !dismissible && e.preventDefault()}
               onPointerDownOutside={(e) => (!dismissible || !scrim) && e.preventDefault()}
             >
-              <m.div className={cn("emp-sheet", className)} data-size={size === "wizard" ? "wizard" : undefined} {...presets.sheetPanel}>
+              <OriginPanel kind="sheet" ref={panel} className={cn("emp-sheet", className)} data-size={size === "wizard" ? "wizard" : undefined}>
                 <OverlayLayer.Provider value>
-                  {header ?? (
-                    <div className="emp-sheet-header">
+                  {header ? (
+                    <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+                      {header}
+                    </div>
+                  ) : (
+                    <div className="emp-sheet-header" data-draggable={dismissible ? "" : undefined} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
                       <div className="flex items-start gap-3 pr-8">
                         <div className="flex flex-col gap-1 min-w-0">
                           <RD.Title className="emp-dialog-title">{title ?? "Panel"}</RD.Title>
@@ -61,7 +103,7 @@ export function Sheet({ open, onOpenChange, title, description, size = "default"
                     <IconButton className="emp-dialog-close" icon={X} label="Close" size="sm" noTooltip />
                   </RD.Close>
                 </OverlayLayer.Provider>
-              </m.div>
+              </OriginPanel>
             </RD.Content>
           </RD.Portal>
         ) : null}

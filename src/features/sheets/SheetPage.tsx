@@ -4,7 +4,7 @@
  */
 import { AnimatePresence, m } from 'motion/react';
 import { ChevronDown, Download, FileSpreadsheet, FileText, FileUp, Search, Sheet as SheetIcon, TableProperties } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { registerFlush } from '@/app/boot';
 import { api, hasCode } from '@/backend';
 import type { Id } from '@/backend/types';
@@ -18,13 +18,13 @@ import { EmptyState } from '@/ui/EmptyState';
 import { IconButton } from '@/ui/IconButton';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '@/ui/Menu';
 import { transitions } from '@/ui/motion/presets';
-import { CondFormatPopover } from './CondFormatPopover';
 import { FindPanel } from './FindPanel';
 import { FormulaBar } from './FormulaBar';
-import { GridController, useGridVersion } from './GridController';
+import { GridController, useGridSelector } from './GridController';
 import { GridView } from './GridView';
 import { SheetTabs } from './SheetTabs';
 import { Toolbar } from './Toolbar';
+import './sheets.css';
 
 export interface SheetPageProps {
   pageId: Id;
@@ -35,7 +35,9 @@ const safeName = (s: string) => (s || 'Untitled').replace(/[\\/:*?"<>|]+/g, ' ')
 
 export default function SheetPage({ pageId, sheetId }: SheetPageProps) {
   const ctrl = useMemo(() => new GridController(pageId, sheetId), [pageId]); // eslint-disable-line react-hooks/exhaustive-deps
-  useGridVersion(ctrl);
+  // Only the load state lives up here: selection moves and edits re-render the children that subscribe to them
+  // (formula bar, grid, status), not the whole workbook chrome.
+  useGridSelector(ctrl, (c) => `${c.loaded ? 1 : 0}|${c.loadError ?? ''}`);
   const barRef = useRef<HTMLTextAreaElement | null>(null);
   const [cfOpen, setCfOpen] = useState(false);
 
@@ -65,6 +67,8 @@ export default function SheetPage({ pageId, sheetId }: SheetPageProps) {
     [ctrl],
   );
 
+  const onFind = useCallback(() => ui.openFind(false), [ui]);
+
   if (ctrl.loadError) {
     return (
       <div className="flex h-full min-h-[420px] items-center justify-center p-8">
@@ -82,8 +86,8 @@ export default function SheetPage({ pageId, sheetId }: SheetPageProps) {
           </m.div>
         ) : (
           <m.div key="page" className="emp-sheet-page" initial={{ opacity: 0 }} animate={{ opacity: 1, transition: transitions.crossfade }}>
-            <SheetHeader ctrl={ctrl} pageId={pageId} onFind={() => ui.openFind(false)} />
-            <Toolbar ctrl={ctrl} condFormat={<CondFormatPopover ctrl={ctrl} open={cfOpen} onOpenChange={setCfOpen} />} />
+            <SheetHeader ctrl={ctrl} pageId={pageId} onFind={onFind} />
+            <Toolbar ctrl={ctrl} cfOpen={cfOpen} onCfOpenChange={setCfOpen} />
             <FormulaBar ctrl={ctrl} barRef={barRef} />
             <div className="emp-wb-body">
               <GridView ctrl={ctrl} ui={ui} barRef={barRef} />
@@ -97,7 +101,13 @@ export default function SheetPage({ pageId, sheetId }: SheetPageProps) {
   );
 }
 
-function SheetHeader({ ctrl, pageId, onFind }: { ctrl: GridController; pageId: Id; onFind: () => void }) {
+/** The active cell as shown in the Import menu; subscribes on its own so the header doesn't follow the selection. */
+function SelectionAnchor({ ctrl }: { ctrl: GridController }) {
+  return <>{useGridSelector(ctrl, (c) => c.selectionLabel.split(':')[0])}</>;
+}
+
+const SheetHeader = memo(function SheetHeader({ ctrl, pageId, onFind }: { ctrl: GridController; pageId: Id; onFind: () => void }) {
+  const sheetName = useGridSelector(ctrl, (c) => c.sheet?.name ?? 'Sheet');
   const meta = useTree((s) => s.byId.get(pageId));
   const [title, setTitle] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -111,7 +121,6 @@ function SheetHeader({ ctrl, pageId, onFind }: { ctrl: GridController; pageId: I
   };
 
   const exportAs = async (format: 'xlsx' | 'csv') => {
-    const sheetName = ctrl.sheet?.name ?? 'Sheet';
     const base = safeName(meta?.title || 'Workbook');
     try {
       const grant = await api.file.saveGrant({
@@ -186,7 +195,7 @@ function SheetHeader({ ctrl, pageId, onFind }: { ctrl: GridController; pageId: I
             Excel or CSV as a new workbook…
           </MenuItem>
           <MenuItem icon={TableProperties} onSelect={() => fileRef.current?.click()}>
-            CSV into this sheet at {ctrl.selectionLabel.split(':')[0]}…
+            CSV into this sheet at <SelectionAnchor ctrl={ctrl} />…
           </MenuItem>
         </MenuContent>
       </Menu>
@@ -203,7 +212,7 @@ function SheetHeader({ ctrl, pageId, onFind }: { ctrl: GridController; pageId: I
           </MenuItem>
           <MenuSeparator />
           <MenuItem icon={FileText} onSelect={() => void exportAs('csv')}>
-            “{ctrl.sheet?.name ?? 'Sheet'}” as CSV
+            “{sheetName}” as CSV
           </MenuItem>
         </MenuContent>
       </Menu>
@@ -220,7 +229,7 @@ function SheetHeader({ ctrl, pageId, onFind }: { ctrl: GridController; pageId: I
       />
     </header>
   );
-}
+});
 
 /** CSV → TSV for pasting (quoted fields keep commas, quotes and newlines). */
 function csvToTsv(text: string): string {

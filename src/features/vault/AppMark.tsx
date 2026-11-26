@@ -6,8 +6,8 @@
  *
  * Launch animation (§6.2 step 0): the layers draw in bottom-up, staggered 80ms, 480ms `ease.outExpo`.
  */
-import { m } from "motion/react";
-import { useId } from "react";
+import { m, useAnimationControls, type TargetAndTransition } from "motion/react";
+import { useEffect, useId } from "react";
 import { cn } from "@/lib/cn";
 import { ease } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
@@ -22,6 +22,71 @@ export interface AppMarkProps {
   className?: string;
   /** Accessible name; omit for decorative use. */
   title?: string;
+  /**
+   * Choreographed slab moments (S2 lock screen, S3 onboarding). Overrides `animate`.
+   *   drop   the three slabs fall into a stack bottom → top (70ms stagger) and land with a contact squash
+   *   rest   at rest
+   *   press  the stack compresses 2px in 70ms, then releases with overshoot (correct password)
+   *   jolt   the slabs knock out of alignment ±3px and re-stack (wrong password)
+   *   open   the slabs separate upward and the tile dissolves (the vault opening)
+   *   exploded  slabs held apart (forge: they assemble as `assemble` goes 0 → 1)
+   */
+  stage?: "drop" | "rest" | "press" | "jolt" | "open" | "exploded";
+  /** Bump to replay the same stage (e.g. a second wrong password). */
+  stageKey?: number;
+  /** 0 → 1: how assembled an `exploded` stack is (S3 key derivation progress). */
+  assemble?: number;
+}
+
+const settle = { type: "spring", stiffness: 380, damping: 30 } as const;
+const release = { type: "spring", stiffness: 700, damping: 30 } as const;
+
+/** Per-layer target for a stage; `u` is svg units per css px. */
+function stageTarget(stage: NonNullable<AppMarkProps["stage"]>, k: number, u: number, assemble: number): TargetAndTransition {
+  switch (stage) {
+    case "drop":
+      return {
+        opacity: 1,
+        y: [-(26 + k * 12) * u, 0, -2.5 * u, 0],
+        scaleY: [1, 1, 0.9, 1],
+        transition: {
+          delay: 0.1 + k * 0.07,
+          y: { duration: 0.62, times: [0, 0.56, 0.74, 1], ease: [[0.55, 0, 0.9, 0.45], [0.2, 0.7, 0.3, 1], [0.45, 0, 0.4, 1]] },
+          scaleY: { duration: 0.62, times: [0, 0.56, 0.64, 1], ease: "easeOut" },
+          opacity: { duration: 0.18, ease: "easeOut" },
+        },
+      };
+    case "press":
+      return {
+        y: [0, (1 + k * 1.6) * u, 0],
+        scaleY: [1, 0.95, 1],
+        transition: { duration: 0.56, times: [0, 0.13, 1], ease: [[0.3, 0, 0.6, 1], [0.34, 1.56, 0.64, 1]] },
+      };
+    case "jolt": {
+      const j = [3, -3, 2.5][k] * u;
+      return { x: [0, j, -j * 0.55, j * 0.2, 0], transition: { duration: 0.52, times: [0, 0.16, 0.42, 0.7, 1], ease: "easeInOut", delay: k * 0.02 } };
+    }
+    case "open":
+      // the stack presses (correct password), then springs apart as the vault opens
+      return {
+        y: [0, (1 + k * 1.6) * u, -(8 + k * 22) * u],
+        scaleY: [1, 0.95, 1],
+        scale: [1, 1, 1 + k * 0.02],
+        opacity: [1, 1, 0],
+        transition: {
+          y: { duration: 0.78, times: [0, 0.12, 1], ease: [[0.3, 0, 0.6, 1], [0.16, 1, 0.3, 1]] },
+          scaleY: { duration: 0.5, times: [0, 0.14, 1], ease: [[0.3, 0, 0.6, 1], [0.34, 1.56, 0.64, 1]] },
+          scale: { duration: 0.78, times: [0, 0.12, 1], ease: "easeOut" },
+          opacity: { duration: 0.7, times: [0, 0.45, 1], ease: "easeIn", delay: (2 - k) * 0.04 },
+        },
+      };
+    case "exploded": {
+      const gap = (1 - Math.max(0, Math.min(1, assemble))) * (k - 1) * 14 * u;
+      return { y: -gap, opacity: 0.55 + 0.45 * assemble, x: 0, scaleY: 1, transition: settle };
+    }
+    default:
+      return { y: 0, x: 0, scale: 1, scaleY: 1, opacity: 1, transition: release };
+  }
 }
 
 /* Geometry from assets/icon.svg (1024 viewBox). Slab k (0 = bottom) has its top face centred at y = 463 − 100k. */
@@ -54,10 +119,31 @@ const GLYPH = [
   [100, 86, 96],
 ];
 
-export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0, className, title }: AppMarkProps) {
+export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0, className, title, stage, stageKey = 0, assemble = 1 }: AppMarkProps) {
   const uid = useId().replace(/:/g, "");
   const reduced = useReducedMotionPref();
-  const play = animate && !reduced;
+  const play = animate && !reduced && !stage;
+  const c0 = useAnimationControls();
+  const c1 = useAnimationControls();
+  const c2 = useAnimationControls();
+  const bg = useAnimationControls();
+  const unit = (variant === "tile" ? 896 : 512) / size;
+  useEffect(() => {
+    if (!stage) return;
+    const ctrls = [c0, c1, c2];
+    if (reduced) {
+      // Reduced motion: no travel — the end state, with the vault opening as a plain fade.
+      ctrls.forEach((c) => void c.start({ x: 0, y: 0, scale: 1, scaleY: 1, opacity: stage === "open" ? 0 : 1, transition: { duration: 0.14 } }));
+      void bg.start({ opacity: stage === "open" ? 0 : 1, scale: 1, transition: { duration: 0.14 } });
+      return;
+    }
+    ctrls.forEach((c, k) => void c.start(stageTarget(stage, k, unit, assemble)));
+    if (stage === "open") void bg.start({ opacity: [1, 1, 0], scale: [1, 0.985, 1.08], transition: { duration: 0.7, times: [0, 0.12, 1], ease: [[0.3, 0, 0.6, 1], [0.16, 1, 0.3, 1]] } });
+    else if (stage === "drop") void bg.start({ opacity: 1, scale: 1, transition: { duration: 0.42, ease: [0.16, 1, 0.3, 1] } });
+    else if (stage === "press") void bg.start({ scale: [1, 0.985, 1], transition: { duration: 0.5, times: [0, 0.14, 1], ease: [[0.3, 0, 0.6, 1], [0.34, 1.56, 0.64, 1]] } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, stageKey, reduced, stage === "exploded" ? assemble : 0]);
+  const staged = !!stage;
   const id = (s: string) => `${uid}-${s}`;
   const tile = variant === "tile";
   const viewBox = tile ? "64 64 896 896" : "256 200 512 620";
@@ -84,6 +170,15 @@ export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0
         />
       </>
     );
+    if (staged) {
+      const ctrl = [c0, c1, c2][k];
+      const init = stage === "drop" ? (reduced ? { opacity: 0 } : { opacity: 0, y: -(26 + k * 12) * unit }) : stage === "exploded" ? { y: -(k - 1) * 14 * unit * (1 - assemble), opacity: 0.55 + 0.45 * assemble } : false;
+      return (
+        <m.g key={k} initial={init} animate={ctrl} style={{ transformBox: "fill-box", transformOrigin: "50% 100%" }}>
+          {body}
+        </m.g>
+      );
+    }
     if (!play) return <g key={k}>{body}</g>;
     return (
       <m.g
@@ -158,8 +253,8 @@ export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0
       ) : null}
       {tile ? (
         <m.g
-          initial={play ? { opacity: 0, scale: 0.92 } : false}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={play ? { opacity: 0, scale: 0.92 } : staged && stage === "drop" && !reduced ? { opacity: 0, scale: 0.92 } : false}
+          animate={staged ? bg : { opacity: 1, scale: 1 }}
           transition={{ duration: 0.48, ease: ease.outExpo, delay }}
           style={{ transformOrigin: "512px 512px" }}
         >

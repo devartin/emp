@@ -22,6 +22,7 @@ import { Segmented } from '@/ui/Segmented';
 import { Select } from '@/ui/Select';
 import { Switch } from '@/ui/Switch';
 import { spring } from '@/ui/motion/tokens';
+import { useReducedMotionPref } from '@/ui/motion/useReducedEffects';
 import { useDbView } from './context';
 import { countConditions } from './engine/filter';
 import { isDateLike } from './engine/schema';
@@ -33,13 +34,27 @@ import { ImportDialog } from './ImportDialog';
 import { TemplatesDialog } from './TemplatesDialog';
 import { LAYOUT_ICON, LAYOUT_LABEL } from './ViewTabs';
 import { useController } from './ViewController';
+import { RollingNumber } from '@/ui/motion/RollingNumber';
 
 function ToolButton({ icon, label, active, count, children, onClick }: { icon: ReactNode; label: string; active?: boolean; count?: number; children?: ReactNode; onClick?: () => void }) {
   return (
-    <button type="button" className={cn('edb-tool', active && 'is-active')} onClick={onClick} aria-label={label} title={label}>
+    // §8.2: idle = a ghost keycap (icon only); active = a tag keycap latched half-down with its label and a rolling count
+    <button
+      type="button"
+      className={cn('edb-tool slab', active ? 'is-active edb-tool-chip' : 'slab-ghost')}
+      data-icon-only={active ? undefined : ''}
+      aria-pressed={!!active}
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+    >
       {icon}
       {active ? <span className="edb-tool-label">{children ?? label}</span> : null}
-      {count ? <span className="edb-tool-count">{count}</span> : null}
+      {count ? (
+        <span className="edb-tool-count">
+          <RollingNumber value={count} />
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -257,32 +272,62 @@ function SettingsButton() {
   );
 }
 
-function SearchBox() {
+/**
+ * One toolbar key in a FLIP slot (DESIGN §1.6). When the search field opens or closes, the keys left of it glide
+ * (transform only) instead of the row relaying out every frame. `layoutDependency` limits measurement to that toggle.
+ */
+function Slot({ dep, className, children }: { dep: boolean; className?: string; children: ReactNode }) {
+  return (
+    <m.div className={cn('edb-tool-slot', className)} layout="position" layoutDependency={dep} transition={spring.morph}>
+      {children}
+    </m.div>
+  );
+}
+
+// The field keeps its 180px width from the first frame; a clip-path wipe (in px, with a 4px bleed for the focus halo)
+// reveals it from the search key's side and folds it back the same way, tracking the keys' glide on the same spring.
+const FIELD_W = 180;
+const CLIP_SHUT = `inset(-4px -4px -4px ${FIELD_W + 4}px round 11px)`;
+const CLIP_OPEN = 'inset(-4px -4px -4px -4px round 11px)';
+
+function SearchBox({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { controller } = useDbView();
-  const [open, setOpen] = useState(false);
+  const reduced = useReducedMotionPref();
   const [q, setQ] = useState('');
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const h = setTimeout(() => controller.configure({ override: q.trim() ? { search: q.trim() } : {} }), 180);
     return () => clearTimeout(h);
   }, [q, controller]);
+  const shut = reduced ? { opacity: 0 } : { opacity: 0, clipPath: CLIP_SHUT };
   return (
-    <div className={cn('edb-search', open && 'is-open')}>
-      <button
-        type="button"
-        className="edb-tool"
-        aria-label="Search this database"
-        title="Search"
-        onClick={() => {
-          setOpen(true);
-          requestAnimationFrame(() => ref.current?.focus());
-        }}
-      >
-        <Search size={16} aria-hidden />
-      </button>
-      <AnimatePresence initial={false}>
+    <>
+      <Slot dep={open} className={cn('edb-search', open && 'is-open')}>
+        <button
+          type="button"
+          className="edb-tool slab slab-ghost"
+          data-icon-only=""
+          aria-label="Search this database"
+          aria-expanded={open}
+          title="Search"
+          onClick={() => {
+            onOpenChange(true);
+            requestAnimationFrame(() => ref.current?.focus());
+          }}
+        >
+          <Search size={16} aria-hidden />
+        </button>
+      </Slot>
+      <AnimatePresence initial={false} mode="popLayout">
         {open ? (
-          <m.div className="edb-search-field" initial={{ width: 0, opacity: 0 }} animate={{ width: 180, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={spring.ui}>
+          <m.div
+            key="field"
+            className="edb-search-field"
+            initial={shut}
+            animate={reduced ? { opacity: 1 } : { opacity: 1, clipPath: CLIP_OPEN }}
+            exit={{ ...shut, transition: { clipPath: spring.morph, opacity: { duration: 0.16, delay: 0.08 } } }}
+            transition={{ clipPath: spring.morph, opacity: { duration: 0.12 } }}
+          >
             <input
               ref={ref}
               value={q}
@@ -292,10 +337,10 @@ function SearchBox() {
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setQ('');
-                  setOpen(false);
+                  onOpenChange(false);
                 }
               }}
-              onBlur={() => !q && setOpen(false)}
+              onBlur={() => !q && onOpenChange(false)}
             />
             {q ? (
               <button type="button" className="edb-search-clear" aria-label="Clear search" onClick={() => (setQ(''), ref.current?.focus())}>
@@ -305,7 +350,7 @@ function SearchBox() {
           </m.div>
         ) : null}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
 
@@ -388,13 +433,26 @@ export function Toolbar({ filterSignal }: { filterSignal: number }) {
   const { view, readOnly } = useDbView();
   const [importOpen, setImportOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   return (
     <div className="edb-toolbar">
-      <FilterButton openSignal={filterSignal} />
-      <SortButton />
-      {view.layout !== 'calendar' && view.layout !== 'chart' && view.layout !== 'gallery' ? <GroupButton /> : null}
-      {view.layout !== 'chart' ? <PropertiesButton /> : null}
-      <SearchBox />
+      <Slot dep={searchOpen}>
+        <FilterButton openSignal={filterSignal} />
+      </Slot>
+      <Slot dep={searchOpen}>
+        <SortButton />
+      </Slot>
+      {view.layout !== 'calendar' && view.layout !== 'chart' && view.layout !== 'gallery' ? (
+        <Slot dep={searchOpen}>
+          <GroupButton />
+        </Slot>
+      ) : null}
+      {view.layout !== 'chart' ? (
+        <Slot dep={searchOpen}>
+          <PropertiesButton />
+        </Slot>
+      ) : null}
+      <SearchBox open={searchOpen} onOpenChange={setSearchOpen} />
       <SettingsButton />
       {!readOnly ? <MoreMenu onImport={() => setImportOpen(true)} /> : null}
       <NewButton onTemplates={() => setTemplatesOpen(true)} />

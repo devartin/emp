@@ -19,7 +19,7 @@ import {
   LineChart, Search, Sparkles, TextSearch,
 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { getCommands, isAvailable, openTodayNote, runCommand, subscribeCommands, type AppCommand } from "@/app/commands";
 import { navigate, useRoute, type AppRoute } from "@/app/router";
 import { preloadRoute } from "@/app/routes";
@@ -33,6 +33,7 @@ import { Sparkline } from "@/charts/Sparkline";
 import { cn } from "@/lib/cn";
 import { formatDate, isoDay } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
+import { useNav } from "@/stores/nav";
 import { useSearch } from "@/stores/search";
 import { notify } from "@/stores/toasts";
 import { useTree } from "@/stores/tree";
@@ -41,13 +42,16 @@ import { useVault } from "@/stores/vault";
 import { useWorkspace } from "@/stores/workspace";
 import { DeltaPill } from "@/ui/DeltaPill";
 import { Kbd } from "@/ui/Kbd";
+import { GlideHighlight } from "@/ui/GlideHighlight";
 import { Spinner } from "@/ui/Spinner";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { duration, ease, spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { calc, calcSync, type CalcResult } from "./calc";
 import { fuzzy, fuzzyAny } from "./fuzzy";
 import { commandIcon } from "./icons";
 import { NESTED, type NestedPage, type NestedId } from "./nested";
+import { takePaletteOrigin } from "./origin";
 import "./palette.css";
 
 // ───────────────────────────────────────────────────────────────────────────── model
@@ -252,6 +256,18 @@ function useCalc(q: string, enabled: boolean): { result: CalcResult | null; pend
   return { result: null, pending: enabled && !!q.trim() };
 }
 
+/**
+ * A weak subsequence hit whose first matched character sits mid-word ("rent" → secu·r·ity c·ent·er). Commands drop
+ * these: they would outrank nothing useful and, preselected, ↵ would run something unexpected.
+ */
+function scatteredHit(r: { match: number; ranges: [number, number][] }, title: string): boolean {
+  if (r.match >= 0.45 || r.ranges.length < 2) return false;
+  const i = r.ranges[0][0];
+  return i > 0 && !/[\s\-_/.,:;()[\]→>·—–]/.test(title[i - 1]) && !(title[i - 1] === title[i - 1].toLowerCase() && title[i] !== title[i].toLowerCase());
+}
+
+const NO_ITEMS: Item[] = [];
+
 // ───────────────────────────────────────────────────────────────────────────── component
 
 export default function CommandPalette() {
@@ -262,35 +278,88 @@ export default function CommandPalette() {
   const reduced = useReducedMotionPref();
   /** Esc pops a nested page / scope first; the palette registers the handler here. */
   const escRef = useRef<(() => boolean) | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // S7: grow from the control that opened it (sidebar Search row), else drop from the top centre (⌘K).
+  const origin = useMemo(() => (open ? takePaletteOrigin() : null), [open]);
+  // What had focus (and where we were) when the palette opened, for focus restoration on close.
+  // Captured on the closed → open transition (before the palette mounts, so activeElement is still the opener).
+  const openedFrom = useRef<{ focus: HTMLElement | null; route: unknown }>({ focus: null, route: null });
+  const wasOpen = useRef(false);
+  if (open && !wasOpen.current) openedFrom.current = { focus: document.activeElement instanceof HTMLElement ? document.activeElement : null, route: useNav.getState().route };
+  wasOpen.current = open;
+  const grow = useMemo(() => {
+    if (!origin || typeof window === "undefined") return null;
+    const w = Math.min(640, window.innerWidth - 32);
+    const left = (window.innerWidth - w) / 2;
+    const top = window.innerHeight * 0.14;
+    return { ox: origin.left + origin.width / 2 - left, oy: origin.top + origin.height / 2 - top, s: Math.max(0.3, Math.min(0.9, origin.width / w)) };
+  }, [origin]);
 
+  // modal={false}: a modal Radix dialog sets pointer-events:none (inherited) on <body> and locks scroll, which
+  // restyled the whole document (~2,000 elements, twice) in the opening frame. The scrim already blocks the page,
+  // outside presses / focus still dismiss, and the panel declares aria-modal and traps Tab itself.
   return (
-    <RD.Root open={open} onOpenChange={(o) => !o && close()}>
+    <RD.Root open={open} onOpenChange={(o) => !o && close()} modal={false}>
       <AnimatePresence>
         {open ? (
           <RD.Portal forceMount key="cmdk">
-            <RD.Overlay asChild forceMount>
-              <m.div
-                className="cmdk-scrim"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1, transition: { duration: duration.fast, ease: ease.out } }}
-                exit={{ opacity: 0, transition: { duration: 0.1, ease: ease.in } }}
-              />
-            </RD.Overlay>
+            {/* Our own scrim (a non-modal Radix dialog renders no Overlay): it blocks the page, and a press on it is
+                a press outside the panel, which dismisses. */}
+            <m.div
+              className="cmdk-scrim"
+              aria-hidden
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: duration.fast, ease: ease.out } }}
+              exit={{ opacity: 0, transition: { duration: 0.1, ease: ease.in } }}
+            />
             <div className="cmdk-pos">
               <RD.Content
                 asChild
                 forceMount
                 aria-describedby={undefined}
                 onOpenAutoFocus={(e) => e.preventDefault()}
+                onCloseAutoFocus={(e) => {
+                  // The palette has no Radix trigger and stays mounted through its exit, so Radix would drop focus on
+                  // <body>. Restore it ourselves: after a navigation focus the content region; otherwise go back to
+                  // whatever opened the palette. Never steal focus from something that already took it (a dialog the
+                  // command opened, an editor that autofocused).
+                  e.preventDefault();
+                  const ae = document.activeElement;
+                  if (ae && ae !== document.body && ae.isConnected) return;
+                  const navigated = useNav.getState().route !== openedFrom.current.route;
+                  const back = openedFrom.current.focus;
+                  if (!navigated && back && back.isConnected && back !== document.body) back.focus({ preventScroll: true });
+                  else document.querySelector<HTMLElement>('.emp-content[data-region="content"]')?.focus({ preventScroll: true });
+                }}
                 onEscapeKeyDown={(e) => {
                   if (escRef.current?.()) e.preventDefault();
                 }}
               >
                 <m.div
-                  className="cmdk-panel"
-                  initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.15, ease: ease.outExpo } }}
-                  exit={reduced ? { opacity: 0, transition: { duration: 0.08 } } : { opacity: 0, scale: 0.985, transition: { duration: 0.1, ease: ease.in } }}
+                  ref={panelRef}
+                  // Non-modal Radix dialog (see RD.Root): we declare the modality and keep Tab inside ourselves.
+                  aria-modal="true"
+                  onKeyDown={(e) => {
+                    if (e.key !== "Tab" || !panelRef.current) return;
+                    const f = [...panelRef.current.querySelectorAll<HTMLElement>('input, button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')].filter((el) => el.offsetParent !== null);
+                    if (!f.length) return;
+                    const i = f.indexOf(document.activeElement as HTMLElement);
+                    const next = e.shiftKey ? (i <= 0 ? f[f.length - 1] : f[i - 1]) : i === f.length - 1 || i < 0 ? f[0] : f[i + 1];
+                    e.preventDefault();
+                    next.focus();
+                  }}
+                  className="cmdk-panel glass-2"
+                  style={grow && !reduced ? { transformOrigin: `${grow.ox}px ${grow.oy}px` } : undefined}
+                  // Opacity + scale on the settle spring only: a content blur on top of the glass backdrop blur made
+                  // the browser recomposite both every frame (416ms first frame at 4× CPU).
+                  initial={reduced ? { opacity: 0 } : grow ? { opacity: 0, scale: grow.s } : { opacity: 0, scale: 0.965, y: -10 }}
+                  animate={{
+                    opacity: 1,
+                    scale: 1,
+                    y: 0,
+                    transition: reduced ? { duration: 0.12 } : { ...spring.settle, opacity: { duration: 0.12, ease: ease.out } },
+                  }}
+                  exit={reduced ? { opacity: 0, transition: { duration: 0.08 } } : { opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: ease.in } }}
                 >
                   <RD.Title className="sr-only">Command palette</RD.Title>
                   <Palette initialScope={modeToScope(mode)} initialQuery={initialQuery} onClose={close} escRef={escRef} />
@@ -316,6 +385,12 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
   const listRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<(() => void) | null>(null);
   const reduced = useReducedMotionPref();
+  // Rows rise at 16ms on first open only (cap 12), never while typing.
+  const [entering, setEntering] = useState(!reduced);
+  useEffect(() => {
+    const t = window.setTimeout(() => setEntering(false), 420);
+    return () => window.clearTimeout(t);
+  }, []);
 
   // Re-sync when the store asks for another mode while open (⌘P while ⌘K is open).
   useEffect(() => {
@@ -353,6 +428,20 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
   const finish = useCallback(
     (fn: () => void | Promise<void>) => {
       restoreRef.current = null;
+      // S7: the highlighted row presses like a keycap for 70ms, then the palette shrinks away.
+      const row = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]');
+      if (row && !reduced && !row.hasAttribute("data-pressing")) {
+        row.setAttribute("data-pressing", "");
+        window.setTimeout(() => {
+          onClose();
+          window.setTimeout(() => {
+            Promise.resolve()
+              .then(fn)
+              .catch((e) => notify.fromError(e, "That didn’t work"));
+          }, 0);
+        }, 70);
+        return;
+      }
       onClose();
       // Let the panel start its exit before heavy navigation work.
       window.setTimeout(() => {
@@ -361,7 +450,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
           .catch((e) => notify.fromError(e, "That didn’t work"));
       }, 0);
     },
-    [onClose],
+    [onClose, reduced],
   );
 
   const openRoute = useCallback(
@@ -564,14 +653,14 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
         const cmdMatches = commands
           .filter((c) => !c.hidden && isAvailable(c))
           .map((c) => ({ c, r: fuzzyAny(query, c.title, c.keywords) }))
-          .filter((x): x is { c: AppCommand; r: NonNullable<typeof x.r> } => !!x.r && x.r.match > 0.25)
+          .filter((x): x is { c: AppCommand; r: NonNullable<typeof x.r> } => !!x.r && x.r.match > 0.25 && !scatteredHit(x.r, x.c.title))
           .sort((a, b) => b.r.match - a.r.match)
           .slice(0, 5);
         const cmdItems = cmdMatches.map(({ c, r }) => commandItem(c, "Commands", r.ranges));
         let cmdTop = cmdMatches[0]?.r.match ?? 0;
         for (const id of Object.keys(NESTED) as NestedId[]) {
           const r = fuzzyAny(query, NESTED[id].title, NESTED[id].keywords);
-          if (r && r.match > 0.35) {
+          if (r && r.match > 0.35 && !scatteredHit(r, NESTED[id].title)) {
             cmdItems.push(nestedEntry(id, "Commands", r.ranges));
             cmdTop = Math.max(cmdTop, r.match);
           }
@@ -787,7 +876,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
             icon: null,
             render: (
               <span className="cmdk-calc">
-                <span className="cmdk-calc-value tabular">{res.display}</span>
+                <CalcValue display={res.display} />
                 <span className="cmdk-calc-detail">{res.detail}</span>
               </span>
             ),
@@ -833,12 +922,19 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, effectiveScope, nested, byId, recents, favorites, frequency, commands, lifeapps, content.hits, quotes, calcState.result, encrypted, route, pageItem, commandItem, nestedEntry, openRoute, finish]);
 
-  // Keep a valid selection (first item) whenever the list changes.
+  // A new query (or scope / nested level) always selects the first result, so ↵ runs the best match. Otherwise
+  // (async content hits arriving, live updates) keep the current selection while it is still listed.
   const firstId = items[0]?.id ?? "";
+  const queryKey = `${effectiveScope}\u0000${nested?.title ?? ""}\u0000${q}`;
+  const lastQueryKey = useRef(queryKey);
+  /** The user moved the selection (arrows / pointer) since the query last changed. */
+  const picked = useRef(false);
   useEffect(() => {
-    setValue((cur) => (items.some((i) => i.id === cur) ? cur : firstId));
+    if (lastQueryKey.current !== queryKey) picked.current = false;
+    lastQueryKey.current = queryKey;
+    setValue((cur) => (picked.current && items.some((i) => i.id === cur) ? cur : firstId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firstId, items.length]);
+  }, [firstId, items.length, queryKey]);
 
   const selected = items.find((i) => i.id === value);
 
@@ -893,17 +989,23 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
     setInput(v);
   };
 
+  // The rows render from a deferred copy of the results: the palette's opening frame paints just the panel and the
+  // input (the rows rise in on the next, interruptible render, inside the S7 grow), and fast typing never blocks
+  // the input on rendering a list that is about to be replaced.
+  const listItems = useDeferredValue(items, NO_ITEMS);
+  const listPending = listItems !== items;
   const groups = useMemo(() => {
     const g: { name: string; items: Item[] }[] = [];
-    for (const it of items) {
+    for (const it of listItems) {
       const last = g[g.length - 1];
       if (last && last.name === it.group) last.items.push(it);
       else g.push({ name: it.group, items: [it] });
     }
     return g;
-  }, [items]);
+  }, [listItems]);
 
   const chip = nested ? nested.title : SCOPE_LABEL[effectiveScope];
+  let rowIndex = 0;
   const loading = (wantContent && content.loading) || (scope === "quote" && !!q.trim() && quotes === null) || (scope === "calc" && calcState.pending);
   const enterLabel = effectiveScope === "calc" ? "Copy" : nested ? "Apply" : selected?.stay ? "Open" : selected?.route ? "Open" : "Run";
 
@@ -915,7 +1017,11 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
       value={value}
       onValueChange={setValue}
       className="cmdk-root"
+      onPointerMove={(e) => {
+        if ((e.target as Element).closest(".cmdk-item")) picked.current = true;
+      }}
       onKeyDown={(e) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End" || e.key === "PageDown" || e.key === "PageUp" || (e.ctrlKey && (e.key === "j" || e.key === "k" || e.key === "n" || e.key === "p"))) picked.current = true;
         if (e.key === "Enter" && e.shiftKey && selected?.route) {
           e.preventDefault();
           void selected.run({ peek: true });
@@ -960,12 +1066,19 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
         {loading ? <Spinner size={14} className="cmdk-spinner" label="Searching" /> : null}
         {!content.ready && wantContent ? <span className="cmdk-indexing">Indexing…</span> : null}
       </div>
-      <Command.List ref={listRef} className="cmdk-list">
-        {!items.length && !loading ? <EmptyResults scope={effectiveScope} query={q} /> : null}
+      <Command.List ref={listRef} className="cmdk-list" data-entering={entering ? "" : undefined}>
+        <GlideHighlight selector='.cmdk-item[data-selected="true"]' tone="slab" />
+        {!items.length && !loading && !listPending ? <EmptyResults scope={effectiveScope} query={q} /> : null}
         {groups.map((g) => (
           <Command.Group key={g.name} heading={g.name}>
             {g.items.map((it) => (
-              <Command.Item key={it.id} value={it.id} onSelect={() => void it.run({ peek: false })} className={cn("cmdk-item", (it.subtitle || it.snippet) && !it.render && "has-sub", it.render && effectiveScope === "calc" && "is-calc")}>
+              <Command.Item
+                key={it.id}
+                value={it.id}
+                onSelect={() => void it.run({ peek: false })}
+                className={cn("cmdk-item", (it.subtitle || it.snippet) && !it.render && "has-sub", it.render && effectiveScope === "calc" && "is-calc")}
+                style={{ ["--i" as string]: Math.min(rowIndex++, 11) }}
+              >
                 {it.icon}
                 {effectiveScope === "calc" && it.render ? (
                   it.render
@@ -1015,14 +1128,14 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
             <span className="cmdk-prefixes" title="> commands · # databases · @ dates · $ quotes · = calculator · ? shortcuts">
               Modes
               {Object.keys(PREFIX).map((p) => (
-                <kbd key={p} className="cmdk-prefix-key">
+                <Kbd key={p} size="xs" className="cmdk-prefix-key">
                   {p}
-                </kbd>
+                </Kbd>
               ))}
             </span>
           ) : (
             <span>
-              <Kbd size="xs">esc</Kbd> {nested || scope !== initialScope ? "Back" : "Close"}
+              <Kbd keys="escape" size="xs" /> {nested || scope !== initialScope ? "Back" : "Close"}
             </span>
           )}
         </span>
@@ -1066,3 +1179,17 @@ function EmptyResults({ scope, query }: { scope: Scope; query: string }) {
   );
 }
 
+
+/** The calculator's big figure rolls its digits as the expression changes (S7); non-numeric results just swap. */
+function CalcValue({ display }: { display: string }) {
+  const m = /^(-?)([\d,]*\.?\d+)(.*)$/.exec(display);
+  if (!m) return <span className="cmdk-calc-value tabular">{display}</span>;
+  const [, sign, num, rest] = m;
+  const frac = num.includes(".") ? num.split(".")[1].length : 0;
+  const grouped = num.includes(",");
+  const value = Number(`${sign}${num.replace(/,/g, "")}`);
+  if (!Number.isFinite(value)) return <span className="cmdk-calc-value tabular">{display}</span>;
+  const format = (n: number) =>
+    `${n < 0 ? "−" : ""}${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: frac, maximumFractionDigits: frac, useGrouping: grouped })}${rest}`;
+  return <RollingNumber className="cmdk-calc-value tabular" value={value} format={format} aria-label={display} />;
+}

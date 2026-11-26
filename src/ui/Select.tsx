@@ -5,6 +5,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { renderIcon, type IconComponent } from "./Button";
 import { Field } from "./Field";
+import { GlideHighlight } from "./GlideHighlight";
 import { floatingZ, useInOverlay } from "./layer";
 
 export interface SelectOption<V extends string = string> {
@@ -41,7 +42,8 @@ export interface SelectProps<V extends string = string> {
 }
 
 /**
- * Select (§5.3): input-like trigger with chevrons-up-down; menu-skinned list matching the trigger width (min 200);
+ * Select (docs/DESIGN.md §6.2): the trigger is a full-width secondary slab (latched while open); the list is glass-1 with
+ * origin-aware open, a gliding highlight plate and a drawn check; matches the trigger width (min 200);
  * typeahead filtering above 8 options; optional "Create '…'" row. Keyboard: ↑↓ ↵ Esc, type to filter.
  */
 export function Select<V extends string = string>({
@@ -90,7 +92,7 @@ export function Select<V extends string = string>({
         <button
           type="button"
           id={ids.id}
-          className={cn("emp-input emp-select-trigger", className)}
+          className={cn("emp-input emp-select-trigger slab", className)}
           data-size={size === "md" ? undefined : size}
           data-invalid={ids.invalid ? "" : undefined}
           data-disabled={disabled ? "" : undefined}
@@ -124,6 +126,7 @@ export function Select<V extends string = string>({
       <RP.Portal>
         <RP.Content
           className="emp-menu emp-pop emp-listbox"
+          data-opaque={z ? "" : undefined}
           align="start"
           sideOffset={6}
           collisionPadding={8}
@@ -155,6 +158,7 @@ export function Select<V extends string = string>({
               </div>
             ) : null}
             <Command.List role="listbox">
+              <GlideHighlight selector={'[cmdk-item][data-selected="true"]'} />
               {search && !onCreate ? <Command.Empty>No matches</Command.Empty> : null}
               {groups.map(([g, opts]) => {
                 const items = opts.map((o) => (

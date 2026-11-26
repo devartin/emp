@@ -2,11 +2,12 @@
  * Formula bar (§5.11: 32px, mono 13): the name box (jump to a cell / range / name, or name the selection), an fx
  * button that starts a formula with the function list open, and the input mirrored with the in-cell editor.
  */
-import { ChevronDown, FunctionSquare, X, Check } from 'lucide-react';
+import { ChevronDown, X, Check } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { api } from '@/backend';
 import { notify } from '@/stores/toasts';
 import { IconButton } from '@/ui/IconButton';
+import { Tooltip } from '@/ui/Tooltip';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '@/ui/Menu';
 import { parseRect, splitSheetRef } from './engine/addr';
 import { handleEditKey } from './CellEditor';
@@ -26,6 +27,22 @@ export function FormulaBar({ ctrl, barRef }: FormulaBarProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [assist, setIndex, dismiss] = useAssist(editingHere ? edit!.text : null, edit?.caret ?? 0, ctrl.names);
   const value = edit ? edit.text : ctrl.activeInput;
+  const fxRef = useRef<HTMLButtonElement | null>(null);
+
+  // S15: the fx keycap depresses when a formula is committed with Enter (or the ✓ button).
+  const pressFx = () => {
+    const el = fxRef.current;
+    if (!el) return;
+    el.setAttribute('data-down', '');
+    window.setTimeout(() => el.removeAttribute('data-down'), 140);
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.isComposing && ctrl.edit?.text.startsWith('=')) pressFx();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [ctrl]);
 
   useLayoutEffect(() => {
     const ta = barRef.current;
@@ -81,10 +98,26 @@ export function FormulaBar({ ctrl, barRef }: FormulaBarProps) {
         {edit ? (
           <>
             <IconButton size="xs" icon={X} label="Cancel" shortcut="esc" onMouseDown={(e) => e.preventDefault()} onClick={() => ctrl.cancelEdit()} />
-            <IconButton size="xs" icon={Check} label="Enter" shortcut="enter" onMouseDown={(e) => e.preventDefault()} onClick={() => void ctrl.commitEdit(null)} />
+            <IconButton
+              size="xs"
+              icon={Check}
+              label="Enter"
+              shortcut="enter"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                if (ctrl.edit?.text.startsWith('=')) pressFx();
+                void ctrl.commitEdit(null);
+              }}
+            />
           </>
         ) : null}
-        <IconButton size="xs" icon={FunctionSquare} label="Insert function" onMouseDown={(e) => e.preventDefault()} onClick={startFormula} />
+        <Tooltip content="Insert function">
+          <button ref={fxRef} type="button" className="emp-fx-key keycap" aria-label="Insert function" data-formula={value.startsWith('=') ? '' : undefined} onMouseDown={(e) => e.preventDefault()} onClick={startFormula}>
+            <span aria-hidden>
+              <i>f</i>x
+            </span>
+          </button>
+        </Tooltip>
       </div>
       <div ref={wrapRef} className="emp-fbar-input-wrap">
         <div className="emp-fbar-mirror" aria-hidden data-ghost={!edit && !value && ctrl.activeGhost ? '' : undefined}>

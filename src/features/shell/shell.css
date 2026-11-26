@@ -1,5 +1,12 @@
 /* App shell (§5.8 sidebar, §6.1 layout). Tokens only. */
 
+/* Live sidebar width during a resize drag; set on .emp-main only and not inherited, so a drag frame restyles one element. */
+@property --sb-live-w {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 248px;
+}
+
 .emp-shell {
   --sb-w: 248px;
   --topbar-h: 44px;
@@ -12,26 +19,53 @@
 }
 
 /* ─── Sidebar ─── */
+/* The sidebar is one machined plate flush to the window edge (DESIGN §3): a lit gradient, film grain and an
+   engraved groove on its right edge instead of a border. */
 .emp-sidebar {
+  --sb-top: color-mix(in oklab, var(--bg-window) 55%, #ffffff);
+  --sb-bot: var(--bg-window);
   position: absolute;
   inset: 0 auto 0 0;
   z-index: 15;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   width: var(--sb-w);
-  background: var(--bg-window);
-  contain: layout paint style;
+  background: linear-gradient(180deg, var(--sb-top), var(--sb-bot));
+  /* no paint containment: it clipped the outer half of the resize handle (which straddles the edge) */
+  contain: layout style;
 }
 :root:is([data-theme="dark"], [data-theme="midnight"]) .emp-sidebar {
-  background: var(--bg-window);
+  --sb-top: var(--panel-top);
+  --sb-bot: var(--panel-bot);
+}
+.emp-sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url("../../styles/grain.png") 0 0 / 180px;
+  mix-blend-mode: var(--grain-blend);
+  opacity: var(--grain-op);
+}
+:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-sidebar::before {
+  display: none;
 }
 .emp-sidebar[data-floating] {
   inset: calc(var(--topbar-h) + 4px) auto 8px 8px;
   z-index: var(--z-peek);
-  border-radius: 12px;
-  background: var(--bg-overlay);
-  box-shadow: var(--elev-3);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--glass-fill-a), var(--glass-fill-b));
+  box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   overflow: hidden;
+}
+:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-sidebar[data-floating] {
+  background: var(--glass-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .emp-sidebar-inner {
   display: flex;
@@ -44,9 +78,13 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 1px;
-  background: var(--border-subtle);
+  width: 2px;
+  background: linear-gradient(90deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px);
   pointer-events: none;
+}
+:root:not([data-theme="dark"]):not([data-theme="midnight"]) .emp-sidebar-sep {
+  width: 1px;
+  background: color-mix(in oklab, var(--groove-dark), transparent 10%);
 }
 .emp-sidebar[data-floating] .emp-sidebar-sep {
   display: none;
@@ -56,15 +94,37 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 8px 12px;
+  /* Right padding is small because the stable scrollbar gutter supplies the rest; the fixed primary nav reserves the
+     same gutter (.emp-sb-primary), so rows — and the selection slab travelling between them — are the same width. */
+  padding: 4px 2px 12px 8px;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+.emp-sb-primary {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: none;
+  padding: 0 2px 6px 8px;
+  overflow: hidden;
   scrollbar-width: thin;
   scrollbar-gutter: stable;
 }
 .emp-sidebar-scroll::-webkit-scrollbar {
   width: 8px;
 }
+.emp-sidebar-scroll {
+  position: relative;
+  /* rows fade under the top and bottom edges instead of being cut */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--sb-fade-top, 0px), #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(180deg, transparent 0, #000 var(--sb-fade-top, 0px), #000 calc(100% - 14px), transparent);
+}
 .emp-sidebar-scroll[data-scrolled] {
-  box-shadow: inset 0 1px 0 var(--border-subtle);
+  --sb-fade-top: 14px;
+}
+.emp-sb-body {
+  position: relative;
 }
 .emp-peek-zone {
   position: absolute;
@@ -94,10 +154,40 @@
   color: var(--text-primary);
   transition: background-color var(--dur-base) var(--ease-out);
 }
+.emp-ws-button {
+  position: relative;
+  isolation: isolate;
+  transform: translateY(0) scale(1);
+  transition: background-color var(--dur-base) var(--ease-out), transform var(--dur-release) var(--spring-release);
+}
 .emp-ws-button:hover,
 .emp-ws-button[data-state="open"] {
-  background: var(--state-hover);
-  transition-duration: var(--dur-fast);
+  background: var(--ghost-hover);
+  transition-duration: var(--dur-fast), var(--dur-release);
+}
+.emp-ws-button:active {
+  background: var(--ghost-press);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  transform: scale(0.98);
+  transition: transform var(--dur-press) var(--ease-press);
+}
+/* The workspace mark is a primary mini-slab: the same keycap as the icon's lit top face. */
+.emp-ws-glyph {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font-weight: 700;
+  color: var(--slab-p-fg);
+  background: linear-gradient(180deg, var(--slab-p-face-a), var(--slab-p-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-p-hl), inset 0 0 0 1px var(--slab-p-rim), 0 1px 0 var(--slab-p-side-b), 0 2px 3px -1px rgba(0, 0, 0, 0.35);
+}
+.emp-ws-glyph[data-emoji] {
+  color: inherit;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 1px 0 var(--slab-s-side-b), 0 2px 3px -1px var(--slab-s-contact);
 }
 .emp-ws-button .name {
   min-width: 0;
@@ -135,8 +225,105 @@
   transition-duration: var(--dur-fast);
 }
 .emp-sb-row:focus-visible {
-  outline: var(--focus-width) solid var(--accent-ring);
-  outline-offset: -2px;
+  outline: 1.5px solid var(--ring);
+  outline-offset: -1px;
+}
+[data-sel-host] .emp-sb-row,
+[data-sel-host] .emp-sb-row:hover,
+[data-sel-host] .emp-sb-row[aria-current="page"],
+[data-sel-host] .emp-sb-row[aria-selected="true"] {
+  background: transparent;
+}
+[data-sel-host] .emp-sb-row[data-drop="inside"] {
+  background: var(--state-selected);
+}
+
+/* ─── Selection slab + hover ghost (S11) ─── */
+.sb-slab,
+.sb-ghost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: 7px;
+  pointer-events: none;
+  opacity: 0;
+}
+/* promoted only while a glide is in flight (SelectionSlab sets data-gliding) */
+:is(.sb-slab, .sb-ghost)[data-gliding] {
+  will-change: transform;
+}
+.sb-slab {
+  --edge: 1.5px;
+  transition: transform var(--dur-glide) var(--spring-glide), opacity 90ms var(--ease-out);
+}
+.sb-slab[data-on] {
+  opacity: 1;
+  transition: transform var(--dur-glide) var(--spring-glide), opacity var(--dur-fast) var(--ease-out);
+}
+.sb-slab-face {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  isolation: isolate;
+  transform-origin: 50% 50%;
+}
+/* side (hangs --edge below) and face, exactly the secondary keycap recipe */
+.sb-slab-face::before,
+.sb-slab-face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.sb-slab-face::before {
+  z-index: -2;
+  background: linear-gradient(180deg, var(--slab-s-side-a), var(--slab-s-side-b));
+  box-shadow: 0 0 0 1px var(--slab-s-side-rim), 0 1px 1.5px var(--slab-s-contact), 0 5px 10px -5px var(--slab-s-ambient);
+  transform: translateY(var(--edge));
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.sb-slab-face::after {
+  z-index: -1;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 -1px 0 var(--slab-s-lo), inset 0 0 0 1px var(--slab-s-rim);
+  transition: transform var(--dur-release) var(--spring-release), filter 200ms var(--ease-out);
+}
+/* the slab goes down with the row */
+[data-sel-host]:has(.emp-sb-row[aria-current="page"]:active) .sb-slab-face::after {
+  transform: translateY(var(--edge));
+  filter: var(--slab-s-press);
+  transition: transform var(--dur-press) var(--ease-press), filter 60ms linear;
+}
+[data-sel-host]:has(.emp-sb-row[aria-current="page"]:active) .sb-slab-face::before {
+  transform: translateY(var(--edge)) scaleY(0.6);
+  transition: transform var(--dur-press) var(--ease-press);
+}
+.sb-ghost {
+  background: var(--ghost-hover);
+  transition: transform var(--dur-morph) var(--spring-morph), opacity 160ms var(--ease-out), background-color 120ms var(--ease-out);
+}
+.sb-ghost[data-on] {
+  opacity: 1;
+  transition: transform var(--dur-morph) var(--spring-morph), opacity var(--dur-fast) var(--ease-out), background-color 120ms var(--ease-out);
+}
+[data-sel-host]:has(.emp-sb-row:active) .sb-ghost {
+  background: var(--ghost-press);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+:is(.sb-slab, .sb-ghost)[data-jump] {
+  transition: opacity var(--dur-fast) var(--ease-out) !important;
+}
+.emp-sidebar:has(.emp-drag-ghost) .sb-ghost {
+  opacity: 0;
+}
+:root[data-motion="reduced"] :is(.sb-slab, .sb-ghost),
+:root[data-motion="reduced"] .sb-slab-face::before,
+:root[data-motion="reduced"] .sb-slab-face::after {
+  transition: opacity 120ms linear !important;
+}
+:root[data-contrast="more"] .sb-slab-face::after {
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1.5px var(--text-secondary);
 }
 .emp-sb-row[aria-current="page"],
 .emp-sb-row[aria-selected="true"] {
@@ -182,9 +369,28 @@
   margin-left: auto;
   flex: none;
 }
+/* Hover actions overlay the right end of the row (they reserve no width at rest), and the label fades out under them. */
 .emp-sb-row .hover-only {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  bottom: 0;
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--dur-fast) var(--ease-out);
+}
+.emp-sb-row:has(> .hover-only) {
+  --trail-w: 20px;
+}
+.emp-sb-row:has(> .hover-only > :nth-child(2)) {
+  --trail-w: 42px;
+}
+.emp-sb-row:is(:hover, :focus-visible, :has(:focus-visible), [data-menu-open]) > .hover-only {
+  pointer-events: auto;
+}
+.emp-sb-row:is(:hover, :focus-visible, :has(:focus-visible), [data-menu-open]):has(> .hover-only) > .label {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - var(--trail-w) - 18px), transparent calc(100% - var(--trail-w) - 2px));
+  mask-image: linear-gradient(90deg, #000 calc(100% - var(--trail-w) - 18px), transparent calc(100% - var(--trail-w) - 2px));
 }
 .emp-sb-row:hover .hover-only,
 .emp-sb-row:focus-visible .hover-only,
@@ -238,7 +444,7 @@
 .emp-sb-chevron svg {
   width: 14px;
   height: 14px;
-  transition: transform var(--dur-base) var(--ease-out);
+  transition: transform var(--dur-release) var(--spring-release);
 }
 .emp-sb-chevron[data-open] svg {
   transform: rotate(90deg);
@@ -306,7 +512,7 @@
   width: 10px;
   height: 10px;
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-glide) var(--spring-glide);
 }
 .emp-sb-head:hover .caret {
   opacity: 1;
@@ -335,7 +541,8 @@
   border-radius: 5px;
   color: #fff;
   flex: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%, rgba(0, 0, 0, 0.12)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), inset 0 0 0 1px rgba(0, 0, 0, 0.14), 0 1px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 .emp-app-tile svg {
   width: 11px;
@@ -347,21 +554,23 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 40px;
-  padding: 0 8px 0 12px;
-  border-top: 1px solid var(--border-subtle);
+  height: 42px;
+  padding: 2px 8px 0 12px;
+  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
   flex: none;
 }
 .emp-status-dot {
   position: relative;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 9999px;
-  background: var(--gain);
+  background: radial-gradient(circle at 50% 35%, color-mix(in oklab, var(--gain), white 45%), var(--gain) 70%);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--gain) 40%, transparent), 0 0 6px color-mix(in oklab, var(--gain) 45%, transparent);
   flex: none;
 }
 .emp-status-dot[data-tone="off"] {
   background: var(--text-disabled);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 .emp-status-dot[data-pulse]::after {
   content: "";
@@ -376,7 +585,9 @@
 .emp-drop-line {
   position: absolute;
   height: 2px;
-  background: var(--accent-solid);
+  background: var(--lit-b);
+  box-shadow: 0 0 6px var(--lit-glow);
+  transition: transform var(--dur-glide) var(--spring-glide);
   border-radius: 1px;
   pointer-events: none;
   z-index: 3;
@@ -390,7 +601,7 @@
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  border: 1.5px solid var(--accent-solid);
+  border: 1.5px solid var(--lit-b);
   background: var(--bg-window);
   box-sizing: border-box;
 }
@@ -405,22 +616,79 @@
   max-width: 240px;
   padding: 0 10px 0 8px;
   border-radius: 8px;
-  background: var(--bg-overlay);
-  box-shadow: var(--elev-4);
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 2px 0 var(--slab-s-side-b), var(--panel-raise);
   color: var(--text-primary);
   font-size: calc(13rem / 14);
-  font-weight: 500;
+  font-weight: 550;
   white-space: nowrap;
+  rotate: -1.5deg;
+  animation: emp-ghost-lift var(--dur-release) var(--spring-release) both;
+}
+@keyframes emp-ghost-lift {
+  from {
+    scale: 0.92;
+    rotate: 0deg;
+    opacity: 0;
+  }
+}
+:root[data-motion="reduced"] .emp-drag-ghost {
+  rotate: none;
+  animation: none;
+}
+/* tree slots glide when rows reflow (expand, collapse, reorder): §5.4.5 */
+.emp-tree-slot {
+  transition: transform var(--dur-morph) var(--spring-morph);
+}
+:root[data-motion="reduced"] .emp-tree-slot {
+  transition: none;
+}
+/* favourites being dragged lift like a picked-up keycap */
+.emp-sb-row[data-fav-dragging] {
+  z-index: 3;
+  color: var(--text-primary);
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b)) !important;
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 2px 0 var(--slab-s-side-b), var(--panel-raise);
 }
 
 /* ─── Main column ─── */
+/* Skip link: invisible until keyboard focus, then a small raised keycap over the top-left corner. */
+.emp-skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: calc(13rem / 14);
+  font-weight: 600;
+  color: var(--text-primary);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), var(--panel-raise);
+  outline: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release);
+}
+.emp-skip-link:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), var(--panel-raise), 0 0 0 2px var(--ring);
+}
+:root[data-motion="reduced"] .emp-skip-link {
+  transition: opacity 120ms linear;
+  transform: none;
+}
 .emp-main {
   position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-canvas);
+  background: var(--canvas-bg);
 }
 .emp-content {
   position: relative;
@@ -448,17 +716,35 @@
   height: var(--topbar-h);
   padding: 0 8px 0 8px;
   flex: none;
-  background: var(--bg-canvas);
+  background: transparent;
   contain: layout style;
-  transition: box-shadow var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out);
 }
-.emp-topbar[data-scrolled] {
-  box-shadow: 0 1px 0 var(--border-subtle);
+/* Once content scrolls, the bar becomes a strip of glass-1 with an engraved bottom edge; content dissolves under a
+   short fade so it reads as passing beneath the glass. Both layers fade with opacity (no shadow animation). */
+.emp-topbar::before,
+.emp-topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-moderate) var(--ease-out);
 }
-:root:not([data-effects="reduced"]):not([data-contrast="more"]) .emp-topbar[data-scrolled][data-glass] {
-  background: color-mix(in oklab, var(--bg-canvas) 72%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  backdrop-filter: blur(16px) saturate(180%);
+.emp-topbar::before {
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, var(--glass-fill-a), var(--glass-fill-b));
+  box-shadow: inset 0 -1px 0 var(--groove-dark), inset 0 -2px 0 var(--groove-lite), inset 0 1px 0 var(--glass-rim);
+}
+.emp-topbar::after {
+  top: 100%;
+  height: 16px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-canvas) 80%, transparent), transparent);
+}
+.emp-topbar[data-scrolled]::before,
+.emp-topbar[data-scrolled]::after {
+  opacity: 1;
 }
 .emp-topbar .grow {
   flex: 1;
@@ -480,44 +766,98 @@
   gap: 0;
   overflow: hidden;
 }
+.emp-crumb-slot {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  flex: 0 1 auto;
+}
 .emp-crumb {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
   max-width: 220px;
   height: 28px;
-  padding: 0 6px;
-  border-radius: 6px;
+  padding: 0 7px;
+  border-radius: 7px;
   color: var(--text-secondary);
   font-size: calc(13rem / 14);
   font-weight: 500;
   white-space: nowrap;
-  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+  transform: scale(1);
+  transition: color var(--dur-base) var(--ease-out), transform var(--dur-release) var(--spring-release);
+}
+/* ghost plate (DESIGN §4.2 ghost): scales in on hover, becomes a well on press */
+.emp-crumb::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--ghost-hover);
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+.emp-crumb:hover::before,
+.emp-crumb[data-state="open"]::before {
+  opacity: 1;
+  transform: scale(1);
+  transition-duration: 140ms;
+}
+.emp-crumb:active {
+  transform: scale(0.97);
+  transition: transform var(--dur-press) var(--ease-press);
+}
+.emp-crumb:active::before {
+  background: var(--ghost-press);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.emp-crumb:disabled {
+  cursor: default;
+}
+.emp-crumb:disabled::before {
+  display: none;
+}
+.emp-crumb:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: 1px;
 }
 .emp-crumb > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .emp-crumb:hover {
-  background: var(--state-hover);
   color: var(--text-primary);
-  transition-duration: var(--dur-fast);
 }
 .emp-crumb[aria-current="page"] {
   color: var(--text-primary);
 }
 .emp-crumb-sep {
   color: var(--text-disabled);
-  padding: 0 1px;
-  font-size: calc(13rem / 14);
+  margin: 0 -1px;
   flex: none;
+  transition: transform var(--dur-release) var(--spring-release), color var(--dur-fast) var(--ease-out);
+}
+/* the chevron after a hovered crumb nudges toward its child */
+.emp-crumb-slot:hover + .emp-crumb-slot > .emp-crumb-sep {
+  transform: translateX(2px);
+  color: var(--text-tertiary);
+}
+:root[data-motion="reduced"] :is(.emp-crumb, .emp-crumb-sep),
+:root[data-motion="reduced"] .emp-crumb::before {
+  transition-duration: 0ms !important;
 }
 
 /* Lock indicator ring countdown (last 60 s) */
 .emp-lock-ring {
   position: relative;
   display: flex;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
 }
@@ -533,8 +873,9 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg-canvas);
-  border-left: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 1px 0 0 var(--groove-lite), inset 2px 0 0 transparent;
+  border-left: 1px solid var(--groove-dark);
   contain: layout paint style;
 }
 .emp-outline-item {
@@ -557,12 +898,12 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 7px 0;
+  padding: 8px 0;
   font-size: calc(13rem / 14);
-  border-bottom: 1px solid var(--border-subtle);
+  box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark);
 }
 .emp-info-row:last-child {
-  border-bottom: 0;
+  box-shadow: none;
 }
 .emp-info-row dt {
   color: var(--text-tertiary);
@@ -574,86 +915,175 @@
 }
 
 /* ─── Trash ─── */
+.emp-trash-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 0 10px;
+  font-size: calc(11rem / 14);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.emp-trash-group::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(180deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px);
+}
 .emp-trash-row {
   position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 52px;
+  min-height: 56px;
   padding: 8px 10px;
-  border-radius: 10px;
-  transition: background-color var(--dur-base) var(--ease-out);
+  border-radius: 12px;
+  outline: none;
 }
-.emp-trash-row:hover,
-.emp-trash-row:focus-within {
-  background: var(--state-hover);
-  transition-duration: var(--dur-fast);
+.emp-trash-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--ghost-hover);
+  opacity: 0;
+  transform: scale(0.98);
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+.emp-trash-row:hover::before,
+.emp-trash-row:focus-within::before {
+  opacity: 1;
+  transform: scale(1);
+  transition-duration: 140ms;
+}
+.emp-trash-row:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: 1px;
 }
 .emp-trash-row .actions {
   display: flex;
   gap: 4px;
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out);
+  transform: translateX(6px);
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release);
 }
 .emp-trash-row:hover .actions,
 .emp-trash-row:focus-within .actions {
   opacity: 1;
+  transform: none;
 }
 .emp-trash-tile {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--bg-surface-2);
-  border: 1px solid var(--border-subtle);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   flex: none;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  filter: saturate(0.6);
+}
+:root[data-motion="reduced"] .emp-trash-row .actions,
+:root[data-motion="reduced"] .emp-trash-row::before {
+  transition-duration: 0ms;
+}
+/* Route skeletons fade in only if loading outlasts 120ms, so fast routes never flash a skeleton. */
+.emp-route-skeleton {
+  animation: emp-skel-in 220ms var(--ease-out) 120ms both;
+}
+@keyframes emp-skel-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* Shortcut sheet */
-.emp-keys-grid {
-  columns: 2;
+.emp-keys-scroll {
+  max-height: 56vh;
+  overflow-y: auto;
+  margin-inline: -4px;
+  padding: 2px 4px 12px;
+  scrollbar-width: thin;
+  --fade-top: 16px;
+  --fade-bottom: 28px;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent);
+  mask-image: linear-gradient(180deg, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent);
+}
+.emp-keys-scroll[data-at-top] {
+  --fade-top: 0px;
+}
+.emp-keys-scroll[data-at-end] {
+  --fade-bottom: 0px;
+}
+.emp-keys-group + .emp-keys-group {
+  margin-top: 18px;
+}
+.emp-keys-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-size: calc(11rem / 14);
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.emp-keys-where {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-disabled);
+}
+.emp-keys-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows, 1), auto);
+  grid-auto-flow: column;
   column-gap: 32px;
-}
-.emp-keys-group {
-  margin-bottom: 20px;
-}
-.emp-keys-group h3 {
-  break-after: avoid;
 }
 .emp-keys-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  height: 30px;
+  height: 34px;
+  padding-bottom: 2px;
   font-size: calc(13rem / 14);
   color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-subtle);
-  break-inside: avoid;
+  box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark);
 }
-.emp-keys-row:last-child {
-  border-bottom: 0;
+.emp-keys-row[data-col-end] {
+  box-shadow: none;
+}
+.emp-keys-scope {
+  margin-left: 6px;
+  font-size: calc(11.5rem / 14);
+  color: var(--text-tertiary);
+}
+@media (max-width: 640px) {
+  .emp-keys-cols {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
 }
 
 /* Template cards */
 .emp-tpl-card {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 14px;
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface-1);
-  box-shadow: var(--elev-1);
+  border-radius: 13px;
   text-align: left;
-  transition: border-color var(--dur-base) var(--ease-out), translate var(--dur-base) var(--ease-out);
-}
-.emp-tpl-card:hover {
-  border-color: var(--border-strong);
-  translate: 0 -1px;
 }
 .emp-tpl-card .tile {
   display: flex;
@@ -662,8 +1092,12 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: var(--bg-surface-2);
-  border: 1px solid var(--border-subtle);
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.emp-tpl-card:hover .tile {
+  transform: translateY(-1px) scale(1.06);
 }
 
 /* Compact breakpoint: content padding tightens; peek-only sidebar handled in JS. */

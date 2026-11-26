@@ -1,6 +1,7 @@
 import * as RDM from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { GlideHighlight } from "./GlideHighlight";
 import { floatingZ, useInOverlay } from "./layer";
 import { makeMenuParts } from "./menuParts";
 
@@ -32,13 +33,18 @@ export interface MenuContentProps {
   noReturnFocus?: boolean;
 }
 
-/** Panel: 220–320 wide, max-height min(480px,70vh), radius 10, elev-2, 6px offset, flip/shift via collision handling. */
+/**
+ * Panel (docs/DESIGN.md §6.1): glass-1 (opaque inside dialogs), radius 10, 220–320 wide; scales from its trigger on
+ * the `glide` spring; rows stagger 16ms on first open; one highlight plate glides between items.
+ */
 export function MenuContent({ children, align = "start", side = "bottom", sideOffset = 6, width, className, noReturnFocus }: MenuContentProps) {
-  const z = floatingZ(useInOverlay());
+  const inOverlay = useInOverlay();
+  const z = floatingZ(inOverlay);
   return (
     <RDM.Portal>
       <RDM.Content
         className={cn("emp-menu emp-pop", className)}
+        data-opaque={inOverlay ? "" : undefined}
         align={align}
         side={side}
         sideOffset={sideOffset}
@@ -47,6 +53,7 @@ export function MenuContent({ children, align = "start", side = "bottom", sideOf
         style={{ ...z, ...(width ? { width } : null) }}
         onCloseAutoFocus={noReturnFocus ? (e) => e.preventDefault() : undefined}
       >
+        <GlideHighlight />
         {children}
       </RDM.Content>
     </RDM.Portal>

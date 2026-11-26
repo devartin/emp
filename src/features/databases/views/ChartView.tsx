@@ -124,7 +124,7 @@ export function ChartView() {
         {!readOnly ? (
           <Popover>
             <PopoverTrigger asChild>
-              <button type="button" className="edb-tool" aria-label="Chart settings" title="Chart settings">
+              <button type="button" className="edb-tool slab slab-ghost" data-icon-only="" aria-label="Chart settings" title="Chart settings">
                 <Settings2 size={16} aria-hidden />
               </button>
             </PopoverTrigger>

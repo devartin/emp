@@ -112,7 +112,7 @@
   --chart-tip-fill: rgba(255, 255, 255, 0.96);
 
   /* focus */
-  --ring: rgba(19, 19, 23, 0.72);
+  --ring: #3a3a41; /* opaque: ≥3:1 on canvas and on the slab face */
   --ring-halo: rgba(16, 16, 24, 0.1);
 
   /* glow (by name only, §4.8) */
@@ -213,7 +213,7 @@
   --glass-rim: rgba(255, 255, 255, 0.1);
   --chart-tip-fill: rgba(30, 30, 36, 0.96);
   --scrim: rgba(0, 0, 0, 0.55);
-  --ring: rgba(237, 237, 240, 0.62);
+  --ring: #a6a6ae; /* opaque: ≥3:1 on #111 canvas and the #34343b slab face */
   --ring-halo: rgba(255, 255, 255, 0.1);
   --glow-pool: 0 10px 26px -10px rgba(201, 210, 255, 0.22);
   --chart-line: #f2f2f5;
@@ -361,6 +361,19 @@
   --panel-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.35);
 }
 
+/* Glass off (Linux / WebKitGTK, where backdrop blur is the expensive part): glass turns opaque, every other effect stays */
+:root[data-glass="off"] {
+  --glass-fill-a: var(--glass-solid);
+  --glass-fill-b: var(--glass-solid);
+  --glass-blur: none;
+  --glass-blur-1: none;
+}
+:root[data-glass="off"] * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+:root[data-glass="off"] .glass-3 { background: color-mix(in oklab, var(--bg-window) 92%, transparent); }
+
 /* ════════════════════════════════════════════════════════════════════════════
    RECIPES
    ════════════════════════════════════════════════════════════════════════════ */
@@ -459,8 +472,9 @@
 }
 .slab:is(.slab-soft, [data-variant="soft"]) {
   --edge: 1px;
-  --fa: color-mix(in oklab, var(--accent-soft), var(--slab-s-face-a) 60%);
-  --fb: color-mix(in oklab, var(--accent-soft-hover), var(--slab-s-face-b) 55%);
+  /* mix onto the opaque secondary face: --accent-soft is translucent and would let the side show through */
+  --fa: color-mix(in oklab, var(--accent-solid) 4%, var(--slab-s-face-a));
+  --fb: color-mix(in oklab, var(--accent-solid) 7%, var(--slab-s-face-b));
   --sa: color-mix(in oklab, var(--accent-solid) 30%, var(--slab-s-side-a));
   --sb: color-mix(in oklab, var(--accent-solid) 30%, var(--slab-s-side-b));
   --fg: var(--accent-text);
@@ -488,22 +502,25 @@
 }
 
 /* hover: whole key lifts 1px, the side counter-moves (stays put in world space) so the visible bevel grows */
-.slab:not(:disabled):not([aria-disabled="true"]):hover {
+.slab:not(:disabled):not([aria-disabled="true"]):hover,
+.slab[data-force="hover"] {
   transform: translateY(-1px);
   transition-duration: var(--dur-hover), var(--dur-fast), var(--dur-moderate), var(--dur-fast);
   transition-timing-function: var(--ease-out);
 }
-.slab:not(:disabled):not([aria-disabled="true"]):hover::before {
+.slab:not(:disabled):not([aria-disabled="true"]):hover::before,
+.slab[data-force="hover"]::before {
   transform: translateY(calc(var(--edge) + 1px));
   transition: transform var(--dur-hover) var(--ease-out);
 }
-.slab:not(:disabled):not([aria-disabled="true"]):hover::after { filter: var(--hoverf); }
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):not(:disabled):hover {
+.slab:not(:disabled):not([aria-disabled="true"]):hover::after,
+.slab[data-force="hover"]::after { filter: var(--hoverf); }
+.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:not(:disabled):hover, [data-force="hover"]) {
   transform: none;
   --fg: var(--text-primary);
 }
 .slab[data-variant="destructive-ghost"]:not(:disabled):hover { --fg: var(--loss-text); }
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):not(:disabled):hover::after {
+.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:not(:disabled):hover, [data-force="hover"])::after {
   opacity: 1;
   transform: scale(1);
   filter: none;
@@ -526,10 +543,10 @@
   filter: var(--pressf);
   transition-duration: 60ms;
 }
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):not(:disabled):active {
+.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:not(:disabled):active, [data-pressing]) {
   transform: scale(var(--press-scale));
 }
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):not(:disabled):active::after,
+.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:not(:disabled):active, [data-pressing])::after,
 .slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is([data-active], [aria-pressed="true"], [data-state="on"], [data-state="open"], .slab-latched)::after {
   opacity: 1;
   transform: scale(1);
@@ -551,12 +568,13 @@
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18), inset 0 -1px 0 var(--lo), inset 0 0 0 1px var(--rim);
 }
 
-/* focus: a 1.5px ring that lands from 7px out */
+/* focus: a 2px ring that lands from 7px out (1.5px floors to a 1px hairline at 1x DPR) */
 .slab {
-  outline: 1.5px solid transparent;
+  outline: 2px solid transparent;
   outline-offset: 7px;
 }
-.slab:focus-visible {
+.slab:focus-visible,
+.slab[data-force="focus"] {
   outline-color: var(--ring);
   outline-offset: 3px;
 }
@@ -572,7 +590,21 @@
   box-shadow: 0 0 0 1px var(--srim);
 }
 .slab:is(:disabled, [aria-disabled="true"])::after { filter: saturate(0.2) opacity(0.6); }
+.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:disabled, [aria-disabled="true"])::before { opacity: 0; }
 .slab:is(.slab-ghost, [data-variant="ghost"]):is(:disabled, [aria-disabled="true"]) { color: var(--text-disabled); }
+/* dark themes: a disabled primary must not be the brightest object on screen — fall back to the secondary face */
+:root:is([data-theme="dark"], [data-theme="midnight"]) .slab:is(.slab-primary, [data-variant="primary"]):is(:disabled, [aria-disabled="true"]) {
+  --fa: var(--slab-s-face-a);
+  --fb: var(--slab-s-face-b);
+  --hl: var(--slab-s-hl);
+  --lo: var(--slab-s-lo);
+  --rim: var(--slab-s-rim);
+  --sheen: transparent;
+  --pool: 0 0 0 transparent;
+  color: var(--text-disabled);
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) .slab:is(.slab-primary, [data-variant="primary"]):is(:disabled, [aria-disabled="true"])::before { opacity: 0; }
+:root:is([data-theme="dark"], [data-theme="midnight"]) .slab:is(.slab-primary, [data-variant="primary"]):is(:disabled, [aria-disabled="true"])::after { filter: none; opacity: 0.7; }
 
 /* icon-only keycaps get a dished (concave) face */
 .slab[data-icon-only]:not(.slab-ghost):not([data-variant="ghost"]):not([data-variant="destructive-ghost"]) {
@@ -720,6 +752,9 @@
 }
 
 /* ── 4.6 edge light + specular (rendered by <EdgeLight/>; pointer tracked by motion/pointerLight.ts) ── */
+/* Tilt angles never inherit: writing them per frame must restyle only the tilting host (§5.9 pointer budget). */
+@property --rx { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@property --ry { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 [data-light] {
   --mx: 50%;
   --my: -40%;
@@ -779,6 +814,84 @@
   box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-1-shadow);
 }
 
+/* ── 4.8b keycap-tile: a static keycap for words, tokens and chips that aren't buttons (recovery words, parsed
+   tokens, latched choices). Same faces as the secondary slab; no hover/press. [data-latched] sits half-down,
+   [data-tone="lit"] uses the lit fill. Set --edge (default 1.5px) and the radius on the element. ── */
+.keycap-tile {
+  --edge: 1.5px;
+  position: relative;
+  isolation: isolate;
+  border-radius: 8px;
+  margin-bottom: var(--edge);
+  color: var(--text-primary);
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.keycap-tile::before,
+.keycap-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.keycap-tile::before {
+  z-index: -2;
+  background: linear-gradient(180deg, var(--slab-s-side-a), var(--slab-s-side-b));
+  box-shadow: 0 0 0 1px var(--slab-s-side-rim), 0 1px 1.5px var(--slab-s-contact), 0 4px 8px -4px var(--slab-s-ambient);
+  transform: translateY(var(--edge));
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.keycap-tile::after {
+  z-index: -1;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 -1px 0 var(--slab-s-lo), inset 0 0 0 1px var(--slab-s-rim);
+}
+.keycap-tile[data-latched] { transform: translateY(calc(var(--edge) - 0.5px)); }
+.keycap-tile[data-latched]::before { transform: translateY(0.5px); }
+.keycap-tile[data-latched]::after {
+  filter: var(--slab-s-press);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14), inset 0 -1px 0 var(--slab-s-lo), inset 0 0 0 1px var(--slab-s-rim);
+}
+.keycap-tile[data-tone="lit"] { color: var(--lit-fg); }
+.keycap-tile[data-tone="lit"]::after {
+  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+/* ── 3b stage canvas: the monochrome "one key light + floor + grain" backdrop for full-screen moments (vault, boot
+   error, crash fallbacks). Static — the stage never animates. ── */
+.stage-canvas {
+  --stage-base: color-mix(in oklab, var(--bg-window) 70%, #e4e4ea);
+  --stage-key: rgba(255, 255, 255, 0.95);
+  --stage-floor: rgba(16, 16, 24, 0.06);
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(980px 560px at 50% 22%, var(--stage-key), transparent 72%),
+    radial-gradient(760px 280px at 50% 104%, var(--stage-floor), transparent 70%),
+    var(--stage-base);
+}
+:root[data-theme="dark"] .stage-canvas {
+  --stage-base: #09090c;
+  --stage-key: rgba(201, 210, 255, 0.075);
+  --stage-floor: rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="midnight"] .stage-canvas {
+  --stage-base: #000;
+  --stage-key: rgba(201, 210, 255, 0.055);
+  --stage-floor: rgba(0, 0, 0, 0);
+}
+.stage-canvas::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url("./grain.png") 0 0 / 180px;
+  mix-blend-mode: var(--grain-blend);
+  opacity: calc(var(--grain-op) * 1.4);
+}
+
 /* ── 4.9 groove (engraved line) ── */
 .groove-h {
   height: 2px;
@@ -807,7 +920,10 @@
 .canvas-halo { background: var(--canvas-bg); }
 
 /* ════════ Reduced motion: state changes stay, travel goes (§5.8) ════════ */
-:root[data-motion="reduced"] :is(.slab, .slab::before, .slab::after, .keycap, .keycap::before, .panel[data-raise], .panel[data-raise]::after) {
+:root[data-motion="reduced"] :is(.slab, .keycap, .keycap-tile, .panel[data-raise]),
+:root[data-motion="reduced"] :is(.slab, .keycap, .keycap-tile, .panel[data-raise])::before,
+:root[data-motion="reduced"] :is(.slab, .keycap, .keycap-tile, .panel[data-raise])::after {
+  /* pseudo-elements are invalid inside :is() — keep them outside or the whole rule is dropped */
   transition-duration: 0ms !important;
 }
 :root[data-motion="reduced"] .panel[data-raise] { --lift: 0px !important; --rx: 0deg !important; --ry: 0deg !important; }
@@ -817,3 +933,11 @@
   animation-duration: var(--dur-morph);
   animation-timing-function: var(--spring-morph);
 }
+
+/* Higher contrast focus (§4.11): a 3px accent ring, 2px out, no halo or glow */
+:root[data-contrast="more"] :is(.slab, .emp-switch, .emp-check, .emp-radio, .emp-slider-thumb, .emp-card, .emp-choice, .emp-swatch, .emp-tab):focus-visible,
+:root[data-contrast="more"] .slab[data-force="focus"] {
+  outline: 3px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+:root[data-contrast="more"] .emp-input:focus-within { box-shadow: inset 0 0 0 2px var(--accent-ring); }

@@ -150,7 +150,7 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
       <m.div variants={staggerItem} className="fh-span-7">
         <Section title="Quarterly timeline" actions={<Button size="xs" variant="ghost" iconRight={ChevronRight} onClick={() => go("quarterly")}>Plan</Button>}>
           {!plan.data ? (
-            <Skeleton height={80} />
+            <Skeleton height={74} />
           ) : (
             <div className="tx-mini-tl">
               {plan.data.due.map((d) => (
@@ -176,7 +176,7 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
               </span>
             </div>
           ) : (
-            <Skeleton height={90} />
+            <Skeleton height={120} />
           )}
         </Section>
       </m.div>

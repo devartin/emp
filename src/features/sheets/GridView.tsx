@@ -294,6 +294,10 @@ export function GridView({ ctrl, ui, barRef }: GridViewProps) {
     const el = scrollRef.current!;
     if (!dragRef.current) {
       el.style.cursor = cursorFor(x, y);
+      if (x <= el.clientWidth && y <= el.clientHeight) {
+        const h = ctrl.hit(x, y);
+        canvasRef.current?.setHover({ zone: h.zone, r: h.r, c: h.c, fill: onFillHandle(x, y) });
+      } else canvasRef.current?.setHover(null);
       return;
     }
     applyDrag(x, y);
@@ -363,6 +367,9 @@ export function GridView({ ctrl, ui, barRef }: GridViewProps) {
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
+            onPointerLeave={() => {
+              if (!dragRef.current) canvasRef.current?.setHover(null);
+            }}
             onDoubleClick={onDoubleClick}
           >
             <div style={{ width: spacerW, height: spacerH }} />

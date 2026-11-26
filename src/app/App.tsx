@@ -8,7 +8,7 @@
  *   onboarding → shell  the panel scales 1→1.04 and fades; the shell enters with scale 0.98→1, blur 8→0 (480ms)
  */
 import { AnimatePresence, m } from "motion/react";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { markAppReady } from "@/app/boot";
 import { AppErrorBoundary } from "@/features/shell/ErrorBoundary";
@@ -25,7 +25,8 @@ import { setCelebrationsEnabled } from "@/ui/motion/Celebrate";
 import { MotionProvider } from "@/ui/motion/MotionProvider";
 import { ease } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
-import { shellEntry } from "./routes";
+import { currentRoute } from "./router";
+import { preloadRoute, shellEntry } from "./routes";
 
 const Shell = shellEntry.C;
 
@@ -49,6 +50,33 @@ function SettingsMirrors() {
   return null;
 }
 
+/** Longest the outgoing phase is held while the shell chunk finishes downloading. */
+const SHELL_WAIT_MS = 1500;
+
+/**
+ * Resolves true once the shell chunk (and the first route's chunk) are loaded — they're preloaded during the KDF /
+ * onboarding, so this is normally instant. Until then the outgoing phase (lock / onboarding / splash) stays up, so
+ * unlocking never flashes the Suspense skeleton.
+ */
+function useShellReady(phase: AppPhase): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (phase !== "shell" || ready) return;
+    let alive = true;
+    const done = () => {
+      if (alive) setReady(true);
+    };
+    const timer = window.setTimeout(done, SHELL_WAIT_MS);
+    preloadRoute(currentRoute());
+    shellEntry.load().then(done, done);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [phase, ready]);
+  return ready;
+}
+
 function PhaseOutlet() {
   const phase = useVault((s) => s.phase);
   const prev = useRef<AppPhase>(phase);
@@ -57,14 +85,16 @@ function PhaseOutlet() {
     from.current = prev.current;
     prev.current = phase;
   }
+  const shellReady = useShellReady(phase);
+  const shown: AppPhase = phase === "shell" && !shellReady ? from.current : phase;
   return (
     <div className="emp-app-root">
       <AnimatePresence initial={false}>
-        {phase === "booting" ? <BootSplash key="booting" /> : null}
-        {phase === "onboarding" ? <Onboarding key="onboarding" /> : null}
-        {phase === "lock" ? <LockScreen key="lock" /> : null}
-        {phase === "error" ? <BootError key="error" /> : null}
-        {phase === "shell" ? <ShellPhase key="shell" from={from.current} /> : null}
+        {shown === "booting" ? <BootSplash key="booting" /> : null}
+        {shown === "onboarding" ? <Onboarding key="onboarding" /> : null}
+        {shown === "lock" ? <LockScreen key="lock" /> : null}
+        {shown === "error" ? <BootError key="error" /> : null}
+        {shown === "shell" ? <ShellPhase key="shell" from={from.current} /> : null}
       </AnimatePresence>
     </div>
   );
@@ -131,8 +161,8 @@ function BootSplash() {
 function BootError() {
   const message = useVault((s) => s.bootError);
   return (
-    <m.div className="emp-phase emp-aurora flex items-center justify-center p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="alert">
-      <div className="w-[420px] rounded-[20px] border border-subtle bg-overlay p-8 text-center shadow-elev-3">
+    <m.div className="emp-phase stage-canvas flex items-center justify-center p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="alert">
+      <div className="panel w-[420px] p-8 text-center" style={{ borderRadius: 22 }}>
         <AppMark size={56} animate={false} className="mx-auto" />
         <h1 className="mt-5 text-title text-primary">EMP couldn't open your workspace</h1>
         <p className="mt-2 text-body text-secondary">{message || "The app backend didn't respond."}</p>

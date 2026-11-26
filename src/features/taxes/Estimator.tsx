@@ -5,7 +5,7 @@
  */
 import { Calculator, ChevronDown, Link2, Plus, Sparkles, X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
 import type { TaxEstimate, TaxInput } from "@/backend/types";
 import { cn } from "@/lib/cn";
@@ -13,17 +13,21 @@ import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { MoneyField } from "@/ui/MoneyField";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
+import { spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { NumberField } from "@/ui/NumberField";
 import { Segmented } from "@/ui/Segmented";
 import { Select } from "@/ui/Select";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
+import { Slider } from "@/ui/Slider";
 import { Switch } from "@/ui/Switch";
 import { Tooltip } from "@/ui/Tooltip";
 import { fmtMoney, fmtPct, num } from "../finance/shared/format";
 import { useAsync } from "../finance/shared/hooks";
-import { Section } from "../finance/shared/ui";
+import { disclose, Section } from "../finance/shared/ui";
 import { STATUS_LABEL, useTax } from "./data";
 
 const INCOME_KINDS: { value: TaxInput["incomes"][number]["kind"]; label: string }[] = [
@@ -62,6 +66,27 @@ export default function Estimator() {
     };
   }, [tx.input, scenario]);
   const alt = useAsync(() => (scenarioInput ? api.tax.estimate(scenarioInput) : Promise.resolve(null)), [JSON.stringify(scenarioInput)]);
+
+  // S18 income scrub: dragging the slider re-estimates live; the result rolls in scrub mode and the brackets morph.
+  const [wageDelta, setWageDelta] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [preview, setPreview] = useState<TaxEstimate | null>(null);
+  const reqId = useRef(0);
+  useEffect(() => {
+    if (!tx.input || wageDelta === 0) {
+      setPreview(null);
+      return;
+    }
+    const id = ++reqId.current;
+    const incomes = tx.input.incomes.slice();
+    const wi = Math.max(0, incomes.findIndex((x) => x.kind === "wages"));
+    if (incomes[wi]) incomes[wi] = { ...incomes[wi], amount: Math.max(0, num(incomes[wi].amount) + wageDelta).toFixed(2) };
+    api.tax
+      .estimate({ ...tx.input, incomes })
+      .then((e) => id === reqId.current && setPreview(e))
+      .catch(() => undefined);
+  }, [wageDelta, tx.input]);
+  const shownEst = preview ?? est;
   if (!p) return <Skeleton height={480} radius={14} />;
   const setIncome = (i: number, patch: Partial<TaxInput["incomes"][number]>) => tx.setProfile({ incomes: p.incomes.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
   const setAdj = (i: number, patch: Partial<TaxInput["adjustments"][number]>) => tx.setProfile({ adjustments: p.adjustments.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
@@ -133,19 +158,54 @@ export default function Estimator() {
       </div>
 
       <div className="fh-span-7 flex flex-col gap-4">
-        <Result est={est} loading={tx.estimating && !est} unsure={p.unsure} />
-        {est ? <Brackets est={est} /> : null}
+        <Result est={shownEst ?? undefined} loading={tx.estimating && !est} unsure={p.unsure} scrubbing={dragging} />
+        {shownEst ? <Brackets est={shownEst} scrubbing={dragging} /> : null}
         <Section title={<span className="inline-flex items-center gap-2"><Sparkles size={14} className="text-accent-text" />What if…</span>} subtitle="Toggle a scenario to see how the estimate moves.">
           <div className="flex flex-col gap-3">
+            <div className="tx-scrub">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-body-sm font-medium">If your wages change by</span>
+                <span className="tabular text-body-sm font-semibold" data-sensitive="">
+                  <RollingNumber value={wageDelta} format={(n) => (Math.round(n) === 0 ? "$0" : fmtMoney(Math.round(n), "USD", { noCents: true, signed: true }))} scrubbing={dragging} countUp={false} sensitive />
+                </span>
+              </div>
+              <div className="mt-3" onPointerUp={() => setDragging(false)} onBlur={() => setDragging(false)}>
+                <Slider
+                  value={[wageDelta]}
+                  min={-30000}
+                  max={30000}
+                  step={500}
+                  onValueChange={(v) => {
+                    setDragging(true);
+                    setWageDelta(v[0]);
+                  }}
+                  onValueCommit={() => setDragging(false)}
+                  formatValue={(n) => fmtMoney(n, "USD", { noCents: true, signed: true })}
+                  aria-label="Change in wages"
+                />
+              </div>
+              <div className="flex justify-between text-caption text-tertiary mt-1.5" style={{ fontWeight: 400 }}>
+                <span>−$30k</span>
+                {wageDelta !== 0 ? (
+                  <button type="button" className="tx-reset" onClick={() => setWageDelta(0)}>
+                    Reset to your figures
+                  </button>
+                ) : (
+                  <span>Drag to see the estimate and brackets move</span>
+                )}
+                <span>+$30k</span>
+              </div>
+            </div>
+            <div className="fh-groove" />
             <ScenarioRow on={scenario.se} onChange={(v) => setScenario((s) => ({ ...s, se: v }))} label="+$5,000 self-employment income" />
             <div className="flex items-center gap-3">
               <Switch size="sm" checked={scenario.retire} onCheckedChange={(v) => setScenario((s) => ({ ...s, retire: v }))} aria-label="Retirement contribution" />
               <span className="text-body-sm flex-1">Contribute to a traditional IRA</span>
               <MoneyField size="sm" value={scenario.retireAmt} onChange={(v) => setScenario((s) => ({ ...s, retireAmt: v ?? "0" }))} wrapperClassName="w-[120px]" aria-label="Contribution" />
             </div>
-            <AnimatePresence initial={false}>
+            <AnimatePresence initial={false} mode="popLayout">
               {alt.data && est ? (
-                <m.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                <m.div key="delta" {...disclose}>
                   <div className="tx-delta">
                     <span className="text-body-sm text-secondary">With these changes, estimated total tax</span>
                     <span className="tabular font-semibold" style={{ color: num(alt.data.totalTax) > num(est.totalTax) ? "var(--loss-text)" : "var(--gain-text)" }}>
@@ -172,27 +232,40 @@ function ScenarioRow({ on, onChange, label }: { on: boolean; onChange: (v: boole
   );
 }
 
-export function Result({ est, loading, unsure, compact }: { est: TaxEstimate | undefined; loading?: boolean; unsure?: boolean; compact?: boolean }) {
+export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxEstimate | undefined; loading?: boolean; unsure?: boolean; compact?: boolean; scrubbing?: boolean }) {
   const [math, setMath] = useState(false);
-  if (loading || !est) return <Skeleton height={compact ? 160 : 260} radius={14} />;
-  const bal = num(est.balance);
+  const bal = est ? num(est.balance) : 0;
   const refund = bal < 0;
+  // owe ⇄ refund crossing: the figure does one pop (1 → 1.04 → 1) and the status pill flips colour
+  const prevRefund = useRef<boolean | null>(null);
+  const [flips, setFlips] = useState(0);
+  useEffect(() => {
+    if (!est) return;
+    if (prevRefund.current !== null && prevRefund.current !== refund) setFlips((n) => n + 1);
+    prevRefund.current = refund;
+  }, [refund, est]);
+  const reduced = useReducedMotionPref();
+  if (loading || !est) return <Skeleton height={compact ? 178 : 260} radius={14} />;
   return (
-    <section className="fh-card tx-result" data-refund={refund ? "" : undefined}>
+    <section className="fh-card tx-result" data-refund={refund ? "" : undefined} data-light="">
+      <EdgeLight specular />
       <div className="flex items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
+            <span className="tx-flip" data-refund={refund ? "" : undefined}>
+              {refund ? "Refund" : "Owe"}
+            </span>
             <span className="text-caption text-secondary" style={{ fontWeight: 500 }}>
               {refund ? "Estimated refund" : "Estimated balance due"}
             </span>
             <Badge tone="outline" icon={Calculator}>Estimate</Badge>
             {est.stale ? <Badge tone="warning">Pack may be out of date</Badge> : null}
           </div>
-          <div className="tx-big tabular" data-sensitive="">
+          <m.div key={flips} className="tx-big tabular" data-sensitive="" initial={false} animate={flips && !reduced ? { scale: [1, 1.04, 1] } : undefined} transition={{ duration: 0.42, ease: [0.2, 0, 0, 1] }} style={{ originX: 0 }}>
             {est.range || unsure ? <span className="tx-approx">≈</span> : null}
             <span className="tx-sym">$</span>
-            <RollingNumber value={Math.abs(Math.round(bal))} format={(n) => Math.round(n).toLocaleString()} />
-          </div>
+            <RollingNumber value={Math.abs(Math.round(bal))} format={(n) => Math.round(n).toLocaleString()} scrubbing={scrubbing} countUpKey="tax:balance" sensitive />
+          </m.div>
           {est.range ? (
             <div className="text-body-sm text-secondary">
               Likely between <Sensitive>{fmtMoney(est.range.low, "USD", { noCents: true })}</Sensitive> and <Sensitive>{fmtMoney(est.range.high, "USD", { noCents: true })}</Sensitive> (±10% income)
@@ -230,9 +303,9 @@ export function Result({ est, loading, unsure, compact }: { est: TaxEstimate | u
             <ChevronDown size={14} style={{ transform: math ? "rotate(180deg)" : undefined, transition: "transform 160ms" }} />
             {math ? "Hide math" : "Show math"}
           </button>
-          <AnimatePresence initial={false}>
+          <AnimatePresence initial={false} mode="popLayout">
             {math ? (
-              <m.dl initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }} className="tx-math">
+              <m.dl key="math" {...disclose} className="tx-math">
                 {[
                   { label: "Gross income", value: est.gross },
                   { label: "Adjusted gross income (AGI)", value: est.agi },
@@ -277,7 +350,7 @@ function Fig({ label, value, plain }: { label: string; value: string; plain?: bo
 }
 
 /** Ordinary-income brackets as a staircase: segment width = bracket span, fill = income taxed there. */
-export function Brackets({ est }: { est: TaxEstimate }) {
+export function Brackets({ est, scrubbing }: { est: TaxEstimate; scrubbing?: boolean }) {
   const taxable = num(est.taxable);
   const pref = num(est.preferentialTax) > 0;
   const bands = est.brackets.filter((b, i) => num(b.taxed) > 0 || i === 0 || num(b.from) <= taxable * 1.25);
@@ -297,7 +370,7 @@ export function Brackets({ est }: { est: TaxEstimate }) {
             <div key={i} className="tx-br" style={{ flex: `${w} 1 0%` }}>
               <span className="tx-br-rate" data-active={num(b.taxed) > 0 ? "" : undefined}>{Math.round(rate * 100)}%</span>
               <div className="tx-br-bar" style={{ height: 14 + rate * 120 }}>
-                <m.i initial={{ scaleX: 0 }} animate={{ scaleX: fill }} transition={{ duration: 0.7, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }} style={{ opacity: 0.35 + rate * 1.6 }} />
+                <m.i initial={{ scaleX: 0 }} animate={{ scaleX: fill }} transition={scrubbing ? spring.glide : { duration: 0.7, delay: 0.1 + i * 0.05, ease: [0.16, 1, 0.3, 1] }} style={{ ["--a" as string]: Math.min(1, 0.35 + rate * 1.6) }} data-full={fill >= 0.999 ? "" : undefined} />
               </div>
               <span className="tx-br-range tabular">{fmtCompactK(num(b.from))}</span>
               {num(b.taxed) > 0 ? (

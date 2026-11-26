@@ -8,7 +8,7 @@
  *   preloadRoute(route)             — warm a chunk on hover / intent
  */
 import { AnimatePresence, m } from "motion/react";
-import { lazy, Suspense, useEffect, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { FileQuestion, Trash2 } from "lucide-react";
 import { api, hasCode } from "@/backend";
@@ -19,7 +19,10 @@ import { useTree } from "@/stores/tree";
 import { useWorkspace } from "@/stores/workspace";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
-import { transitions } from "@/ui/motion/presets";
+import { ease } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
+import { isViewTransitionActive } from "@/ui/motion/viewTransition";
+import { useNav } from "@/stores/nav";
 import { registerShellPreload } from "./boot";
 import { navigate, routeKey, useRoute, type AppRoute } from "./router";
 
@@ -274,25 +277,82 @@ export function RouteView({ route }: RouteViewProps) {
   );
 }
 
+type NavDir = "forward" | "back" | "lateral";
+interface DirInfo {
+  dir: NavDir;
+  sign: number;
+  reduced: boolean;
+  instant: boolean;
+}
+
+/** Route transitions with direction (docs/DESIGN.md §5.4.3): x offsets per direction, opacity always. */
+const routeVariants = {
+  initial: (d: DirInfo) =>
+    d.instant ? { opacity: 1, x: 0 } : d.reduced ? { opacity: 0 } : { opacity: 0, x: d.dir === "lateral" ? d.sign * 16 : d.dir === "back" ? -12 : 12 },
+  enter: (d: DirInfo) => ({
+    opacity: 1,
+    x: 0,
+    transition: d.instant ? { duration: 0 } : { duration: d.reduced ? 0.12 : 0.22, ease: ease.out },
+  }),
+  exit: (d: DirInfo) =>
+    d.instant
+      ? { opacity: 0, transition: { duration: 0 } }
+      : d.reduced
+        ? { opacity: 0, transition: { duration: 0.08, ease: ease.in } }
+        : { opacity: 0, x: d.dir === "lateral" ? d.sign * -16 : d.dir === "back" ? 8 : -8, transition: { duration: 0.09, ease: ease.in } },
+};
+
+/** Infer the navigation direction from the nav store and a short local history of route keys. */
+function useNavDirection(key: string): DirInfo {
+  const reduced = useReducedMotionPref();
+  const lastChange = useNav((s) => s.lastChange);
+  const visited = useRef<string[]>([key]);
+  const info = useRef<DirInfo>({ dir: "forward", sign: 1, reduced, instant: false });
+  const last = visited.current[visited.current.length - 1];
+  if (last !== key) {
+    const prior = visited.current[visited.current.length - 2];
+    let dir: NavDir;
+    if (lastChange === "back" || (lastChange === "browser" && prior === key)) dir = "back";
+    else if (lastChange === "replace") dir = "lateral";
+    else dir = "forward";
+    if (dir === "back") visited.current.pop();
+    else visited.current = [...visited.current, key].slice(-50);
+    info.current = { dir, sign: 1, reduced, instant: isViewTransitionActive() };
+  } else {
+    info.current = { ...info.current, reduced };
+  }
+  return info.current;
+}
+
 /**
- * The main pane: the current route with page transitions (§4.2): out opacity→0 over 80ms `ease.in`, in opacity 0→1
- * and y 6→0 over 200ms `ease.out`. Sub-target changes (block anchors, tabs) keep the same key and don't remount.
+ * The main pane: the current route with direction-aware transitions (docs/DESIGN.md §5.4.3). Forward: the old route
+ * leaves x −8 / 90ms ease-in, the new one arrives from x +12 over 220ms ease-out; back mirrors; lateral (replace,
+ * tab-like switches) uses ±16px. Reduced motion crossfades in 120ms. The route is interactive from its first frame.
+ * `:root[data-nav-dir]` mirrors the direction for CSS. During a shared-element View Transition
+ * (`withViewTransition`) the swap is instant so the browser can morph `view-transition-name` pairs.
+ * Sub-target changes (block anchors, tabs) keep the same key and don't remount.
  */
 export function RouteOutlet({ onRouteChange }: { onRouteChange?: (route: AppRoute) => void }) {
   const route = useRoute();
   const key = routeKey(route);
+  const dir = useNavDirection(key);
   useEffect(() => {
     onRouteChange?.(route);
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute("data-nav-dir", dir.dir);
+  }, [dir]);
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence mode="wait" initial={false} custom={dir}>
       <m.div
         key={key}
         className="emp-route"
         data-route={route.t}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0, transition: transitions.pageIn }}
-        exit={{ opacity: 0, transition: transitions.pageOut }}
+        custom={dir}
+        variants={routeVariants}
+        initial="initial"
+        animate="enter"
+        exit="exit"
       >
         <RouteView route={route} />
       </m.div>

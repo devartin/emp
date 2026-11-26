@@ -3,7 +3,7 @@
  * allowed (losses first, then highest basis); minimum trade and whole shares respected. EMP never places trades —
  * the output is a checklist to carry out at your broker.
  */
-import { ArrowRight, ClipboardCopy, Info, Scale } from "lucide-react";
+import { ArrowRight, Check, ClipboardCopy, Info, Scale } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/backend";
@@ -14,6 +14,9 @@ import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
 import { Checkbox } from "@/ui/Checkbox";
 import { MoneyField } from "@/ui/MoneyField";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
+import { spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { Switch } from "@/ui/Switch";
@@ -65,6 +68,9 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
       notify.error("Couldn't copy to the clipboard");
     }
   };
+  const reduced = useReducedMotionPref();
+  // checklist complete → the Copy plate swaps to an "All done" badge that pops
+  const allDone = !!plan?.trades.length && plan.trades.every((x) => done.has(`${x.accountId}|${x.symbol}|${x.side}`));
   if (!s) return <Skeleton height={420} radius={14} />;
   return (
     <div className="flex flex-col gap-4">
@@ -79,19 +85,30 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
         </Section>
         <Section className="fh-span-8" title="Before and after" subtitle={plan ? `${plan.trades.length} trades · buys ${fmtMoney(buys, "USD", { noCents: true })} · sells ${fmtMoney(sells, "USD", { noCents: true })}` : null}>
           <div className="pf-ba">
-            {classes.map((c) => (
+            {classes.map((c, i) => (
               <div key={c.assetClass} className="pf-ba-row">
                 <span className="pf-ba-label">
                   <span className="w-2 h-2 rounded-[2px]" style={{ background: c.color }} />
                   {c.assetClass}
                 </span>
                 <div className="pf-ba-track">
+                  {/* before: a well-tinted ghost of today's weight */}
+                  <span className="pf-ba-now" style={{ transform: `scaleX(${Math.min(1, c.current / 70)})` }} />
+                  {/* after: a lit bar that springs to the planned weight (settle, 40ms stagger) */}
+                  <m.span
+                    className="pf-ba-after"
+                    style={{ ["--c" as string]: c.color, originX: 0 }}
+                    initial={reduced ? false : { scaleX: Math.min(1, c.current / 70) }}
+                    animate={{ scaleX: Math.min(1, c.after / 70) }}
+                    transition={reduced ? { duration: 0 } : { ...spring.settle, delay: 0.18 + i * 0.04 }}
+                  />
                   <span className="pf-ba-target" style={{ left: `${Math.min(100, (c.target / 70) * 100)}%` }} title={`Target ${c.target}%`} />
-                  <span className="pf-ba-now" style={{ width: `${Math.min(100, (c.current / 70) * 100)}%`, background: c.color }} />
-                  <m.span className="pf-ba-after" initial={false} animate={{ width: `${Math.min(100, (c.after / 70) * 100)}%` }} transition={{ type: "spring", stiffness: 260, damping: 30 }} style={{ borderColor: c.color }} />
                 </div>
                 <span className="pf-ba-vals tabular">
-                  {c.current.toFixed(1)}% <ArrowRight size={11} className="inline text-tertiary" /> <b>{c.after.toFixed(1)}%</b>
+                  {c.current.toFixed(1)}% <ArrowRight size={11} className="inline text-tertiary" />{" "}
+                  <b>
+                    <RollingNumber value={c.after} format={(n) => `${n.toFixed(1)}%`} countUp={false} />
+                  </b>
                 </span>
                 <span className="pf-ba-drift tabular" data-ok={Math.abs(c.after - c.target) <= 5 ? "" : undefined}>
                   {fmtPp(c.after - c.target)}
@@ -99,9 +116,9 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
               </div>
             ))}
             <div className="flex items-center gap-4 mt-2 text-caption text-tertiary" style={{ fontWeight: 400 }}>
-              <span className="inline-flex items-center gap-1.5"><i className="fh-key" style={{ background: "var(--text-tertiary)", height: 8 }} />Now</span>
-              <span className="inline-flex items-center gap-1.5"><i className="fh-key" style={{ border: "1.5px solid var(--text-secondary)", height: 8, background: "transparent" }} />After plan</span>
-              <span className="inline-flex items-center gap-1.5"><i className="fh-key" style={{ width: 2, height: 10, background: "var(--text-primary)" }} />Target</span>
+              <span className="inline-flex items-center gap-1.5"><i className="pf-key-now" />Now</span>
+              <span className="inline-flex items-center gap-1.5"><i className="pf-key-after" />After plan</span>
+              <span className="inline-flex items-center gap-1.5"><i className="pf-key-target" />Target</span>
             </div>
           </div>
         </Section>
@@ -111,6 +128,13 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
         subtitle="EMP never places trades. Tick each one off as you do it at your broker."
         actions={
           <>
+            <AnimatePresence>
+              {allDone ? (
+                <m.span key="done" initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} transition={spring.pop} className="fh-balanced">
+                  <Check size={12} strokeWidth={3} /> All trades done
+                </m.span>
+              ) : null}
+            </AnimatePresence>
             {plan && num(plan.estRealizedGain) !== 0 ? <Badge tone="warning">Est. realised gain <Sensitive>{fmtMoney(plan.estRealizedGain, "USD", { noCents: true, signed: true })}</Sensitive></Badge> : null}
             <Button size="xs" variant="secondary" icon={ClipboardCopy} onClick={copy} disabled={!plan?.trades.length}>
               Copy list
@@ -143,9 +167,9 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
                   const k = `${x.accountId}|${x.symbol}|${x.side}`;
                   const acct = book.accounts.get(x.accountId);
                   return (
-                    <m.tr key={k} initial={{ opacity: 0 }} animate={{ opacity: done.has(k) ? 0.45 : 1 }} transition={{ duration: 0.16, delay: Math.min(0.2, i * 0.02) }}>
+                    <m.tr key={k} initial={{ opacity: 0, y: 4 }} animate={{ opacity: done.has(k) ? 0.45 : 1, y: 0 }} transition={{ duration: 0.2, delay: Math.min(0.2, i * 0.016) }} className="pf-trade" data-done={done.has(k) ? "" : undefined}>
                       <td>
-                        <Checkbox checked={done.has(k)} onCheckedChange={() => setDone((d) => { const n = new Set(d); if (n.has(k)) n.delete(k); else n.add(k); return n; })} aria-label="Done" />
+                        <Checkbox celebrate checked={done.has(k)} onCheckedChange={() => setDone((d) => { const n = new Set(d); if (n.has(k)) n.delete(k); else n.add(k); return n; })} aria-label="Done" />
                       </td>
                       <td>
                         <span className="inline-flex items-center gap-2">
@@ -158,7 +182,9 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
                         {acct ? <span className="text-caption text-tertiary ml-1.5">{acct.tax === "taxable" ? "taxable" : acct.tax === "deferred" ? "tax-deferred" : "tax-free"}</span> : null}
                       </td>
                       <td className="num"><Sensitive align="end">{fmtQty(x.qty)}</Sensitive></td>
-                      <td className="num font-medium"><Sensitive align="end">{fmtMoney(x.amount, "USD", { noCents: true })}</Sensitive></td>
+                      <td className="num font-medium" data-sensitive="">
+                        <RollingNumber value={num(x.amount)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive />
+                      </td>
                       <td className="num text-secondary">{x.estRealizedGain ? <Sensitive align="end">{fmtMoney(x.estRealizedGain, "USD", { noCents: true, signed: true })}</Sensitive> : "—"}</td>
                     </m.tr>
                   );

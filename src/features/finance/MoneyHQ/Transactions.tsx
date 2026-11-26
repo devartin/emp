@@ -6,6 +6,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowLeftRight, Check, ChevronDown, CornerDownRight, MoreHorizontal, Plus, Search, Split, Trash2, Wand2, X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
+import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, runJob } from "@/backend";
 import type { Id } from "@/backend/types";
@@ -19,13 +20,16 @@ import { IconButton } from "@/ui/IconButton";
 import { Input } from "@/ui/Input";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/ui/Menu";
 import { MoneyField } from "@/ui/MoneyField";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
+import { spring } from "@/ui/motion/tokens";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
 import { Segmented } from "@/ui/Segmented";
 import { Select } from "@/ui/Select";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
 import { dayLabel, fmtMoney, num, toMoney, todayIso, weekdayLabel } from "../shared/format";
-import { Glyph, Quiet } from "../shared/ui";
+import { useFlip } from "../shared/hooks";
+import { disclose, Glyph, Quiet } from "../shared/ui";
 import { useLedgerCtx, type Category, type Txn } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 
@@ -71,6 +75,18 @@ export default function Transactions() {
   }, [rows]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // the ledger glides down/up as the rule suggestion appears/leaves (no height animation)
+  const ledgerRef = useFlip<HTMLElement>(!!suggest, { self: true });
+  // A split disclosure resizes its row; for a moment the virtual rows below transition their transform to the new spot.
+  const virtRef = useRef<HTMLDivElement>(null);
+  const glideTimer = useRef<number | undefined>(undefined);
+  const glideRows = () => {
+    const el = virtRef.current;
+    if (!el) return;
+    el.setAttribute("data-glide", "");
+    window.clearTimeout(glideTimer.current);
+    glideTimer.current = window.setTimeout(() => el.removeAttribute("data-glide"), 360);
+  };
   const virt = useVirtualizer({ count: rows.length, getScrollElement: () => scrollRef.current, estimateSize: () => 52, overscan: 8 });
 
   const categorize = (t: Txn, categoryId: Id | null) => {
@@ -122,7 +138,7 @@ export default function Transactions() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <Input size="sm" icon={Search} placeholder="Search payee, memo, category or amount" value={q} onChange={(e) => setQ(e.target.value)} clearable onClear={() => setQ("")} wrapperClassName="w-[200px]" aria-label="Search transactions" />
+        <Input size="sm" icon={Search} placeholder="Search payee, memo, category or amount" value={q} onChange={(e) => setQ(e.target.value)} clearable onClear={() => setQ("")} wrapperClassName="w-[264px]" aria-label="Search transactions" />
         <Segmented
           size="sm"
           value={filter}
@@ -146,9 +162,9 @@ export default function Transactions() {
         </div>
       </div>
 
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} mode="popLayout">
         {suggest ? (
-          <m.div key="suggest" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }} className="overflow-hidden">
+          <m.div key="suggest" {...disclose}>
             <div className="fh-suggest">
               <Wand2 size={15} className="text-accent-text flex-none" />
               <span className="flex-1 text-body-sm">
@@ -161,34 +177,9 @@ export default function Transactions() {
             </div>
           </m.div>
         ) : null}
-        {selected.size ? (
-          <m.div key="bulk" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.16 }} className="fh-bulk">
-            <span className="text-body-sm font-medium">{selected.size} selected</span>
-            <CategoryPicker
-              categories={l.categories}
-              value={null}
-              onChange={(c) => {
-                for (const id of selected) void l.updateTxn(id, { categoryId: c });
-                setSelected(new Set());
-                setTimeout(reloadOverview, 300);
-              }}
-              trigger={
-                <Button size="xs" variant="secondary" iconRight={ChevronDown}>
-                  Categorise
-                </Button>
-              }
-            />
-            <Button size="xs" variant="destructive-ghost" icon={Trash2} onClick={() => void l.deleteTxns([...selected]).then(() => setSelected(new Set()))}>
-              Delete
-            </Button>
-            <Button size="xs" variant="ghost" className="ml-auto" onClick={() => setSelected(new Set())}>
-              Clear selection
-            </Button>
-          </m.div>
-        ) : null}
       </AnimatePresence>
 
-      <section className="fh-card fh-card-flush">
+      <section className="fh-card fh-card-flush" ref={ledgerRef}>
         <div className="fh-txn-head" role="row">
           <span className="w-6" />
           <span className="fh-txn-date">Date</span>
@@ -208,7 +199,7 @@ export default function Transactions() {
           ) : rows.length === 0 ? (
             <Quiet icon={Check} title={filter === "uncategorized" ? "Everything is categorised" : "No transactions match"} body={filter === "uncategorized" ? "Nice work — your reports are up to date." : "Try a different search or filter."} />
           ) : (
-            <div style={{ height: virt.getTotalSize(), position: "relative" }}>
+            <div ref={virtRef} className="fh-txn-virt" style={{ height: virt.getTotalSize(), position: "relative" }}>
               {virt.getVirtualItems().map((vi) => {
                 const t = rows[vi.index];
                 const prev = rows[vi.index - 1];
@@ -220,6 +211,7 @@ export default function Transactions() {
                       newDay={newDay}
                       selected={selected.has(t.id)}
                       onToggle={() => toggle(t.id)}
+                      onDisclose={glideRows}
                       onCategorize={(c) => categorize(t, c)}
                       onSplit={() => setSplitting(t)}
                       onDelete={() => void l.deleteTxns([t.id])}
@@ -247,6 +239,33 @@ export default function Transactions() {
           </span>
         </div>
       </section>
+      <AnimatePresence>
+        {selected.size ? (
+          <m.div key="bulk" initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 16, transition: { duration: 0.12 } }} transition={spring.thumb} className="fh-bulk" role="toolbar" aria-label="Selected transactions">
+            <span className="text-body-sm font-medium tabular"><RollingNumber value={selected.size} countUp={false} /> selected</span>
+            <CategoryPicker
+              categories={l.categories}
+              value={null}
+              onChange={(c) => {
+                for (const id of selected) void l.updateTxn(id, { categoryId: c });
+                setSelected(new Set());
+                setTimeout(reloadOverview, 300);
+              }}
+              trigger={
+                <Button size="xs" variant="secondary" iconRight={ChevronDown}>
+                  Categorise
+                </Button>
+              }
+            />
+            <Button size="xs" variant="destructive-ghost" icon={Trash2} onClick={() => void l.deleteTxns([...selected]).then(() => setSelected(new Set()))}>
+              Delete
+            </Button>
+            <Button size="xs" variant="ghost" className="ml-auto" onClick={() => setSelected(new Set())}>
+              Clear selection
+            </Button>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       {splitting ? <SplitDialog txn={splitting} onClose={() => setSplitting(null)} /> : null}
       {adding ? <AddDialog onClose={() => setAdding(false)} /> : null}
@@ -254,7 +273,7 @@ export default function Transactions() {
   );
 }
 
-function TxnRow({ t, newDay, selected, onToggle, onCategorize, onSplit, onDelete, onCleared }: { t: Txn; newDay: boolean; selected: boolean; onToggle: () => void; onCategorize: (c: Id | null) => void; onSplit: () => void; onDelete: () => void; onCleared: () => void }) {
+function TxnRow({ t, newDay, selected, onToggle, onDisclose, onCategorize, onSplit, onDelete, onCleared }: { t: Txn; newDay: boolean; selected: boolean; onToggle: () => void; onDisclose?: () => void; onCategorize: (c: Id | null) => void; onSplit: () => void; onDelete: () => void; onCleared: () => void }) {
   const l = useLedgerCtx();
   const [open, setOpen] = useState(false);
   const cat = t.categoryId ? l.cat.get(t.categoryId) : undefined;
@@ -281,7 +300,7 @@ function TxnRow({ t, newDay, selected, onToggle, onCategorize, onSplit, onDelete
               <span className="truncate">{twinAcct ? `${t.amount < 0 ? "To" : "From"} ${twinAcct.name}` : "Transfer"}</span>
             </span>
           ) : t.splits.length ? (
-            <button type="button" className="fh-chip" data-kind="split" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+            <button type="button" className="fh-chip" data-kind="split" onClick={() => { onDisclose?.(); setOpen((v) => !v); }} aria-expanded={open}>
               <Split size={12} />
               Split · {t.splits.length}
               <ChevronDown size={12} style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform 160ms" }} />
@@ -292,7 +311,7 @@ function TxnRow({ t, newDay, selected, onToggle, onCategorize, onSplit, onDelete
               value={t.categoryId}
               onChange={onCategorize}
               trigger={
-                <button type="button" className="fh-chip" data-kind={cat ? "cat" : "none"} style={cat ? { color: `var(--block-${cat.color}-text)`, background: `var(--block-${cat.color}-bg)` } : undefined}>
+                <button type="button" className="fh-chip" data-kind={cat ? "cat" : "none"} style={cat ? ({ "--chip-c": `var(--block-${cat.color}-text)`, "--chip-bg": `var(--block-${cat.color}-bg)` } as React.CSSProperties) : undefined}>
                   {cat ? <span className="truncate">{cat.name}</span> : <span>Categorise</span>}
                   <ChevronDown size={12} className="opacity-60 flex-none" />
                 </button>
@@ -326,9 +345,9 @@ function TxnRow({ t, newDay, selected, onToggle, onCategorize, onSplit, onDelete
           </Menu>
         </span>
       </div>
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} mode="popLayout">
         {open && t.splits.length ? (
-          <m.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }} className="overflow-hidden">
+          <m.div key="splits" {...disclose}>
             {t.splits.map((s) => {
               const sc = s.categoryId ? l.cat.get(s.categoryId) : undefined;
               return (

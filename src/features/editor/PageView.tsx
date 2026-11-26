@@ -23,7 +23,9 @@ import { Banner } from '@/ui/Banner';
 import { Button } from '@/ui/Button';
 import { EmptyState } from '@/ui/EmptyState';
 import { Skeleton, useSkeletonDelay } from '@/ui/Skeleton';
+import { spring } from '@/ui/motion/tokens';
 import '@/styles/editor.css';
+import './editor-v2.css';
 import { Editor } from './Editor';
 import { existingSaver } from './useDocSave';
 import { REMOTE_META, type ConflictInfo, type DocSaver, type SaverSnapshot } from './useDocSave';
@@ -84,6 +86,9 @@ export default function PageView({ pageId, blockId }: PageViewProps) {
   const [status, setStatus] = useState<SaverSnapshot | null>(null);
   const [find, setFindOpen] = useState<{ replace: boolean; token: number } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Keyed by page so navigating resets it without an effect.
+  const [backlinks, setBacklinks] = useState<{ id: Id; open: boolean }>({ id: pageId, open: false });
+  const backlinksOpen = backlinks.id === pageId && backlinks.open;
   const [conflict, setConflict] = useState<ConflictInfo | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -411,8 +416,12 @@ export default function PageView({ pageId, blockId }: PageViewProps) {
         onCover={(cover) => patchMeta({ cover })}
         onFlags={(flags) => patchMeta({ flags })}
         onHistory={() => setHistoryOpen(true)}
+        backlinksOpen={backlinksOpen}
+        onBacklinksOpen={(open) => setBacklinks({ id: pageId, open })}
       />
-      <div className="emp-page-column emp-page-body">
+      {/* FLIPs (transform only) when the backlinks list above opens/closes; layoutDependency keeps every other render
+          measurement-free. */}
+      <m.div className="emp-page-column emp-page-body" layout="position" layoutDependency={backlinksOpen} transition={spring.morph}>
         <Editor
           key={pageId}
           ownerId={pageId}
@@ -430,7 +439,7 @@ export default function PageView({ pageId, blockId }: PageViewProps) {
           onStatus={setStatus}
           onConflict={setConflict}
         />
-      </div>
+      </m.div>
       <AnimatePresence>
         {dragOver ? (
           <m.div className="emp-drop-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>

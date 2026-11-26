@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Sankey as RSankey, Tooltip } from "recharts";
 import { valueFormatter, type ValueFormat } from "./axis";
 import { ChartFrame } from "./ChartFrame";
@@ -36,6 +36,17 @@ export function Sankey({ nodes, links, height = 300, format = "money", currency 
   const data = useMemo(() => ({ nodes: nodes.map((n) => ({ name: n.name })), links: links.map((l) => ({ ...l })) }), [nodes, links]);
   const inflow = (i: number) => links.filter((l) => l.target === i).reduce((s, l) => s + l.value, 0);
   const outflow = (i: number) => links.filter((l) => l.source === i).reduce((s, l) => s + l.value, 0);
+  // Collision-aware labels: the node pass records each label's natural centre; a layout effect then spreads labels in
+  // the same column at least LABEL_GAP apart (top-down, then pulled back up from the bottom edge) and re-renders once.
+  const natural = useRef(new Map<number, { col: number; cy: number }>());
+  const [labelY, setLabelY] = useState<ReadonlyMap<number, number>>(() => new Map());
+  natural.current = new Map();
+  useLayoutEffect(() => {
+    const next = spreadLabels(natural.current, height);
+    let same = next.size === labelY.size;
+    if (same) for (const [k, v] of next) if (Math.abs((labelY.get(k) ?? NaN) - v) > 0.5) same = false;
+    if (!same) setLabelY(next);
+  });
   const summary = `${summaryLabel}: ${links
     .slice(0, 8)
     .map((l) => `${nodes[l.source]?.name} to ${nodes[l.target]?.name} ${fmt(l.value)}`)
@@ -48,7 +59,8 @@ export function Sankey({ nodes, links, height = 300, format = "money", currency 
       loading={loading}
       empty={links.length === 0}
       className={className}
-      table={{ columns: ["From", "To", "Amount"], rows: links.map((l) => [nodes[l.source]?.name ?? "", nodes[l.target]?.name ?? "", fmt(l.value)]), sensitiveCols: [2] }}
+      title={summaryLabel}
+      table={() => ({ columns: ["From", "To", "Amount"], rows: links.map((l) => [nodes[l.source]?.name ?? "", nodes[l.target]?.name ?? "", fmt(l.value)]), sensitiveCols: [2] })}
     >
       {(size) => (
         <RSankey
@@ -67,6 +79,9 @@ export function Sankey({ nodes, links, height = 300, format = "money", currency 
             const lx = isSource ? n.x - 8 : n.x + n.width + 8;
             const anchor = isSource ? "end" : "start";
             const dim = hoverNode !== null && hoverNode !== n.index;
+            const cy0 = n.y + n.height / 2;
+            natural.current.set(n.index, { col: Math.round(isSource ? n.x : n.x + n.width) * (isSource ? -1 : 1), cy: cy0 });
+            const cy = labelY.get(n.index) ?? cy0;
             return (
               <g
                 className="emp-fade-enter"
@@ -75,10 +90,10 @@ export function Sankey({ nodes, links, height = 300, format = "money", currency 
                 style={{ opacity: dim ? 0.55 : 1, transition: "opacity 160ms cubic-bezier(.2,0,0,1)" }}
               >
                 <rect x={n.x} y={n.y} width={n.width} height={Math.max(2, n.height)} rx={3} fill={colorOf(n.index)} />
-                <text x={lx} y={n.y + n.height / 2 - 1} textAnchor={anchor} fontSize={12} fontWeight={500} fill={t.text} style={{ fontFamily: t.fontFamily }}>
+                <text x={lx} y={cy - 1} textAnchor={anchor} fontSize={12} fontWeight={500} fill={t.text} style={{ fontFamily: t.fontFamily }}>
                   {n.payload.name}
                 </text>
-                <text x={lx} y={n.y + n.height / 2 + 13} textAnchor={anchor} fontSize={11} fill={t.textTertiary} style={{ fontFamily: t.fontFamily, fontVariantNumeric: "tabular-nums" }}>
+                <text x={lx} y={cy + 13} textAnchor={anchor} fontSize={11} fill={t.textTertiary} style={{ fontFamily: t.fontFamily, fontVariantNumeric: "tabular-nums" }}>
                   {t.privacy ? "•••" : fmt(value)}
                 </text>
               </g>
@@ -118,4 +133,32 @@ export function Sankey({ nodes, links, height = 300, format = "money", currency 
       )}
     </ChartFrame>
   );
+}
+
+/** Two-line label block (name + amount) needs this much vertical room. */
+const LABEL_GAP = 30;
+
+function spreadLabels(natural: ReadonlyMap<number, { col: number; cy: number }>, height: number): Map<number, number> {
+  const cols = new Map<number, { i: number; cy: number }[]>();
+  for (const [i, v] of natural) {
+    const arr = cols.get(v.col) ?? [];
+    arr.push({ i, cy: v.cy });
+    cols.set(v.col, arr);
+  }
+  const out = new Map<number, number>();
+  const top = 13;
+  const bottom = height - 17;
+  for (const arr of cols.values()) {
+    arr.sort((a, b) => a.cy - b.cy);
+    const ys = arr.map((a) => a.cy);
+    for (let k = 0; k < ys.length; k++) ys[k] = Math.max(ys[k], k ? ys[k - 1] + LABEL_GAP : top);
+    if (ys.length && ys[ys.length - 1] > bottom) {
+      ys[ys.length - 1] = bottom;
+      for (let k = ys.length - 2; k >= 0; k--) ys[k] = Math.min(ys[k], ys[k + 1] - LABEL_GAP);
+    }
+    arr.forEach((a, k) => {
+      if (Math.abs(ys[k] - a.cy) > 0.5) out.set(a.i, ys[k]);
+    });
+  }
+  return out;
 }

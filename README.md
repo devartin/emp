@@ -27,6 +27,19 @@
 
 <p align="center"><img src="docs/assets/features.png" alt="Guided life apps, private by design, finance charts that feel alive" width="100%"></p>
 
+## See it move
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/unlock.gif" alt="Typing the password on the lock screen; the vault unlocks and Home settles in" width="100%"><br><sub><b>Unlock → Home.</b> The vault opens and your day assembles itself.</sub></td>
+    <td width="50%"><img src="docs/media/life-app-install.gif" alt="Setting up the Habits life app: pick habits, choose a streak rule, then watch EMP build the dashboard, databases and reminders" width="100%"><br><sub><b>Life apps build your workspace.</b> Answer three questions; EMP lays down every page, database and reminder.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/money-hq.gif" alt="Opening Money HQ: net worth counts up, then scrubbing the chart rolls every figure to that day" width="100%"><br><sub><b>Money HQ.</b> Numbers count up, and scrubbing the chart rolls every figure to that day.</sub></td>
+    <td width="50%"><img src="docs/media/command-palette.gif" alt="Opening the command palette with Ctrl+K, typing portfolio and jumping straight to the Portfolio app" width="100%"><br><sub><b>Command palette.</b> <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> to search, run commands and jump anywhere.</sub></td>
+  </tr>
+</table>
+
 ## Why EMP
 
 Notion is wonderful until you want it offline, private, fast — or until you need a real spreadsheet, a budget that
@@ -90,6 +103,17 @@ Each app keeps watching your data and surfaces **insights** — *"You're 2 month
   OAuth client — EMP ships no secrets.
 - **.ics** calendars, **Markdown** and **Notion export** import, **Excel** in and out, export everything to Markdown/CSV/JSON.
 - A built-in **network log** and an **offline switch**: you can see every request EMP makes, and stop them all.
+
+## Screenshots
+
+| | |
+|---|---|
+| <img src="docs/screenshots/home-dark.png" alt="Home in dark mode: today's agenda, due tasks, habits and suggestions"> **Home** — your day at a glance | <img src="docs/screenshots/money-hq-dark.png" alt="Money HQ overview: net-worth chart mid-scrub, budget envelopes and spending"> **Money HQ** — net worth, envelopes and spending |
+| <img src="docs/screenshots/portfolio-dark.png" alt="Portfolio overview: total value vs contributions, allocation drift and heat map"> **Portfolio** — value, drift and today's heat map | <img src="docs/screenshots/markets-candles-dark.png" alt="Markets: watchlist and a candlestick chart with SMA 20 and 50"> **Markets** — watchlists and candles with moving averages |
+| <img src="docs/screenshots/database-board-dark.png" alt="Client CRM database shown as a board grouped by stage"> **Databases** — a CRM as a board, grouped by stage | <img src="docs/screenshots/habits-dark.png" alt="Habits life app: today's check-ins, streaks and weekly progress ring"> **Habits** — check-ins, streaks and gentle insights |
+| <img src="docs/screenshots/page-light.png" alt="Website relaunch page with a gradient cover, callout and goals"> **Pages** — a block editor with covers, callouts and backlinks | <img src="docs/screenshots/sheet-light.png" alt="Household budget spreadsheet with inputs, monthly columns and totals"> **Sheets** — a real formula engine behind every cell |
+| <img src="docs/screenshots/calendar-light.png" alt="Calendar month view with Personal, Work, Family and holiday calendars"> **Calendar** — every calendar in one month view | <img src="docs/screenshots/life-os-light.png" alt="Life OS: due today, overdue, inbox, Top 3 and the day's agenda"> **Life OS** — Top 3, tasks and the day's agenda |
+| <img src="docs/screenshots/life-apps-light.png" alt="Life apps gallery: Money HQ, Portfolio, Tax Organizer, Spreadsheet Studio, Life OS and Habits"> **Life apps** — guided setups that build the system for you | <img src="docs/screenshots/tax-estimator-light.png" alt="Tax estimator with household, income lines and where your income lands across brackets"> **Taxes** — a clearly-labelled federal estimator |
 
 ## Security
 

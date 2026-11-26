@@ -7,7 +7,7 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Check, Eye, EyeOff, GripVertical, LayoutGrid, RotateCcw } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
+import { AnimatePresence, m, PresenceContext } from "motion/react";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { api } from "@/backend";
 import { cn } from "@/lib/cn";
@@ -15,7 +15,9 @@ import { useSettings } from "@/stores/settings";
 import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { Segmented } from "@/ui/Segmented";
-import { spring } from "@/ui/motion/tokens";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
+import { ease, spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { useStableNow } from "@/features/lifeapps/data";
 import { WizardSheet } from "@/features/lifeapps/WizardSheet";
 import { MoneyWidget } from "./widgets/Money";
@@ -80,21 +82,30 @@ function sanitize(v: unknown): Slot[] | null {
   return out;
 }
 
-function Widget({ slot, editing, onSpan, onHide, index }: { slot: Slot; editing: boolean; onSpan: (s: Span) => void; onHide: () => void; index: number }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: slot.id, disabled: !editing });
+/** Arrival (S19): the greeting rises first, then widgets cascade at 40ms (cap 8) on the settle spring. */
+const ARRIVAL_DELAY = 0.14;
+let arrivedThisSession = false;
+
+function Widget({ slot, editing, onSpan, onHide, index, arrive }: { slot: Slot; editing: boolean; onSpan: (s: Span) => void; onHide: () => void; index: number; arrive: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: slot.id, disabled: !editing, transition: { duration: 380, easing: "var(--spring-morph)" } });
+  const reduced = useReducedMotionPref();
   const def = WIDGETS[slot.id];
   const C = def.C;
+  const bare = def.bare && !editing;
+  const delay = ARRIVAL_DELAY + Math.min(index, 7) * 0.04;
   return (
     <m.section
       ref={setNodeRef}
-      layout="position"
-      transition={spring.layout}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0, transition: { ...spring.gentle, delay: index * 0.05 } }}
-      className={cn("hm-widget", def.bare && !editing && "is-bare", editing && "is-editing", isDragging && "is-dragging")}
+      layout={reduced ? false : "position"}
+      transition={spring.morph}
+      initial={arrive ? (reduced ? { opacity: 0 } : { opacity: 0, y: 14, scale: 0.985 }) : false}
+      animate={{ opacity: 1, y: 0, scale: 1, transition: reduced ? { duration: 0.14, delay: Math.min(index, 7) * 0.02 } : { ...spring.settle, delay, opacity: { duration: 0.26, ease: ease.out, delay } } }}
+      className={cn("hm-slot", isDragging && "is-dragging")}
       style={{ gridColumn: `span ${slot.span} / span ${slot.span}`, transform: CSS.Translate.toString(transform), transition }}
       aria-label={def.title}
     >
+      <div className={cn("hm-widget", bare ? "is-bare" : "panel", editing && "is-editing")} data-light={bare ? undefined : ""}>
+      {bare ? null : <EdgeLight />}
       {editing ? (
         <div className="hm-edit-bar">
           <button type="button" className="hm-grip" {...attributes} {...listeners} aria-label={`Move ${def.title}`}>
@@ -108,7 +119,50 @@ function Widget({ slot, editing, onSpan, onHide, index }: { slot: Slot; editing:
       <div className={cn("hm-widget-body", editing && "pointer-events-none select-none")}>
         <C />
       </div>
+      </div>
     </m.section>
+  );
+}
+
+/** The greeting moment: each word rises out of a soft blur, 50ms apart; the date follows. */
+function Greeting({ text, date }: { text: string; date: string }) {
+  const reduced = useReducedMotionPref();
+  const [arrive] = useState(() => !arrivedThisSession);
+  // Once every word has landed the greeting renders plain spans: no motion values, no resting filter/transform and
+  // no compositor layers left on the text (it rasterises crisply).
+  const [landed, setLanded] = useState(!arrive);
+  const words = text.split(" ");
+  return (
+    <div className="hm-greeting">
+      <h1 className="hm-hello" aria-label={text}>
+        {words.map((w, i) => [
+          i > 0 ? " " : null,
+          landed ? (
+            <span key={`${i}-${w}`} aria-hidden className="hm-word">
+              {w}
+            </span>
+          ) : (
+            <m.span
+              key={`${i}-${w}`}
+              aria-hidden
+              className="hm-word"
+              initial={reduced ? { opacity: 0 } : { opacity: 0, y: "0.42em", filter: "blur(6px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)", transition: reduced ? { duration: 0.14 } : { ...spring.settle, delay: i * 0.05, opacity: { duration: 0.3, ease: ease.out, delay: i * 0.05 }, filter: { duration: 0.32, ease: ease.out, delay: i * 0.05 } } }}
+              onAnimationComplete={i === words.length - 1 ? () => setLanded(true) : undefined}
+            >
+              {w}
+            </m.span>
+          ),
+        ])}
+      </h1>
+      <m.p
+        className="hm-date"
+        initial={arrive ? { opacity: 0, y: reduced ? 0 : 4 } : false}
+        animate={{ opacity: 1, y: 0, transition: { duration: 0.32, ease: ease.out, delay: reduced ? 0 : 0.1 + words.length * 0.05 } }}
+      >
+        {date}
+      </m.p>
+    </div>
   );
 }
 
@@ -117,6 +171,10 @@ export default function HomePage() {
   const now = useStableNow(60_000);
   const [layout, setLayout] = useState<Slot[]>(DEFAULT);
   const [editing, setEditing] = useState(false);
+  const [arrive] = useState(() => !arrivedThisSession);
+  useEffect(() => {
+    arrivedThisSession = true;
+  }, []);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
   useEffect(() => {
@@ -142,16 +200,13 @@ export default function HomePage() {
     save(arrayMove(layout, from, to));
   };
 
+  // The route outlet's AnimatePresence starts with initial={false}, which would also suppress the S19 arrival of
+  // everything inside Home on first load. Home owns its arrival (once per session), so it opts out of that context.
   return (
+    <PresenceContext.Provider value={null}>
     <div className="hm-page">
       <header className="hm-head">
-        <div>
-          <h1 className="text-h1 text-primary">
-            {greeting(now.getHours())}
-            {name ? `, ${name}` : ""}
-          </h1>
-          <p className="mt-1 text-body text-secondary">{now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</p>
-        </div>
+        <Greeting text={`${greeting(now.getHours())}${name ? `, ${name}` : ""}`} date={now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} />
         <div className="flex items-center gap-2">
           <AnimatePresence>
             {editing ? (
@@ -162,14 +217,14 @@ export default function HomePage() {
               </m.div>
             ) : null}
           </AnimatePresence>
-          <Button size="sm" variant={editing ? "primary" : "ghost"} icon={editing ? Check : LayoutGrid} onClick={() => setEditing((e) => !e)}>
+          <Button size="sm" variant={editing ? "primary" : "ghost"} icon={editing ? Check : LayoutGrid} active={editing} onClick={() => setEditing((e) => !e)}>
             {editing ? "Done" : "Customize home"}
           </Button>
         </div>
       </header>
       <AnimatePresence>
         {editing && hidden.length ? (
-          <m.div className="hm-tray" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}>
+          <m.div className="hm-tray well" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }} transition={spring.settle}>
             <span className="text-caption text-tertiary">Hidden:</span>
             {hidden.map((s) => (
               <Button key={s.id} size="xs" variant="soft" icon={Eye} onClick={() => save(layout.map((x) => (x.id === s.id ? { ...x, hidden: false } : x)))}>
@@ -183,12 +238,13 @@ export default function HomePage() {
         <SortableContext items={visible.map((s) => s.id)} strategy={rectSortingStrategy}>
           <div className={cn("hm-grid", editing && "is-editing")}>
             {visible.map((s, i) => (
-              <Widget key={s.id} slot={s} index={i} editing={editing} onSpan={(span) => save(layout.map((x) => (x.id === s.id ? { ...x, span } : x)))} onHide={() => save(layout.map((x) => (x.id === s.id ? { ...x, hidden: true } : x)))} />
+              <Widget key={s.id} slot={s} index={i} arrive={arrive} editing={editing} onSpan={(span) => save(layout.map((x) => (x.id === s.id ? { ...x, span } : x)))} onHide={() => save(layout.map((x) => (x.id === s.id ? { ...x, hidden: true } : x)))} />
             ))}
           </div>
         </SortableContext>
       </DndContext>
       <WizardSheet />
     </div>
+    </PresenceContext.Provider>
   );
 }

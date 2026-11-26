@@ -14,7 +14,8 @@ import { Input } from "@/ui/Input";
 import { Segmented } from "@/ui/Segmented";
 import { Textarea } from "@/ui/Textarea";
 import { dayLabel, todayIso } from "../finance/shared/format";
-import { Section } from "../finance/shared/ui";
+import { useFlip } from "../finance/shared/hooks";
+import { disclose, Section } from "../finance/shared/ui";
 import { CLASS_ORDER } from "./data";
 
 interface IpsDoc {
@@ -58,6 +59,8 @@ const RISK: Record<string, string> = {
 export default function IPS({ instanceId, summary: s }: { instanceId: Id; summary?: PortfolioSummary }) {
   const [doc, setDoc] = useState<IpsDoc | null>(null);
   const [saved, setSaved] = useState<"idle" | "saving" | "saved">("idle");
+  // adding/removing a rule: the list and the button below glide (translate FLIP), never a height animation
+  const rulesRef = useFlip<HTMLDivElement>(doc?.rules.length ?? 0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const key = `ips:${instanceId}`;
   useEffect(() => {
@@ -144,10 +147,11 @@ export default function IPS({ instanceId, summary: s }: { instanceId: Id; summar
         </Section>
 
         <Section title="5 · Rules I follow when markets fall">
+          <div ref={rulesRef}>
           <ol className="pf-ips-rules">
-            <AnimatePresence initial={false}>
+            <AnimatePresence initial={false} mode="popLayout">
               {doc.rules.map((r, i) => (
-                <m.li key={i} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                <m.li key={i} {...disclose}>
                   <span className="pf-ips-n">{i + 1}</span>
                   <Input value={r} onChange={(e) => update({ rules: doc.rules.map((x, j) => (j === i ? e.target.value : x)) })} wrapperClassName="flex-1" aria-label={`Rule ${i + 1}`} />
                   <IconButton icon={X} size="sm" label="Remove rule" onClick={() => update({ rules: doc.rules.filter((_, j) => j !== i) })} />
@@ -158,6 +162,7 @@ export default function IPS({ instanceId, summary: s }: { instanceId: Id; summar
           <Button size="sm" variant="ghost" icon={Plus} className="mt-2" onClick={() => update({ rules: [...doc.rules, ""] })}>
             Add a rule
           </Button>
+          </div>
         </Section>
 
         <Section title="6 · Review and signature">

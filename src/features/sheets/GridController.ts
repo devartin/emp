@@ -148,6 +148,8 @@ export class GridController {
   scrollIntoView: ((r: number, c: number) => void) | null = null;
   /** Set by the view: focus the cell editor (keyboard target). */
   focusGrid: (() => void) | null = null;
+  /** Set by the renderer: called after a single-cell commit is written (S15 committed results roll). */
+  onCommitted: ((r: number, c: number, before: string, sheetId: string) => void) | null = null;
 
   private tiles = new Map<string, Tile>();
   private listeners = new Set<() => void>();
@@ -905,6 +907,7 @@ export class GridController {
           }
       }
     } else edits.push({ row: e.r, col: e.c, input: text === '' ? null : text });
+    const before = edits.length === 1 && sheetId === this.sheetId ? (this.cell(e.r, e.c)?.d ?? '') : null;
     // Optimistic paint for plain values.
     if (!text.startsWith('=') && sheetId === this.sheetId) {
       for (const ed of edits) {
@@ -933,6 +936,7 @@ export class GridController {
       this.emit();
       return false;
     }
+    if (before !== null && ok.ok) this.onCommitted?.(e.r, e.c, before, sheetId);
     return true;
   }
 
@@ -1499,6 +1503,17 @@ export class GridController {
 
 export function useGridVersion(ctrl: GridController): number {
   return useSyncExternalStore(ctrl.subscribe, ctrl.getVersion, ctrl.getVersion);
+}
+
+/**
+ * Subscribe to one slice of the controller: the component re-renders only when `select(ctrl)` returns a different
+ * value (compare with `Object.is`, so return a primitive — a number or a string key). Use it for chrome that does
+ * not depend on every selection move (tabs, header, toolbar, closed popovers) so arrow keys only re-render the
+ * parts that actually show the selection.
+ */
+export function useGridSelector<T extends string | number | boolean | null | undefined>(ctrl: GridController, select: (c: GridController) => T): T {
+  const get = () => select(ctrl);
+  return useSyncExternalStore(ctrl.subscribe, get, get);
 }
 
 function clamp(n: number, lo: number, hi: number): number {

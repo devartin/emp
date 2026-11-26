@@ -25,6 +25,7 @@ import { Dialog } from "./Dialog";
 import { EmojiPicker } from "./EmojiPicker";
 import { EmptyState } from "./EmptyState";
 import { FileDropZone } from "./FileDropZone";
+import { KeycapExtras, MaterialsSection, MotionLab, StateMatrix } from "./GalleryV2";
 import { IconButton } from "./IconButton";
 import { Input } from "./Input";
 import { Kbd } from "./Kbd";
@@ -63,6 +64,7 @@ const ChartGallery = lazy(() => import("@/charts/ChartGallery"));
 
 const SECTIONS = [
   ["foundations", "Foundations"],
+  ["materials", "Materials"],
   ["buttons", "Buttons"],
   ["inputs", "Inputs"],
   ["selection", "Selection"],
@@ -73,6 +75,7 @@ const SECTIONS = [
   ["data", "Cards & KPIs"],
   ["status", "Progress & status"],
   ["misc", "Tags, avatars, misc"],
+  ["motion", "Motion lab"],
   ["charts", "Charts"],
 ] as const;
 
@@ -83,6 +86,8 @@ export function Gallery() {
   const [motion, setMotion] = useState(() => document.documentElement.getAttribute("data-motion") ?? "full");
   const [privacy, setPrivacy] = useState(() => document.documentElement.getAttribute("data-privacy") === "on");
   const [numbers, setNumbers] = useState(() => document.documentElement.getAttribute("data-numbers") ?? "standard");
+  const [effects, setEffects] = useState(() => document.documentElement.getAttribute("data-effects") ?? "full");
+  const [contrast, setContrast] = useState(() => document.documentElement.getAttribute("data-contrast") ?? "normal");
 
   const apply = (patch: Partial<{ theme: ThemePref; accent: AccentName }>) => applyBootPrefs({ ...getBootPrefs(), ...patch });
   useEffect(() => {
@@ -90,14 +95,16 @@ export function Gallery() {
     document.documentElement.setAttribute("data-motion", motion);
     document.documentElement.setAttribute("data-privacy", privacy ? "on" : "off");
     document.documentElement.setAttribute("data-numbers", numbers);
-  }, [density, motion, privacy, numbers]);
+    document.documentElement.setAttribute("data-effects", effects);
+    document.documentElement.setAttribute("data-contrast", contrast);
+  }, [density, motion, privacy, numbers, effects, contrast]);
 
   return (
-    <div className="min-h-screen bg-window text-primary">
-      <header className="sticky top-0 z-30 flex items-center gap-3 px-6 h-14 bg-canvas" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-        <img src="/emp.svg" width={22} height={22} alt="" style={{ borderRadius: 6 }} />
+    <div className="min-h-screen canvas-halo text-primary">
+      <header className="glass-1 sticky top-0 z-30 flex items-center gap-3 px-6 h-14" style={{ boxShadow: "inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark)" }}>
+        <img src="/emp.svg" width={24} height={24} alt="" style={{ borderRadius: 6, boxShadow: "0 3px 8px -3px rgba(0,0,0,.5)" }} />
         <span className="text-title">EMP UI</span>
-        <Badge tone="outline">v1 kit</Badge>
+        <Badge tone="solid">v2 · Slab</Badge>
         <div className="ml-auto flex items-center gap-2">
           <Segmented
             size="sm"
@@ -140,6 +147,18 @@ export function Gallery() {
                 <MenuRadioItem value="reduced">Reduced</MenuRadioItem>
               </MenuRadioGroup>
               <MenuSeparator />
+              <MenuLabel>Effects</MenuLabel>
+              <MenuRadioGroup value={effects} onValueChange={setEffects}>
+                <MenuRadioItem value="full">Full (glass, light, grain)</MenuRadioItem>
+                <MenuRadioItem value="reduced">Reduced</MenuRadioItem>
+              </MenuRadioGroup>
+              <MenuSeparator />
+              <MenuLabel>Contrast</MenuLabel>
+              <MenuRadioGroup value={contrast} onValueChange={setContrast}>
+                <MenuRadioItem value="normal">Standard</MenuRadioItem>
+                <MenuRadioItem value="more">More</MenuRadioItem>
+              </MenuRadioGroup>
+              <MenuSeparator />
               <MenuLabel>Number colours</MenuLabel>
               <MenuRadioGroup value={numbers} onValueChange={setNumbers}>
                 <MenuRadioItem value="standard">Standard</MenuRadioItem>
@@ -162,6 +181,7 @@ export function Gallery() {
         </nav>
         <main className="flex-1 min-w-0 px-8 py-8 flex flex-col gap-14 max-w-[1120px]">
           <Foundations />
+          <MaterialsSection />
           <Buttons />
           <Inputs />
           <SelectionSection />
@@ -172,7 +192,8 @@ export function Gallery() {
           <DataSection />
           <Status />
           <Misc />
-          <Section id="charts" title="Charts" lead="Recharts + SVG primitives themed from CSS variables; entry animations run once when 30% visible.">
+          <MotionLab />
+          <Section id="charts" title="Charts" lead="Single-series trends are ink; colour means something. Hero lines are drawn by a pen, bars grow on settle, tooltips are faux glass with a glowing scrub dot. Entry runs once when 30% visible.">
             <Suspense fallback={<Skeleton height={320} radius={14} />}>
               <ChartGallery />
             </Suspense>
@@ -211,7 +232,7 @@ function Foundations() {
   const semantic = ["--accent-solid", "--accent-soft", "--gain", "--loss", "--warning", "--info"];
   const blocks = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"];
   return (
-    <Section id="foundations" title="Foundations" lead="Calm monochrome neutrals, one accent (Graphite by default — matching the icon), crisp 1px borders and soft depth.">
+    <Section id="foundations" title="Foundations" lead="Premium monochrome — graphite by default, matching the icon — with real depth. Colour is reserved for meaning: gain/loss, destructive, warning, tags and data.">
       <div className="grid grid-cols-2 gap-4">
         <Card title="Surfaces">
           <div className="grid grid-cols-7 gap-2">
@@ -268,7 +289,7 @@ function Foundations() {
         <Card title="Elevation & radii">
           <div className="grid grid-cols-4 gap-4 p-2">
             {[1, 2, 3, 4].map((e) => (
-              <div key={e} className="h-20 rounded-xl bg-surface-1 flex items-end p-2 text-caption text-tertiary" style={{ boxShadow: `var(--elev-${e})` }}>
+              <div key={e} className="h-20 rounded-xl flex items-end p-2 text-caption text-tertiary" style={{ boxShadow: `var(--elev-${e})`, background: "linear-gradient(180deg, var(--panel-top), var(--panel-bot))" }}>
                 elev-{e}
               </div>
             ))}
@@ -283,10 +304,12 @@ function Foundations() {
           </div>
         </Card>
       </div>
-      <div className="emp-aurora rounded-2xl h-40 flex items-center justify-center overflow-hidden" style={{ boxShadow: "inset 0 0 0 1px var(--border-subtle)" }}>
-        <div className="flex flex-col items-center gap-2">
-          <img src="/emp.svg" width={48} height={48} alt="" style={{ borderRadius: 12, boxShadow: "var(--elev-3)" }} />
-          <span className="text-title">Aurora · onboarding, lock, heroes</span>
+      <div className="panel rounded-2xl h-40 flex items-center justify-center overflow-hidden canvas-halo" data-light="" data-specular="">
+        <span className="emp-specular" aria-hidden />
+        <span className="emp-edge" aria-hidden />
+        <div className="flex flex-col items-center gap-3">
+          <img src="/emp.svg" width={56} height={56} alt="" style={{ borderRadius: 14, boxShadow: "0 12px 28px -10px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06)" }} />
+          <span className="text-title">Canvas halo · one key light</span>
         </div>
       </div>
     </Section>
@@ -298,7 +321,8 @@ function Buttons() {
   const variants = ["primary", "secondary", "ghost", "soft", "destructive", "destructive-ghost", "link"] as const;
   const [ok, setOk] = useState(false);
   return (
-    <Section id="buttons" title="Buttons" lead="Seven variants, five sizes. Press springs to .97 (.92 for small and icon buttons); loading keeps width; success draws a check.">
+    <Section id="buttons" title="Buttons" lead="Tactile keycaps. Hover lifts the face 1px while the side stays put; press seats the face onto its side in 70ms (pure CSS, one frame) and releases on a spring with 11% overshoot. Focus rings land from 7px out.">
+      <StateMatrix />
       <Card>
         <div className="flex flex-col gap-5">
           {variants.map((v) => (
@@ -347,6 +371,7 @@ function Buttons() {
           </Row>
         </div>
       </Card>
+      <KeycapExtras />
     </Section>
   );
 }
@@ -357,7 +382,7 @@ function Inputs() {
   const [amt, setAmt] = useState<string | null>("2450.00");
   const [text, setText] = useState("Quarterly review");
   return (
-    <Section id="inputs" title="Inputs" lead="32px default, accent focus ring at 22%. Number and money fields step with arrows (Shift ×10, Alt ×0.1) and evaluate =expressions on blur.">
+    <Section id="inputs" title="Inputs" lead="Recessed wells. Focus swaps the inner rim for the ring with a 4px halo; invalid helpers rise in. Number fields carry mini keycap steppers that auto-repeat on hold and evaluate =expressions on blur.">
       <Card>
         <div className="grid grid-cols-3 gap-x-6 gap-y-5">
           <Input label="Page title" value={text} onChange={(e) => setText(e.currentTarget.value)} clearable helper="Shown in the sidebar and breadcrumbs" />
@@ -366,7 +391,7 @@ function Inputs() {
           <SearchField aria-label="Search" />
           <Input label="Disabled" disabled defaultValue="Locked value" />
           <Input label="Read-only" readOnly defaultValue="acct_9f2c1e" className="slashed font-mono" />
-          <NumberField label="Quantity" value={num} onChange={setNum} helper="Try typing =12*4+2 then Tab" />
+          <NumberField label="Quantity" value={num} onChange={setNum} helper="Try typing =12*4+2 then Tab" steppers />
           <MoneyField label="Monthly budget" value={amt} onChange={setAmt} currency="USD" />
           <SecretField label="API key" defaultValue="sk_live_51Hc9…" helper="Stored encrypted; never shown again" />
           <Input size="sm" placeholder="Small 28" />
@@ -398,7 +423,7 @@ function SelectionSection() {
   const [bg, setBg] = useState<BlockColorValue>("yellow");
   const currencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "SEK", "NOK", "SGD", "BTC"].map((c) => ({ value: c, label: c, description: formatCurrency(1234.5, c === "BTC" ? "USD" : c) }));
   return (
-    <Section id="selection" title="Select, combobox, date" lead="Menu-skinned lists that match the trigger width; typeahead above 8 options; “Create …” rows.">
+    <Section id="selection" title="Select, combobox, date" lead="Triggers are full-width secondary slabs that latch while open. Lists are glass with an origin-aware open and a highlight plate that glides between rows.">
       <Card>
         <div className="grid grid-cols-3 gap-x-6 gap-y-5">
           <Select label="Base currency" value={cur} onValueChange={setCur} options={currencies} />
@@ -454,7 +479,7 @@ function Controls() {
   const [vol, setVol] = useState([62]);
   const [range, setRange] = useState([20, 75]);
   return (
-    <Section id="controls" title="Checkbox, radio, switch, slider" lead="Checks draw in over 180ms; switch thumbs travel on spring.snappy and stretch while pressed.">
+    <Section id="controls" title="Checkbox, radio, switch, slider" lead="Wells that light up: checks pop into a lit mini-slab and draw their tick; switch thumbs are domes that travel on the thumb spring and stretch while held; sliders have engraved ticks.">
       <Card>
         <div className="grid grid-cols-4 gap-6">
           <div className="flex flex-col gap-3">
@@ -496,7 +521,7 @@ function Navigation() {
   const [view, setView] = useState("table");
   const [tab, setTab] = useState("overview");
   return (
-    <Section id="navigation" title="Tabs & segmented" lead="Indicators slide on a shared layoutId with spring.ui.">
+    <Section id="navigation" title="Tabs & segmented" lead="The segmented slab glides by layout projection and squashes with travel; the tab bar is an extruded ink bar whose leading edge arrives first.">
       <Card>
         <div className="flex flex-col gap-6">
           <div className="flex flex-wrap items-center gap-4">
@@ -552,7 +577,7 @@ function Overlays() {
   const [showHidden, setShowHidden] = useState(true);
   const [sort, setSort] = useState("updated");
   return (
-    <Section id="overlays" title="Menus, popovers, dialogs, sheets" lead="Menus open from their trigger origin (scale .96→1, 160ms outExpo); dialogs scale in on spring.gentle over a blurred scrim.">
+    <Section id="overlays" title="Menus, popovers, dialogs, sheets" lead="Glass. Menus scale from their trigger on the glide spring, rows stagger 16ms; dialogs grow out of the button that opened them and close back into it; sheets drag to dismiss.">
       <Card>
         <div className="flex flex-wrap gap-3">
           <Menu>
@@ -730,7 +755,7 @@ function Overlays() {
 function Feedback() {
   const [loading, setLoading] = useState(false);
   return (
-    <Section id="feedback" title="Toasts, banners, empty states, skeletons" lead="Toasts stack (y −8n, scale 1−.05n), expand on hover, pause on hover/focus/blur, swipe to dismiss.">
+    <Section id="feedback" title="Toasts, banners, empty states, skeletons" lead="Toasts rise from the dock on the thumb spring and drain a groove; banners are recessed bands; empty states settle the icon's slabs into a well.">
       <Card>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => toast.success("Imported 248 transactions", { description: "6 duplicates skipped · 12 rules applied" })}>
@@ -820,9 +845,9 @@ function DataSection() {
     return () => window.clearInterval(iv);
   }, []);
   return (
-    <Section id="data" title="Cards, KPI tiles, money" lead="Rolling digits stagger 20ms from the right; first mount counts up over 600ms. Hide numbers masks every sensitive value.">
+    <Section id="data" title="Cards, KPI tiles, money" lead="Machined plates. Clickable tiles lift, catch the pointer light and tilt up to 3°. Only changed digits roll, right to left; Hide numbers swaps to a recessed mask.">
       <div className="grid grid-cols-4 gap-4">
-        <KpiTile label="Net worth" value={{ amount: nw.toFixed(2), currency: "USD" }} delta={{ value: 0.042 }} spark={spark} info="Assets minus liabilities, in USD" />
+        <KpiTile label="Net worth" value={{ amount: nw.toFixed(2), currency: "USD" }} delta={{ value: 0.042 }} spark={spark} info="Assets minus liabilities, in USD" onClick={() => toast("Net worth")} />
         <KpiTile label="Spent this month" value={{ amount: "3412.18", currency: "USD" }} noCents delta={{ value: 0.083, invert: true }} spark={spark.map((v, i) => v + Math.sin(i) * 3)} sparkColor="accent" />
         <KpiTile label="Savings rate" value={0.274 * 100} format={(n) => `${n.toFixed(1)}%`} delta={{ value: -0.012, label: "vs 3-mo avg" }} spark={spark2} />
         <KpiTile label="Portfolio" value={{ amount: "96120.00", currency: "EUR" }} stale="Prices from 14 min ago" delta={{ value: -0.0061, label: "today" }} spark={spark2} />
@@ -830,7 +855,7 @@ function DataSection() {
       <div className="grid grid-cols-4 gap-4">
         <KpiTile label="Loading" value={null} loading delta={{ value: 0 }} spark={[]} />
         <KpiTile label="Big number" size="xl" value={{ amount: "1204500.00", currency: "USD" }} noCents />
-        <Card interactive onClick={() => toast("Card clicked")} title="Interactive card" subtitle="Hover lifts · press .985">
+        <Card interactive light tilt onClick={() => toast("Card clicked")} title="Interactive card" subtitle="Lifts 2px · edge light · presses to .99">
           <span className="text-body text-secondary">Opens the account detail in a side peek.</span>
         </Card>
         <Card title="Live price" subtitle="Flash ≤ 1/s per symbol">
@@ -885,7 +910,7 @@ function DataSection() {
 function Status() {
   const [p, setP] = useState(0.42);
   return (
-    <Section id="status" title="Progress, rings, budgets, spinners" lead="Budget bars turn warning at 75% and loss past 100%, with the overflow drawn as a second lap.">
+    <Section id="status" title="Progress, rings, budgets, spinners" lead="Grooves with lit fills (scaleX on glide). Rings sweep in on settle and glow once at 100%. Budget bars turn warning at 75% and loss past 100%.">
       <Card>
         <div className="grid gap-8" style={{ gridTemplateColumns: "1fr 1.2fr 1.3fr" }}>
           <div className="flex flex-col gap-4">

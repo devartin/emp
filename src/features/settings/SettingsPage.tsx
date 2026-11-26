@@ -12,6 +12,7 @@ import { navigate } from "@/app/router";
 import { cn } from "@/lib/cn";
 import { useSettings } from "@/stores/settings";
 import { useVault } from "@/stores/vault";
+import { Select, type SelectOption } from "@/ui/Select";
 import { Skeleton } from "@/ui/Skeleton";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
@@ -69,7 +70,6 @@ export default function SettingsPage({ section }: SettingsPageProps) {
   const loaded = useSettings((s) => s.loaded && !!s.vault);
   const reduced = useReducedMotionPref();
   const [q, setQ] = useState("");
-  const searchRef = useRef<HTMLInputElement>(null);
   const score = useSecurityScore();
   const encrypted = useVault((s) => !!s.status?.encrypted);
 
@@ -115,6 +115,10 @@ export default function SettingsPage({ section }: SettingsPageProps) {
   }, [q]);
 
   const go = (target: string) => navigate({ t: "settings", section: target }, { replace: true });
+  const pick = (target: string) => {
+    go(target);
+    setQ("");
+  };
   const View = VIEWS[active];
   const meta = SECTIONS.find((s) => s.id === active) ?? SECTIONS[0];
 
@@ -123,42 +127,9 @@ export default function SettingsPage({ section }: SettingsPageProps) {
       <aside className="st-rail" aria-label="Settings sections">
         <div className="st-rail-inner">
           <div className="st-rail-title">Settings</div>
-          <div className="st-search">
-            <Search size={14} aria-hidden />
-            <input
-              ref={searchRef}
-              value={q}
-              onChange={(e) => setQ(e.currentTarget.value)}
-              placeholder="Search settings"
-              aria-label="Search settings"
-              spellCheck={false}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setQ("");
-                if (e.key === "Enter" && results?.[0]) {
-                  go(results[0].key);
-                  setQ("");
-                }
-              }}
-            />
-            {q ? (
-              <button type="button" aria-label="Clear search" onClick={() => (setQ(""), searchRef.current?.focus())}>
-                <X size={12} aria-hidden />
-              </button>
-            ) : null}
-          </div>
+          <SettingsSearch q={q} onChange={setQ} onPick={pick} first={results?.[0]?.key} />
           {results ? (
-            <div className="st-results" role="list">
-              {results.length ? (
-                results.map((h) => (
-                  <button key={h.key} type="button" role="listitem" className="st-result" onClick={() => (go(h.key), setQ(""))}>
-                    <span className="st-result-title">{h.title}</span>
-                    <span className="st-result-sub">{h.sub}</span>
-                  </button>
-                ))
-              ) : (
-                <p className="st-noresults">No settings match “{q.trim()}”.</p>
-              )}
-            </div>
+            <SearchResults results={results} q={q} onPick={pick} />
           ) : (
             <nav className="st-nav">
               {GROUPS.map((g) => (
@@ -187,6 +158,22 @@ export default function SettingsPage({ section }: SettingsPageProps) {
         </div>
       </aside>
       <main className="st-main" aria-label={meta.title}>
+        {/* Narrow widths (container < 820px): the rail folds into a sticky header — a section picker and the search —
+            so labels never truncate. Both exist in the DOM; CSS container queries pick one. */}
+        <div className="st-compact">
+          <div className="st-compact-row">
+            <Select<SectionId>
+              value={active}
+              onValueChange={(v) => pick(v)}
+              options={SECTION_OPTIONS}
+              aria-label="Settings section"
+              className="st-compact-select"
+              listWidth={260}
+            />
+            <SettingsSearch q={q} onChange={setQ} onPick={pick} first={results?.[0]?.key} />
+          </div>
+          {results ? <SearchResults results={results} q={q} onPick={pick} /> : null}
+        </div>
         <AnimatePresence mode="wait" initial={false}>
           <m.div
             key={active}
@@ -200,6 +187,57 @@ export default function SettingsPage({ section }: SettingsPageProps) {
         </AnimatePresence>
       </main>
       <ReauthHost />
+    </div>
+  );
+}
+
+const SECTION_OPTIONS: SelectOption<SectionId>[] = SECTIONS.map((s) => ({ value: s.id, label: s.title, icon: s.icon, group: s.group }));
+
+interface SearchHit {
+  key: string;
+  title: string;
+  sub: string;
+}
+
+function SettingsSearch({ q, onChange, onPick, first }: { q: string; onChange: (q: string) => void; onPick: (key: string) => void; first?: string }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div className="st-search">
+      <Search size={14} aria-hidden />
+      <input
+        ref={ref}
+        value={q}
+        onChange={(e) => onChange(e.currentTarget.value)}
+        placeholder="Search settings"
+        aria-label="Search settings"
+        spellCheck={false}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onChange("");
+          if (e.key === "Enter" && first) onPick(first);
+        }}
+      />
+      {q ? (
+        <button type="button" aria-label="Clear search" onClick={() => (onChange(""), ref.current?.focus())}>
+          <X size={12} aria-hidden />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function SearchResults({ results, q, onPick }: { results: SearchHit[]; q: string; onPick: (key: string) => void }) {
+  return (
+    <div className="st-results" role="list">
+      {results.length ? (
+        results.map((h) => (
+          <button key={h.key} type="button" role="listitem" className="st-result" onClick={() => onPick(h.key)}>
+            <span className="st-result-title">{h.title}</span>
+            <span className="st-result-sub">{h.sub}</span>
+          </button>
+        ))
+      ) : (
+        <p className="st-noresults">No settings match “{q.trim()}”.</p>
+      )}
     </div>
   );
 }

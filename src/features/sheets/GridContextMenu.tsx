@@ -17,6 +17,7 @@ import {
   Trash2,
   WrapText,
 } from 'lucide-react';
+import { memo } from 'react';
 import { notify } from '@/stores/toasts';
 import { ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from '@/ui/ContextMenu';
 import { colName } from './engine/addr';
@@ -36,7 +37,19 @@ async function readClipboard(): Promise<string | null> {
   }
 }
 
-export function GridContextMenu({ ctrl, zone, onCondFormat }: GridContextMenuProps) {
+/**
+ * The content panel is memoised and its items are a separate component, so they're only built while the menu is
+ * open (reading the selection fresh at that moment) instead of on every selection move of the grid.
+ */
+export const GridContextMenu = memo(function GridContextMenu(props: GridContextMenuProps) {
+  return (
+    <ContextMenuContent width={248}>
+      <GridMenuItems {...props} />
+    </ContextMenuContent>
+  );
+});
+
+function GridMenuItems({ ctrl, zone, onCondFormat }: GridContextMenuProps) {
   const p = ctrl.primary;
   const rows = p.r1 - p.r0 + 1;
   const cols = p.c1 - p.c0 + 1;
@@ -60,7 +73,7 @@ export function GridContextMenu({ ctrl, zone, onCondFormat }: GridContextMenuPro
     await ctrl.pasteText(text, undefined, mode);
   };
   return (
-    <ContextMenuContent width={248}>
+    <>
       <ContextMenuItem icon={Scissors} shortcut="mod+x" onSelect={() => exec('cut')}>
         Cut
       </ContextMenuItem>
@@ -147,7 +160,7 @@ export function GridContextMenu({ ctrl, zone, onCondFormat }: GridContextMenuPro
       <ContextMenuItem icon={Paintbrush} onSelect={onCondFormat}>
         Conditional formatting…
       </ContextMenuItem>
-    </ContextMenuContent>
+    </>
   );
 }
 

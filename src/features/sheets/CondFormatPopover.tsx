@@ -4,7 +4,7 @@
  */
 import { AnimatePresence, m } from 'motion/react';
 import { Paintbrush, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { CondFormatRule, Rect } from '@/backend/types';
 import { cn } from '@/lib/cn';
 import { Button } from '@/ui/Button';
@@ -16,7 +16,7 @@ import { Select } from '@/ui/Select';
 import { Tooltip } from '@/ui/Tooltip';
 import { spring } from '@/ui/motion/tokens';
 import { MAX_COLS, MAX_ROWS, rectName, rectsIntersect } from './engine/addr';
-import { useGridVersion, type GridController } from './GridController';
+import { useGridSelector, type GridController } from './GridController';
 import { BAR_PRESETS, gradientCss, HIGHLIGHT_PRESETS, SCALE_PRESETS } from './palette';
 
 type Kind = 'scale' | 'bars' | 'highlight';
@@ -34,6 +34,8 @@ export interface CondFormatPopoverProps {
   ctrl: GridController;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Where to point the popover when its toolbar key is collapsed into the toolbar's "More" menu. */
+  fallbackAnchor?: RefObject<HTMLElement | null>;
 }
 
 function describe(rule: CondFormatRule): string {
@@ -53,13 +55,23 @@ function describe(rule: CondFormatRule): string {
   }
 }
 
-export function CondFormatPopover({ ctrl, open, onOpenChange }: CondFormatPopoverProps) {
-  useGridVersion(ctrl);
+export function CondFormatPopover({ ctrl, open, onOpenChange, fallbackAnchor }: CondFormatPopoverProps) {
+  // Closed it is just a toolbar key: don't follow every selection move.
+  useGridSelector(ctrl, (c) => (open ? c.version : -1));
   const [kind, setKind] = useState<Kind>('scale');
   const [op, setOp] = useState<Op>('gt');
   const [v1, setV1] = useState('');
   const [v2, setV2] = useState('');
   const [look, setLook] = useState(0);
+  const keyRef = useRef<HTMLButtonElement | null>(null);
+  // Anchor on the toolbar key, or on "More" while the key is collapsed (an inert, invisible group).
+  const anchor = useRef({
+    getBoundingClientRect: (): DOMRect => {
+      const key = keyRef.current;
+      const el = key && !key.closest('[data-collapsed]') ? key : (fallbackAnchor?.current ?? key);
+      return el ? el.getBoundingClientRect() : new DOMRect();
+    },
+  });
   useEffect(() => {
     if (!open) return;
     setV1('');
@@ -86,12 +98,11 @@ export function CondFormatPopover({ ctrl, open, onOpenChange }: CondFormatPopove
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverAnchor virtualRef={anchor} />
       <Tooltip content="Conditional formatting">
-        <PopoverAnchor asChild>
-          <button type="button" className="emp-tb-icon-menu" aria-label="Conditional formatting" data-active={open ? '' : undefined} onClick={() => onOpenChange(!open)}>
-            <Paintbrush size={16} aria-hidden />
-          </button>
-        </PopoverAnchor>
+        <button ref={keyRef} type="button" className="emp-tb-icon-menu" aria-label="Conditional formatting" data-active={open ? '' : undefined} onClick={() => onOpenChange(!open)}>
+          <Paintbrush size={16} aria-hidden />
+        </button>
       </Tooltip>
       <PopoverContent form className="emp-cf-pop" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
         <div className="emp-cf-head">
@@ -162,11 +173,20 @@ export function CondFormatPopover({ ctrl, open, onOpenChange }: CondFormatPopove
           )}
         </div>
         {rules.length ? (
-          <div className="emp-cf-rules">
+          <div className="emp-cf-rules relative">
             <div className="emp-cf-rules-title">Rules on this sheet</div>
-            <AnimatePresence initial={false}>
+            {/* DESIGN §1.6: rows rise in at full size; removals pop out of flow and the rest glide (layout="position"). */}
+            <AnimatePresence initial={false} mode="popLayout">
               {[...here, ...others].map((r) => (
-                <m.div key={r.id ?? describe(r)} className={cn('emp-cf-rule', !here.includes(r) && 'is-other')} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={spring.layout}>
+                <m.div
+                  key={r.id ?? describe(r)}
+                  className={cn('emp-cf-rule', !here.includes(r) && 'is-other')}
+                  layout="position"
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: here.includes(r) ? 1 : 0.6, y: 0, transition: { opacity: { duration: 0.16 }, y: spring.settle } }}
+                  exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                  transition={spring.layout}
+                >
                   <span
                     className="emp-cf-rule-chip"
                     style={

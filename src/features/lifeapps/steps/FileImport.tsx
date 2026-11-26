@@ -40,7 +40,7 @@ export function FileImport({ step, value, onChange }: StepProps) {
         <div className="flex flex-col gap-2">
           <FileDropZone onBrowse={browse} title="Choose bank files" hint="CSV, OFX, QFX or QIF — you map columns after setup." accept={[".csv", ".ofx", ".qfx", ".qif"]} />
           {grants.map((g) => (
-            <div key={g.grantId} className="la-file">
+            <div key={g.grantId} className="la-file well" data-static="">
               <FileText size={14} aria-hidden />
               <span className="min-w-0 flex-1 truncate">{g.displayName}</span>
               <span className="text-caption text-tertiary tabular">{formatBytes(g.size)}</span>

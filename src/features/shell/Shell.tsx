@@ -4,7 +4,7 @@
  * link confirmation). Below 900px the sidebar becomes a hover-peek overlay.
  */
 import { m } from "motion/react";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { routeKey, routePageId, useRoute, type AppRoute } from "@/app/router";
 import { CommandPaletteEntry, RouteOutlet } from "@/app/routes";
 import { writeLockIdentity } from "@/features/vault/identity";
@@ -42,10 +42,19 @@ const CommandPalette = CommandPaletteEntry.C;
 export default function Shell() {
   const compact = useCompact();
   const collapsed = useUi((s) => s.sidebarCollapsed);
-  const width = useUi((s) => s.sidebarWidth);
   const reduced = useReducedMotionPref();
   const hidden = collapsed || compact;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  // The committed sidebar width is written imperatively: subscribing would re-render the whole shell (and the
+  // route under it) at the end of every resize drag.
+  useLayoutEffect(() => {
+    const apply = (w: number) => shellRef.current?.style.setProperty("--sb-w", `${w}px`);
+    apply(useUi.getState().sidebarWidth);
+    return useUi.subscribe((st, prev) => {
+      if (st.sidebarWidth !== prev.sidebarWidth) apply(st.sidebarWidth);
+    });
+  }, []);
   const [scrolled, setScrolled] = useState(false);
   const route = useRoute();
   const workspace = useWorkspace((s) => s.workspace);
@@ -71,7 +80,21 @@ export default function Shell() {
   }, []);
 
   return (
-    <div className="emp-shell" style={{ ["--sb-w" as string]: `${width}px` }}>
+    <div ref={shellRef} className="emp-shell">
+      {/* First focusable element: keyboard users skip the sidebar and top bar. A button, not a #fragment link,
+          because the router owns the hash. */}
+      <button
+        type="button"
+        className="emp-skip-link"
+        onClick={() => {
+          const el = scrollRef.current;
+          const target = el?.querySelector<HTMLElement>("h1") ?? null;
+          if (target && !target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+          (target ?? el)?.focus();
+        }}
+      >
+        Skip to content
+      </button>
       <SidebarFrame compact={compact} />
       <m.main
         className="emp-main"

@@ -1,6 +1,7 @@
 /** Watchlist panel (§11.3 watchlist_*): lists as tabs, live rows, add via search, per-symbol alerts. */
 import { Bell, BellRing, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
+import { GlideHighlight } from "@/ui/GlideHighlight";
 import { useEffect, useState } from "react";
 import type { SymbolKey, WatchlistSymbol } from "@/backend/types";
 import { useQuote } from "@/stores/market";
@@ -49,9 +50,11 @@ export function WatchlistPanel({ selected, onSelect }: { selected?: SymbolKey; o
         ) : !list || !list.symbols.length ? (
           <Quiet title="Nothing here yet" body="Search for a symbol above to start watching it." />
         ) : (
-          <AnimatePresence initial={false}>
+          <AnimatePresence initial={false} mode="popLayout">
+            <GlideHighlight key="__glide" selector=".mk-row.is-selected" tone="slab" attributes={["class"]} />
             {list.symbols.map((s) => (
-              <m.div key={s.key} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}>
+              // compositor-only: rows fade/rise in, neighbours glide by `layout` transforms, exits pop out and fade
+              <m.div key={s.key} layout="position" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}>
                 <QuoteRow
                   symbol={s.key}
                   selected={s.key === selected}

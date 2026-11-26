@@ -12,6 +12,7 @@ import { FindReplace } from './findReplace';
 import { MarkdownShortcuts } from './inputRules';
 import { Placeholders } from './placeholder';
 import { Suggest } from './suggest';
+import { BlockMorph } from './morph';
 
 export function editorExtensions(opts: { readOnly?: boolean } = {}): AnyExtension[] {
   const base: AnyExtension[] = [...schemaExtensions(), EditorContextExt, BlockIds, CodeHighlight, FindReplace];
@@ -26,5 +27,6 @@ export function editorExtensions(opts: { readOnly?: boolean } = {}): AnyExtensio
     BlockKeymap,
     MarkdownShortcuts,
     Placeholders,
+    BlockMorph,
   ];
 }

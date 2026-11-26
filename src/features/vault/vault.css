@@ -52,34 +52,80 @@
   -webkit-mask-image: radial-gradient(70% 60% at 50% 45%, #000 0%, transparent 100%);
 }
 
-/* ─── Glass panel (onboarding 560/720, lock 360) ─── */
-.emp-vault-card {
-  position: relative;
-  border-radius: 20px;
-  background: color-mix(in oklab, var(--bg-overlay) 92%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  backdrop-filter: blur(24px) saturate(160%);
-  box-shadow: var(--elev-3);
-  overflow: hidden;
+/* ─── The vault stage (lock + onboarding): monochrome, one key light from above, a soft floor, film grain.
+   Static — the stage never animates (DESIGN §3); only the card and the slabs move. ─── */
+.emp-vault-stage {
+  --stage-base: color-mix(in oklab, var(--bg-window) 70%, #e4e4ea);
+  --stage-key: rgba(255, 255, 255, 0.95);
+  --stage-floor: rgba(16, 16, 24, 0.06);
+  isolation: isolate;
+  background:
+    radial-gradient(980px 560px at 50% 22%, var(--stage-key), transparent 72%),
+    radial-gradient(760px 280px at 50% 104%, var(--stage-floor), transparent 70%),
+    var(--stage-base);
 }
-.emp-vault-card::before {
-  /* hairline top light */
+:root:is([data-theme="dark"]) .emp-vault-stage {
+  --stage-base: #09090c;
+  --stage-key: rgba(201, 210, 255, 0.075);
+  --stage-floor: rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="midnight"] .emp-vault-stage {
+  --stage-base: #000;
+  --stage-key: rgba(201, 210, 255, 0.055);
+  --stage-floor: rgba(0, 0, 0, 0);
+}
+/* grain over the whole stage */
+.emp-vault-stage::after {
   content: "";
   position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
-  opacity: 0.6;
+  inset: 0;
+  z-index: -1;
   pointer-events: none;
+  background: url("../../styles/grain.png") 0 0 / 180px;
+  mix-blend-mode: var(--grain-blend);
+  opacity: calc(var(--grain-op) * 1.4);
 }
-:root:is([data-theme="dark"], [data-theme="midnight"]) .emp-vault-card::before {
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
-  opacity: 1;
+/* a tight cone of light that sits right above the card */
+.emp-stage-light {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(900px, 120vw);
+  height: 70vh;
+  translate: -50% 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(50% 60% at 50% 0%, var(--stage-key), transparent 75%);
+  opacity: 0.8;
 }
-:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-vault-card {
-  background: var(--bg-overlay);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-vault-stage::after {
+  display: none;
+}
+
+/* ─── The card: a machined plate (onboarding 560/640, lock 360) ─── */
+.emp-vault-card {
+  position: relative;
+  isolation: isolate;
+  border-radius: 22px;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 -1px 0 var(--panel-lo), inset 0 0 0 1px var(--panel-rim), var(--panel-raise);
+}
+.emp-vault-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: url("../../styles/grain.png") 0 0 / 180px;
+  mix-blend-mode: var(--grain-blend);
+  opacity: var(--grain-op);
+}
+:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-vault-card::before {
+  display: none;
+}
+:root[data-contrast="more"] .emp-vault-card {
+  box-shadow: inset 0 0 0 1.5px var(--border-strong), var(--panel-shadow);
 }
 
 /* ─── XL inputs (§6.3 password field xl) ─── */
@@ -137,30 +183,64 @@
 .emp-words {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px 10px;
-  padding: 20px;
-  border-radius: 12px;
-  background: var(--bg-surface-2);
-  border: 1px solid var(--border-subtle);
+  gap: 8px;
+  padding: 14px 14px 16px;
+  border-radius: 14px;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 3px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  perspective: 600px;
   counter-reset: word;
   -webkit-user-select: text;
   user-select: text;
 }
+/* each word is a secondary keycap (edge 1.5px) */
 .emp-word {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: baseline;
   gap: 6px;
   min-width: 0;
+  height: 34px;
+  padding: 3px 8px 0 4px;
+  margin-bottom: 2px;
+  border-radius: 8px;
   font-family: var(--font-mono-code);
-  font-size: calc(18rem / 14);
-  line-height: calc(28 / 18);
-  font-weight: 500;
+  font-size: calc(16rem / 14);
+  line-height: 28px;
+  font-weight: 550;
   color: var(--text-primary);
   letter-spacing: -0.01em;
+  transform-origin: 50% 100%;
+  backface-visibility: hidden;
+}
+.emp-word::before,
+.emp-word::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.emp-word::before {
+  z-index: -2;
+  background: linear-gradient(180deg, var(--slab-s-side-a), var(--slab-s-side-b));
+  box-shadow: 0 0 0 1px var(--slab-s-side-rim), 0 1px 1.5px var(--slab-s-contact), 0 4px 8px -4px var(--slab-s-ambient);
+  transform: translateY(1.5px);
+}
+.emp-word::after {
+  z-index: -1;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 -1px 0 var(--slab-s-lo), inset 0 0 0 1px var(--slab-s-rim);
+}
+.emp-word .emp-word-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .emp-word-n {
   flex: none;
-  width: 1.6em;
+  width: 1.9em;
   text-align: right;
   font-size: calc(11rem / 14);
   color: var(--text-tertiary);
@@ -181,17 +261,19 @@
   display: flex;
   align-items: center;
   height: 30px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--control-bg);
-  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  border-radius: 9px;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  transition: box-shadow 160ms var(--ease-out), background-color 160ms var(--ease-out), transform var(--dur-release) var(--spring-release);
 }
 .emp-word-input:focus-within {
-  border-color: var(--accent-solid);
-  box-shadow: var(--focus-ring);
+  background: color-mix(in oklab, var(--well-bg), var(--panel-top) 55%);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
 }
-.emp-word-input[data-filled] {
-  background: var(--bg-surface-1);
+/* a confirmed word latches down: pressed 1px, deeper inset, gain rim */
+.emp-word-input[data-ok] {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px var(--well-in), inset 0 0 0 1px color-mix(in oklab, var(--gain) 55%, transparent), 0 1px 0 var(--well-lip);
 }
 .emp-word-input span {
   flex: none;
@@ -232,16 +314,18 @@
 .emp-onb-stepper span {
   position: relative;
   flex: 1;
-  height: 4px;
+  height: 5px;
   border-radius: 9999px;
-  background: rgba(var(--text-rgb), 0.08);
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
   overflow: hidden;
 }
 .emp-onb-stepper span i {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--accent-solid);
+  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 0 8px var(--lit-glow);
   transform-origin: left center;
 }
 .emp-onb-title {
@@ -320,27 +404,78 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
+/* area chips are keycaps (edge 2px); a chosen one latches half-down with a lit tile */
 .emp-onb-chip {
+  --edge: 2px;
   position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: 52px;
+  margin-bottom: 2px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--btn-secondary-bg);
   text-align: left;
   color: var(--text-primary);
-  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  transform: translateY(0);
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.emp-onb-chip::before,
+.emp-onb-chip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.emp-onb-chip::before {
+  z-index: -2;
+  background: linear-gradient(180deg, var(--slab-s-side-a), var(--slab-s-side-b));
+  box-shadow: 0 0 0 1px var(--slab-s-side-rim), 0 1px 1.5px var(--slab-s-contact), 0 6px 12px -5px var(--slab-s-ambient);
+  transform: translateY(var(--edge));
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.emp-onb-chip::after {
+  z-index: -1;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 -1px 0 var(--slab-s-lo), inset 0 0 0 1px var(--slab-s-rim);
+  transition: filter 200ms var(--ease-out);
 }
 .emp-onb-chip:hover {
-  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  transition: transform var(--dur-hover) var(--ease-out);
+}
+.emp-onb-chip:hover::before {
+  transform: translateY(calc(var(--edge) + 1px));
+}
+.emp-onb-chip:hover::after {
+  filter: var(--slab-s-hover);
+}
+.emp-onb-chip:active {
+  transform: translateY(var(--edge)) scale(0.985);
+  transition: transform var(--dur-press) var(--ease-press);
+}
+.emp-onb-chip:active::before {
+  transform: translateY(0);
+  transition: transform var(--dur-press) var(--ease-press);
+}
+.emp-onb-chip:active::after {
+  filter: var(--slab-s-press);
 }
 .emp-onb-chip[aria-checked="true"] {
-  border-color: transparent;
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1.5px var(--accent-solid);
+  transform: translateY(calc(var(--edge) - 1px));
+}
+.emp-onb-chip[aria-checked="true"]::before {
+  transform: translateY(1px);
+}
+.emp-onb-chip[aria-checked="true"]::after {
+  filter: var(--slab-s-press);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18), inset 0 0 0 1.5px var(--ring);
+}
+.emp-onb-chip:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: 3px;
 }
 .emp-onb-chip .tile {
   flex: none;
@@ -350,12 +485,20 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--bg-surface-2);
   color: var(--text-secondary);
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  transition: transform var(--dur-thumb) var(--spring-thumb);
 }
 .emp-onb-chip[aria-checked="true"] .tile {
-  background: var(--accent-solid);
-  color: var(--accent-contrast);
+  color: var(--lit-fg, #fff);
+  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 10px var(--lit-glow);
+  transform: scale(1.06);
+}
+:root[data-motion="reduced"] :is(.emp-onb-chip, .emp-onb-chip .tile, .emp-word-input),
+:root[data-motion="reduced"] .emp-onb-chip::before {
+  transition-duration: 0ms !important;
 }
 .emp-onb-chip .tile svg {
   width: 16px;
@@ -367,10 +510,10 @@
   align-items: center;
   gap: 14px;
   padding: 14px 0;
-  border-top: 1px solid var(--border-subtle);
+  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
 }
 .emp-onb-row:first-child {
-  border-top: 0;
+  box-shadow: none;
 }
 .emp-onb-row .ico {
   flex: none;
@@ -380,9 +523,9 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: var(--bg-surface-2);
   color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
 }
 
 .emp-build-row {
@@ -406,37 +549,116 @@
   border-radius: 9999px;
   color: var(--text-tertiary);
 }
-.emp-build-row[data-state="done"] .emp-build-dot {
-  background: var(--accent-solid);
-  color: var(--accent-contrast);
+.emp-build-dot {
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
 }
-.emp-build-row[data-state="pending"] .emp-build-dot {
-  border: 1.5px dashed var(--border-strong);
+.emp-build-row[data-state="done"] .emp-build-dot {
+  color: var(--lit-fg, #fff);
+  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 10px var(--lit-glow);
+  animation: emp-dot-pop var(--dur-pop) var(--spring-pop) both;
+}
+@keyframes emp-dot-pop {
+  from {
+    transform: scale(0.6);
+  }
+}
+:root[data-motion="reduced"] .emp-build-row[data-state="done"] .emp-build-dot {
+  animation: none;
+}
+
+/* ─── S3 forge: exploded slabs assemble while the key derivation groove fills ─── */
+.emp-forge {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 22px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-top) 94%, transparent), color-mix(in oklab, var(--panel-bot) 94%, transparent));
+}
+.emp-forge-groove {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+}
+.emp-forge-groove i {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transform-origin: left center;
+  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 0 8px var(--lit-glow);
 }
 
 /* Lock card */
 .emp-lock-card {
-  width: 360px;
-  padding: 32px;
+  width: 372px;
+  padding: 36px 32px 28px;
+}
+.emp-lock-hero {
+  position: relative;
+  width: 76px;
+  height: 76px;
+}
+/* contact shadow under the stack */
+.emp-lock-hero::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -10px;
+  height: 14px;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.22), transparent);
+}
+.emp-lock-badge {
+  position: absolute;
+  right: -7px;
+  bottom: -5px;
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: linear-gradient(180deg, var(--thumb-a), var(--thumb-b));
+  box-shadow: var(--dome-shadow), 0 0 0 3px var(--panel-top);
+}
+.emp-lock-title {
+  margin-top: 22px;
+  font-size: calc(19rem / 14);
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+  color: var(--text-primary);
+}
+.emp-lock-caption {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(12rem / 14);
+  color: var(--text-tertiary);
+}
+.emp-lock-caption::before,
+.emp-lock-caption::after {
+  content: "";
+  width: 18px;
+  height: 2px;
+  background: linear-gradient(180deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px);
 }
 .emp-lock-card[data-wide] {
   width: 520px;
-}
-
-/* Graphite (monochrome) accent: keep the aurora's first light soft instead of a grey smudge. */
-:root[data-accent="graphite"] .emp-stage.emp-aurora {
-  background:
-    radial-gradient(60% 50% at 20% 10%, color-mix(in oklab, #8b8bf8 16%, transparent), transparent 70%),
-    radial-gradient(50% 45% at 85% 25%, color-mix(in oklab, #a855f7 18%, transparent), transparent 70%),
-    radial-gradient(70% 60% at 50% 100%, color-mix(in oklab, #0ea5e9 14%, transparent), transparent 70%),
-    var(--bg-window);
-}
-:root[data-accent="graphite"]:is([data-theme="dark"], [data-theme="midnight"]) .emp-stage.emp-aurora {
-  background:
-    radial-gradient(60% 50% at 20% 10%, color-mix(in oklab, #8b8bf8 20%, transparent), transparent 70%),
-    radial-gradient(50% 45% at 85% 25%, color-mix(in oklab, #a855f7 20%, transparent), transparent 70%),
-    radial-gradient(70% 60% at 50% 100%, color-mix(in oklab, #0ea5e9 14%, transparent), transparent 70%),
-    var(--bg-window);
 }
 
 /* Lock avatar: a 64px squircle in the inverse surface (monochrome), or the workspace emoji on surface-2. */

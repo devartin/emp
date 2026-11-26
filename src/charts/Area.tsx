@@ -19,13 +19,16 @@ export interface HeroAreaChartProps<T extends Datum> extends Omit<LineChartProps
   actions?: ReactNode;
   /** Label for the delta while not scrubbing ("past year"). */
   periodLabel?: string;
+  /** Count the number up once per session under this key (S5); defaults to a key derived from the label. */
+  countUpKey?: string;
 }
 
 /**
- * Hero chart with the header-readout pattern (§13.5): while scrubbing, the KPI above the chart shows the hovered value
- * (rolling digits) and its change from the start; on leave it reverts.
+ * Hero chart (S5, §13.5): first view per session the number counts up (1.3s) while a pen dot draws the ink line
+ * (1.1s), then the end-dot keycap pulses 3×. Scrubbing drives the number in scrub mode and the DeltaPill live; on
+ * leave it springs back.
  */
-export function HeroAreaChart<T extends Datum>({ y, label, xReadout, actions, periodLabel = "this period", format = "money", currency = "USD", ...rest }: HeroAreaChartProps<T>) {
+export function HeroAreaChart<T extends Datum>({ y, label, xReadout, actions, periodLabel = "this period", format = "money", currency = "USD", countUpKey, ...rest }: HeroAreaChartProps<T>) {
   const [idx, setIdx] = useState<number | null>(null);
   const data = rest.data;
   const firstVal = Number(data[0]?.[y] ?? 0);
@@ -39,7 +42,7 @@ export function HeroAreaChart<T extends Datum>({ y, label, xReadout, actions, pe
       <div className="flex flex-col gap-1 min-w-0">
         <span className="text-caption text-secondary">{label}</span>
         <span className="text-kpi tabular" data-sensitive="">
-          <RollingNumber value={cur} format={fmt} countUp={false} />
+          <RollingNumber value={cur} format={fmt} sensitive scrubbing={idx !== null} countUpKey={countUpKey ?? `hero:${typeof label === "string" ? label : String(y)}`} countUpDuration={1.3} />
         </span>
         <div className="flex items-center gap-2 h-5">
           <DeltaPill value={change} />
@@ -61,6 +64,7 @@ export function HeroAreaChart<T extends Datum>({ y, label, xReadout, actions, pe
       header={header}
       tooltip={false}
       onScrub={setIdx}
+      hero
     />
   );
 }

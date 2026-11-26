@@ -132,14 +132,15 @@ export function Cover({ cover, workspaceId, readOnly, onChange }: { cover: Cover
     <m.div
       ref={ref}
       className={cn('emp-cover', repositioning && 'is-repositioning')}
-      data-gradient={cover.t === 'gradient' ? cover.v : undefined}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 0.16 } }}
       onPointerDown={startDrag}
     >
+      {/* the art lives on its own layer so it can settle in from 1.02 (S22) without the cover box overflowing */}
+      {cover.t === 'gradient' ? <div key={cover.v} className="emp-cover-art" data-gradient={cover.v} aria-hidden /> : null}
       {cover.t === 'asset' ? (
         url ? (
-          <img src={url} alt="" draggable={false} style={{ objectPosition: `50% ${Math.round(posY * 100)}%` }} />
+          <img key={url} src={url} alt="" draggable={false} style={{ objectPosition: `50% ${Math.round(posY * 100)}%` }} />
         ) : (
           <div className="emp-cover-loading" />
         )

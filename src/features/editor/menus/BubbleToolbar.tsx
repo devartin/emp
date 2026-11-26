@@ -39,7 +39,7 @@ interface BubbleState {
 function Btn({ label, shortcut, active, onClick, children, className }: { label: string; shortcut?: string; active?: boolean; onClick: () => void; children: ReactNode; className?: string }) {
   return (
     <Tooltip content={label} shortcut={shortcut} side="top">
-      <button type="button" className={cn('emp-bubble-btn', className)} data-active={active ? '' : undefined} aria-pressed={active} aria-label={label} onMouseDown={(e) => e.preventDefault()} onClick={onClick}>
+      <button type="button" className={cn('emp-bubble-btn slab', !active && 'slab-ghost', className)} data-active={active ? '' : undefined} aria-pressed={active} aria-label={label} onMouseDown={(e) => e.preventDefault()} onClick={onClick}>
         {children}
       </button>
     </Tooltip>
@@ -130,7 +130,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
     <Floating open={visible} anchor={anchor} context={editor.view.dom} placement="top" offsetPx={8} passive className="emp-bubble" role="toolbar" ariaLabel="Formatting">
       <Menu onOpenChange={setMenuOpen} modal={false}>
         <MenuTrigger asChild>
-          <button type="button" className="emp-bubble-btn emp-bubble-turn" onMouseDown={(e) => e.preventDefault()}>
+          <button type="button" className="emp-bubble-btn emp-bubble-turn slab slab-ghost" onMouseDown={(e) => e.preventDefault()}>
             <span>{turnLabel}</span>
             <ChevronDown size={12} />
           </button>
@@ -175,7 +175,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       <Popover onOpenChange={setMenuOpen}>
         <Tooltip content="Colour" side="top">
           <PopoverTrigger asChild>
-            <button type="button" className="emp-bubble-btn emp-bubble-color" onMouseDown={(e) => e.preventDefault()} aria-label="Colour">
+            <button type="button" className="emp-bubble-btn emp-bubble-color slab slab-ghost" onMouseDown={(e) => e.preventDefault()} aria-label="Colour">
               <span
                 className="emp-bubble-a"
                 style={{
@@ -196,7 +196,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       <span className="emp-bubble-sep" />
       <Menu onOpenChange={setMenuOpen} modal={false}>
         <MenuTrigger asChild>
-          <button type="button" className="emp-bubble-btn" aria-label="More" onMouseDown={(e) => e.preventDefault()}>
+          <button type="button" className="emp-bubble-btn slab slab-ghost" aria-label="More" onMouseDown={(e) => e.preventDefault()}>
             <MoreHorizontal size={15} />
           </button>
         </MenuTrigger>

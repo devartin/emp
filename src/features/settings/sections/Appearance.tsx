@@ -5,7 +5,7 @@
  */
 import { Check, Palette } from "lucide-react";
 import { m } from "motion/react";
-import { useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Accent, DeviceSettings, ThemeSetting } from "@/backend/types";
 import { cn } from "@/lib/cn";
 import { useSettings } from "@/stores/settings";
@@ -29,9 +29,9 @@ const THEMES: { id: ThemeSetting; name: string }[] = [
 ];
 
 const PALETTE = {
-  light: { win: "#F7F7F8", canvas: "#FFFFFF", ink: "rgba(24,24,27,.85)", line: "rgba(24,24,27,.12)", faint: "rgba(24,24,27,.07)" },
-  dark: { win: "#0B0B0E", canvas: "#151519", ink: "rgba(237,237,240,.9)", line: "rgba(255,255,255,.14)", faint: "rgba(255,255,255,.08)" },
-  midnight: { win: "#000000", canvas: "#050506", ink: "rgba(237,237,240,.9)", line: "rgba(255,255,255,.14)", faint: "rgba(255,255,255,.08)" },
+  light: { win: "#F4F4F6", canvas: "#FFFFFF", ink: "rgba(24,24,27,.85)", line: "rgba(24,24,27,.12)", faint: "rgba(24,24,27,.07)", keyA: "#4b4b53", keyB: "#222226", keySide: "#050506" },
+  dark: { win: "#0B0B0E", canvas: "#17171b", ink: "rgba(237,237,240,.9)", line: "rgba(255,255,255,.14)", faint: "rgba(255,255,255,.08)", keyA: "#f4f4f6", keyB: "#d4d4da", keySide: "#8a8a94" },
+  midnight: { win: "#000000", canvas: "#08080a", ink: "rgba(237,237,240,.9)", line: "rgba(255,255,255,.14)", faint: "rgba(255,255,255,.08)", keyA: "#f4f4f6", keyB: "#d4d4da", keySide: "#8a8a94" },
 } as const;
 
 export const ACCENTS: { id: Accent; name: string; light: string; dark: string }[] = [
@@ -46,7 +46,8 @@ export const ACCENTS: { id: Accent; name: string; light: string; dark: string }[
 
 function Mini({ p, accent }: { p: (typeof PALETTE)[keyof typeof PALETTE]; accent: string }) {
   return (
-    <span className="st-mini" style={{ background: p.win } as CSSProperties} aria-hidden>
+    <span className="st-mini" style={{ background: `radial-gradient(120% 80% at 60% -10%, ${p.canvas}, ${p.win} 70%)` } as CSSProperties} aria-hidden>
+      <span className="st-mini-key" style={{ background: `linear-gradient(180deg, ${accent === "#18181B" || accent === "#EDEDF0" ? p.keyA : accent}, ${accent === "#18181B" || accent === "#EDEDF0" ? p.keyB : accent})`, ["--mk-side" as string]: p.keySide }} />
       <span className="st-mini-side">
         <i style={{ background: p.ink, width: "62%", opacity: 0.8 }} />
         <i style={{ background: p.faint, width: "80%" }} />
@@ -75,15 +76,7 @@ function ThemeCard({ id, name, selected, accent, onPick }: { id: ThemeSetting; n
   const reduced = useReducedMotionPref();
   const a = ACCENTS.find((x) => x.id === accent) ?? ACCENTS[0];
   return (
-    <m.button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      className={cn("st-theme", selected && "is-on")}
-      whileTap={reduced ? undefined : { scale: 0.985 }}
-      transition={spring.snappy}
-      onClick={(e) => onPick(e.currentTarget)}
-    >
+    <button type="button" role="radio" aria-checked={selected} className={cn("st-theme", selected && "is-on")} onClick={(e) => onPick(e.currentTarget)}>
       <span className="st-theme-preview">
         {id === "system" ? (
           <span className="st-theme-split">
@@ -102,7 +95,7 @@ function ThemeCard({ id, name, selected, accent, onPick }: { id: ThemeSetting; n
         ) : null}
       </span>
       <span className="st-theme-name">{name}</span>
-    </m.button>
+    </button>
   );
 }
 
@@ -155,7 +148,7 @@ export function AppearanceSection() {
             })}
             <span className="st-swatch-name">{ACCENTS.find((a) => a.id === device.accent)?.name}</span>
           </div>
-          <AccentPreview />
+          <AccentPreview accent={device.accent} />
         </div>
       </Group>
 
@@ -238,10 +231,21 @@ export function AppearanceSection() {
 }
 
 /** Real kit components rendered with the live accent. */
-function AccentPreview() {
+function AccentPreview({ accent }: { accent: Accent }) {
+  const reduced = useReducedMotionPref();
+  const first = useRef(true);
+  const [pulse, setPulse] = useState(0);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    setPulse((n) => n + 1);
+  }, [accent]);
   return (
     <div className="st-accent-preview" aria-label="Preview">
-      <div className="st-ap-col">
+      {pulse && !reduced ? <span key={pulse} className="st-relight" aria-hidden /> : null}
+      <div key={`c${pulse}`} className={cn("st-ap-col", pulse ? "st-ap-pop" : undefined)}>
         <div className="st-ap-row">
           <Button size="sm" variant="primary" tabIndex={-1}>
             Save changes
@@ -272,14 +276,19 @@ function AccentPreview() {
   );
 }
 
+/** Plays once when the motion preference changes and on hover (nothing loops — DESIGN §5.4.6). */
 function MotionDemo() {
   const reduced = useReducedMotionPref();
+  const [run, setRun] = useState(0);
+  useEffect(() => setRun((n) => n + 1), [reduced]);
   return (
-    <span className="st-motion-demo" aria-hidden title={reduced ? "Reduced motion: crossfade only" : "Full motion"}>
+    <span className="st-motion-demo" aria-hidden title={reduced ? "Reduced motion: crossfade only" : "Full motion"} onPointerEnter={() => setRun((n) => n + 1)}>
       <m.span
+        key={run}
         className="st-motion-dot"
-        animate={reduced ? { opacity: [1, 0.35, 1] } : { x: [0, 30, 0] }}
-        transition={reduced ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" } : { duration: 1.4, repeat: Infinity, ease: [0.65, 0, 0.35, 1] }}
+        initial={reduced ? { opacity: 0.35 } : { x: 0 }}
+        animate={reduced ? { opacity: 1 } : { x: [0, 30, 0] }}
+        transition={reduced ? { duration: 0.14 } : { duration: 1.1, ease: [0.65, 0, 0.35, 1], times: [0, 0.55, 1] }}
       />
     </span>
   );

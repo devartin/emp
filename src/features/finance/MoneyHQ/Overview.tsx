@@ -5,7 +5,6 @@ import { m } from "motion/react";
 import { useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { Insight } from "@/backend/types";
-import { Donut } from "@/charts/Donut";
 import { LineChart } from "@/charts/Line";
 import { Sankey } from "@/charts/Sankey";
 import { useChartTheme, seriesColor } from "@/charts/theme";
@@ -14,23 +13,27 @@ import { Amount } from "@/ui/Amount";
 import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
 import { DeltaPill } from "@/ui/DeltaPill";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { addMonths, assignColors, dayLabel, fmtMoney, fmtPct, monthLabel, num, relDays, toMoney, todayIso } from "../shared/format";
-import { useAsync, useDbChanged } from "../shared/hooks";
+import { useAsync, useDbChanged, useScrubIdx, useScrubStore, type ScrubStore } from "../shared/hooks";
 import { InsightCard, Quiet, Section } from "../shared/ui";
+import { SpendWheel, WheelLegendRow } from "../shared/SpendWheel";
 import { localInsights } from "./insights";
-import { useLedgerCtx } from "./ledger";
+import { debtInputs, debtPlanStart, useLedgerCtx } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 import { BudgetRing, Envelope, HeroMoney, MetricCard, TxnLine, type EnvelopeData } from "./widgets";
+import { DetailBars, KpiDetail, KpiMorphStage, KpiMorphTile } from "./KpiMorph";
 
 type Range = "6m" | "1y" | "3y" | "5y";
 
 export function Overview() {
   return (
+    <KpiMorphStage details={(id, close) => <MetricDetail id={id} onClose={close} />}>
     <m.div className="fh-grid" variants={staggerList(0.04)} initial="hidden" animate="show">
       <m.div variants={staggerItem} className="fh-span-8">
         <NetWorthHero />
@@ -57,52 +60,37 @@ export function Overview() {
         <Insights />
       </m.div>
     </m.div>
+    </KpiMorphStage>
   );
 }
 
 // ───────────────────────────────────────────────────────────────────────────── net worth hero
 
+const NW_SERIES = [{ key: "net", label: "Net worth" }];
+const xfShort = (v: unknown) => monthLabel(String(v).slice(0, 7), true);
+const xfLong = (v: unknown) => {
+  const d = String(v);
+  return `${monthLabel(d.slice(0, 7), true)} '${d.slice(2, 4)}`;
+};
+const PERIOD_LABEL: Record<Range, string> = { "6m": "past 6 months", "1y": "past year", "3y": "past 3 years", "5y": "past 5 years" };
+
+type NwPoint = { t: string; net: number; assets: number; liabilities: number };
+
 function NetWorthHero() {
   const { instanceId, overview } = useMoney();
   const l = useLedgerCtx();
   const [range, setRange] = useState<Range>("1y");
-  const [idx, setIdx] = useState<number | null>(null);
   const s = useAsync(() => api.finance.networthSeries({ instanceId, range }), [instanceId, range]);
   useDbChanged([l.schemas.txns?.database.id], s.reload, 400);
-  const data = useMemo(() => (s.data ? s.data.t.map((t, i) => ({ t, net: s.data!.net[i], assets: s.data!.assets[i], liabilities: s.data!.liabilities[i] })) : []), [s.data]);
-  const i = idx ?? data.length - 1;
-  const cur = data[i];
-  const first = data[0];
-  const change = cur && first && first.net ? (cur.net - first.net) / Math.abs(first.net) : 0;
-  const delta = cur && first ? cur.net - first.net : 0;
+  const data = useMemo<NwPoint[]>(() => (s.data ? s.data.t.map((t, i) => ({ t, net: s.data!.net[i], assets: s.data!.assets[i], liabilities: s.data!.liabilities[i] })) : []), [s.data]);
   const long = range === "3y" || range === "5y";
-  const xf = (v: unknown) => {
-    const d = String(v);
-    return long ? `${monthLabel(d.slice(0, 7), true)} '${d.slice(2, 4)}` : monthLabel(d.slice(0, 7), true);
-  };
-  const periodLabel = { "6m": "past 6 months", "1y": "past year", "3y": "past 3 years", "5y": "past 5 years" }[range];
+  // The scrub index lives outside this component's state: only the readouts re-render while scrubbing, not the chart.
+  const scrub = useScrubStore();
   return (
-    <section className="fh-card" style={{ paddingBottom: 10 }}>
+    <section className="fh-card fh-hero" data-light="" ref={scrub.hostRef} style={{ paddingBottom: 10 }}>
+      <EdgeLight specular />
       <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
-            Net worth
-          </div>
-          <div className="mt-1 h-[44px] flex items-center">{cur ? <HeroMoney value={cur.net} cents={false} /> : <Skeleton width={220} height={36} radius={8} />}</div>
-          <div className="flex items-center gap-2 h-6 mt-1">
-            {cur ? (
-              <>
-                <DeltaPill value={change} />
-                <span className="text-caption tabular" style={{ fontWeight: 500, color: delta >= 0 ? "var(--gain-text)" : "var(--loss-text)" }}>
-                  <Sensitive>{fmtMoney(delta, "USD", { noCents: true, signed: true })}</Sensitive>
-                </span>
-                <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                  {idx === null ? periodLabel : dayLabel(cur.t, true)}
-                </span>
-              </>
-            ) : null}
-          </div>
-        </div>
+        <NetWorthReadout scrub={scrub} data={data} periodLabel={PERIOD_LABEL[range]} />
         <Segmented
           size="sm"
           value={range}
@@ -120,21 +108,21 @@ function NetWorthHero() {
         <LineChart
           data={data}
           x="t"
-          series={[{ key: "net", label: "Net worth" }]}
+          series={NW_SERIES}
           height={208}
           area
           curve="monotoneX"
-          xFormat={xf}
+          xFormat={long ? xfLong : xfShort}
           tooltip={false}
-          onScrub={setIdx}
+          onScrub={scrub.set}
           summaryLabel="Net worth"
           loading={s.loading && !s.data}
-          live
+          hero
         />
       </div>
-      <div className="flex items-center gap-5 pt-2 mt-1 border-t border-subtle">
-        <MiniStat label="Assets" value={cur?.assets} />
-        <MiniStat label="Liabilities" value={cur ? -cur.liabilities : undefined} />
+      <div className="fh-groove -mx-5 mt-1" />
+      <div className="flex items-center gap-5 pt-2.5">
+        <NetWorthMinis scrub={scrub} data={data} />
         <span className="ml-auto text-caption text-tertiary" style={{ fontWeight: 400 }}>
           {overview ? (
             <>
@@ -147,31 +135,95 @@ function NetWorthHero() {
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: number | undefined }) {
+function NetWorthReadout({ scrub, data, periodLabel }: { scrub: ScrubStore; data: NwPoint[]; periodLabel: string }) {
+  const idx = useScrubIdx(scrub);
+  const cur = data[idx ?? data.length - 1];
+  const first = data[0];
+  const change = cur && first && first.net ? (cur.net - first.net) / Math.abs(first.net) : 0;
+  const delta = cur && first ? cur.net - first.net : 0;
+  const scrubbing = idx !== null;
+  return (
+    <div className="min-w-0">
+      <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
+        Net worth
+      </div>
+      <div className="mt-1 h-[48px] flex items-center">{cur ? <HeroMoney value={cur.net} cents={false} countUpKey="money:networth" scrubbing={scrubbing} /> : <Skeleton width={220} height={38} radius={8} />}</div>
+      <div className="flex items-center gap-2 h-6 mt-1">
+        {cur ? (
+          <>
+            <DeltaPill value={change} />
+            <span className="text-caption tabular" style={{ fontWeight: 560, color: delta >= 0 ? "var(--gain-text)" : "var(--loss-text)", transition: "color 200ms var(--ease-out)" }} data-sensitive="">
+              <RollingNumber value={delta} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true, signed: true })} scrubbing={scrubbing} countUp={false} sensitive />
+            </span>
+            <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
+              {scrubbing ? dayLabel(cur.t, true) : periodLabel}
+            </span>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function NetWorthMinis({ scrub, data }: { scrub: ScrubStore; data: NwPoint[] }) {
+  const idx = useScrubIdx(scrub);
+  const cur = data[idx ?? data.length - 1];
+  const scrubbing = idx !== null;
+  return (
+    <>
+      <MiniStat label="Assets" value={cur?.assets} scrubbing={scrubbing} />
+      <MiniStat label="Liabilities" value={cur ? -cur.liabilities : undefined} scrubbing={scrubbing} />
+    </>
+  );
+}
+
+function MiniStat({ label, value, scrubbing }: { label: string; value: number | undefined; scrubbing?: boolean }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">
       <span className="text-caption text-tertiary" style={{ fontWeight: 500 }}>
         {label}
       </span>
-      <span className="text-body-sm font-medium tabular">{value === undefined ? "—" : <Sensitive>{fmtMoney(value, "USD", { noCents: true })}</Sensitive>}</span>
+      <span className="text-body-sm font-medium tabular" data-sensitive="">
+        {value === undefined ? "—" : <RollingNumber value={value} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} scrubbing={scrubbing} countUp={false} sensitive />}
+      </span>
     </span>
   );
 }
 
 // ───────────────────────────────────────────────────────────────────────────── side metrics
 
+/** Minimum-payments payoff month from the same planner (and the same debts) the Debt tab uses, so the two agree. */
+function useMinimumDebtFree(): string | null | undefined {
+  const l = useLedgerCtx();
+  const debts = useMemo(() => (l.loading ? null : debtInputs(l.accounts)), [l.loading, l.accounts]);
+  const key = debts ? JSON.stringify(debts) : "";
+  const s = useAsync(
+    async () => {
+      if (!debts) return undefined;
+      if (!debts.length) return "";
+      const plan = await api.finance.debtPlan({ debts: debts.map(({ name, balance, aprPct, minPayment }) => ({ name, balance, aprPct, minPayment })), strategy: "avalanche", extraMonthly: "0", startMonth: debtPlanStart() });
+      const min = plan.strategies.find((x) => x.strategy === "minimum");
+      return min && min.months < 600 ? min.payoffDate : null;
+    },
+    [key],
+  );
+  return s.data;
+}
+
 function SideMetrics() {
   const { overview: ov, go } = useMoney();
+  const debtFree = useMinimumDebtFree();
   if (!ov) {
     return (
       <div className="flex flex-col gap-3 h-full">
         {[0, 1, 2, 3].map((k) => (
-          <Skeleton key={k} height={72} radius={14} />
+          <Skeleton key={k} height={90} radius={14} />
         ))}
       </div>
     );
   }
   const tba = ov.toBeAssigned ? num(ov.toBeAssigned.amount) : null;
+  // `debtFree`: undefined while loading, "" with nothing owed, null when minimums never clear it, else the month
   const rate = ov.savingsRate3m;
   return (
     <div className="flex flex-col gap-3 h-full">
@@ -179,35 +231,143 @@ function SideMetrics() {
         <MetricCard
           label="To be assigned"
           tone={tba < 0 ? "warn" : undefined}
-          value={<Sensitive>{fmtMoney(tba, "USD")}</Sensitive>}
+          value={<RollingNumber value={tba} format={(n) => fmtMoney(n, "USD")} countUpKey="money:tba" sensitive />}
           sub={tba > 0.005 ? "Give every dollar a job" : tba < -0.005 ? "Assigned more than you have" : "Every dollar has a job"}
-          onClick={() => go("budget")}
-          visual={tba > 0.005 ? <Badge tone="accent">Assign</Badge> : tba < -0.005 ? <Badge tone="warning">Fix</Badge> : <CheckCircle2 size={18} className="text-gain" />}
+          onClick={tba > 0.005 ? undefined : () => go("budget")}
+          visual={
+            tba > 0.005 ? (
+              <Button size="sm" variant="primary" onClick={() => go("budget")}>
+                Assign
+              </Button>
+            ) : tba < -0.005 ? (
+              <Badge tone="warning">Fix</Badge>
+            ) : (
+              <CheckCircle2 size={18} className="text-gain" />
+            )
+          }
         />
       ) : (
         <MetricCard label="Left to spend" value={<Sensitive>{fmtMoney(ov.leftToSpend?.amount ?? 0)}</Sensitive>} onClick={() => go("budget")} />
       )}
-      <MetricCard
+      <KpiMorphTile
+        id="savings"
         label="Savings rate · 3 months"
         value={<RollingNumber value={rate * 100} format={(n) => `${n.toFixed(1)}%`} countUp={false} />}
         sub={rate >= 0.2 ? "Above the common 20% guideline" : "Common guideline: 20% or more"}
-        visual={<BudgetRing ratio={Math.max(0, Math.min(1, rate / 0.4))} size={40} stroke={4} color={rate >= 0.2 ? "var(--gain)" : "var(--warning)"} />}
+        visual={<BudgetRing ratio={Math.max(0, Math.min(1, rate / 0.4))} size={40} stroke={4} color={rate >= 0.2 ? "var(--gain)" : "var(--warning)"} delay={0.25} />}
       />
-      <MetricCard
+      <KpiMorphTile
+        id="ef"
         label="Emergency fund"
         value={`${ov.efMonths.toFixed(1)} months`}
         sub={ov.efMonths >= 6 ? "of essentials · fully funded" : "of essentials · goal 6 months"}
-        onClick={() => go("goals")}
-        visual={<BudgetRing ratio={Math.min(1, ov.efMonths / 6)} size={40} stroke={4} color={ov.efMonths >= 6 ? "var(--gain)" : ov.efMonths >= 3 ? "var(--accent-solid)" : "var(--warning)"} />}
+        visual={<BudgetRing ratio={Math.min(1, ov.efMonths / 6)} size={40} stroke={4} color={efColor(ov.efMonths)} delay={0.3} />}
       />
       <MetricCard
         label="Debt-free"
-        value={ov.debtFreeDate ? monthLabel(ov.debtFreeDate) : "Debt-free"}
-        sub={ov.debtFreeDate ? "at minimum payments · see the planner" : "No balances owed"}
+        value={debtFree === undefined ? <span className="flex items-center h-[28px]"><Skeleton width={110} height={20} radius={6} /></span> : debtFree ? monthLabel(debtFree) : debtFree === "" ? "Debt-free" : "Not on minimums"}
+        sub={debtFree === undefined ? "\u00a0" : debtFree ? "at minimum payments · see the planner" : debtFree === "" ? "No balances owed" : "minimums never clear it · see the planner"}
         onClick={() => go("debt")}
-        visual={<ArrowRight size={16} className="text-tertiary" />}
+        visual={<ArrowRight size={16} className="text-tertiary fh-nudge-x" />}
       />
     </div>
+  );
+}
+
+const fmtCompact = (v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : fmtMoney(v, "USD", { noCents: true }));
+const efColor = (months: number) => (months >= 6 ? "var(--gain)" : months >= 3 ? "var(--chart-line)" : "var(--warning)");
+
+/** Month-by-month figures from the ledger (non-transfer flows; splits counted by their parts). */
+function useMonthlyFlows(months = 6) {
+  const l = useLedgerCtx();
+  return useMemo(() => {
+    const cur = todayIso().slice(0, 7);
+    const keys = Array.from({ length: months }, (_, i) => addMonths(cur, i - months + 1));
+    const acc = new Map(keys.map((k) => [k, { income: 0, spend: 0, essential: 0 }]));
+    for (const t of l.txns) {
+      const k = t.date.slice(0, 7);
+      const row = acc.get(k);
+      if (!row || t.transferId) continue;
+      const parts = t.splits.length ? t.splits : [t];
+      for (const p of parts) {
+        const c = p.categoryId ? l.cat.get(p.categoryId) : undefined;
+        if (c?.group === "Savings & Debt") continue;
+        if (p.amount > 0) row.income += p.amount;
+        else {
+          row.spend -= p.amount;
+          if (c?.essential) row.essential -= p.amount;
+        }
+      }
+    }
+    return keys.map((k) => ({ month: k, ...(acc.get(k) ?? { income: 0, spend: 0, essential: 0 }) }));
+  }, [l.txns, l.cat, months]);
+}
+
+function MetricDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const { overview: ov, go } = useMoney();
+  // completed months only — the current one is partial
+  const flows = useMonthlyFlows(7).slice(0, 6);
+  if (!ov) return null;
+  if (id === "savings") {
+    const rate = ov.savingsRate3m;
+    const bars = flows.map((f) => {
+      const r = f.income > 0 ? (f.income - f.spend) / f.income : 0;
+      return { key: f.month, label: monthLabel(f.month, true), value: Math.max(0, r), display: f.income > 0 ? `${r < 0 ? "\u2212" : ""}${Math.abs(Math.round(r * 100))}%` : "—", tone: (r >= 0.2 ? "ink" : "muted") as "ink" | "muted" };
+    });
+    const last = flows.slice(-3);
+    const inc = last.reduce((a, f) => a + f.income, 0) / Math.max(1, last.length);
+    const sp = last.reduce((a, f) => a + f.spend, 0) / Math.max(1, last.length);
+    return (
+      <KpiDetail
+        id="savings"
+        label="Savings rate · 3 months"
+        value={`${(rate * 100).toFixed(1)}%`}
+        visual={<BudgetRing ratio={Math.max(0, Math.min(1, rate / 0.4))} size={40} stroke={4} color={rate >= 0.2 ? "var(--gain)" : "var(--warning)"} />}
+        onClose={onClose}
+        aside={
+          <>
+            <div className="fh-kv">Avg income <b data-sensitive="">{fmtMoney(inc, "USD", { noCents: true })}</b></div>
+            <div className="fh-kv">Avg spending <b data-sensitive="">{fmtMoney(sp, "USD", { noCents: true })}</b></div>
+            <div className="fh-kv">Kept <b data-sensitive="">{fmtMoney(inc - sp, "USD", { noCents: true })}/mo</b></div>
+            <Button size="sm" variant="secondary" iconRight={ArrowRight} iconMotion="arrow" className="mt-auto" onClick={() => go("transactions")}>
+              See transactions
+            </Button>
+          </>
+        }
+      >
+        <div className="text-caption text-tertiary mb-3" style={{ fontWeight: 400 }}>
+          Share of income kept each month (excluding transfers, savings and debt payments). The dashed line is the common 20% guideline.
+        </div>
+        <DetailBars bars={bars} guide={0.2} guideLabel="20%" />
+      </KpiDetail>
+    );
+  }
+  const months = ov.efMonths;
+  const ess = flows.slice(-3).reduce((a, f) => a + f.essential, 0) / 3;
+  const bars = flows.map((f) => ({ key: f.month, label: monthLabel(f.month, true), value: f.essential, display: fmtCompact(f.essential), tone: "ink" as const }));
+  return (
+    <KpiDetail
+      id="ef"
+      label="Emergency fund"
+      value={`${months.toFixed(1)} months`}
+      visual={<BudgetRing ratio={Math.min(1, months / 6)} size={40} stroke={4} color={efColor(months)} />}
+      onClose={onClose}
+      aside={
+        <>
+          <div className="fh-kv">Essentials / month <b data-sensitive="">{fmtMoney(ess, "USD", { noCents: true })}</b></div>
+          <div className="fh-kv">Covered today <b data-sensitive="">{fmtMoney(ess * months, "USD", { noCents: true })}</b></div>
+          <div className="fh-kv">To 6 months <b data-sensitive="">{months >= 6 ? "Funded" : fmtMoney(Math.max(0, ess * (6 - months)), "USD", { noCents: true })}</b></div>
+          <Button size="sm" variant="secondary" iconRight={ArrowRight} iconMotion="arrow" className="mt-auto" onClick={() => go("goals")}>
+            Open goals
+          </Button>
+        </>
+      }
+    >
+      <div className="text-caption text-tertiary mb-3" style={{ fontWeight: 400 }}>
+        Essential spending by month — rent, utilities, groceries, insurance and the like. Your fund is measured against it.
+      </div>
+      <DetailBars bars={bars} />
+    </KpiDetail>
   );
 }
 
@@ -233,9 +393,11 @@ function Envelopes() {
       subtitle={
         ov ? (
           <>
-            <Sensitive>{fmtMoney(totalSpent, "USD", { noCents: true })}</Sensitive> of <Sensitive>{fmtMoney(totalAssigned, "USD", { noCents: true })}</Sensitive> spent · {Math.round(pace * 100)}% through {monthLabel(month, true)}
+            <Sensitive>{fmtMoney(totalSpent, "USD", { noCents: true })}</Sensitive> of <Sensitive>{fmtMoney(totalAssigned, "USD", { noCents: true })}</Sensitive> spent · {Math.round(pace * 100)}% through {monthLabel(month, true)} · dot = where you should be today
           </>
-        ) : null
+        ) : (
+          "\u00a0"
+        )
       }
       actions={
         <Button size="xs" variant="ghost" iconRight={ArrowRight} onClick={() => go("budget")}>
@@ -246,13 +408,13 @@ function Envelopes() {
       {!ov ? (
         <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: 8 }, (_, k) => (
-            <Skeleton key={k} height={64} radius={12} />
+            <Skeleton key={k} height={63} radius={12} />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-x-2 gap-y-1 -mx-2">
-          {list.map((e) => (
-            <Envelope key={e.category.id} e={e} onClick={() => go("budget")} />
+          {list.map((e, i) => (
+            <Envelope key={e.category.id} e={e} index={i} onClick={() => go("budget")} />
           ))}
         </div>
       )}
@@ -283,24 +445,38 @@ function SpendingDonut() {
     if (rest > 0) out.push({ id: "__other", label: "Everything else", value: rest, color: t.other });
     return out;
   }, [rows, t]);
+  const [active, setActive] = useState<string | null>(null);
+  const { go } = useMoney();
   return (
-    <Section title="Spending by category" subtitle={s.data ? <span className="inline-flex items-center gap-2">{monthLabel(month)}{prev > 0 ? <DeltaPill value={(total - prev) / prev} invert plain label="vs last month" /> : null}</span> : null}>
-      <div className="flex items-center gap-5">
-        <div className="flex-none" style={{ width: 150 }}>
-          <Donut data={slices} size={150} legend={false} loading={s.loading && !s.data} summaryLabel="Spending by category" centerLabel="Spent" />
+    <Section title="Spending by category" subtitle={s.data ? <span className="inline-flex items-center gap-2">{monthLabel(month)}{prev > 0 ? <DeltaPill value={(total - prev) / prev} invert plain label="vs last month" /> : null}</span> : "\u00a0"}>
+      {s.loading && !s.data ? (
+        <div className="flex items-center gap-5 h-[222px]">
+          <Skeleton width={160} height={160} radius={80} />
+          <div className="flex-1 flex flex-col gap-2">{[0, 1, 2, 3, 4].map((k) => <Skeleton key={k} height={14} />)}</div>
         </div>
-        <ul className="m-0 p-0 list-none flex-1 min-w-0 flex flex-col gap-0.5">
-          {slices.map((x) => (
-            <li key={x.id} className="flex items-center gap-2 h-7 text-body-sm min-w-0">
-              <span className="w-2 h-2 rounded-[2px] flex-none" style={{ background: x.color }} />
-              <span className="truncate flex-1 text-secondary">{x.label}</span>
-              <span className="tabular text-primary font-medium" data-sensitive="">
-                {fmtMoney(x.value, "USD", { noCents: true })}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      ) : slices.length === 0 ? (
+        <Quiet icon={CheckCircle2} title="No spending yet this month" />
+      ) : (
+        <div className="flex items-center gap-5">
+          <SpendWheel
+            data={slices}
+            size={164}
+            thickness={17}
+            active={active}
+            onActive={setActive}
+            onSelect={(id) => go("transactions", id === "uncategorized" ? { filter: "uncategorized" } : undefined)}
+            centerLabel="Spent"
+            format={(n) => fmtMoney(n, "USD", { noCents: true })}
+            total={total}
+            summary={`Spending by category, ${monthLabel(month)}: ${slices.map((x) => `${x.label} ${fmtMoney(x.value, "USD", { noCents: true })}`).join(", ")}`}
+          />
+          <ul className="m-0 p-0 list-none flex-1 min-w-0 flex flex-col gap-0.5">
+            {slices.map((x) => (
+              <WheelLegendRow key={x.id} slice={x} active={active} onActive={setActive} onClick={() => go("transactions", x.id === "uncategorized" ? { filter: "uncategorized" } : undefined)} value={fmtMoney(x.value, "USD", { noCents: true })} />
+            ))}
+          </ul>
+        </div>
+      )}
     </Section>
   );
 }
@@ -404,10 +580,11 @@ function simplifySankey(d: SankeyData): SankeyData {
     const gName = name(g.target);
     add("Income", gName, g.value);
     const kids = d.links.filter((l) => l.source === g.target).sort((a, b) => b.value - a.value);
-    const keep = gName === "Saved & paid down" ? kids : kids.filter((k, i) => i < 3 && k.value / income >= 0.025);
+    // tiny groups (< 4% of income) stay a single node so their leaf labels can't collide at the bottom of the column
+    const keep = gName === "Saved & paid down" ? kids : g.value / income < 0.04 ? [] : kids.filter((k, i) => i < 3 && k.value / income >= 0.04);
     const rest = kids.filter((k) => !keep.includes(k)).reduce((a, k) => a + k.value, 0);
     for (const k of keep) add(gName, name(k.target), k.value);
-    if (rest > 0) add(gName, gName === "Fun" ? "Other fun" : `Other ${gName.toLowerCase()}`, rest);
+    if (rest > 0 && keep.length) add(gName, gName === "Fun" ? "Other fun" : `Other ${gName.toLowerCase()}`, rest);
   }
   return { nodes, links: links.filter((l) => l.value > 0) };
 }
@@ -524,7 +701,7 @@ function Insights() {
       {!overview ? (
         <div className="grid grid-cols-3 gap-3">
           {[0, 1, 2].map((k) => (
-            <Skeleton key={k} height={120} radius={12} />
+            <Skeleton key={k} height={160} radius={12} />
           ))}
         </div>
       ) : list.length === 0 ? (

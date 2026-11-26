@@ -1,5 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { formatPercent } from "@/lib/format";
 
@@ -18,7 +18,8 @@ export interface DeltaPillProps {
 }
 
 /**
- * Delta chip (§5.10, §3.3): 20px, full radius, 12/16 600, gain/loss soft background, 12px arrow-up-right /
+ * Delta pill (docs/DESIGN.md §6.3): 20px, a gain/loss soft face with a 1px rim at 30% and an inset top highlight; the
+ * 12px arrow nudges on change; arrow-up-right /
  * arrow-down-right; always signed with "+" or U+2212.
  */
 export function DeltaPill({ value, format = "percent", invert, label, plain, className, digits = 1 }: DeltaPillProps) {
@@ -29,9 +30,18 @@ export function DeltaPill({ value, format = "percent", invert, label, plain, cla
       ? format(value)
       : formatPercent(value, { digits, signed: true });
   const Icon = dir === "up" ? ArrowUpRight : dir === "down" ? ArrowDownRight : Minus;
+  // The arrow nudges y ∓1px when the value changes (not on mount).
+  const [nudge, setNudge] = useState(0);
+  const prev = useRef(value);
+  useEffect(() => {
+    if (prev.current !== value) setNudge((n) => n + 1);
+    prev.current = value;
+  }, [value]);
   const pill = (
     <span className={cn("emp-delta", !label && className)} data-dir={good === "flat" ? undefined : good} data-plain={plain ? "" : undefined} data-sensitive="">
-      <Icon aria-hidden />
+      <span key={nudge} className="emp-delta-arrow" data-nudge={nudge ? "" : undefined}>
+        <Icon aria-hidden />
+      </span>
       <span>{text}</span>
     </span>
   );

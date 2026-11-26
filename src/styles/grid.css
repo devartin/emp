@@ -238,7 +238,7 @@
 .emp-sheet-tab.is-dragging { z-index: 2; opacity: 0.92; box-shadow: var(--elev-2); background: var(--bg-canvas); cursor: grabbing; }
 .emp-sheet-tab-bg { position: absolute; inset: 0; border-radius: 7px; background: var(--bg-canvas); box-shadow: var(--elev-1), inset 0 -2px 0 var(--tab-color, transparent); z-index: -1; }
 :root[data-theme="dark"] .emp-sheet-tab-bg, :root[data-theme="midnight"] .emp-sheet-tab-bg { background: var(--bg-surface-3); }
-.emp-sheet-tab > * { position: relative; }
+.emp-sheet-tab > :not(.emp-sheet-tab-bg) { position: relative; } /* the bg plate stays absolute (inset 0) */
 .emp-sheet-tab { isolation: isolate; }
 .emp-sheet-tab-color { width: 8px; height: 8px; border-radius: 3px; background: var(--tab-color, var(--text-tertiary)); }
 .emp-sheet-tab-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }

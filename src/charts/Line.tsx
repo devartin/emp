@@ -6,7 +6,7 @@ import { lttb } from "@/lib/lttb";
 import { summarizeSeries } from "./a11y";
 import { MARGIN, X_AXIS_HEIGHT, edgeAwareTick, niceDomain, tickFormatter, tickStyle, valueFormatter, type ValueFormat } from "./axis";
 import { ChartFrame, type ChartTable } from "./ChartFrame";
-import { resolveColor, useChartTheme, seriesColor, type ChartTheme } from "./theme";
+import { defaultSeriesColor, resolveColor, useChartTheme, seriesColor, type ChartTheme } from "./theme";
 import { ChartTooltip } from "./Tooltip";
 
 export type Datum = Record<string, unknown>;
@@ -38,8 +38,13 @@ export interface LineChartProps<T extends Datum> {
   /** Right for price / net-worth series, left for categories (§13.5). */
   yAxis?: "left" | "right" | "none";
   area?: boolean;
-  /** Single-series value charts colour by sign of last − first (default when one series). */
+  /**
+   * Colour a single series by the sign of last − first. Default: single-series trend lines are ink (--chart-line,
+   * §5.6) and direction lives in the DeltaPill and the end-dot halo; pass `true` to colour the line itself.
+   */
   colorBySign?: boolean;
+  /** Hero treatment (S5): pen draw-in, end-dot keycap pulses. Set by HeroAreaChart. */
+  hero?: boolean;
   /** Dashed reference at the first value (default with colorBySign). */
   startReference?: boolean;
   /** Pulsing halo on the last point. */
@@ -61,6 +66,14 @@ export interface LineChartProps<T extends Datum> {
   extraDomainValues?: number[];
 }
 
+interface Layout<T> {
+  plotted: T[];
+  domain: [number, number];
+  ticks: number[];
+  yWidth: number;
+  xTicks: unknown[];
+}
+
 function ScrubReporter<T>({ data, onScrub }: { data: readonly T[]; onScrub: (i: number | null) => void }) {
   const active = useIsTooltipActive();
   const pts = useActiveTooltipDataPoints<T>();
@@ -76,22 +89,38 @@ function ScrubReporter<T>({ data, onScrub }: { data: readonly T[]; onScrub: (i: 
   return null;
 }
 
+/** Scrub dot (§5.6): a 6px keycap dot with a soft glow, on the series. */
 function ActiveDot({ cx, cy, color, t }: { cx?: number; cy?: number; color: string; t: ChartTheme }) {
   if (cx === undefined || cy === undefined) return null;
   return (
     <g>
-      <circle cx={cx} cy={cy} r={8} fill={color} fillOpacity={0.2} />
-      <circle cx={cx} cy={cy} r={4} fill={color} stroke={t.canvas} strokeWidth={2} />
+      <circle cx={cx} cy={cy} r={10} fill={color} fillOpacity={0.12} />
+      <circle cx={cx} cy={cy + 1} r={4.5} fill="#000" fillOpacity={0.25} />
+      <circle cx={cx} cy={cy} r={4.5} fill={color} stroke={t.canvas} strokeWidth={2} />
     </g>
   );
 }
 
-function LastDot({ cx, cy, color, live }: { cx?: number; cy?: number; color: string; live?: boolean }) {
+/**
+ * End-dot keycap (§5.6, S5): an 8px face on a 1px side, tinted halo pulses (3×, 900ms, 300ms apart) after the pen
+ * finishes on hero charts; `live` keeps a slow ping (Markets, S16).
+ */
+function LastDot({ cx, cy, color, live, halo, hero }: { cx?: number; cy?: number; color: string; live?: boolean; halo: string; hero?: boolean }) {
   if (cx === undefined || cy === undefined) return null;
+  const delay = hero ? 1150 : 300;
   return (
-    <g>
-      {live ? <circle className="emp-live-halo" cx={cx} cy={cy} r={3} fill={color} /> : null}
-      <circle cx={cx} cy={cy} r={3} fill={color} />
+    <g className="emp-end-dot">
+      {live ? <circle className="emp-live-halo" cx={cx} cy={cy} r={4} fill={halo} /> : null}
+      {hero ? (
+        <>
+          <circle className="emp-end-pulse" cx={cx} cy={cy} r={4} fill={halo} style={{ animationDelay: `${delay}ms` }} />
+          <circle className="emp-end-pulse" cx={cx} cy={cy} r={4} fill={halo} style={{ animationDelay: `${delay + 300}ms` }} />
+          <circle className="emp-end-pulse" cx={cx} cy={cy} r={4} fill={halo} style={{ animationDelay: `${delay + 600}ms` }} />
+        </>
+      ) : null}
+      <circle cx={cx} cy={cy + 1} r={4} fill="#000" fillOpacity={0.3} />
+      <circle cx={cx} cy={cy} r={4} fill={color} />
+      <circle cx={cx} cy={cy - 1.2} r={1.6} fill="#fff" fillOpacity={0.35} />
     </g>
   );
 }
@@ -121,6 +150,7 @@ export function LineChart<T extends Datum>({
   colorBySign,
   startReference,
   live,
+  hero,
   includeZero,
   tooltip = true,
   onScrub,
@@ -147,47 +177,85 @@ export function LineChart<T extends Datum>({
   const first = visible[0] ? Number(data[0]?.[visible[0].key]) : NaN;
   const lastV = visible[0] ? Number(data[data.length - 1]?.[visible[0].key]) : NaN;
   const signColor = lastV >= first ? t.gain : t.loss;
-  const colorOf = (s: SeriesDef, i: number) => resolveColor(s.color) ?? (bySign ? signColor : seriesColor(t, i));
+  const colorOf = (s: SeriesDef, i: number) =>
+    resolveColor(s.color) ?? (colorBySign === true ? signColor : defaultSeriesColor(t, i, visible.length));
 
   const isEmpty = empty ?? data.length < 2;
   const fmt = valueFormatter(format, currency);
+  const tf = tickFormatter(format, currency, t.privacy);
 
-  const content = (size: { width: number; height: number }) => {
+  // Latest formatters by ref: callers pass inline lambdas, which must not bust the layout cache below.
+  const fmtRef = useRef({ xFormat, xTooltipFormat, fmt });
+  fmtRef.current = { xFormat, xTooltipFormat, fmt };
+
+  // The morph animation only runs on a real data change: an always-active Recharts animation re-measures the
+  // path (getTotalLength) on every scrub re-render.
+  const prevData = useRef(data);
+  const morphUntil = useRef(0);
+  if (prevData.current !== data) {
+    const p = prevData.current;
+    if (p.length !== data.length || p.some((d, i) => d !== data[i])) morphUntil.current = performance.now() + 700;
+    prevData.current = data;
+  }
+  const dataMorph = performance.now() < morphUntil.current;
+
+  // Layout (decimation, y-domain, ticks) depends on data, width and series keys only — cached across scrub renders.
+  const seriesKey = series.map((s) => s.key).join("|");
+  const layoutCache = useRef<{ key: unknown[]; out: Layout<T> } | null>(null);
+  const layout = (width: number): Layout<T> => {
+    const key = [data, width, seriesKey, visible.length, includeZero, extraDomainValues?.join(","), yAxis, t.privacy, format, currency, x];
+    const c = layoutCache.current;
+    if (c && c.key.length === key.length && c.key.every((k, i) => k === key[i])) return c.out;
     // Decimate above 2× pixel width (Rust does this for real data; this protects ad-hoc callers).
-    const maxPts = Math.max(64, size.width * 2);
+    const maxPts = Math.max(64, width * 2);
     const plotted = data.length > maxPts && visible.length === 1 ? lttb(data, maxPts, (_d, i) => i, (d) => Number(d[visible[0].key])) : data;
     const values: number[] = [];
     for (const d of plotted) for (const s of series) values.push(Number(d[s.key]));
     if (extraDomainValues) values.push(...extraDomainValues);
     const { domain, ticks } = niceDomain(values, { includeZero });
-    const tf = tickFormatter(format, currency, t.privacy);
     const yWidth = yAxis === "none" ? 0 : axisWidth(ticks.map(tf));
-    const lastIndex = plotted.length - 1;
-    const morph = animate && plotted.length <= 500 && !t.reducedMotion;
-    const strokeW = visible.length > 2 ? 1.5 : 2;
-    // One tick per distinct label (months on daily data), thinned to ≥64px apart (§13.5).
-    let xTicks: unknown[] | undefined;
-    {
-      const firsts: unknown[] = [];
-      let prev = "";
-      for (const d of plotted) {
-        const l = xFormat(d[x]);
-        if (l !== prev) firsts.push(d[x]);
-        prev = l;
-      }
-      if (firsts.length < plotted.length) {
-        const cap = Math.max(2, Math.floor((size.width - yWidth) / 64));
-        const step = Math.ceil(firsts.length / cap);
-        xTicks = firsts.filter((_, i) => i % step === 0);
-      }
+    // One tick per distinct label (months on daily data), thinned to ≥64px apart (§13.5). Ticks are always explicit
+    // (interval 0) so Recharts never measures tick text (getStringSize forces layout).
+    const xf = fmtRef.current.xFormat;
+    const firsts: unknown[] = [];
+    let prev = "";
+    for (const d of plotted) {
+      const l = xf(d[x]);
+      if (l !== prev) firsts.push(d[x]);
+      prev = l;
     }
+    const cap = Math.max(2, Math.floor((width - yWidth) / 64));
+    const step = Math.max(1, Math.ceil(firsts.length / cap));
+    const xTicks = firsts.filter((_, i) => i % step === 0);
+    const out = { plotted, domain, ticks, yWidth, xTicks };
+    layoutCache.current = { key, out };
+    return out;
+  };
 
-    return (
+  // Latest scrub callback by ref, so the cached chart element below never calls a stale one.
+  const onScrubRef = useRef(onScrub);
+  onScrubRef.current = onScrub;
+  const seriesSig = series.map((s) => [s.key, s.label, s.color, s.dashed, s.area, s.hidden].join("\u0000")).join("\u0001");
+  // The chart subtree is cached by identity: a hero readout update (scrub → header re-render) must not re-render the
+  // Recharts tree — Recharts' Line calls getTotalLength() on every render, and re-renders re-run tick layout.
+  const chartCache = useRef<{ key: unknown[]; el: ReactNode } | null>(null);
+
+  const content = (size: { width: number; height: number }) => {
+    const lay = layout(size.width);
+    const { plotted, domain, ticks, yWidth, xTicks } = lay;
+    const lastIndex = plotted.length - 1;
+    const morph = animate && dataMorph && plotted.length <= 500 && !t.reducedMotion;
+    const strokeW = visible.length > 2 ? 1.5 : 2;
+    const cacheKey = [lay, size.height, t, morph, seriesSig, live, hero, tooltip, !!onScrub, children, startReference, curve, area, yAxis, colorBySign, gid];
+    const hit = chartCache.current;
+    if (hit && hit.key.length === cacheKey.length && hit.key.every((k, i) => k === cacheKey[i])) return hit.el;
+
+    const el = (
       <ComposedChart width={size.width} height={size.height} data={plotted} margin={MARGIN} accessibilityLayer>
         <defs>
           {visible.map((s, i) => (
             <linearGradient key={s.key} id={`${gid}-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={colorOf(s, i)} stopOpacity={t.areaTop} />
+              <stop offset="0%" stopColor={colorOf(s, i)} stopOpacity={colorOf(s, i) === t.chartLine ? (t.dark ? 0.16 : 0.13) : t.areaTop} />
               <stop offset="100%" stopColor={colorOf(s, i)} stopOpacity={0} />
             </linearGradient>
           ))}
@@ -197,13 +265,13 @@ export function LineChart<T extends Datum>({
           dataKey={x as string as never}
           tickLine={false}
           axisLine={false}
-          tick={edgeAwareTick(t, xFormat, size.width)}
-          tickFormatter={(v) => xFormat(v)}
+          tick={edgeAwareTick(t, (v) => fmtRef.current.xFormat(v), size.width)}
+          tickFormatter={(v) => fmtRef.current.xFormat(v)}
           height={X_AXIS_HEIGHT}
           tickMargin={8}
           minTickGap={28}
           ticks={xTicks as never}
-          interval={xTicks ? 0 : "preserveStartEnd"}
+          interval={0}
         />
         <YAxis
           hide={yAxis === "none"}
@@ -215,6 +283,7 @@ export function LineChart<T extends Datum>({
           ticks={ticks}
           domain={domain}
           tickFormatter={tf}
+          interval={0}
           tickMargin={6}
           allowDataOverflow
         />
@@ -229,8 +298,8 @@ export function LineChart<T extends Datum>({
               stroke="none"
               fill={`url(#${gid}-${s.key})`}
               isAnimationActive={morph}
-              animationDuration={400}
-              animationEasing="ease-in-out"
+              animationDuration={620}
+              animationEasing="ease-out"
               activeDot={false}
               tooltipType="none"
             />
@@ -250,10 +319,10 @@ export function LineChart<T extends Datum>({
               strokeLinejoin="round"
               strokeDasharray={s.dashed ? "4 4" : undefined}
               isAnimationActive={morph}
-              animationDuration={400}
-              animationEasing="ease-in-out"
+              animationDuration={620}
+              animationEasing="ease-out"
               dot={(p: { cx?: number; cy?: number; index?: number }) =>
-                p.index === lastIndex && i === 0 ? <LastDot key="last" cx={p.cx} cy={p.cy} color={c} live={live} /> : <g key={`d${p.index}`} />
+                p.index === lastIndex && i === 0 ? <LastDot key="last" cx={p.cx} cy={p.cy} color={c} live={live} hero={hero} halo={c === t.chartLine ? signColor : c} /> : <g key={`d${p.index}`} />
               }
               activeDot={(p: { cx?: number; cy?: number }) => <ActiveDot cx={p.cx} cy={p.cy} color={c} t={t} />}
             />
@@ -261,7 +330,7 @@ export function LineChart<T extends Datum>({
         })}
         {tooltip ? (
           <Tooltip
-            cursor={{ stroke: t.textTertiary, strokeOpacity: 0.5, strokeDasharray: "3 3", strokeWidth: 1 }}
+            cursor={{ stroke: t.text, strokeOpacity: 0.35, strokeWidth: 1 }}
             isAnimationActive={false}
             offset={14}
             content={(p) => {
@@ -270,21 +339,23 @@ export function LineChart<T extends Datum>({
               return (
                 <ChartTooltip
                   privacy={t.privacy}
-                  title={(xTooltipFormat ?? xFormat)((p as unknown as { label?: unknown }).label)}
+                  title={(fmtRef.current.xTooltipFormat ?? fmtRef.current.xFormat)((p as unknown as { label?: unknown }).label)}
                   rows={series.map((s, i) => {
                     const item = payload.find((it) => it.dataKey === s.key);
-                    return { key: s.key, label: s.label, value: item ? fmt(Number(item.value)) : "—", color: colorOf(s, Math.max(0, visible.indexOf(s))) ?? seriesColor(t, i), dashed: s.dashed };
+                    return { key: s.key, label: s.label, value: item ? fmtRef.current.fmt(Number(item.value)) : "—", color: colorOf(s, Math.max(0, visible.indexOf(s))) ?? seriesColor(t, i), dashed: s.dashed };
                   })}
                 />
               );
             }}
           />
         ) : (
-          <Tooltip cursor={{ stroke: t.textTertiary, strokeOpacity: 0.5, strokeDasharray: "3 3" }} content={() => null} isAnimationActive={false} />
+          <Tooltip cursor={{ stroke: t.text, strokeOpacity: 0.35, strokeWidth: 1 }} content={() => null} isAnimationActive={false} />
         )}
-        {onScrub ? <ScrubReporter data={plotted} onScrub={(i) => onScrub(i === null ? null : data.indexOf(plotted[i]))} /> : null}
+        {onScrub ? <ScrubReporter data={plotted} onScrub={(i) => onScrubRef.current?.(i === null ? null : data.indexOf(plotted[i]))} /> : null}
       </ComposedChart>
     );
+    chartCache.current = { key: cacheKey, el };
+    return el;
   };
 
   const summary = useMemo(() => {
@@ -294,18 +365,23 @@ export function LineChart<T extends Datum>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, summaryLabel]);
 
-  const table: ChartTable = useMemo(
-    () => ({
-      columns: [String(x), ...series.map((s) => s.label)],
-      rows: data.map((d) => [(xTooltipFormat ?? xFormat)(d[x]), ...series.map((s) => fmt(Number(d[s.key])))]),
-      sensitiveCols: series.map((_, i) => i + 1),
-    }),
+  // Built lazily — only when "View as table" is opened (formatting every row × series on each render is costly).
+  const seriesLabels = series.map((s) => `${s.key}\u0000${s.label}`).join("\u0001");
+  const table = useMemo(
+    () => (): ChartTable => {
+      const { xFormat: xf, xTooltipFormat: xtf, fmt: f } = fmtRef.current;
+      return {
+        columns: [String(x), ...series.map((s) => s.label)],
+        rows: data.map((d) => [(xtf ?? xf)(d[x]), ...series.map((s) => f(Number(d[s.key])))]),
+        sensitiveCols: series.map((_, i) => i + 1),
+      };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, series],
+    [data, seriesLabels, x],
   );
 
   return (
-    <ChartFrame height={height} summary={summary} loading={loading} empty={isEmpty} cached={cached} table={table} header={header} footer={footer} className={className}>
+    <ChartFrame height={height} summary={summary} title={summaryLabel} loading={loading} empty={isEmpty} cached={cached} table={table} header={header} footer={footer} className={className} hero={hero}>
       {content}
     </ChartFrame>
   );

@@ -1,10 +1,11 @@
 /** Money HQ widgets: budget ring + envelope, metric card, hero money, transaction row. */
 import { ArrowLeftRight, Split } from "lucide-react";
 import { m } from "motion/react";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { moneyParts } from "@/lib/money";
+import { currencyDecimals, moneyParts } from "@/lib/money";
 import { Amount } from "@/ui/Amount";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Sensitive } from "@/ui/Sensitive";
@@ -23,7 +24,7 @@ export function budgetTone(ratio: number): string {
  * Progress ring with a pace tick and an overflow "second lap" at .5 (§5.10 budget bar, as a ring). Draws in with
  * pathLength on mount; reduced motion shows the final state.
  */
-export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children }: { ratio: number; pace?: number | null; size?: number; stroke?: number; color?: string; children?: ReactNode }) {
+export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children, delay = 0, className }: { ratio: number; pace?: number | null; size?: number; stroke?: number; color?: string; children?: ReactNode; delay?: number; className?: string }) {
   const reduced = useReducedMotionPref();
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -31,12 +32,13 @@ export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children
   const lap = ratio > 1 ? Math.min(1, ratio - 1) : 0;
   const tone = color ?? budgetTone(ratio);
   const theta = pace !== undefined && pace !== null ? Math.max(0, Math.min(1, pace)) * Math.PI * 2 : null;
-  const ri = r - stroke / 2 - 1.5;
-  const ro = r + stroke / 2 + 1.5;
-  return (
-    <span className="relative inline-flex items-center justify-center flex-none" style={{ width: size, height: size }} role="img" aria-label={`${Math.round(ratio * 100)}% used`}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} style={{ stroke: "color-mix(in oklab, var(--text-primary) 8%, transparent)" }} />
+    return (
+    <span className={cn("fh-ring-wrap relative inline-flex items-center justify-center flex-none", className)} style={{ width: size, height: size }} role="img" aria-label={`${Math.round(ratio * 100)}% used`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden style={{ transform: "rotate(-90deg)", overflow: "visible" }}>
+        {/* engraved groove track: dark inner edge + light lower lip */}
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke + 1} style={{ stroke: "var(--well-bg)" }} />
+        <circle cx={size / 2} cy={size / 2} r={r - stroke / 2 - 0.25} fill="none" strokeWidth={0.75} style={{ stroke: "var(--groove-dark)" }} />
+        <circle cx={size / 2} cy={size / 2} r={r + stroke / 2 + 0.25} fill="none" strokeWidth={0.75} style={{ stroke: "var(--groove-lite)" }} />
         <m.circle
           cx={size / 2}
           cy={size / 2}
@@ -48,13 +50,14 @@ export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children
           strokeDasharray={c}
           initial={reduced ? false : { strokeDashoffset: c }}
           animate={{ strokeDashoffset: c * (1 - first) }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.9, delay, ease: [0.16, 1, 0.3, 1] }}
         />
         {lap > 0 ? (
-          <m.circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" style={{ stroke: tone, opacity: 0.5 }} strokeDasharray={c} initial={reduced ? false : { strokeDashoffset: c }} animate={{ strokeDashoffset: c * (1 - lap) }} transition={{ duration: 0.7, delay: 0.5, ease: [0.16, 1, 0.3, 1] }} />
+          <m.circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" style={{ stroke: tone, opacity: 0.5 }} strokeDasharray={c} initial={reduced ? false : { strokeDashoffset: c }} animate={{ strokeDashoffset: c * (1 - lap) }} transition={{ duration: 0.7, delay: delay + 0.6, ease: [0.16, 1, 0.3, 1] }} />
         ) : null}
         {theta !== null ? (
-          <line x1={size / 2 + ri * Math.cos(theta)} y1={size / 2 + ri * Math.sin(theta)} x2={size / 2 + ro * Math.cos(theta)} y2={size / 2 + ro * Math.sin(theta)} strokeWidth={2} strokeLinecap="round" style={{ stroke: "var(--text-secondary)" }} />
+          /* pace marker: a small ink dome sitting on the track centre-line, not a line crossing the stroke */
+          <m.circle cx={size / 2 + r * Math.cos(theta)} cy={size / 2 + r * Math.sin(theta)} r={Math.max(1.75, stroke / 2)} style={{ fill: "var(--text-primary)", stroke: "var(--bg-surface-1)", strokeWidth: 1 }} initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: delay + 0.7 }} />
         ) : null}
       </svg>
       {children ? <span className="absolute inset-0 inline-flex items-center justify-center">{children}</span> : null}
@@ -70,12 +73,12 @@ export interface EnvelopeData {
   pace: number;
 }
 
-export function Envelope({ e, onClick }: { e: EnvelopeData; onClick?: () => void }) {
+export function Envelope({ e, onClick, index = 0 }: { e: EnvelopeData; onClick?: () => void; index?: number }) {
   const ratio = e.assigned > 0 ? e.spent / e.assigned : e.spent > 0 ? 2 : 0;
   const over = e.available < -0.005;
   return (
     <button type="button" className="fh-envelope" onClick={onClick} data-over={over ? "" : undefined}>
-      <BudgetRing ratio={ratio} pace={e.pace} size={46} stroke={4}>
+      <BudgetRing ratio={ratio} pace={e.pace} size={46} stroke={4} delay={0.12 + Math.min(index, 8) * 0.05}>
         <Glyph name={e.category.icon} color={e.category.color} size={26} />
       </BudgetRing>
       <span className="min-w-0 flex-1 text-left">
@@ -89,30 +92,46 @@ export function Envelope({ e, onClick }: { e: EnvelopeData; onClick?: () => void
   );
 }
 
-/** Large money figure with the currency symbol at 0.6× and dimmed cents; digits roll on change. */
-export function HeroMoney({ value, currency = "USD", cents = true, className }: { value: number; currency?: string; cents?: boolean; className?: string }) {
-  const p = moneyParts(toMoney(value, currency), { noCents: !cents });
-  const n = Math.abs(value);
-  const intFmt = (x: number) => formatNumber(Math.trunc(x), { maximumFractionDigits: 0 });
+/** Large money figure with the currency symbol at 0.6× and dimmed cents; digits roll on change (count up once per session with `countUpKey`). */
+export function HeroMoney({ value, currency = "USD", cents = true, className, countUpKey, scrubbing }: { value: number; currency?: string; cents?: boolean; className?: string; countUpKey?: string; scrubbing?: boolean }) {
+  // Symbol, its position, the decimal mark and the minus glyph depend on the currency only — resolve them once, not
+  // on every scrub frame (moneyParts builds Intl formatters).
+  const shape = useMemo(() => ({ ...moneyParts(toMoney(-1.5, currency)), digits: currencyDecimals(currency) }), [currency]);
+  // Without cents the figure rounds like fmtMoney(…, { noCents }) does, so the hero and any legend agree to the dollar.
+  const [intPart, fraction = ""] = Math.abs(value).toFixed(cents ? shape.digits : 0).split(".");
+  const n = Number(intPart);
+  const negative = value < 0 && (n > 0 || /[1-9]/.test(fraction));
+  const intFmt = (x: number) => formatNumber(Math.round(x), { maximumFractionDigits: 0 });
   return (
     <span className={cn("fh-hero-value", className)} data-sensitive="">
-      {p.sign ? <span>{p.sign}</span> : null}
-      {p.symbolPosition === "prefix" ? <span className="fh-sym">{p.symbol}</span> : null}
-      <RollingNumber value={Math.trunc(n)} format={intFmt} />
-      {cents && p.fraction ? (
+      {negative ? <span>{shape.sign}</span> : null}
+      {shape.symbolPosition === "prefix" ? <span className="fh-sym">{shape.symbol}</span> : null}
+      <RollingNumber value={n} format={intFmt} countUpKey={countUpKey} countUpDuration={countUpKey ? 1.3 : undefined} scrubbing={scrubbing} />
+      {fraction ? (
         <span className="fh-cents">
-          {p.decimal}
-          {p.fraction}
+          {shape.decimal}
+          {fraction}
         </span>
       ) : null}
+      {shape.symbolPosition === "suffix" ? <span className="fh-sym">{shape.symbol}</span> : null}
     </span>
   );
 }
 
-export function MetricCard({ label, value, sub, visual, onClick, tone }: { label: ReactNode; value: ReactNode; sub?: ReactNode; visual?: ReactNode; onClick?: () => void; tone?: "warn" | "good" }) {
+/** KPI plate: a machined panel; clickable ones lift, catch the pointer light and tilt ≤ 3° (§4.5). */
+export function MetricCard({ label, value, sub, visual, onClick, tone, className }: { label: ReactNode; value: ReactNode; sub?: ReactNode; visual?: ReactNode; onClick?: () => void; tone?: "warn" | "good"; className?: string }) {
   const El = onClick ? "button" : "div";
   return (
-    <El type={onClick ? "button" : undefined} className="fh-metric" onClick={onClick} data-tone={tone}>
+    <El
+      type={onClick ? "button" : undefined}
+      className={cn("fh-metric panel", className)}
+      onClick={onClick}
+      data-tone={tone}
+      data-raise={onClick ? "" : undefined}
+      data-light=""
+      data-tilt={onClick ? "3" : undefined}
+    >
+      <EdgeLight specular={!!onClick} />
       <span className="min-w-0 flex-1 text-left">
         <span className="block text-caption text-secondary" style={{ fontWeight: 500 }}>
           {label}

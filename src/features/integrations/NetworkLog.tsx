@@ -17,6 +17,7 @@ import { Button } from "@/ui/Button";
 import { SearchField } from "@/ui/SearchField";
 import { Select } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
 import "./integrations.css";
 
 const CONNECTOR_LABEL: Record<string, string> = { google: "Google", frankfurter: "Frankfurter", stooq: "Stooq", coingecko: "CoinGecko", finnhub: "Finnhub", tiingo: "Tiingo", yahoo: "Yahoo", updater: "Updates", "remote-image": "Images" };
@@ -122,10 +123,13 @@ export function NetworkLog({ limit = 1000, height = 420 }: { limit?: number; hei
               const isNew = fresh && it.index === 0 && Date.now() - fresh < 1500;
               return (
                 <div key={it.key} role="row" className={cn("ig-log-row", isNew && "is-new")} style={{ position: "absolute", top: 0, left: 0, right: 0, height: it.size, transform: `translateY(${it.start}px)` }}>
-                  <span role="cell" className="tabular text-tertiary">{time(r.at)}</span>
+                  <span role="cell" className="tabular text-tertiary">
+                    <span className="ig-led" data-bad={failed ? "" : undefined} aria-hidden />
+                    {time(r.at)}
+                  </span>
                   <span role="cell" className="truncate">{CONNECTOR_LABEL[r.connector] ?? r.connector}</span>
                   <span role="cell" className="min-w-0 truncate" title={`${r.method} ${r.host}${r.path}`}>
-                    <span className="ig-method">{r.method}</span>
+                    <span className="ig-method" data-m={r.method}>{r.method}</span>
                     <span className="text-secondary">{r.host}</span>
                     <span className="text-tertiary">{r.path}</span>
                   </span>
@@ -141,9 +145,9 @@ export function NetworkLog({ limit = 1000, height = 420 }: { limit?: number; hei
       </div>
       <AnimatePresence initial={false}>
         {rows ? (
-          <m.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-caption text-tertiary">
+          <m.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="ig-log-foot flex items-center gap-2 text-caption text-tertiary">
             <span className="tabular">
-              {totals.n.toLocaleString()} requests · {formatBytes(totals.bytes)}
+              <RollingNumber value={totals.n} format={(n) => Math.round(n).toLocaleString()} /> requests · {formatBytes(totals.bytes)}
               {totals.failed ? ` · ${totals.failed} failed` : ""}
             </span>
             <span aria-hidden>·</span>

@@ -1,8 +1,10 @@
 /**
  * Board view (§8.3, §4.2 DnD): columns from select / status / checkbox groups, 50 cards per column with infinite
- * scroll, a "No value" group, per-group counts, collapse/hide groups, and pointer-driven drag between columns with
- * spring physics — lift (scale 1.02, rotate 1.5°, elev-4, spring.snappy), siblings reflow on spring.layout, drop on
- * spring.drag into the placeholder. Moving sets the group property and the manual position in one call.
+ * scroll, a "No value" group, per-group rolling counts, collapse/hide groups, and pointer-driven drag between columns
+ * with physics (S14) — pickup lifts the card into a raised plate (panel-raise, scale 1.03) that leans ≤ 3° into the
+ * drag's horizontal velocity; siblings glide out of the way on the morph spring around a recessed landing slot; the
+ * drop flies home on the drag spring and lands with a contact squash. Moving sets the group property and the manual
+ * position in one call.
  * Layout animations are disabled above 300 visible cards.
  */
 import { animate, AnimatePresence, m, useMotionValue, useReducedMotion } from 'motion/react';
@@ -14,6 +16,7 @@ import { IconButton } from '@/ui/IconButton';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/ui/Menu';
 import { Tag } from '@/ui/Tag';
 import { spring } from '@/ui/motion/tokens';
+import { RollingNumber } from '@/ui/motion/RollingNumber';
 import { useDbView } from '../context';
 import { NO_VALUE } from '../engine/group';
 import { rt } from '../engine/values';
@@ -91,6 +94,9 @@ export function BoardView() {
       const x0 = e.clientX;
       const y0 = e.clientY;
       let started = false;
+      let lastX = x0;
+      let lastT = 0;
+      let vxs = 0;
       const onMove = (ev: PointerEvent) => {
         if (!started) {
           if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return;
@@ -102,14 +108,25 @@ export function BoardView() {
           x.set(r.left);
           y.set(r.top);
           setDrag(d);
-          animate(scale, 1.02, spring.snappy);
-          animate(rotate, reduced ? 0 : 1.5, spring.snappy);
+          animate(scale, reduced ? 1 : 1.03, spring.release);
+          animate(rotate, reduced ? 0 : 1.5, spring.release);
+          lastX = ev.clientX;
+          lastT = performance.now();
           document.body.classList.add('edb-dragging');
         }
         const d = dragRef.current;
         if (!d) return;
         x.set(ev.clientX - d.dx);
         y.set(ev.clientY - d.dy);
+        if (!reduced) {
+          // lean into the horizontal velocity (S14 "rotate in the drag direction"), resting at +1.5°
+          const now = performance.now();
+          const vx = (ev.clientX - lastX) / Math.max(1, now - lastT);
+          lastX = ev.clientX;
+          lastT = now;
+          vxs = vxs * 0.7 + vx * 0.3;
+          rotate.set(Math.max(-3, Math.min(3, 1.5 + vxs * 3)));
+        }
         const sc = scrollRef.current;
         if (sc) {
           const b = sc.getBoundingClientRect();
@@ -145,6 +162,20 @@ export function BoardView() {
           dragRef.current = null;
           setDrag(null);
           setDropping(false);
+          // contact squash once the real card is back in its slot
+          requestAnimationFrame(() => {
+            const landed = scrollRef.current?.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(d.id)}"] > .edb-card`);
+            if (landed && !reduced) {
+              landed.animate(
+                [
+                  { transform: 'scale(1, 1)', transformOrigin: '50% 100%' },
+                  { transform: 'scale(1.012, 0.975)', transformOrigin: '50% 100%', offset: 0.3 },
+                  { transform: 'scale(1, 1)', transformOrigin: '50% 100%' },
+                ],
+                { duration: 240, easing: 'cubic-bezier(.2,0,0,1)' },
+              );
+            }
+          });
         });
       };
       const onUp = () => finish(false);
@@ -278,7 +309,9 @@ function Column({ g, ids, rows, gpName, layoutOn, drag, titleProp, cardProps, al
     <section className={cn('edb-col', isTarget && 'is-target')} data-col-key={g.key} aria-label={g.label}>
       <header className="edb-col-head">
         {g.color ? <Tag color={g.color}>{g.label}</Tag> : <span className={cn('edb-col-label', g.key === NO_VALUE && 'text-tertiary')}>{g.key === NO_VALUE ? `No ${gpName}` : g.label}</span>}
-        <span className="edb-group-count tabular-nums">{g.count}</span>
+        <span className="edb-group-count tabular-nums">
+          <RollingNumber value={g.count} />
+        </span>
         <span className="flex-1" />
         <Menu>
           <MenuTrigger asChild>
@@ -297,11 +330,11 @@ function Column({ g, ids, rows, gpName, layoutOn, drag, titleProp, cardProps, al
       </header>
       <div className="edb-col-body">
         {ids.map((id) => {
-          if (id === '__ph') return <m.div key="__ph" layout={layoutOn} transition={spring.layout} className="edb-card-ph" data-placeholder="" style={{ height: drag?.h }} />;
+          if (id === '__ph') return <m.div key="__ph" layout={layoutOn} transition={spring.morph} initial={layoutOn ? { opacity: 0, scaleY: 0.6 } : false} animate={{ opacity: 1, scaleY: 1 }} className="edb-card-ph" data-placeholder="" style={{ height: drag?.h }} />;
           const row = rows.get(id);
           if (!row) return null;
           return (
-            <m.div key={id} layout={layoutOn ? 'position' : false} transition={spring.layout} data-card-id={id}>
+            <m.div key={id} layout={layoutOn ? 'position' : false} transition={spring.morph} data-card-id={id}>
               <Card
                 row={row}
                 titleProp={titleProp}

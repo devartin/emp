@@ -101,19 +101,35 @@ export function StackedAreaChart<T extends Record<string, unknown>>({
   );
 }
 
-/** Horizontal diverging bars around zero (drift in pp, budget variance). */
-export function DivergingBars({ rows, max, format }: { rows: { key: string; label: ReactNode; value: number; outside?: boolean; note?: ReactNode }[]; max?: number; format: (v: number) => string }) {
+/**
+ * Horizontal diverging bars around zero (drift in pp, budget variance). Bars are half-width plates scaled from the
+ * zero line (transform only) and grow in on mount with a 40ms stagger; `active`/`onActive` link rows to a chart.
+ */
+export function DivergingBars({ rows, max, format, active, onActive }: { rows: { key: string; label: ReactNode; value: number; outside?: boolean; note?: ReactNode }[]; max?: number; format: (v: number) => string; active?: string | null; onActive?: (key: string | null) => void }) {
   const m = max ?? Math.max(1, ...rows.map((r) => Math.abs(r.value)));
   return (
     <div className="fh-div" role="list">
-      {rows.map((r) => {
-        const w = Math.min(1, Math.abs(r.value) / m) * 50;
+      {rows.map((r, i) => {
+        const k = Math.min(1, Math.abs(r.value) / m);
         return (
-          <div key={r.key} className="fh-div-row" role="listitem">
+          <div
+            key={r.key}
+            className="fh-div-row"
+            role="listitem"
+            data-on={active === r.key ? "" : undefined}
+            data-dim={active && active !== r.key ? "" : undefined}
+            onMouseEnter={onActive ? () => onActive(r.key) : undefined}
+            onMouseLeave={onActive ? () => onActive(null) : undefined}
+          >
             <span className="fh-div-label">{r.label}</span>
             <span className="fh-div-track">
               <span className="fh-div-mid" />
-              <span className="fh-div-bar" data-dir={r.value >= 0 ? "pos" : "neg"} data-out={r.outside ? "" : undefined} style={r.value >= 0 ? { left: "50%", width: `${w}%` } : { right: "50%", width: `${w}%` }} />
+              <span
+                className="fh-div-bar"
+                data-dir={r.value >= 0 ? "pos" : "neg"}
+                data-out={r.outside ? "" : undefined}
+                style={{ ...(r.value >= 0 ? { left: "50%", transformOrigin: "0% 50%" } : { right: "50%", transformOrigin: "100% 50%" }), width: "50%", transform: `scaleX(${k})`, ["--i" as string]: i }}
+              />
             </span>
             <span className="fh-div-val tabular" data-out={r.outside ? "" : undefined}>
               {format(r.value)}

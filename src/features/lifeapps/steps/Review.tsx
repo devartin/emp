@@ -52,7 +52,7 @@ export function summarize(step: Step, value: unknown, currency: string): string 
 export function Review({ manifest, steps, answers, currency, sample, onSample, onJump }: { manifest: LifeAppManifest; steps: Step[]; answers: Record<string, unknown>; currency: string; sample: boolean; onSample: (v: boolean) => void; onJump: (stepId: string) => void }) {
   return (
     <div className="flex flex-col gap-4">
-      <dl className="la-review">
+      <dl className="la-review panel" data-flat="">
         {steps
           .filter((s) => s.kind !== "review")
           .map((s) => (
@@ -67,7 +67,7 @@ export function Review({ manifest, steps, answers, currency, sample, onSample, o
             </div>
           ))}
       </dl>
-      <div className="la-card-row">
+      <div className="la-card-row panel" data-flat="">
         <Switch labelFirst checked={sample} onCheckedChange={onSample} label="Include sample data" description={`Explore ${manifest.title} with realistic example rows, clearly tagged. Remove them in one click later.`} />
       </div>
     </div>

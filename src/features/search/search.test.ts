@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { calcSync } from './calc';
+import { calcSync, prettyExpr } from './calc';
 import { fuzzy } from './fuzzy';
 
 describe('fuzzy', () => {
@@ -25,5 +25,15 @@ describe('calculator', () => {
     expect(Number(calcSync('212 f to c')?.copy)).toBeCloseTo(100, 6);
     expect(calcSync('5 km in kg')).toBeNull();
     expect(calcSync('hello world')).toBeNull();
+  });
+});
+
+describe('calculator echo', () => {
+  test('binary operators are evenly spaced with thin spaces; unary minus stays attached', () => {
+    const t = '\u2009';
+    expect(prettyExpr('1200*12+340')).toBe(`1200${t}×${t}12${t}+${t}340`);
+    expect(prettyExpr('1200 × 12+340')).toBe(`1200${t}×${t}12${t}+${t}340`);
+    expect(prettyExpr('-3*(2-1)')).toBe(`−3${t}×${t}(2${t}−${t}1)`);
+    expect(prettyExpr('15% of 80')).toBe('15% of 80');
   });
 });

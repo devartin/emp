@@ -1,0 +1,397 @@
+/* Sheets — design language v2 "Slab" (docs/DESIGN.md §8.3, S15). Layered over src/styles/grid.css (shared chrome);
+   selectors are scoped under `.emp-sheet-page` so they win without !important. The grid canvas itself stays flat for
+   performance — depth lives in the chrome around it: a machined toolbar plate, a recessed formula well with an fx
+   keycap, slab sheet tabs and a grooved footer. Animate transform / opacity / filter only. */
+
+.emp-sheet-page {
+  background: var(--bg-canvas);
+}
+
+/* ── header */
+.emp-sheet-page .emp-wb-header {
+  height: 56px;
+  gap: 8px;
+}
+.emp-sheet-page .emp-wb-title {
+  border: 0;
+  border-radius: 8px;
+  transition: background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.emp-sheet-page .emp-wb-title:hover {
+  background: var(--ghost-hover);
+}
+.emp-sheet-page .emp-wb-title:focus {
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+}
+
+/* ── toolbar: a machined plate between two grooves; room under the keys for their slab edge */
+.emp-sheet-page .emp-sheet-toolbar {
+  height: 46px;
+  padding: 0 12px 2px;
+  gap: 2px;
+  border: 0;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow:
+    inset 0 1px 0 var(--groove-dark),
+    inset 0 2px 0 var(--groove-lite),
+    inset 0 -1px 0 var(--groove-lite),
+    inset 0 -2px 0 var(--groove-dark);
+}
+.emp-sheet-page .emp-tb-sep {
+  width: 2px;
+  height: 20px;
+  margin: 0 7px;
+  background: linear-gradient(90deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px);
+}
+/* groups: trailing ones collapse into the "More" menu as the plate narrows (Toolbar.tsx measures them). A collapsed
+   group stays in the DOM — out of flow, invisible and inert — so its width can still be measured. */
+.emp-sheet-page .emp-sheet-toolbar {
+  overflow: hidden;
+}
+.emp-sheet-page .emp-tb-group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.emp-sheet-page .emp-tb-group[data-collapsed] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.emp-sheet-page .emp-tb-group[data-group="more"] {
+  margin-left: auto;
+}
+/* menu glyphs for the overflow menu (decimal keys, colour dots) */
+.emp-tb-glyph {
+  font: 600 11px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text-secondary);
+}
+.emp-tb-dot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+}
+.emp-tb-dot.is-none {
+  background: linear-gradient(135deg, transparent 45%, var(--loss-text, #c23b36) 45% 55%, transparent 55%), var(--bg-canvas);
+}
+.emp-tb-sub {
+  max-height: min(420px, var(--radix-dropdown-menu-content-available-height, 420px));
+  overflow-y: auto;
+}
+
+/* raw toolbar keys (decimals, colour, borders) behave like ghost slabs: ghost plate on hover, press down, latch */
+.emp-sheet-page :is(.emp-tb-text, .emp-tb-color, .emp-tb-icon-menu) {
+  transform: translateY(0) scale(1);
+  transition:
+    transform var(--dur-release) var(--spring-release),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.emp-sheet-page :is(.emp-tb-text, .emp-tb-color, .emp-tb-icon-menu):hover {
+  background: var(--ghost-hover);
+}
+.emp-sheet-page :is(.emp-tb-text, .emp-tb-color, .emp-tb-icon-menu):active {
+  background: var(--ghost-press);
+  transform: translateY(1px) scale(0.96);
+  transition: transform var(--dur-press) var(--ease-press), background-color var(--dur-press) var(--ease-press);
+}
+.emp-sheet-page :is(.emp-tb-color, .emp-tb-icon-menu):is([data-active], [data-state="open"]) {
+  background: var(--ghost-press);
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim);
+  transform: translateY(1px);
+}
+.emp-sheet-page .emp-tb-color-bar {
+  height: 3px;
+  box-shadow: inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+}
+
+/* ── formula bar: name box and formula are recessed wells; fx is a living keycap */
+.emp-sheet-page .emp-formula-bar {
+  height: 40px;
+  align-items: center;
+  gap: 0;
+  padding: 0 10px 0 10px;
+  border: 0;
+  background: var(--bg-canvas);
+  box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark);
+  line-height: 28px;
+}
+.emp-sheet-page .emp-sheet-namebox {
+  width: 112px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.emp-sheet-page .emp-sheet-namebox:focus-within {
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+}
+.emp-sheet-page .emp-namebox-input {
+  border-radius: inherit;
+  padding-left: 10px;
+}
+.emp-sheet-page .emp-namebox-input:focus {
+  background: transparent;
+  box-shadow: none;
+}
+.emp-sheet-page .emp-namebox-menu {
+  top: 5px;
+}
+.emp-sheet-page .emp-fbar-actions {
+  gap: 2px;
+  padding: 0 8px 0 8px;
+}
+.emp-sheet-page .emp-fbar-actions::after {
+  display: none;
+}
+.emp-sheet-page .emp-fbar-input-wrap {
+  height: 28px;
+  border-radius: 8px;
+  transition: background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.emp-sheet-page .emp-fbar-input-wrap:hover {
+  background: var(--ghost-hover);
+}
+.emp-sheet-page .emp-formula-bar[data-editing] .emp-fbar-input-wrap {
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+}
+
+/* fx keycap (S15: depresses on Enter, see FormulaBar) */
+.emp-fx-key {
+  --edge: 2px;
+  height: 22px;
+  min-width: 30px;
+  margin-bottom: 2px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font: 600 12px/1 var(--font-ui);
+  letter-spacing: -0.01em;
+  color: var(--text-secondary);
+  cursor: default;
+}
+.emp-fx-key i {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  font-weight: 500;
+  margin-right: 0.5px;
+}
+.emp-fx-key:hover {
+  color: var(--text-primary);
+}
+.emp-fx-key:hover::after {
+  filter: var(--slab-s-hover);
+}
+.emp-fx-key:active,
+.emp-fx-key[data-down] {
+  transform: translateY(var(--edge));
+  transition: transform 50ms var(--ease-press);
+}
+.emp-fx-key:active::before,
+.emp-fx-key[data-down]::before {
+  transform: translateY(0);
+  transition: transform 50ms var(--ease-press);
+}
+.emp-fx-key:active::after,
+.emp-fx-key[data-down]::after {
+  filter: var(--slab-s-press);
+}
+.emp-fx-key[data-formula] {
+  color: var(--text-primary);
+}
+.emp-fx-key:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ── in-cell editor: a lit frame lifted off the grid */
+.emp-sheet-page .emp-cell-editor[data-editing] {
+  box-shadow:
+    0 0 0 2px var(--accent-solid),
+    0 0 0 5px color-mix(in oklab, var(--accent-solid) 16%, transparent),
+    0 10px 24px -10px rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+}
+
+/* ── formula assist (portal: not under .emp-sheet-page) — glass-1, gliding slab plate, rows rise at 16ms */
+.emp-fa .emp-fa-list-wrap.glass-1,
+.emp-fa .emp-fa-help.glass-1 {
+  border-radius: 12px;
+  overflow: hidden;
+}
+.emp-fa .emp-fa-help .emp-fh {
+  background: transparent;
+  box-shadow: none;
+}
+.emp-fa .emp-fa-list {
+  position: relative;
+  isolation: isolate;
+  padding: 5px;
+}
+.emp-fa .emp-fa-list .emp-glide {
+  border-radius: 7px;
+}
+.emp-fa .emp-fa-item {
+  position: relative;
+  z-index: 1;
+  border-radius: 7px;
+  animation: emp-fa-row-in 200ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 16ms);
+}
+.emp-fa [data-glide-ready] .emp-fa-item.is-active {
+  background: transparent;
+}
+.emp-fa .emp-fa-item.is-active .emp-fa-name {
+  color: var(--text-primary);
+}
+.emp-fa .emp-fa-detail,
+.emp-fa .emp-fa-foot {
+  border-top: 0;
+  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
+}
+.emp-fa .emp-fa-foot {
+  gap: 5px;
+  padding: 8px 12px 9px;
+}
+.emp-fa .emp-fa-foot .emp-kbd-group {
+  display: inline-flex;
+}
+.emp-fa .emp-fa-dot {
+  color: var(--text-disabled);
+  margin: 0 1px;
+}
+.emp-fa .emp-fh-example {
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim);
+}
+@keyframes emp-fa-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+:root[data-motion="reduced"] .emp-fa .emp-fa-item {
+  animation: none;
+}
+
+/* ── find panel: glass-1 floating over the grid, field is a well */
+.emp-sheet-page .emp-sheet-find {
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--glass-fill-a), var(--glass-fill-b));
+  box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-1-shadow);
+  -webkit-backdrop-filter: var(--glass-blur-1);
+  backdrop-filter: var(--glass-blur-1);
+}
+:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-sheet-page .emp-sheet-find {
+  background: var(--glass-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.emp-sheet-page .emp-find-field {
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+}
+.emp-sheet-page .emp-find-field:focus-within {
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+}
+.emp-sheet-page .emp-find-opt {
+  transition: transform var(--dur-release) var(--spring-release), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.emp-sheet-page .emp-find-opt:active {
+  transform: scale(0.92);
+  transition-duration: var(--dur-press);
+}
+.emp-sheet-page .emp-find-opt.is-on {
+  background: var(--ghost-press);
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim);
+}
+
+/* ── footer: grooved plate with slab tabs */
+.emp-sheet-page .emp-wb-footer {
+  height: 44px;
+  border: 0;
+  background: linear-gradient(180deg, var(--panel-bot), var(--panel-top));
+  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
+}
+.emp-sheet-page .emp-sheet-tabs-scroll {
+  padding: 5px 6px 7px 6px;
+  gap: 3px;
+}
+.emp-sheet-page .emp-sheet-tab {
+  height: 26px;
+  padding: 0 13px;
+  border-radius: 7px;
+  transform: translateY(0) scale(1);
+  transition:
+    color var(--dur-base) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-release) var(--spring-release);
+}
+.emp-sheet-page .emp-sheet-tab:not(.is-active):hover {
+  background: var(--ghost-hover);
+}
+.emp-sheet-page .emp-sheet-tab:not(.is-dragging):active {
+  transform: translateY(1px) scale(0.97);
+  transition-duration: var(--dur-press);
+  transition-timing-function: var(--ease-press);
+}
+.emp-sheet-page .emp-sheet-tab.is-active {
+  color: var(--text-primary);
+}
+/* the active tab is a secondary slab face (edge 1.5px) that glides between tabs (layoutId, glide spring) */
+.emp-sheet-page .emp-sheet-tab > .emp-sheet-tab-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 7px;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow:
+    inset 0 1px 0 var(--slab-s-hl),
+    inset 0 0 0 1px var(--slab-s-rim),
+    inset 0 -2px 0 var(--tab-color, transparent),
+    0 1.5px 0 var(--slab-s-side-b),
+    0 2px 2px var(--slab-s-contact),
+    0 6px 10px -6px var(--slab-s-ambient);
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) .emp-sheet-page .emp-sheet-tab-bg {
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+}
+.emp-sheet-page .emp-sheet-tab.is-dragging {
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), var(--panel-raise);
+  opacity: 1;
+}
+.emp-sheet-page .emp-sheet-tab-color {
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+}
+
+/* status: figures are RollingNumbers (tabular) */
+.emp-sheet-page .emp-status-item {
+  align-items: center;
+}
+.emp-sheet-page .emp-status-item b {
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-motion="reduced"] .emp-sheet-page :is(.emp-tb-text, .emp-tb-color, .emp-tb-icon-menu, .emp-sheet-tab, .emp-find-opt),
+:root[data-motion="reduced"] .emp-fx-key,
+:root[data-motion="reduced"] .emp-fx-key::before,
+:root[data-motion="reduced"] .emp-fx-key::after {
+  transition: none !important;
+}

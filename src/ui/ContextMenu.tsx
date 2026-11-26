@@ -1,6 +1,8 @@
 import * as RCM from "@radix-ui/react-context-menu";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { GlideHighlight } from "./GlideHighlight";
+import { floatingZ, useInOverlay } from "./layer";
 import { makeMenuParts } from "./menuParts";
 
 const parts = makeMenuParts(RCM);
@@ -20,9 +22,17 @@ export const ContextMenuSubTrigger = parts.SubTrigger;
 export const ContextMenuSubContent = parts.SubContent;
 
 export function ContextMenuContent({ children, className, width }: { children: ReactNode; className?: string; width?: number }) {
+  const inOverlay = useInOverlay();
   return (
     <RCM.Portal>
-      <RCM.Content className={cn("emp-menu emp-pop", className)} collisionPadding={8} loop style={width ? { width } : undefined}>
+      <RCM.Content
+        className={cn("emp-menu emp-pop", className)}
+        data-opaque={inOverlay ? "" : undefined}
+        collisionPadding={8}
+        loop
+        style={{ ...floatingZ(inOverlay), ...(width ? { width } : null) }}
+      >
+        <GlideHighlight />
         {children}
       </RCM.Content>
     </RCM.Portal>

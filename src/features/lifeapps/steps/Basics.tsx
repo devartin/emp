@@ -18,7 +18,7 @@ export function ToggleStep({ step, value, onChange }: StepProps) {
   if (isObj(step.default) || isObj(value)) {
     const obj = { ...(isObj(step.default) ? step.default : {}), ...(isObj(value) ? value : {}) };
     return (
-      <div className="la-toggles">
+      <div className="la-toggles panel" data-flat="">
         {Object.keys(obj).map((k) => (
           <Switch key={k} labelFirst checked={!!obj[k]} onCheckedChange={(v) => onChange({ ...obj, [k]: v })} label={TOGGLE_LABEL[k]?.[0] ?? humanize(k)} description={TOGGLE_LABEL[k]?.[1]} />
         ))}
@@ -27,7 +27,7 @@ export function ToggleStep({ step, value, onChange }: StepProps) {
   }
   const on = typeof value === "boolean" ? value : !!step.default;
   return (
-    <div className="la-toggles">
+    <div className="la-toggles panel" data-flat="">
       <Switch labelFirst checked={on} onCheckedChange={onChange} label={on ? "Yes" : "No"} description={step.help} />
     </div>
   );

@@ -15,6 +15,10 @@ import { Button } from "@/ui/Button";
 import { DeltaPill } from "@/ui/DeltaPill";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from "@/ui/Menu";
 import { staggerItem, staggerList } from "@/ui/motion/presets";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
+import { spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
@@ -89,9 +93,11 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
   const item = inList?.symbols.find((s) => s.key === symbol);
   const [listForAlert, setListForAlert] = useState<string | null>(null);
   useEffect(() => setListForAlert(inList?.id ?? null), [inList?.id]);
+  const reduced = useReducedMotionPref();
   const pos = useMemo(() => (q && lo52 !== null && hi52 !== null && hi52 > lo52 ? (q.price - lo52) / (hi52 - lo52) : null), [q, lo52, hi52]);
   return (
-    <section className="fh-card">
+    <section className="fh-card mk-detail" data-light="">
+      <EdgeLight />
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -104,12 +110,11 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
               <>
                 <span className="mk-price">
                   <PriceFlash value={q.price} symbol={symbol}>
-                    {fmtPrice(q.price, q.currency)}
+                    <RollingNumber value={q.price} format={(n) => fmtPrice(n, q.currency)} countUp={false} />
                   </PriceFlash>
                 </span>
                 <span className={q.change >= 0 ? "emp-gain tabular font-semibold" : "emp-loss tabular font-semibold"}>
-                  {q.change >= 0 ? "+" : "−"}
-                  {fmtPrice(Math.abs(q.change), q.currency)}
+                  <RollingNumber value={q.change} format={(n) => `${n >= 0 ? "+" : "\u2212"}${fmtPrice(Math.abs(n), q.currency)}`} countUp={false} />
                 </span>
                 <DeltaPill value={q.changePct} digits={2} label="today" />
               </>
@@ -161,7 +166,11 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
           <div className="flex items-center gap-2 mt-1">
             <span className="text-caption tabular text-secondary">{lo52 !== null ? fmtPrice(lo52) : "—"}</span>
             <span className="mk-range">
-              {pos !== null ? <m.i initial={{ left: "0%" }} animate={{ left: `${Math.max(0, Math.min(1, pos)) * 100}%` }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} /> : null}
+              {pos !== null ? (
+                <m.span className="mk-range-rail" initial={reduced ? false : { x: "0%" }} animate={{ x: `${Math.max(0, Math.min(1, pos)) * 100}%` }} transition={reduced ? { duration: 0 } : { ...spring.settle, delay: 0.2 }}>
+                  <i />
+                </m.span>
+              ) : null}
             </span>
             <span className="text-caption tabular text-secondary">{hi52 !== null ? fmtPrice(hi52) : "—"}</span>
           </div>

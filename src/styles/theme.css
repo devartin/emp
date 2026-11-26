@@ -350,7 +350,7 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background-color: rgba(var(--text-rgb), 0.22);
+    background-color: rgba(var(--text-rgb), 0.2);
     border-radius: 9999px;
     border: 3px solid transparent;
     background-clip: content-box;
@@ -372,14 +372,16 @@
   }
 }
 
-/* Accent switch: transition colour properties for 240ms (§3.2). bootPrefs adds the class briefly. */
-:root.emp-accent-switching,
-:root.emp-accent-switching *,
-:root.emp-accent-switching *::before,
-:root.emp-accent-switching *::after {
-  transition-property: background-color, border-color, color, fill, stroke !important;
-  transition-duration: var(--emp-switch-ms, 240ms) !important;
-  transition-timing-function: var(--ease-out) !important;
+/* Accent / theme colour crossfade (§3.2): one root View Transition (themeTransition.ts crossfadeColors), composited —
+   no per-element transition overrides, so in-flight transform transitions keep running. */
+:root.emp-vt-crossfade::view-transition-group(*) {
+  animation-duration: var(--emp-switch-ms, 240ms);
+  animation-timing-function: var(--ease-out);
+}
+:root.emp-vt-crossfade::view-transition-old(root),
+:root.emp-vt-crossfade::view-transition-new(root) {
+  animation-duration: var(--emp-switch-ms, 240ms);
+  animation-timing-function: var(--ease-out);
 }
 
 /* ─── Privacy: Hide numbers (§5.10). Real value is also removed from the a11y tree by <Sensitive>. ─── */
@@ -402,13 +404,14 @@
   justify-content: var(--mask-justify, flex-start);
   overflow: hidden;
   padding-inline: 0.2em;
-  border-radius: 0.3em;
-  background: rgba(var(--text-rgb), 0.06);
+  border-radius: 6px;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim);
   color: var(--text-tertiary);
   font-weight: 600;
   letter-spacing: 0.06em;
   white-space: nowrap;
-  animation: emp-fade-in 160ms var(--ease-out);
+  animation: emp-fade-in 120ms var(--ease-out);
 }
 :root[data-privacy="on"] [data-sensitive][data-align="end"] {
   --mask-justify: flex-end;

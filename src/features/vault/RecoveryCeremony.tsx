@@ -11,7 +11,8 @@ import { usePrivacy } from "@/stores/privacy";
 import { notify } from "@/stores/toasts";
 import { Button } from "@/ui/Button";
 import { Checkbox } from "@/ui/Checkbox";
-import { spring } from "@/ui/motion/tokens";
+import { ease, spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import "./vault.css";
 
 export interface RecoveryCeremonyProps {
@@ -94,6 +95,7 @@ export function RecoveryCeremony({ words, onDone, allowSkip = true, footerStart,
   const [busy, setBusy] = useState(false);
   const [reveal, setReveal] = useState(false);
   const copySensitive = usePrivacy((s) => s.copySensitive);
+  const reduced = useReducedMotionPref();
 
   const ready = saved && answers.every((a) => a.trim().length > 0);
   const allRight = answers.every((a, i) => a.trim().toLowerCase() === words[positions[i]]?.toLowerCase());
@@ -124,24 +126,30 @@ export function RecoveryCeremony({ words, onDone, allowSkip = true, footerStart,
         {showWords ? (
           <m.div
             key="words"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto", transition: { duration: 0.22 } }}
-            exit={{ opacity: 0, height: 0, transition: { duration: 0.16 } }}
-            style={{ overflow: "hidden" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 0.16 } }}
+            exit={{ opacity: 0, transition: { duration: 0.12, ease: ease.in } }}
           >
+            {/* S4: each word is a keycap that flips up out of the well, 40ms apart, on the settle spring. */}
             <ol className="emp-words" aria-label="Recovery key, 24 words">
               {words.map((w, i) => (
-                <li key={i} className="emp-word">
+                <m.li
+                  key={i}
+                  className="emp-word"
+                  initial={reduced ? { opacity: 0 } : { opacity: 0, rotateX: -90, y: 6 }}
+                  animate={{ opacity: 1, rotateX: 0, y: 0, transition: reduced ? { duration: 0.14 } : { ...spring.settle, delay: 0.12 + i * 0.04, opacity: { duration: 0.18, delay: 0.12 + i * 0.04 } } }}
+                >
                   <span className="emp-word-n">{i + 1}</span>
                   <span className="emp-word-t">{w}</span>
-                </li>
+                </m.li>
               ))}
             </ol>
           </m.div>
         ) : (
           <m.div
             key="hidden"
-            className="flex items-center gap-3 rounded-xl border border-subtle bg-surface-2 px-4 py-3"
+            className="well flex items-center gap-3 rounded-xl px-4 py-3"
+            data-static=""
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, transition: { duration: 0.16, delay: 0.1 } }}
             exit={{ opacity: 0, transition: { duration: 0.1 } }}
@@ -191,17 +199,16 @@ export function RecoveryCeremony({ words, onDone, allowSkip = true, footerStart,
         {saved ? (
           <m.div
             key="verify"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto", transition: { duration: 0.2 } }}
-            exit={{ opacity: 0, height: 0, transition: { duration: 0.14 } }}
-            style={{ overflow: "hidden" }}
+            initial={{ opacity: 0, y: reduced ? 0 : -6 }}
+            animate={{ opacity: 1, y: 0, transition: reduced ? { duration: 0.14 } : spring.settle }}
+            exit={{ opacity: 0, transition: { duration: 0.12 } }}
           >
             <p className="mt-4 text-body-sm text-secondary">Type these words from your key to confirm:</p>
             <div className="mt-2 grid grid-cols-3 gap-2">
               {positions.map((p, i) => {
                 const ok = answers[i].trim().toLowerCase() === words[p]?.toLowerCase();
                 return (
-                  <label key={p} className="emp-word-input" data-filled={answers[i] ? "" : undefined} style={{ height: 36 }}>
+                  <label key={p} className="emp-word-input" data-filled={answers[i] ? "" : undefined} data-ok={ok ? "" : undefined} style={{ height: 38 }}>
                     <span aria-hidden>#{p + 1}</span>
                     <input
                       value={answers[i]}

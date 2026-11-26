@@ -1,16 +1,16 @@
 /**
- * Block drag and drop (§7.6, §4.2): pointer-driven, a 0.6-opacity clone follows the pointer (lift: scale 1.02, elev-4),
- * a 2px accent drop line with a 6px cap shows the target, the ghost's horizontal offset picks the nesting depth
- * (24px per level), hovering a collapsed toggle for 500ms expands it, the view auto-scrolls within 48px of an edge
+ * Block drag and drop (§7.6, S22): pointer-driven; the block lifts into a raised plate (scale 1.03, panel-raise) that
+ * leans ≤ 2.5° into the horizontal velocity, a 2px lit insertion groove with a dome cap glides between gaps, the
+ * ghost's horizontal offset picks the nesting depth (24px per level), hovering a collapsed toggle for 500ms expands it, the view auto-scrolls within 48px of an edge
  * (≤ 12px/frame), and dropping to the right edge of a top-level block makes columns. The drop is one undo step and
- * the moved block FLIPs into place.
+ * the moved block lands from the plate on the settle spring with a 1px contact squash.
  */
 import type { Editor } from '@tiptap/core';
 import { Fragment, type Node as PMNode } from '@tiptap/pm/model';
-import { css } from '@/ui/motion/tokens';
 import { allowsChildren, isToggleLike } from '../lib/blockTypes';
 import { allBlocks, deleteContainer, infoAt, parentOf, type BlockInfo } from '../lib/blocks';
 import { prefersReducedMotion } from '../lib/context';
+import { landFrom } from '../lib/fx';
 import { blockSelectionKey, KEEP_BLOCK_SEL } from '../extensions/blockSelection';
 
 const INDENT = 24;
@@ -48,6 +48,10 @@ export class BlockDrag {
   private sourceEls: HTMLElement[];
   private offset: { x: number; y: number };
   private done = false;
+  /** Smoothed horizontal velocity (px/ms) → the lifted plate leans into the drag (≤ 2.5°). */
+  private vx = 0;
+  private lastMove = { x: 0, t: 0 };
+  private lineShown = false;
 
   constructor(
     private editor: Editor,
@@ -100,10 +104,24 @@ export class BlockDrag {
   }
 
   private onMove = (e: PointerEvent) => {
+    const now = performance.now();
+    if (this.lastMove.t) {
+      const dt = Math.max(1, now - this.lastMove.t);
+      this.vx = this.vx * 0.75 + ((e.clientX - this.lastMove.x) / dt) * 0.25;
+    }
+    this.lastMove = { x: e.clientX, t: now };
     this.pointer = { x: e.clientX, y: e.clientY };
     this.positionGhost();
     this.compute();
   };
+
+  private tilt() {
+    const deg = prefersReducedMotion() ? 0 : Math.max(-2.5, Math.min(2.5, this.vx * 2.2));
+    const plate = this.ghost.firstElementChild as HTMLElement | null;
+    plate?.style.setProperty('--tilt', `${deg.toFixed(2)}deg`);
+    // the lean decays back to level when the pointer rests
+    this.vx *= 0.9;
+  }
 
   private onUp = () => {
     this.finish(true);
@@ -119,6 +137,7 @@ export class BlockDrag {
 
   private tick = () => {
     if (this.done) return;
+    this.tilt();
     // Auto-scroll near the edges.
     const rect = this.scroller instanceof Window ? { top: 0, bottom: window.innerHeight } : this.scroller.getBoundingClientRect();
     const y = this.pointer.y;
@@ -231,8 +250,12 @@ export class BlockDrag {
     const l = this.line;
     if (!t) {
       l.style.opacity = '0';
+      this.lineShown = false;
       return;
     }
+    // the groove glides between gaps; its first appearance (or a switch to columns) jumps into place
+    const jump = !this.lineShown || l.classList.contains('is-vertical') !== (t.kind === 'columns');
+    if (jump) l.setAttribute('data-jump', '');
     l.style.opacity = '1';
     if (t.kind === 'gap') {
       l.classList.remove('is-vertical');
@@ -245,6 +268,11 @@ export class BlockDrag {
       l.style.width = '2px';
       l.style.height = `${t.line.h}px`;
     }
+    if (jump) {
+      void l.offsetWidth;
+      l.removeAttribute('data-jump');
+    }
+    this.lineShown = true;
   }
 
   private finish(drop: boolean) {
@@ -290,15 +318,11 @@ export class BlockDrag {
     }
     tr.setMeta(blockSelectionKey, { set: { ids: blocks.map((b) => b.id) } }).setMeta(KEEP_BLOCK_SEL, true);
     this.editor.view.dispatch(tr.scrollIntoView());
-    if (prefersReducedMotion()) return;
+    // physical drop (S22): the block lands from where the lifted plate was, on the settle spring, then squashes 1px
     requestAnimationFrame(() => {
       const el = this.editor.view.dom.querySelector<HTMLElement>(`.emp-block[data-id="${CSS.escape(blocks[0].id)}"]`);
       if (!el) return;
-      const r = el.getBoundingClientRect();
-      const dx = ghostRect.left - r.left;
-      const dy = ghostRect.top - r.top;
-      if (Math.abs(dx) + Math.abs(dy) < 2) return;
-      el.animate([{ transform: `translate(${dx}px, ${dy}px) scale(1.02)`, opacity: 0.8 }, { transform: 'none', opacity: 1 }], { duration: 240, easing: css.easeOutExpo });
+      landFrom(el, { left: ghostRect.left + 8, top: ghostRect.top + 4 }, { scale: 1.03, rotate: 0 });
     });
   }
 }

@@ -8,7 +8,7 @@ import { api } from "@/backend";
 import type { CellValue, DbSchema, Id, RowDTO } from "@/backend/types";
 import { notify } from "@/stores/toasts";
 import { cell, queryAll, useAsync, useDbChanged, useRoleDbs, V } from "../shared/hooks";
-import { num } from "../shared/format";
+import { addMonths, num, todayIso } from "../shared/format";
 
 export interface Account {
   id: Id;
@@ -166,9 +166,12 @@ function parseAll(schemas: Partial<Record<DbKey, DbSchema>>, rows: Partial<Recor
   const txns = all.filter((t) => !t.splitParent).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const acct = new Map(accounts.map((a) => [a.id, a]));
   for (const a of accounts) a.balance = a.cleared = a.opening;
+  // Balances are "as of today", the same cut the backend uses for net worth (finance_overview / networth_series);
+  // future-dated (scheduled) rows otherwise made Accounts disagree with the Overview hero.
+  const today = todayIso();
   for (const t of txns) {
     const a = t.accountId ? acct.get(t.accountId) : undefined;
-    if (!a) continue;
+    if (!a || t.date > today) continue;
     a.balance += t.amount;
     if (t.cleared !== "uncleared") a.cleared += t.amount;
   }
@@ -346,6 +349,17 @@ export function useLedgerCtx(): Ledger {
 }
 
 export const DEBT_TYPES = new Set(["credit_card", "student_loan", "auto_loan", "mortgage", "personal_loan", "other_liability"]);
+/** The debts the planner works on: open loan/card accounts carrying a balance owed. One source for the Overview
+ * "Debt-free" tile and the Debt tab, so both quote the same plan. */
+export function debtInputs(accounts: Account[]): { key: Id; name: string; balance: string; aprPct: string; minPayment: string }[] {
+  return accounts
+    .filter((a) => DEBT_TYPES.has(a.type) && !a.closed && a.balance < 0)
+    .map((a) => ({ key: a.id, name: a.name, balance: (-a.balance).toFixed(2), aprPct: String(a.apr ?? 0), minPayment: a.minPayment.toFixed(2) }));
+}
+
+/** First month of a payoff plan: next month (this month's payments are already in the ledger). */
+export const debtPlanStart = (): string => addMonths(todayIso().slice(0, 7), 1);
+
 export const ACCOUNT_TYPE_LABEL: Record<string, string> = {
   checking: "Checking",
   savings: "Savings",

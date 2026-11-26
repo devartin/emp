@@ -7,7 +7,7 @@ import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dn
 import { CSS } from '@dnd-kit/utilities';
 import { LayoutGroup, m } from 'motion/react';
 import { Eye, EyeOff, List, Palette, PenLine, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { BlockColor, SheetMeta } from '@/backend/types';
 import { cn } from '@/lib/cn';
 import { AlertDialog } from '@/ui/AlertDialog';
@@ -15,7 +15,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { IconButton } from '@/ui/IconButton';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '@/ui/Menu';
 import { spring } from '@/ui/motion/tokens';
-import { useGridVersion, type GridController } from './GridController';
+import { useGridSelector, type GridController } from './GridController';
 import { TAB_COLORS } from './palette';
 import { StatusBar } from './StatusBar';
 
@@ -23,8 +23,10 @@ export interface SheetTabsProps {
   ctrl: GridController;
 }
 
-export function SheetTabs({ ctrl }: SheetTabsProps) {
-  useGridVersion(ctrl);
+/** Re-renders only when the sheet list or the current sheet changes — not on selection moves (the status bar on the
+ *  right subscribes to the selection on its own). */
+export const SheetTabs = memo(function SheetTabs({ ctrl }: SheetTabsProps) {
+  useGridSelector(ctrl, (c) => `${c.sheetId}|${c.sheets.map((s) => `${s.id}:${s.name}:${s.color ?? ''}:${s.hidden ? 1 : 0}`).join('|')}`);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<SheetMeta | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -109,7 +111,7 @@ export function SheetTabs({ ctrl }: SheetTabsProps) {
       />
     </div>
   );
-}
+});
 
 interface SheetTabProps {
   sheet: SheetMeta;

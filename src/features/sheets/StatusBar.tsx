@@ -6,9 +6,10 @@ import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { api } from '@/backend';
 import { Tooltip } from '@/ui/Tooltip';
+import { RollingNumber } from '@/ui/motion/RollingNumber';
 import { rectName } from './engine/addr';
 import { formatValue } from './engine/numfmt';
-import { useGridVersion, type GridController } from './GridController';
+import { useGridSelector, type GridController } from './GridController';
 
 interface Summary {
   sum: number | null;
@@ -18,7 +19,7 @@ interface Summary {
 }
 
 export function StatusBar({ ctrl }: { ctrl: GridController }) {
-  useGridVersion(ctrl);
+  useGridSelector(ctrl, (c) => `${c.sheetId}|${c.sel.ranges.map(rectName).join(',')}|${c.dataVersion}|${c.activeStyle.numFmt ?? ''}|${c.sheets.length}`);
   const [sum, setSum] = useState<Summary | null>(null);
   const ranges = ctrl.sel.ranges;
   const key = `${ctrl.sheetId}|${ranges.map(rectName).join(',')}|${ctrl.dataVersion}`;
@@ -54,7 +55,8 @@ export function StatusBar({ ctrl }: { ctrl: GridController }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, single]);
 
-  const show = (n: number) => formatValue(n, fmt && !/[ymdhs]/i.test(fmt) ? fmt : Math.abs(n) >= 1000 ? '#,##0.00' : 'General').text;
+  // Display only: a true minus (U+2212) like the grid paints.
+  const show = (n: number) => formatValue(n, fmt && !/[ymdhs]/i.test(fmt) ? fmt : Math.abs(n) >= 1000 ? '#,##0.00' : 'General').text.replace(/^-/, '\u2212');
   return (
     <div className="emp-sheet-status" aria-live="polite">
       <AnimatePresence initial={false} mode="popLayout">
@@ -64,19 +66,19 @@ export function StatusBar({ ctrl }: { ctrl: GridController }) {
               <Tooltip content="Sum of the numbers in the selection">
                 <span className="emp-status-item">
                   <span>Sum</span>
-                  <b>{show(sum.sum)}</b>
+                  <b><RollingNumber value={sum.sum} format={show} /></b>
                 </span>
               </Tooltip>
             ) : null}
             {sum.avg !== null ? (
               <span className="emp-status-item">
                 <span>Average</span>
-                <b>{show(sum.avg)}</b>
+                <b><RollingNumber value={sum.avg} format={show} /></b>
               </span>
             ) : null}
             <span className="emp-status-item">
               <span>Count</span>
-              <b>{sum.countA.toLocaleString()}</b>
+              <b><RollingNumber value={sum.countA} format={(n) => Math.round(n).toLocaleString()} /></b>
             </span>
           </m.div>
         ) : (

@@ -108,7 +108,43 @@ export function calcSync(input: string): CalcResult | null {
   if (/[a-z]{2,}/i.test(q.replace(/\bof\b/gi, ""))) return null;
   const v = evalNum(q);
   if (v === null) return null;
-  return { copy: String(Math.round(v * 1e10) / 1e10), display: fmt(v, 10), detail: q.replace(/\*/g, " × ").replace(/\//g, " ÷ ").replace(/\s+/g, " ") };
+  return { copy: String(Math.round(v * 1e10) / 1e10), display: fmt(v, 10), detail: prettyExpr(q) };
+}
+
+const THIN = "\u2009";
+
+/**
+ * Echo of an arithmetic expression with typographic operators and even spacing: every binary operator gets a thin
+ * space on both sides ("1200 × 12 + 340"); a unary minus stays attached to its operand ("−3 × −2").
+ */
+export function prettyExpr(q: string): string {
+  const tokens = q.replace(/\s+/g, "").match(/\d[\d,]*(?:\.\d+)?|\.\d+|[a-z]+|[-+*/×÷x^()%]|./gi) ?? [];
+  let out = "";
+  let prev: "start" | "value" | "op" = "start";
+  for (const t of tokens) {
+    if (/^[-+*/×÷^]$/.test(t) || (t === "x" && prev === "value")) {
+      const sym = t === "*" || t === "x" ? "×" : t === "/" ? "÷" : t === "-" ? "−" : t;
+      if (prev === "value") {
+        out += `${THIN}${sym}${THIN}`;
+        prev = "op";
+      } else out += sym; // unary sign
+      continue;
+    }
+    if (t === "(") {
+      out += t;
+      prev = "start";
+      continue;
+    }
+    if (/^[a-z]+$/i.test(t)) {
+      // words such as "of" in "15% of 80"
+      out += ` ${t} `;
+      prev = "op";
+      continue;
+    }
+    out += t;
+    prev = "value";
+  }
+  return out.replace(/ {2,}/g, " ").trim();
 }
 
 /** Full calculator including currency conversion. */

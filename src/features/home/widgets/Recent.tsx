@@ -7,6 +7,7 @@ import { formatRelative } from "@/lib/dates";
 import { useTree } from "@/stores/tree";
 import { useWorkspace } from "@/stores/workspace";
 import { PageIcon } from "@/features/shell/PageIcon";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { staggerItem, staggerList } from "@/ui/motion/presets";
 
 export function RecentWidget() {
@@ -14,13 +15,16 @@ export function RecentWidget() {
   const pages = useTree(useShallow((s) => recents.map((id) => s.byId.get(id)).filter((p): p is NonNullable<typeof p> => !!p && !p.flags.template && !p.deletedAt).slice(0, 8)));
   return (
     <div className="flex h-full flex-col gap-3">
-      <h2 className="hm-title"><Clock size={15} aria-hidden />Recent</h2>
+      <h2 data-widget-head="" className="hm-title"><Clock size={15} aria-hidden />Recent</h2>
       {pages.length ? (
-        <m.ul className="hm-recent" variants={staggerList(0.03)} initial="hidden" animate="show">
+        <m.ul className="hm-recent" variants={staggerList(0.04)} initial="hidden" animate="show">
           {pages.map((p) => (
             <m.li key={p.id} variants={staggerItem}>
-              <button type="button" className="hm-recent-card" onClick={() => navigate({ t: "page", id: p.id })}>
-                <PageIcon icon={p.icon} kind={p.kind} size={20} />
+              <button type="button" className="hm-recent-card panel" data-raise data-light onClick={() => navigate({ t: "page", id: p.id })}>
+                <EdgeLight />
+                <span className="hm-recent-icon">
+                  <PageIcon icon={p.icon} kind={p.kind} size={18} />
+                </span>
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="truncate text-body-sm font-medium text-primary">{p.title || "Untitled"}</span>
                   <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>{formatRelative(p.updatedAt)}</span>

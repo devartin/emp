@@ -1992,9 +1992,6 @@
   gap: 10px;
 }
 @media (max-width: 900px) {
-  .st-rail {
-    width: 196px;
-  }
   .st-main {
     padding: 24px 20px 80px;
   }
@@ -2031,5 +2028,630 @@
   .st-hero {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Design language v2 "Slab" (docs/DESIGN.md §8.3, S12). Layered over the rules above.
+   Rail = a machined plate with an engraved right edge; the active section is a secondary slab that glides; groups
+   are panels; dividers are grooves; the header icon is a keycap tile. Transform / opacity / filter only.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.st-page {
+  background: var(--canvas-bg);
+}
+.st-rail {
+  position: relative;
+  isolation: isolate;
+  border-right: 0;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset -1px 0 0 var(--groove-lite), inset -2px 0 0 var(--groove-dark);
+}
+.st-rail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url("../../styles/grain.png") 0 0 / 180px;
+  mix-blend-mode: var(--grain-blend);
+  opacity: var(--grain-op);
+}
+.st-search {
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  transition: box-shadow 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) .st-search {
+  background: var(--well-bg);
+}
+.st-search:focus-within {
+  background: color-mix(in oklab, var(--well-bg), var(--panel-top) 55%);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+}
+.st-search input::placeholder {
+  color: var(--text-tertiary);
+}
+.st-search svg {
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.st-search:focus-within svg {
+  transform: scale(1.08);
+  color: var(--text-secondary);
+}
+
+/* nav rows: ghost plate on hover, press with physics; the active row is a slab (edge 1.5px) */
+.st-nav-group {
+  gap: 2px;
+}
+.st-nav-item {
+  transform: translateY(0) scale(1);
+  transition:
+    background-color 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    transform var(--dur-release) var(--spring-release);
+}
+.st-nav-item:hover {
+  background: var(--ghost-hover);
+}
+.st-nav-item:active {
+  transform: translateY(0.5px) scale(0.985);
+  transition: transform var(--dur-press) var(--ease-press);
+}
+.st-nav-item:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.st-nav-item svg {
+  transition: color 160ms var(--ease-out), transform var(--dur-release) var(--spring-release);
+}
+.st-nav-item:hover svg {
+  color: var(--text-secondary);
+}
+.st-nav-item.is-active:active {
+  transform: translateY(1px) scale(0.99);
+}
+.st-nav-item.is-active svg {
+  color: var(--text-primary);
+}
+.st-nav-pill {
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow:
+    inset 0 1px 0 var(--slab-s-hl),
+    inset 0 0 0 1px var(--slab-s-rim),
+    0 1.5px 0 var(--slab-s-side-b),
+    0 2px 3px var(--slab-s-contact),
+    0 8px 14px -8px var(--slab-s-ambient);
+}
+.st-nav-score {
+  height: 18px;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 18%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* main */
+.st-header {
+  align-items: center;
+}
+.st-header-icon {
+  position: relative;
+  isolation: isolate;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow:
+    inset 0 1px 0 var(--slab-s-hl),
+    inset 0 0 0 1px var(--slab-s-rim),
+    0 2.5px 0 var(--slab-s-side-b),
+    0 3px 4px var(--slab-s-contact),
+    0 12px 20px -10px var(--slab-s-ambient);
+  animation: st-icon-in 520ms var(--spring-pop) both;
+}
+.st-header-icon svg {
+  animation: st-icon-glyph 640ms var(--spring-release) 80ms both;
+}
+@keyframes st-icon-in {
+  from {
+    transform: translateY(-6px) scale(0.92);
+    opacity: 0;
+  }
+}
+@keyframes st-icon-glyph {
+  from {
+    transform: rotate(-14deg) scale(0.7);
+    opacity: 0;
+  }
+}
+.st-title {
+  letter-spacing: -0.022em;
+}
+
+/* groups are machined plates; rows are separated by engraved grooves */
+.st-card {
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 -1px 0 var(--panel-lo), inset 0 0 0 1px var(--panel-rim), var(--panel-shadow);
+}
+.st-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background: url("../../styles/grain.png") 0 0 / 180px;
+  mix-blend-mode: var(--grain-blend);
+  opacity: var(--grain-op);
+}
+.st-row + .st-row,
+.st-card > * + .st-row,
+.st-row + .st-block,
+.st-block + .st-row,
+.st-block + .st-block {
+  border-top: 0;
+  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
+}
+.st-row-icon {
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  color: var(--text-secondary);
+}
+.st-group {
+  animation: st-group-in 360ms var(--ease-out) both;
+}
+.st-body > div > .st-group:nth-of-type(1) { animation-delay: 40ms; }
+.st-body > div > .st-group:nth-of-type(2) { animation-delay: 80ms; }
+.st-body > div > .st-group:nth-of-type(3) { animation-delay: 120ms; }
+.st-body > div > .st-group:nth-of-type(4) { animation-delay: 160ms; }
+.st-body > div > .st-group:nth-of-type(n + 5) { animation-delay: 200ms; }
+@keyframes st-group-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.st-tag {
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--well-rim), inset 0 1px 1px var(--well-in);
+  background: var(--well-bg);
+}
+.st-chip {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 16%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) .st-chip {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 22%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ── appearance: theme cards are plates that latch; previews re-light on change */
+.st-theme {
+  transform: translateY(0) scale(1);
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.st-theme:hover {
+  transform: translateY(-2px);
+  transition: transform 200ms var(--ease-out);
+}
+.st-theme:active {
+  transform: translateY(0) scale(0.985);
+  transition: transform var(--dur-press) var(--ease-press);
+}
+.st-theme-preview {
+  height: 100px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--panel-rim), 0 1px 1px rgba(0, 0, 0, 0.05), 0 6px 14px -8px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 200ms var(--ease-out);
+}
+.st-theme-preview::after {
+  /* specular sheet over the miniature: the screen glass */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), transparent 42%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.st-theme:hover .st-theme-preview {
+  box-shadow: 0 0 0 1px var(--panel-rim), 0 2px 3px rgba(0, 0, 0, 0.06), 0 16px 28px -14px rgba(0, 0, 0, 0.42);
+}
+.st-theme.is-on .st-theme-preview {
+  box-shadow: 0 0 0 2px var(--ring), 0 0 0 6px var(--ring-halo), 0 6px 14px -8px rgba(0, 0, 0, 0.3);
+}
+.st-theme-check {
+  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
+  color: var(--lit-fg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 1px 0 rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+/* a miniature keycap in every preview */
+.st-mini-key {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  width: 26px;
+  height: 9px;
+  border-radius: 3px;
+  box-shadow: 0 1.5px 0 var(--mk-side), 0 2px 3px rgba(0, 0, 0, 0.25);
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.st-theme:hover .st-mini-key {
+  transform: translateY(-1px);
+}
+.st-theme:active .st-mini-key {
+  transform: translateY(1.5px);
+  box-shadow: 0 0 0 var(--mk-side), 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+/* accent swatches: domes; the latched ring glides between them */
+.st-swatch {
+  transform: translateY(0) scale(1);
+  transition: transform var(--dur-release) var(--spring-release);
+}
+.st-swatch:active {
+  transform: translateY(1px) scale(0.92);
+  transition: transform var(--dur-press) var(--ease-press);
+}
+.st-swatch:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.st-swatch-fill {
+  background: radial-gradient(120% 90% at 50% 10%, color-mix(in oklab, var(--sw-l) 70%, #fff), var(--sw-l) 62%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 3px rgba(0, 0, 0, 0.18), inset 0 0 0 1px rgba(0, 0, 0, 0.14), 0 1px 0 rgba(0, 0, 0, 0.12), 0 2px 5px -1px rgba(0, 0, 0, 0.3);
+  transition: transform var(--dur-release) var(--spring-release);
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) .st-swatch-fill {
+  background: radial-gradient(120% 90% at 50% 10%, color-mix(in oklab, var(--sw-d) 70%, #fff), var(--sw-d) 62%);
+}
+.st-swatch:hover .st-swatch-fill {
+  transform: translateY(-1px) scale(1.06);
+}
+.st-swatch-ring {
+  inset: -2px;
+  box-shadow: 0 0 0 2px var(--ring), 0 0 0 5px var(--ring-halo);
+}
+
+/* the live preview: a recessed bed that re-lights (one sheen pass) when the accent changes */
+.st-accent-preview {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 3px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+}
+.st-relight {
+  position: absolute;
+  inset: -20% auto -20% 0;
+  width: 42%;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent-solid) 26%, rgba(255, 255, 255, 0.5)), transparent);
+  mix-blend-mode: soft-light;
+  transform: translateX(-120%) skewX(-18deg);
+  animation: st-relight 820ms var(--ease-sheen, cubic-bezier(0.3, 0.7, 0.2, 1)) both;
+}
+@keyframes st-relight {
+  to {
+    transform: translateX(340%) skewX(-18deg);
+  }
+}
+.st-ap-pop {
+  animation: st-ap-pop 420ms var(--spring-pop) both;
+}
+@keyframes st-ap-pop {
+  0% {
+    transform: scale(0.94);
+  }
+}
+
+/* density / text-size previews crossfade (160ms) */
+.st-density-demo {
+  animation: st-fade 160ms var(--ease-out);
+}
+@keyframes st-fade {
+  from {
+    opacity: 0.4;
+  }
+}
+.st-motion-demo {
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+}
+
+/* ── security: the vault (S: encryption status) */
+.st-vault {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+  padding: 22px 24px 22px 18px;
+}
+.st-vault-art {
+  position: relative;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background:
+    radial-gradient(70% 60% at 50% 38%, color-mix(in oklab, var(--vault-tint) 18%, transparent), transparent 70%),
+    var(--well-bg);
+  box-shadow: inset 0 1px 3px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  overflow: hidden;
+  --vault-tint: var(--warning);
+}
+.st-vault[data-enc="1"] .st-vault-art {
+  --vault-tint: var(--gain);
+}
+.st-vault-art .emp-slab-glyph {
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.18));
+  transition: transform 520ms var(--spring-settle), filter 320ms var(--ease-out);
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) .st-vault-art .emp-slab-glyph {
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.6));
+}
+.st-vault-art .emp-slab-layer {
+  transition: transform 520ms var(--spring-settle), opacity 320ms var(--ease-out);
+}
+.st-vault-art .emp-slab-glyph[data-exploded] .emp-slab-layer {
+  transform: translateY(calc(var(--k) * -3.4 * var(--gap)));
+}
+.st-vault-art[data-l0="0"] .emp-slab-layer:nth-of-type(1),
+.st-vault-art[data-l1="0"] .emp-slab-layer:nth-of-type(2),
+.st-vault-art[data-l2="0"] .emp-slab-layer:nth-of-type(3) {
+  opacity: 0.5;
+}
+/* the seal: a lit ring that closes around the stack once encrypted */
+.st-vault-seal {
+  position: absolute;
+  inset: 16px;
+  border-radius: 999px;
+  pointer-events: none;
+  border: 1.5px dashed color-mix(in oklab, var(--vault-tint) 55%, transparent);
+  opacity: 0.7;
+  transform: scale(1.06);
+  transition: transform 600ms var(--spring-settle), opacity 300ms var(--ease-out), border-color 300ms var(--ease-out);
+}
+.st-vault[data-enc="1"] .st-vault-seal {
+  border-style: solid;
+  border-color: color-mix(in oklab, var(--gain) 45%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--gain) 9%, transparent), inset 0 0 18px color-mix(in oklab, var(--gain) 14%, transparent);
+  transform: scale(0.94);
+  opacity: 1;
+}
+.st-vault-lock {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slab-s-fg);
+  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 2px 0 var(--slab-s-side-b), 0 3px 5px var(--slab-s-contact);
+}
+.st-vault[data-enc="1"] .st-vault-lock {
+  color: var(--slab-p-fg);
+  background: linear-gradient(180deg, var(--slab-p-face-a), var(--slab-p-face-b));
+  box-shadow: inset 0 1px 0 var(--slab-p-hl), inset 0 0 0 1px var(--slab-p-rim), 0 2px 0 var(--slab-p-side-b), 0 3px 6px var(--slab-p-contact), var(--glow-pool);
+}
+.st-vault-lock::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: radial-gradient(circle at 50% 30%, color-mix(in oklab, var(--vault-tint) 50%, #fff), var(--vault-tint) 70%);
+  box-shadow: 0 0 0 2px var(--panel-top), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.st-vault-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: calc(11rem / 14);
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--vault-tint) 72%, var(--text-secondary));
+  --vault-tint: var(--warning);
+}
+.st-vault[data-enc="1"] .st-vault-eyebrow {
+  --vault-tint: var(--gain);
+}
+.st-vault-title {
+  margin-top: 4px;
+  font-size: calc(19rem / 14);
+  line-height: 26px;
+  font-weight: 640;
+  letter-spacing: -0.017em;
+  color: var(--text-primary);
+}
+.st-layers {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.st-layer {
+  display: grid;
+  grid-template-columns: 18px 92px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 9px;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  font-size: calc(12.5rem / 14);
+  animation: st-layer-in 380ms var(--spring-settle) both;
+  animation-delay: calc(var(--i, 0) * 60ms + 120ms);
+}
+@keyframes st-layer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+.st-layer-led {
+  width: 10px;
+  height: 10px;
+  margin-left: 4px;
+  border-radius: 99px;
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim);
+  transition: background 240ms var(--ease-out), box-shadow 240ms var(--ease-out);
+}
+.st-layer[data-on] .st-layer-led {
+  background: radial-gradient(circle at 50% 30%, color-mix(in oklab, var(--gain) 45%, #fff), var(--gain) 70%);
+  box-shadow: 0 0 0 0.5px color-mix(in oklab, var(--gain) 60%, #000), 0 0 8px color-mix(in oklab, var(--gain) 55%, transparent);
+}
+.st-layer-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.st-layer-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-tertiary);
+}
+.st-layer-state {
+  font-size: calc(11.5rem / 14);
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.st-layer[data-on] .st-layer-state {
+  color: var(--gain-text);
+}
+@media (max-width: 900px) {
+  .st-vault {
+    grid-template-columns: 1fr;
+  }
+  .st-layer {
+    grid-template-columns: 18px 80px minmax(0, 1fr);
+  }
+  .st-layer-state {
+    display: none;
+  }
+}
+
+/* hero ring: a recessed bed under the score sweep */
+.st-hero {
+  border: 0;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in oklab, var(--hero-tint) 9%, transparent), transparent 55%),
+    linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 -1px 0 var(--panel-lo), inset 0 0 0 1px var(--panel-rim), var(--panel-shadow);
+}
+.st-hero-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--well-bg);
+  box-shadow: inset 0 2px 5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+}
+.st-hero-ring svg {
+  position: relative;
+}
+.st-hero-track {
+  stroke: transparent;
+}
+.st-check {
+  transition: background-color 160ms var(--ease-out);
+}
+.st-check:hover {
+  background: var(--ghost-hover);
+}
+.st-check + .st-check {
+  border-top: 0;
+  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
+}
+
+:root:is([data-effects="reduced"], [data-contrast="more"]) :is(.st-rail, .st-card)::before {
+  display: none;
+}
+:root[data-motion="reduced"] :is(.st-group, .st-header-icon, .st-header-icon svg, .st-layer, .st-relight, .st-ap-pop, .st-density-demo) {
+  animation: none !important;
+}
+:root[data-motion="reduced"] :is(.st-nav-item, .st-theme, .st-swatch, .st-swatch-fill, .st-mini-key, .st-vault-seal, .st-vault-art .emp-slab-layer) {
+  transition: opacity 120ms linear !important;
+  transform: none !important;
+}
+
+/* ── narrow: the rail folds into a sticky header (section picker + search). Container query on the page, so it also
+   applies when the app sidebar is open on a mid-size window. Labels never truncate. */
+.st-page {
+  container: st-page / inline-size;
+}
+.st-compact {
+  display: none;
+}
+@container st-page (max-width: 819px) {
+  .st-rail {
+    display: none;
+  }
+  .st-main {
+    padding: 0 20px 80px;
+  }
+  .st-compact {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 -20px 24px;
+    padding: 12px 20px 12px;
+    background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+    box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark), 0 10px 18px -16px var(--panel-shadow-c, rgba(0, 0, 0, 0.35));
+  }
+  .st-compact-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .st-compact-select {
+    flex: 0 1 240px;
+    min-width: 0;
+  }
+  .st-compact .st-search {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+  .st-compact .st-results {
+    max-height: min(320px, 50vh);
+    overflow-y: auto;
+  }
+}
+@container st-page (max-width: 520px) {
+  .st-compact-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .st-compact-select,
+  .st-compact .st-search {
+    flex: none;
   }
 }

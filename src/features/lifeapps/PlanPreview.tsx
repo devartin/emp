@@ -1,10 +1,12 @@
 /**
- * Live plan preview (§6.5 right column): a miniature of the hub that reacts to answers, then "What we'll create" —
- * every generated item grouped by kind, with a switch on each optional one so the user can opt out.
+ * Live plan preview (§6.5 right column, a recessed bay): a miniature of the hub — a raised panel that reacts to
+ * answers — then "What we'll create": every generated item as a small skeleton slab (the plates the S6 build stage
+ * drops in), grouped by kind, with a switch on each optional one so the user can opt out (an opted-out slab sinks into
+ * the bay).
  */
 import { AlertTriangle, Bell, Database, Eye, FileText, LayoutDashboard, ListChecks, Repeat, Sheet as SheetIcon, Target, Wand2 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import type { GenerationPlan, GenerationPlanItem, LifeAppManifest } from "@/backend/types";
 import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/format";
@@ -12,7 +14,8 @@ import { Skeleton } from "@/ui/Skeleton";
 import { Switch } from "@/ui/Switch";
 import { spring } from "@/ui/motion/tokens";
 import { describeCounts, SHEET_TITLES } from "./engine/plan";
-import { identity } from "./identity";
+import { AppTile } from "./AppTile";
+import { appVars } from "./identity";
 import { humanValue } from "./steps/fields";
 
 const KIND: Record<GenerationPlanItem["kind"], { label: string; icon: typeof FileText }> = {
@@ -68,8 +71,9 @@ export function PlanPreview({ manifest, plan, answers, disabled, onToggle, curre
                     {g.items.map((it) => {
                       const off = disabled.includes(it.key);
                       return (
-                        <m.li key={it.key} layout="position" className={cn("la-preview-item", off && "is-off")} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0, transition: spring.gentle }} exit={{ opacity: 0, transition: { duration: 0.1 } }}>
-                          <span className="min-w-0 flex-1 truncate">{it.title}</span>
+                        <m.li key={it.key} layout="position" className={cn("la-preview-item", off && "is-off")} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0, transition: spring.settle }} exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.1, ease: [0.4, 0, 1, 1] } }} transition={spring.morph}>
+                          <span className="la-preview-mark" aria-hidden />
+                          <span className="la-preview-title min-w-0 flex-1 truncate">{it.title}</span>
                           {it.count !== undefined && it.count > 1 ? <span className="la-count">×{it.count}</span> : null}
                           {it.optional ? <Switch size="sm" checked={!off} onCheckedChange={(on) => onToggle(it.key, on)} aria-label={`Create ${it.title}`} /> : null}
                         </m.li>
@@ -98,16 +102,12 @@ export function PlanPreview({ manifest, plan, answers, disabled, onToggle, curre
 
 /** A miniature of the hub that reacts to answers (crossfades over 160 ms). */
 function MiniHub({ manifest, answers, currency }: { manifest: LifeAppManifest; answers: Record<string, unknown>; currency: string }) {
-  const id = identity(manifest.id);
-  const Icon = id.icon;
   const content = miniContent(manifest.id, answers, currency);
   return (
-    <div className="la-mini" style={{ ["--app" as string]: id.color }}>
+    <div className="la-mini panel" style={appVars(manifest.id)}>
       <div className="la-mini-banner" />
       <div className="la-mini-head">
-        <span className="la-tile la-tile-sm" style={{ background: id.color }}>
-          <Icon size={12} strokeWidth={2.25} aria-hidden />
-        </span>
+        <AppTile appId={manifest.id} size="sm" />
         <span className="truncate text-body-sm font-semibold">{content.title ?? manifest.title}</span>
       </div>
       <AnimatePresence mode="wait" initial={false}>
@@ -147,7 +147,7 @@ function miniContent(appId: string, a: Record<string, unknown>, currency: string
             </div>
             <div className="la-mini-bars" aria-hidden>
               {[0.82, 0.55, 0.7, 0.38, 0.62, 0.48].map((h, i) => (
-                <span key={i} style={{ height: `${h * 100}%` }} />
+                <span key={i} style={{ ["--h" as string]: pay ? h : h * 0.35 } as CSSProperties} />
               ))}
             </div>
             <p className="la-mini-caption">{({ fifty_thirty_twenty: "50/30/20 · Needs, Wants, Savings & Debt", zero_based: "Zero-based · every dollar gets a job", pay_yourself_first: "Pay yourself first · savings move on payday", envelopes: "Envelopes · fixed amounts per category", track_only: "Track only · no targets" } as Record<string, string>)[method]}</p>

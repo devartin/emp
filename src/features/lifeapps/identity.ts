@@ -55,6 +55,9 @@ export function iconByName(name: string | undefined): LucideIcon | undefined {
   return name ? ICONS[name] : undefined;
 }
 
+/** Apps whose hub renders this feature's AppHeader (the others are the finance feature's hubs). */
+export const OWN_HUBS: ReadonlySet<string> = new Set(["life-os", "habits", "spreadsheet-studio"]);
+
 /** CSS custom properties that tint a subtree with an app's colour. */
 export function appVars(appId: string): Record<string, string> {
   const c = identity(appId).color;

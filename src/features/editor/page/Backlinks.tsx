@@ -1,4 +1,9 @@
-/** Backlinks (§7.10): a pill under the title, "N backlinks"; expands to sources with ±60-char snippets. */
+/**
+ * Backlinks (§7.10): a pill under the title, "N backlinks"; expands to sources with ±60-char snippets.
+ * DESIGN §1.6: nothing animates height. The list mounts at its full size and fades in (items rise in a CSS stagger);
+ * on close it pops out of flow (`popLayout`) while it fades. The page body below glides with a `layout="position"`
+ * FLIP keyed on `open` (PageView), so `open` is controlled by the page.
+ */
 import { AnimatePresence, m } from 'motion/react';
 import { ArrowUpRight, ChevronRight, Link2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -6,11 +11,10 @@ import { api, listen } from '@/backend';
 import type { Backlink, Id } from '@/backend/types';
 import { navigate } from '@/app/router';
 import { cn } from '@/lib/cn';
-import { ease } from '@/ui/motion/tokens';
+import { spring } from '@/ui/motion/tokens';
 
-export function Backlinks({ pageId }: { pageId: Id }) {
+export function Backlinks({ pageId, open, onOpenChange }: { pageId: Id; open: boolean; onOpenChange: (open: boolean) => void }) {
   const [links, setLinks] = useState<Backlink[] | null>(null);
-  const [open, setOpen] = useState(false);
   useEffect(() => {
     let live = true;
     let t: ReturnType<typeof setTimeout> | null = null;
@@ -35,7 +39,7 @@ export function Backlinks({ pageId }: { pageId: Id }) {
   const sources = new Set(links.map((l) => l.sourceId)).size;
   return (
     <div className="emp-backlinks">
-      <button type="button" className={cn('emp-backlinks-pill', open && 'is-open')} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button type="button" className={cn('emp-backlinks-pill', open && 'is-open')} onClick={() => onOpenChange(!open)} aria-expanded={open}>
         <Link2 size={13} />
         <span>
           {links.length} backlink{links.length === 1 ? '' : 's'}
@@ -43,13 +47,14 @@ export function Backlinks({ pageId }: { pageId: Id }) {
         </span>
         <ChevronRight size={13} className="emp-backlinks-chev" />
       </button>
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} mode="popLayout">
         {open ? (
           <m.ul
+            key="list"
             className="emp-backlinks-list"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1, transition: { duration: 0.2, ease: [...ease.out] as [number, number, number, number] } }}
-            exit={{ height: 0, opacity: 0, transition: { duration: 0.14, ease: [...ease.in] as [number, number, number, number] } }}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0, transition: { opacity: { duration: 0.16 }, y: spring.settle } }}
+            exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
           >
             {links.map((l, i) => (
               <li key={`${l.sourceId}:${l.blockId ?? i}`}>

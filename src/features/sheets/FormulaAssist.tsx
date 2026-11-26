@@ -8,6 +8,8 @@ import { useEffect, useLayoutEffect, useMemo, useState, type RefObject } from 'r
 import { createPortal } from 'react-dom';
 import type { SheetFunctionInfo } from '@/backend/types';
 import { cn } from '@/lib/cn';
+import { GlideHighlight } from '@/ui/GlideHighlight';
+import { Kbd } from '@/ui/Kbd';
 import { transitions } from '@/ui/motion/presets';
 import { callAt, cachedFunctions, completionAt, loadFunctions, rankFunctions } from './formula';
 import { FunctionHelp } from './FunctionHelp';
@@ -110,13 +112,15 @@ export function FormulaAssist({ anchor, state, open, onPick, onHover }: FormulaA
           onMouseDown={(e) => e.preventDefault()}
         >
           {showList ? (
-            <div className="emp-fa-list-wrap">
+            <div className="emp-fa-list-wrap glass-1">
               <ul className="emp-fa-list" role="listbox" aria-label="Functions" style={{ maxHeight: Math.min(pos.maxH, 300) }}>
+                <GlideHighlight selector='[aria-selected="true"]' tone="slab" attributes={['aria-selected']} />
                 {state.items.map((it, i) => (
                   <li
                     key={`${it.kind}:${it.name}`}
                     role="option"
                     aria-selected={i === state.index}
+                    style={{ ['--i' as string]: Math.min(i, 12) }}
                     className={cn('emp-fa-item', i === state.index && 'is-active')}
                     onMouseEnter={() => onHover(i)}
                     onClick={() => onPick(it)}
@@ -136,12 +140,21 @@ export function FormulaAssist({ anchor, state, open, onPick, onHover }: FormulaA
                 </div>
               ) : null}
               <div className="emp-fa-foot">
-                <kbd>↑</kbd>
-                <kbd>↓</kbd> to choose · <kbd>Tab</kbd> to insert · <kbd>Esc</kbd> to dismiss
+                <Kbd keys="arrowup" size="xs" />
+                <Kbd keys="arrowdown" size="xs" />
+                <span>to choose</span>
+                <span className="emp-fa-dot" aria-hidden>·</span>
+                <Kbd keys="tab" size="xs" />
+                <span>to insert</span>
+                <span className="emp-fa-dot" aria-hidden>·</span>
+                <Kbd keys="esc" size="xs" />
+                <span>to dismiss</span>
               </div>
             </div>
           ) : state.call ? (
-            <FunctionHelp info={state.call.info} argIndex={state.call.argIndex} />
+            <div className="emp-fa-help glass-1">
+              <FunctionHelp info={state.call.info} argIndex={state.call.argIndex} />
+            </div>
           ) : null}
         </m.div>
       ) : null}

@@ -112,6 +112,12 @@ export function CellEditor({ ctrl, ui, gridRef, barRef }: CellEditorProps) {
   const inCell = !!edit && edit.sheetId === ctrl.sheetId;
   const [assist, setIndex, dismiss] = useAssist(edit && edit.origin === 'cell' ? edit.text : null, edit?.caret ?? 0, ctrl.names);
 
+  // Grid size, cached from a ResizeObserver so placing never reads layout (it runs on every overlay paint, i.e.
+  // every frame of the selection glide).
+  const gridSize = useRef<{ w: number; h: number } | null>(null);
+  // Last written geometry: skip the style writes when nothing moved.
+  const placed = useRef('');
+
   // Position over the active / edited cell; follows scrolling without React renders.
   const place = useCallback(() => {
     const wrap = wrapRef.current;
@@ -123,17 +129,35 @@ export function CellEditor({ ctrl, ui, gridRef, barRef }: CellEditorProps) {
     const rect = mg ?? { r0: pos.r, c0: pos.c, r1: pos.r, c1: pos.c };
     const l = ctrl.layout();
     const rp = ctrl.rectPx(rect, l);
-    const gw = grid.clientWidth;
-    const gh = grid.clientHeight;
-    wrap.style.transform = `translate(${Math.round(rp.x)}px, ${Math.round(rp.y)}px)`;
-    wrap.style.minWidth = `${Math.max(24, rp.w + 1)}px`;
-    wrap.style.minHeight = `${Math.max(16, rp.h + 1)}px`;
-    wrap.style.maxWidth = `${Math.max(rp.w + 1, gw - rp.x - 8)}px`;
-    wrap.style.maxHeight = `${Math.max(rp.h + 1, gh - rp.y - 8)}px`;
+    const size = gridSize.current ?? (gridSize.current = { w: grid.clientWidth, h: grid.clientHeight });
+    const gw = size.w;
+    const gh = size.h;
     // Hide while the cell is scrolled under the headers.
-    const hidden = rp.x + rp.w < l.headerW || rp.y + rp.h < l.headerH || rp.x > gw || rp.y > gh;
-    wrap.style.visibility = hidden && e ? 'hidden' : '';
+    const hidden = !!e && (rp.x + rp.w < l.headerW || rp.y + rp.h < l.headerH || rp.x > gw || rp.y > gh);
+    const x = Math.round(rp.x);
+    const y = Math.round(rp.y);
+    const key = `${x},${y},${rp.w},${rp.h},${gw},${gh},${hidden ? 1 : 0}`;
+    if (key === placed.current) return;
+    placed.current = key;
+    const st = wrap.style;
+    st.transform = `translate(${x}px, ${y}px)`;
+    st.minWidth = `${Math.max(24, rp.w + 1)}px`;
+    st.minHeight = `${Math.max(16, rp.h + 1)}px`;
+    st.maxWidth = `${Math.max(rp.w + 1, gw - rp.x - 8)}px`;
+    st.maxHeight = `${Math.max(rp.h + 1, gh - rp.y - 8)}px`;
+    st.visibility = hidden ? 'hidden' : '';
   }, [ctrl, gridRef]);
+
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const ro = new ResizeObserver(() => {
+      gridSize.current = { w: grid.clientWidth, h: grid.clientHeight };
+      place();
+    });
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, [gridRef, place]);
 
   useLayoutEffect(() => {
     place();

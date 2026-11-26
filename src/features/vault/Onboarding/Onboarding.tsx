@@ -7,7 +7,7 @@
  *       → connections and updates → building your workspace → into the app (hands off to the life-app gallery).
  */
 import { AnimatePresence, m, useIsPresent } from "motion/react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { api, errorMessage } from "@/backend";
 import { enterShell, preloadShell } from "@/app/boot";
 import { WindowControls } from "@/features/shell/WindowControls";
@@ -196,13 +196,14 @@ export default function Onboarding() {
 
   return (
     <m.div
-      className="emp-stage emp-aurora"
+      className="emp-stage emp-vault-stage"
       onScroll={(e) => e.currentTarget.scrollLeft && (e.currentTarget.scrollLeft = 0)}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 0.32 } }}
       exit={{ opacity: 0, transition: { duration: 0.48, ease: ease.out } }}
       onKeyDown={onKeyDown}
     >
+      <span className="emp-stage-light" aria-hidden />
       <div className="emp-stage-drag drag-region" data-tauri-drag-region />
       <WindowControls className="absolute right-0 top-0" />
       <m.div
@@ -211,17 +212,21 @@ export default function Onboarding() {
         role="dialog"
         aria-modal="true"
         aria-label="Set up EMP"
-        initial={{ opacity: 0, scale: reduced ? 1 : 0.98, y: reduced ? 0 : 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.48, ease: ease.outExpo } }}
+        initial={{ opacity: 0, scale: reduced ? 1 : 0.97, y: reduced ? 0 : 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0, transition: { ...spring.settle, opacity: { duration: 0.4, ease: ease.out } } }}
         exit={{ opacity: 0, scale: reduced ? 1 : 1.04, transition: { duration: 0.48, ease: ease.out } }}
-        style={{ pointerEvents: isPresent ? undefined : "none" }}
+        // Step changes resize the card with a layout (transform) animation on spring.gentle — never a height
+        // animation. Children carry layout="position" so they are counter-scaled instead of distorting.
+        layout={reduced ? false : true}
+        transition={{ layout: spring.gentle }}
+        style={{ pointerEvents: isPresent ? undefined : "none", borderRadius: 22 }}
       >
         <AnimatePresence initial={false}>
           {step !== "launch" ? (
-            <m.div key="stepper" className="emp-onb-stepper" aria-hidden initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: 0.24, delay: 0.1 } }}>
+            <m.div key="stepper" layout={reduced ? false : "position"} transition={{ layout: spring.gentle }} className="emp-onb-stepper" aria-hidden initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: 0.24, delay: 0.1 } }}>
               {steps.map((s, i) => (
                 <span key={s}>
-                  <m.i initial={false} animate={{ scaleX: i <= progress ? 1 : 0 }} transition={spring.ui} style={{ originX: 0 }} />
+                  <m.i initial={false} animate={{ scaleX: i <= progress ? 1 : 0 }} transition={reduced ? { duration: 0 } : { ...spring.glide, delay: i === progress ? 0.08 : 0 }} style={{ originX: dir > 0 ? 0 : 1 }} />
                 </span>
               ))}
             </m.div>
@@ -230,15 +235,15 @@ export default function Onboarding() {
         <span className="sr-only" aria-live="polite">
           {index >= 0 ? `Step ${index + 1} of ${steps.length}` : ""}
         </span>
-        <AutoHeight>
+        <m.div layout={reduced ? false : "position"} transition={{ layout: spring.gentle }}>
           <AnimatePresence mode="wait" initial={false} custom={dir}>
             <m.div
               key={step}
               custom={dir}
               variants={{
-                enter: (d: number) => ({ opacity: 0, x: reduced ? 0 : 24 * d }),
-                center: { opacity: 1, x: 0, transition: { duration: 0.24, ease: ease.outExpo } },
-                exit: (d: number) => ({ opacity: 0, x: reduced ? 0 : -24 * d, transition: { duration: 0.16, ease: ease.in } }),
+                enter: (d: number) => ({ opacity: 0, x: reduced ? 0 : 28 * d, filter: reduced ? "none" : "blur(3px)" }),
+                center: { opacity: 1, x: 0, filter: "blur(0px)", transition: reduced ? { duration: 0.14 } : { ...spring.settle, opacity: { duration: 0.24, ease: ease.out }, filter: { duration: 0.24, ease: ease.out } } },
+                exit: (d: number) => ({ opacity: 0, x: reduced ? 0 : -20 * d, filter: reduced ? "none" : "blur(2px)", transition: { duration: 0.14, ease: ease.in } }),
               }}
               initial="enter"
               animate="center"
@@ -255,7 +260,7 @@ export default function Onboarding() {
               {step === "building" ? <BuildingStep tasks={buildTasks} onOpen={() => void open()} opening={opening} /> : null}
             </m.div>
           </AnimatePresence>
-        </AutoHeight>
+        </m.div>
         {createError && step === "protect" ? (
           <p className="emp-helper mt-3" data-invalid="" role="alert">
             <span>{createError}</span>
@@ -266,22 +271,3 @@ export default function Onboarding() {
   );
 }
 
-/** Animates its height to the content's height on `spring.gentle` (§6.2 "Panel height animates"). */
-function AutoHeight({ children }: { children: ReactNode }) {
-  const inner = useRef<HTMLDivElement>(null);
-  const [h, setH] = useState<number | "auto">("auto");
-  const reduced = useReducedMotionPref();
-  useLayoutEffect(() => {
-    const el = inner.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setH(el.offsetHeight));
-    ro.observe(el);
-    setH(el.offsetHeight);
-    return () => ro.disconnect();
-  }, []);
-  return (
-    <m.div initial={false} animate={{ height: h }} transition={reduced ? { duration: 0 } : spring.gentle} style={{ overflow: "visible" }}>
-      <div ref={inner}>{children}</div>
-    </m.div>
-  );
-}

@@ -17,6 +17,8 @@ import { usePrivacy } from "@/stores/privacy";
 import { useTree } from "@/stores/tree";
 import { useUi } from "@/stores/ui";
 import { IconButton } from "@/ui/IconButton";
+import { ease, spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { LockIndicator } from "./LockIndicator";
 import { ExportMenu, FavoriteButton, PageMoreMenu } from "./PageActions";
@@ -71,13 +73,23 @@ export function Topbar({ sidebarHidden, compact, scrolled }: TopbarProps) {
   const rightOpen = useUi((s) => s.rightPanelOpen);
   const hasPanel = !!meta || route.t === "app";
   const trafficLights = isTauri && isMac && sidebarHidden;
+  const reduced = useReducedMotionPref();
 
   return (
     <header className="emp-topbar drag-region" data-region="topbar" data-scrolled={scrolled ? "" : undefined} data-glass="" data-tauri-drag-region style={trafficLights ? { paddingLeft: 78 } : undefined}>
       <div className="no-drag flex items-center gap-0.5">
-        <AnimatePresence initial={false}>
+        {/* The toggle fades/slides in (opacity + x); the controls after it glide over with a layout (transform)
+            animation — no width animation. popLayout takes the leaving toggle out of flow at once. */}
+        <AnimatePresence initial={false} mode="popLayout">
           {sidebarHidden ? (
-            <m.span key="sb" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0, width: 0 }} transition={{ duration: 0.16 }} className="flex overflow-hidden">
+            <m.span
+              key="sb"
+              initial={reduced ? { opacity: 0 } : { opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, x: -10 }}
+              transition={reduced ? { duration: 0.12 } : { ...spring.ui, opacity: { duration: 0.16, ease: ease.out } }}
+              className="flex"
+            >
               <span data-sidebar-toggle="" className="flex">
                 <IconButton
                   size="sm"
@@ -94,12 +106,14 @@ export function Topbar({ sidebarHidden, compact, scrolled }: TopbarProps) {
             </m.span>
           ) : null}
         </AnimatePresence>
-        <IconButton size="sm" icon={ArrowLeft} label="Back" shortcut="mod+[" disabled={!canBack} onClick={() => void useNav.getState().goBack()} />
-        <IconButton size="sm" icon={ArrowRight} label="Forward" shortcut="mod+]" disabled={!canForward} onClick={() => void useNav.getState().goForward()} />
+        <m.span className="flex items-center gap-0.5" layout={reduced ? false : "position"} layoutDependency={sidebarHidden} transition={spring.ui}>
+          <IconButton size="sm" icon={ArrowLeft} label="Back" shortcut="mod+[" disabled={!canBack} onClick={() => void useNav.getState().goBack()} />
+          <IconButton size="sm" icon={ArrowRight} label="Forward" shortcut="mod+]" disabled={!canForward} onClick={() => void useNav.getState().goForward()} />
+        </m.span>
       </div>
-      <div className="ml-1 min-w-0 flex-shrink">
+      <m.div className="ml-1 min-w-0 flex-shrink" layout={reduced ? false : "position"} layoutDependency={sidebarHidden} transition={spring.ui}>
         <Breadcrumbs />
-      </div>
+      </m.div>
       <div className="grow" />
       <div className="no-drag flex items-center gap-0.5">
         {meta ? <EditedIndicator pageId={meta.id} /> : null}

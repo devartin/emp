@@ -18,6 +18,7 @@ import { Segmented } from "@/ui/Segmented";
 import { Skeleton } from "@/ui/Skeleton";
 import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { PageIcon } from "./PageIcon";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
 
 export function TemplatesDialog() {
   const open = useUi((s) => s.templatesOpen);
@@ -87,11 +88,11 @@ export function TemplatesDialog() {
           />
         ) : null}
       </div>
-      <div className="mt-4 max-h-[58vh] overflow-y-auto pb-1 pr-1">
+      <div className="mt-4 max-h-[58vh] overflow-y-auto px-1 pb-2 pr-1 pt-1">
         {list === null ? (
           <div className="grid grid-cols-3 gap-3">
             {Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="emp-tpl-card">
+              <div key={i} className="emp-tpl-card panel" data-flat="">
                 <Skeleton width={36} height={36} radius={10} />
                 <Skeleton width="70%" height={11} />
                 <Skeleton width="40%" height={9} />
@@ -101,16 +102,19 @@ export function TemplatesDialog() {
         ) : shown.length ? (
           <m.div className="grid grid-cols-3 gap-3" variants={staggerList(0.025)} initial="hidden" animate="show">
             {shown.map((t) => (
-              <m.button key={t.id} type="button" className="emp-tpl-card" variants={staggerItem} onClick={() => void apply(t)} disabled={!!busy} aria-busy={busy === t.id || undefined}>
-                <span className="tile">
-                  <PageIcon icon={t.icon} kind={t.kind} size={20} />
-                </span>
-                <span className="text-body font-medium text-primary">{t.title}</span>
-                <span className="flex items-center gap-1 text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                  {t.builtin ? t.category : "My template"}
-                  <Plus size={12} className="ml-auto opacity-60" aria-hidden />
-                </span>
-              </m.button>
+              <m.div key={t.id} variants={staggerItem} className="flex">
+                <button type="button" className="emp-tpl-card panel w-full" data-raise data-light onClick={() => void apply(t)} disabled={!!busy} aria-busy={busy === t.id || undefined}>
+                  <EdgeLight />
+                  <span className="tile">
+                    <PageIcon icon={t.icon} kind={t.kind} size={20} />
+                  </span>
+                  <span className="text-body font-medium text-primary">{t.title}</span>
+                  <span className="flex items-center gap-1 text-caption text-tertiary" style={{ fontWeight: 400 }}>
+                    {t.builtin ? t.category : "My template"}
+                    <Plus size={12} className="ml-auto opacity-60" aria-hidden />
+                  </span>
+                </button>
+              </m.div>
             ))}
           </m.div>
         ) : (

@@ -28,8 +28,8 @@ export function ChoiceCards({ step, value, onChange, recommendation, currency }:
   return (
     <div className="flex flex-col gap-4">
       {many ? (
-        <div className="la-optlist" role="radiogroup" aria-label={step.title}>
-          <label className="la-optsearch">
+        <div className="la-optlist panel" data-flat="" role="radiogroup" aria-label={step.title}>
+          <label className="la-optsearch groove-bottom">
             <Search size={14} aria-hidden />
             <input value={q} onChange={(e) => setQ(e.currentTarget.value)} placeholder="Search" aria-label="Search options" />
           </label>
@@ -67,7 +67,7 @@ export function ChoiceCards({ step, value, onChange, recommendation, currency }:
         </div>
       )}
       {extras.length ? (
-        <div className="la-extras">
+        <div className="la-extras well" data-static="">
           {extras.map((k) => {
             const type = step.itemSchema?.[k] ?? (typeof obj?.[k] === "number" ? "number" : typeof obj?.[k] === "boolean" ? "bool" : "text");
             const v = obj?.[k];

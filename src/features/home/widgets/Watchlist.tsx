@@ -74,7 +74,7 @@ export function WatchlistWidget() {
   }, [symbols.join(",")]);
   return (
     <div className="flex h-full flex-col gap-2">
-      <div className="flex items-center justify-between">
+      <div data-widget-head="" className="flex items-center justify-between">
         <h2 className="hm-title"><LineChart size={15} aria-hidden />{list?.name ?? "Watchlist"}</h2>
         <Button size="xs" variant="ghost" iconRight={ArrowRight} onClick={() => navigate({ t: "markets" })}>Markets</Button>
       </div>

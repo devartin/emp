@@ -1,13 +1,12 @@
 /** Quick actions: the few things people start from Home. */
 import { CalendarPlus, CheckSquare, FilePlus2, HeartPulse, Search, Sparkles } from "lucide-react";
-import { m } from "motion/react";
 import { api } from "@/backend";
 import { navigate } from "@/app/router";
 import { notify } from "@/stores/toasts";
 import { useUi } from "@/stores/ui";
 import { useWorkspace } from "@/stores/workspace";
-import { spring } from "@/ui/motion/tokens";
-import { Kbd } from "@/ui/Kbd";
+import { Button, type IconMotion } from "@/ui/Button";
+import { setPaletteOrigin } from "@/features/search/origin";
 
 export function QuickActionsWidget() {
   const ws = useWorkspace((s) => s.workspace);
@@ -24,22 +23,22 @@ export function QuickActionsWidget() {
     }
   };
   const actions = [
-    { id: "page", label: "New page", icon: FilePlus2, kbd: "mod+n", run: newPage },
+    { id: "page", label: "New page", icon: FilePlus2, kbd: "mod+n", run: newPage, primary: true, motion: "plus" as IconMotion },
     { id: "task", label: "Add a task", icon: CheckSquare, run: () => (lifeos ? navigate({ t: "app", instanceId: lifeos.id, tab: "tasks" }) : navigate({ t: "lifeapps", appId: "life-os" })) },
     { id: "habits", label: "Check in", icon: HeartPulse, run: () => (habits ? navigate({ t: "app", instanceId: habits.id }) : navigate({ t: "lifeapps", appId: "habits" })) },
     { id: "event", label: "New event", icon: CalendarPlus, run: () => navigate({ t: "calendar" } as never) },
-    { id: "apps", label: "Life apps", icon: Sparkles, run: () => navigate({ t: "lifeapps" }) },
-    { id: "search", label: "Search", icon: Search, kbd: "mod+k", run: () => useUi.getState().openPalette() },
-  ];
+    { id: "apps", label: "Life apps", icon: Sparkles, run: () => navigate({ t: "lifeapps" }), motion: "sparkle" as IconMotion },
+    { id: "search", label: "Search", icon: Search, kbd: "mod+k", run: (el?: HTMLElement) => (setPaletteOrigin(el), useUi.getState().openPalette()), motion: "search" as IconMotion },
+  ] as { id: string; label: string; icon: typeof Search; kbd?: string; run: (el?: HTMLElement) => unknown; primary?: boolean; motion?: IconMotion }[];
   return (
+    <div className="hm-quick-wrap">
     <div className="hm-quick" role="toolbar" aria-label="Quick actions">
-      {actions.map((a, i) => (
-        <m.button key={a.id} type="button" className="hm-quick-btn" onClick={() => void a.run()} whileTap={{ scale: 0.97 }} transition={spring.snappy} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0, transition: { ...spring.gentle, delay: i * 0.03 } }}>
-          <a.icon size={15} aria-hidden />
-          <span>{a.label}</span>
-          {a.kbd ? <Kbd keys={a.kbd} /> : null}
-        </m.button>
+      {actions.map((a) => (
+        <Button key={a.id} data-qa={a.id} variant={a.primary ? "primary" : "secondary"} size="md" icon={a.icon} iconMotion={a.motion} kbd={a.kbd} onClick={(e) => void a.run(e.currentTarget)}>
+          {a.label}
+        </Button>
       ))}
+    </div>
     </div>
   );
 }

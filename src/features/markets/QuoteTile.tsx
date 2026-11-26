@@ -1,10 +1,11 @@
 /** Quote tile and quote row (§17.2): live price with tick flash, signed change, sparkline, freshness chip. */
-import { m } from "motion/react";
 import type { Quote, SymbolKey } from "@/backend/types";
 import { Sparkline } from "@/charts/Sparkline";
 import { cn } from "@/lib/cn";
 import { useQuote } from "@/stores/market";
 import { DeltaPill, GainLoss } from "@/ui/DeltaPill";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Skeleton } from "@/ui/Skeleton";
 import { fmtPrice } from "../finance/shared/format";
@@ -16,7 +17,18 @@ export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: Symb
   const info = useSymbolInfo(symbol);
   const spark = useSparkline(symbol);
   return (
-    <m.button type="button" className={cn("mk-tile", selected && "is-selected")} data-compact={compact ? "" : undefined} onClick={onClick} whileTap={{ scale: 0.985 }} transition={{ type: "spring", stiffness: 600, damping: 35, mass: 0.6 }}>
+    <button
+      type="button"
+      className={cn("mk-tile panel", selected && "is-selected")}
+      data-compact={compact ? "" : undefined}
+      data-raise={selected ? undefined : ""}
+      data-latched={selected ? "" : undefined}
+      data-light=""
+      data-tilt={selected ? undefined : "3"}
+      aria-pressed={onClick ? !!selected : undefined}
+      onClick={onClick}
+    >
+      <EdgeLight specular={!selected} />
       <div className="flex items-start justify-between gap-2 w-full">
         <div className="min-w-0 text-left">
           <div className="mk-tile-ticker">{ticker(symbol)}</div>
@@ -30,7 +42,7 @@ export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: Symb
             <>
               <div className="mk-tile-price">
                 <PriceFlash value={q.price} symbol={symbol}>
-                  {fmtPrice(q.price, q.currency)}
+                  <RollingNumber value={q.price} format={(n) => fmtPrice(n, q.currency)} countUp={false} />
                 </PriceFlash>
               </div>
               <DeltaPill value={q.changePct} digits={2} />
@@ -44,7 +56,7 @@ export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: Symb
         </div>
         <div className="w-[88px] flex-none">{spark.length > 1 ? <Sparkline data={spark} height={34} live={q?.freshness === "live"} aria-label={`${ticker(symbol)} last month`} /> : null}</div>
       </div>
-    </m.button>
+    </button>
   );
 }
 
@@ -66,7 +78,7 @@ export function QuoteRow({ symbol, q, onClick, selected, trailing }: { symbol: S
           <>
             <div className="mk-row-price">
               <PriceFlash value={quote.price} symbol={symbol}>
-                {fmtPrice(quote.price, quote.currency)}
+                <RollingNumber value={quote.price} format={(n) => fmtPrice(n, quote.currency)} countUp={false} />
               </PriceFlash>
             </div>
             <GainLoss value={quote.changePct} className="text-caption font-semibold">

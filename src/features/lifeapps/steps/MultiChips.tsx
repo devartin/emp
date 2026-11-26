@@ -1,7 +1,10 @@
-/** multi_chips (§16): toggle chips with a drawn check; a live "N selected" counter. */
+/**
+ * multi_chips (§16): toggle chips with a check that pops in; a live "N selected" counter. The check's 15px slot is
+ * always reserved (the label sits centred over it while off), so latching only scales / fades the check and slides
+ * the label with a transform — no chip or row relayout per frame.
+ */
 import { Check } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
-import { cn } from "@/lib/cn";
+import { m } from "motion/react";
 import { spring } from "@/ui/motion/tokens";
 import type { StepProps } from "./types";
 
@@ -14,25 +17,14 @@ export function MultiChips({ step, value, onChange }: StepProps) {
         {(step.options ?? []).map((o) => {
           const on = sel.includes(o.value);
           return (
-            <m.button
-              key={o.value}
-              type="button"
-              aria-pressed={on}
-              className={cn("la-chip", on && "is-on")}
-              onClick={() => toggle(o.value)}
-              whileTap={{ scale: 0.96 }}
-              transition={spring.snappy}
-              layout="position"
-            >
-              <AnimatePresence initial={false}>
-                {on ? (
-                  <m.span key="c" className="la-chip-check" initial={{ width: 0, opacity: 0 }} animate={{ width: 14, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={spring.snappy}>
-                    <Check size={13} strokeWidth={3} aria-hidden />
-                  </m.span>
-                ) : null}
-              </AnimatePresence>
-              {o.label}
-            </m.button>
+            <button key={o.value} type="button" aria-pressed={on} className="la-chip la-chip-latch slab" onClick={() => toggle(o.value)}>
+              <m.span className="la-chip-check" initial={false} animate={on ? { scale: 1, opacity: 1, x: 0 } : { scale: 0.4, opacity: 0, x: -3 }} transition={on ? spring.pop : { duration: 0.12, ease: [0.4, 0, 1, 1] }} aria-hidden>
+                <Check size={13} strokeWidth={3} />
+              </m.span>
+              <m.span className="la-chip-label" initial={false} animate={{ x: on ? 0 : -9.5 }} transition={spring.glide}>
+                {o.label}
+              </m.span>
+            </button>
           );
         })}
       </div>

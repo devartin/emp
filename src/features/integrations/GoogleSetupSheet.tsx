@@ -25,7 +25,10 @@ import { SecretField } from "@/ui/SecretField";
 import { Select } from "@/ui/Select";
 import { Sheet } from "@/ui/Sheet";
 import { Spinner } from "@/ui/Spinner";
+import { SlabGlyph } from "@/ui/SlabGlyph";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import "./integrations.css";
 
 const SCOPE_LABEL: Record<string, string> = {
@@ -148,6 +151,8 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
   const [fieldErr, setFieldErr] = useState<{ field?: string; message: string } | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [tested, setTested] = useState(false);
+  const [steps, setSteps] = useState(0);
+  const [synced, setSynced] = useState<number | null>(null);
   const [showSteps, setShowSteps] = useState(false);
   const { run, dialog } = useReauth();
 
@@ -160,6 +165,8 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
       setTested(false);
       setTesting(null);
       setFieldErr(null);
+      setSteps(0);
+      setSynced(null);
     }
   }, [open, refresh]);
 
@@ -184,13 +191,29 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
     run(async () => {
       setTesting("Starting…");
       setTested(false);
+      setSteps(0);
+      setSynced(null);
       try {
         const account = status?.accounts[0];
-        const job = await api.google.connect({ feature, accountId: account?.id, onEvent: (e) => e.kind === "progress" && e.label && setTesting(e.label) });
+        const job = await api.google.connect({
+          feature,
+          accountId: account?.id,
+          onEvent: (e) => {
+            if (e.kind === "progress" && e.label) {
+              setTesting(e.label);
+              setSteps((n) => n + 1);
+            }
+          },
+        });
         await job.result;
         setTested(true);
         refresh();
-        if (feature === "calendar") void api.gcal.syncNow({}).then((j) => j.result).catch(() => undefined);
+        if (feature === "calendar")
+          void api.gcal
+            .syncNow({})
+            .then((j) => j.result)
+            .then((r) => setSynced(r.added ?? 0))
+            .catch(() => undefined);
       } catch (e) {
         notify.fromError(e, "Couldn’t connect to Google");
       } finally {
@@ -219,7 +242,7 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
         </>
       }
     >
-      <div className="flex flex-col gap-5">
+      <div className="relative flex flex-col gap-5">
         {preview ? (
           <Banner tone="info" inline icon={Info}>
             Browser preview: Google is simulated here — nothing leaves this tab. The desktop app runs the real flow.
@@ -236,9 +259,17 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
             <span className="ml-auto text-caption text-gain-text">Done</span>
           </button>
         ) : null}
-        <AnimatePresence initial={false}>
+        {/* DESIGN §1.6: the guide mounts at full size and rises in; on collapse it pops out of flow and fades while the
+            content below glides up with a layout="position" FLIP. Nothing animates height. */}
+        <AnimatePresence initial={false} mode="popLayout">
         {!configured || showSteps ? (
-        <m.ol className="ig-steps overflow-hidden" initial={configured ? { height: 0, opacity: 0 } : false} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}>
+        <m.ol
+          key="steps"
+          className="ig-steps"
+          initial={configured ? { opacity: 0, y: -6 } : false}
+          animate={{ opacity: 1, y: 0, transition: { opacity: { duration: 0.16 }, y: spring.settle } }}
+          exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
+        >
           <StepItem n={1} title="Create a Google Cloud project" done={configured}>
             <p className="ig-p">Any name works. It’s yours — EMP never sees it.</p>
             <div className="flex flex-wrap items-center gap-2">
@@ -317,18 +348,36 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
         </m.ol>
         ) : null}
         </AnimatePresence>
+        <m.div layout="position" transition={spring.layout} className="flex flex-col gap-5">
         <AnimatePresence>
           {testing || tested ? (
             <m.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: spring.gentle }} exit={{ opacity: 0 }} className={cn("ig-test", tested && "is-ok")} role="status">
-              {tested ? (
-                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
-                  <circle cx="12" cy="12" r="11" fill="var(--gain)" />
-                  <m.path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.28, ease: [0.2, 0, 0, 1] }} />
-                </svg>
-              ) : (
-                <Spinner size={16} />
-              )}
-              <span className="text-body-sm">{tested ? `Connected — ${FEATURE_LABEL[feature]} access granted.` : testing}</span>
+              <Handshake ok={tested} progress={tested ? 1 : Math.min(0.85, 0.12 + steps * 0.22)} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-body-sm font-semibold text-primary">
+                  {tested ? null : <Spinner size={12} />}
+                  {tested ? `Connected — ${FEATURE_LABEL[feature]} access granted` : testing}
+                </div>
+                <div className="text-caption text-tertiary">
+                  {tested ? (
+                    feature === "calendar" ? (
+                      synced === null ? (
+                        "Syncing your calendars…"
+                      ) : synced === 0 ? (
+                        "Your calendars are up to date on this device"
+                      ) : (
+                        <>
+                          <RollingNumber value={synced} countUp className="font-semibold text-primary" /> {synced === 1 ? "event" : "events"} synced to this device
+                        </>
+                      )
+                    ) : (
+                      "Tokens are stored encrypted on this device."
+                    )
+                  ) : (
+                    "Waiting for Google in your browser"
+                  )}
+                </div>
+              </div>
             </m.div>
           ) : null}
         </AnimatePresence>
@@ -336,9 +385,37 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
           <ShieldCheck size={14} className="mt-px flex-none" aria-hidden />
           EMP asks only for the scopes a feature needs, when you first use it. Tokens stay encrypted on this device; you can revoke them here or at myaccount.google.com.
         </p>
+        </m.div>
       </div>
       {dialog}
     </Sheet>
+  );
+}
+
+/**
+ * S20 "Connect Google": the EMP slab glyph and the Google mark sit apart over a progress groove while the OAuth
+ * round-trip runs (real progress events), then slide together and *click* — a 2px press, a contact flash, a check pop.
+ */
+function Handshake({ ok, progress }: { ok: boolean; progress: number }) {
+  const reduced = useReducedMotionPref();
+  return (
+    <div className="ig-hs" data-ok={ok ? "" : undefined} data-reduced={reduced ? "" : undefined} aria-hidden>
+      <span className="ig-hs-groove">
+        <span className="ig-hs-fill" style={{ transform: `scaleX(${progress})` }} />
+      </span>
+      <span className="ig-hs-a">
+        <SlabGlyph size={26} />
+      </span>
+      <span className="ig-hs-b">
+        <span className="ig-g">G</span>
+      </span>
+      <span className="ig-hs-flash" />
+      <span className="ig-hs-check">
+        <svg viewBox="0 0 24 24" width="12" height="12">
+          <path d="M6 12.5l4 4L18 8" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+    </div>
   );
 }
 

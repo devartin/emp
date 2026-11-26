@@ -3,6 +3,7 @@ import { PartyPopper, RefreshCw, Settings2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { api, errorMessage, hasCode } from "@/backend";
 import type { VaultSettings } from "@/backend/types";
+import { fixMinus, numberFormat } from "@/lib/format";
 import { useSettings } from "@/stores/settings";
 import { notify } from "@/stores/toasts";
 import { useTree } from "@/stores/tree";
@@ -120,7 +121,7 @@ export function GeneralSection() {
       </Group>
 
       <Group title="Region & formats" description="Changes apply everywhere instantly, including charts and exports.">
-        <Row id="locale" label="Number format" description={`${(1234567.89).toLocaleString(vault.locale)} · ${(-0.042).toLocaleString(vault.locale, { style: "percent", minimumFractionDigits: 1 })}`}>
+        <Row id="locale" label="Number format" description={`${fixMinus(numberFormat({}, vault.locale).format(1234567.89))} · ${fixMinus(numberFormat({ style: "percent", minimumFractionDigits: 1 }, vault.locale).format(-0.042))}`}>
           <Select size="sm" value={vault.locale} onValueChange={(v) => void setVault({ locale: v })} options={localeOptions.some((o) => o.value === vault.locale) ? localeOptions : [{ value: vault.locale, label: displayName("language", vault.locale) }, ...localeOptions]} searchable className="w-[220px]" aria-label="Number format" />
         </Row>
         <Row id="timezone" label="Time zone" description={`It’s ${now.toLocaleTimeString(undefined, { timeZone: vault.timezone, hour: "numeric", minute: "2-digit" })} there · ${tzOffset(vault.timezone)}`}>

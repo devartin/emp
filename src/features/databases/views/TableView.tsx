@@ -34,6 +34,9 @@ import { CellView, isRightAligned, MiniCheck, RowIcon } from '../properties/Cell
 import { TypeIcon } from '../properties/meta';
 import { AddPropertyMenu, PropertyMenu } from '../properties/PropertyMenu';
 import { useController, type ControllerSnapshot } from '../ViewController';
+import { RollText } from './RollText';
+import { RollingNumber } from '@/ui/motion/RollingNumber';
+import { riseStagger } from '@/features/editor/lib/fx';
 
 const GUTTER = 44;
 const MIN_W = 64;
@@ -246,7 +249,7 @@ function FooterCell({ col, fn, value, onChange, sticky }: { col: Col; fn?: AggFn
             <>
               <span className="edb-tf-label">{AGG_SHORT[fn]}</span>
               <span className="edb-tf-value tabular-nums" data-sensitive={col.prop.type === 'money' ? '' : undefined}>
-                {value ?? '…'}
+                {value == null ? '…' : <RollText text={value} sensitive={col.prop.type === 'money'} countUpKey={`edb-tf:${col.prop.id}:${fn}`} />}
               </span>
             </>
           ) : (
@@ -822,6 +825,13 @@ function GroupedBody({ snap, rowProps, onNew, totalW }: { snap: ControllerSnapsh
   const { view, patchView, controller, propsById, readOnly } = useDbView();
   const collapsed = new Set(view.collapsedGroups);
   const gp = view.groupBy ? propsById.get(view.groupBy.prop) : undefined;
+  // group collapse: sections below glide (layout morph) and a re-opened group's rows rise in (16ms, cap 12)
+  const prevCollapsed = useRef(collapsed);
+  const opened = new Set([...prevCollapsed.current].filter((k) => !collapsed.has(k)));
+  useEffect(() => {
+    prevCollapsed.current = collapsed;
+  });
+  const glide = (snap.groups ?? []).reduce((n, g) => n + g.ids.length, 0) <= 300;
   let index = -1;
   return (
     <div className="edb-groups">
@@ -829,7 +839,7 @@ function GroupedBody({ snap, rowProps, onNew, totalW }: { snap: ControllerSnapsh
         const isCollapsed = collapsed.has(g.key);
         const groupValue = gp ? groupCellValue(gp, g.key) : undefined;
         return (
-          <section key={g.key} className="edb-group-sec">
+          <m.section key={g.key} className="edb-group-sec" layout={glide ? 'position' : false} transition={spring.morph}>
             <div className="edb-group-head" style={{ width: Math.min(totalW, 99999) }}>
               <button
                 type="button"
@@ -837,11 +847,13 @@ function GroupedBody({ snap, rowProps, onNew, totalW }: { snap: ControllerSnapsh
                 aria-expanded={!isCollapsed}
                 onClick={() => patchView({ collapsedGroups: isCollapsed ? view.collapsedGroups.filter((k) => k !== g.key) : [...view.collapsedGroups, g.key] })}
               >
-                <m.span animate={{ rotate: isCollapsed ? 0 : 90 }} transition={{ duration: 0.16 }} className="flex">
+                <m.span animate={{ rotate: isCollapsed ? 0 : 90 }} transition={spring.release} className="flex">
                   <ChevronRight size={14} aria-hidden />
                 </m.span>
                 {g.color ? <Tag color={g.color}>{g.label}</Tag> : <span className="font-medium">{g.key === NO_VALUE ? <span className="text-tertiary">{g.label}</span> : g.label}</span>}
-                <span className="edb-group-count tabular-nums">{g.count}</span>
+                <span className="edb-group-count tabular-nums">
+                  <RollingNumber value={g.count} countUp={false} />
+                </span>
               </button>
               <span className="edb-group-aggs">
                 {Object.entries(g.aggs).filter(([pid]) => view.footerAggs[pid] !== 'count').map(([pid, v]) => (
@@ -855,7 +867,7 @@ function GroupedBody({ snap, rowProps, onNew, totalW }: { snap: ControllerSnapsh
               ) : null}
             </div>
             {!isCollapsed ? (
-              <div className="edb-group-rows">
+              <div className="edb-group-rows" ref={opened.has(g.key) ? riseRows : undefined}>
                 {g.ids.map((id) => {
                   index += 1;
                   const row = snap.rows.get(id);
@@ -868,11 +880,16 @@ function GroupedBody({ snap, rowProps, onNew, totalW }: { snap: ControllerSnapsh
                 ) : null}
               </div>
             ) : null}
-          </section>
+          </m.section>
         );
       })}
     </div>
   );
+}
+
+/** Callback ref: a group that was just re-opened has its rows rise in under the header. */
+function riseRows(el: HTMLDivElement | null) {
+  if (el) riseStagger(el.querySelectorAll('.edb-tr'), { step: 16, cap: 12, y: -6 });
 }
 
 /** The cell value that puts a row into group `key` (for "New" in a group and board drops). */

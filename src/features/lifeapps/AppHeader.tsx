@@ -1,10 +1,9 @@
 /**
- * Life-app landing header (§6.5): 120px app-tinted banner, 40px icon tile, h1 + subtitle, KPI row, underline tabs,
+ * Life-app landing header (§6.5): no tinted banner (the app colour lives on the tile only), 40px icon tile, h1 + subtitle, KPI row, underline tabs,
  * and the app menu — Tune up, sample data, detach and uninstall (with typed confirmation for removing content).
  */
 import { Database, Ellipsis, FlaskConical, Settings2, Trash2, Unlink } from "lucide-react";
-import { m } from "motion/react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, errorMessage } from "@/backend";
 import type { LifeAppInstance } from "@/backend/types";
 import { navigate } from "@/app/router";
@@ -18,7 +17,8 @@ import { IconButton } from "@/ui/IconButton";
 import { Input } from "@/ui/Input";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/ui/Menu";
 import { Tabs, type TabItem } from "@/ui/Tabs";
-import { spring } from "@/ui/motion/tokens";
+import { AppTile } from "./AppTile";
+import { wasJustInstalled } from "./handoff";
 import { appVars, identity } from "./identity";
 import { openWizard } from "./wizardStore";
 
@@ -36,11 +36,17 @@ export interface AppHeaderProps<V extends string> {
 
 export function AppHeader<V extends string>({ instance, title, subtitle, kpis, tabs, tab, onTab, actions }: AppHeaderProps<V>) {
   const id = identity(instance.appId);
-  const Icon = id.icon;
   const [confirm, setConfirm] = useState<null | "uninstall" | "detach">(null);
   const [keep, setKeep] = useState(true);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sweep, setSweep] = useState(false);
+  // S6 finish: one edge-light sweep across the header the first time the new app lands.
+  useEffect(() => {
+    if (!wasJustInstalled(instance.id)) return;
+    const h = window.setTimeout(() => setSweep(true), 420);
+    return () => window.clearTimeout(h);
+  }, [instance.id]);
 
   const sample = async (on: boolean) => {
     try {
@@ -73,12 +79,12 @@ export function AppHeader<V extends string>({ instance, title, subtitle, kpis, t
 
   return (
     <header className="la-hero" style={appVars(instance.appId)}>
-      <div className="la-hero-banner" aria-hidden />
       <div className="la-hero-inner">
         <div className="la-hero-row">
-          <m.span className="la-tile la-tile-lg" style={{ background: id.color }} initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1, transition: spring.gentle }}>
-            <Icon size={20} strokeWidth={2.1} aria-hidden />
-          </m.span>
+          <span className="la-sweep" data-run={sweep ? "" : undefined} aria-hidden onAnimationEnd={() => setSweep(false)} />
+          <span data-app-tile={instance.appId} className="inline-flex">
+            <AppTile appId={instance.appId} size="xl" />
+          </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="truncate">{title}</h1>

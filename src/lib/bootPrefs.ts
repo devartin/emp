@@ -5,6 +5,7 @@
  *
  * The inline snippet in index.html performs the same resolution before first paint; keep the two in sync.
  */
+import { crossfadeColors } from "@/ui/motion/themeTransition";
 import { isLinux } from "./platform";
 
 export type ThemePref = "system" | "light" | "dark" | "midnight";
@@ -81,10 +82,16 @@ export function resolveMotion(pref: MotionPref): "full" | "reduced" {
 }
 
 export function resolveEffects(pref: EffectsPref): "full" | "reduced" {
-  if (pref === "auto") {
-    return isLinux || mq("(prefers-reduced-transparency: reduce)") ? "reduced" : "full";
-  }
+  if (pref === "auto") return mq("(prefers-reduced-transparency: reduce)") ? "reduced" : "full";
   return pref;
+}
+
+/**
+ * Backdrop blur is the one effect WebKitGTK can't afford, so Linux turns glass opaque (`data-glass="off"`) but keeps
+ * the rest of the material (grain, edge light, specular, sheen). Everywhere else glass follows `data-effects`.
+ */
+export function resolveGlass(): "on" | "off" {
+  return isLinux ? "off" : "on";
 }
 
 export function resolveContrast(pref: ContrastPref): "normal" | "more" {
@@ -100,6 +107,8 @@ export function motionConfigValue(pref: MotionPref): "user" | "always" | "never"
 let current: BootPrefs = DEFAULT_BOOT;
 let effectsPref: EffectsPref = "auto";
 let contrastPref: ContrastPref = "system";
+/** Set by the frame monitor (§4.4); cleared when it recovers. */
+let degraded = false;
 
 function setAttr(name: string, value: string) {
   const el = document.documentElement;
@@ -110,12 +119,8 @@ function setAttr(name: string, value: string) {
 let applied = false;
 export function applyBootPrefs(p: BootPrefs): void {
   const root = document.documentElement;
-  if (applied && root.getAttribute("data-accent") !== p.accent) {
-    // 240ms colour transition on accent change (§3.2)
-    root.style.setProperty("--emp-switch-ms", "240ms");
-    root.classList.add("emp-accent-switching");
-    window.setTimeout(() => root.classList.remove("emp-accent-switching"), 280);
-  }
+  // 240ms colour crossfade on accent change (§3.2): one root View Transition, armed here and picked up in a microtask.
+  if (applied && root.getAttribute("data-accent") !== p.accent) crossfadeColors(240);
   applied = true;
   current = p;
   setAttr("data-theme", resolveTheme(p.theme));
@@ -136,7 +141,8 @@ export function applyAppearance(opts: {
 }): void {
   if (opts.effects) effectsPref = opts.effects;
   if (opts.contrast) contrastPref = opts.contrast;
-  setAttr("data-effects", resolveEffects(effectsPref));
+  setAttr("data-effects", degraded && effectsPref === "auto" ? "reduced" : resolveEffects(effectsPref));
+  setAttr("data-glass", resolveGlass());
   setAttr("data-contrast", resolveContrast(contrastPref));
   if (opts.numberColors) setAttr("data-numbers", opts.numberColors);
   if (opts.readableFont !== undefined) setAttr("data-readable", opts.readableFont ? "on" : "off");
@@ -145,7 +151,16 @@ export function applyAppearance(opts: {
 
 /** Force effects to reduced at runtime (frame-drop monitor, §4.4) while the preference is `auto`. */
 export function degradeEffects(): void {
-  if (effectsPref === "auto") setAttr("data-effects", "reduced");
+  if (effectsPref !== "auto") return;
+  degraded = true;
+  setAttr("data-effects", "reduced");
+}
+
+/** Undo a frame-monitor degrade (the monitor re-arms after sustained smooth frames) while the pref is `auto`. */
+export function restoreEffects(): void {
+  if (!degraded) return;
+  degraded = false;
+  if (effectsPref === "auto") setAttr("data-effects", resolveEffects("auto"));
 }
 
 export function getBootPrefs(): BootPrefs {

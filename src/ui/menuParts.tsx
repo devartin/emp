@@ -5,6 +5,7 @@ import { Check, ChevronRight } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { renderIcon, type IconComponent } from "./Button";
+import { GlideHighlight } from "./GlideHighlight";
 import { Kbd } from "./Kbd";
 
 type NS = typeof RDM | typeof RCM;
@@ -107,6 +108,7 @@ export function makeMenuParts(P: NS) {
     return (
       <D.Portal>
         <D.SubContent className={cn("emp-menu emp-pop", className)} data-sub="" sideOffset={2} alignOffset={-5} collisionPadding={8}>
+          <GlideHighlight />
           {children}
         </D.SubContent>
       </D.Portal>

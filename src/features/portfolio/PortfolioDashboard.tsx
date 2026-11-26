@@ -18,8 +18,9 @@ import { useQuotes } from "@/stores/market";
 import { Amount } from "@/ui/Amount";
 import { Button } from "@/ui/Button";
 import { DeltaPill, GainLoss } from "@/ui/DeltaPill";
+import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { staggerItem, staggerList } from "@/ui/motion/presets";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
+import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
@@ -27,9 +28,10 @@ import { Skeleton } from "@/ui/Skeleton";
 import type { TabItem } from "@/ui/Tabs";
 import { DivergingBars } from "../finance/shared/charts";
 import { assignColors, fmtMoney, fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney } from "../finance/shared/format";
-import { useAsync } from "../finance/shared/hooks";
+import { useAsync, useScrubIdx, useScrubStore, type ScrubStore } from "../finance/shared/hooks";
 import { Disclaimer, HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
-import { HeroMoney } from "../finance/MoneyHQ/widgets";
+import { HeroMoney, MetricCard } from "../finance/MoneyHQ/widgets";
+import { SpendWheel } from "../finance/shared/SpendWheel";
 import { ticker } from "../markets/data";
 import { CLASS_ORDER, usePortfolioSummary } from "./data";
 import "./portfolio.css";
@@ -125,9 +127,9 @@ function Overview({ instanceId, summary: s, go }: { instanceId: Id; summary?: Po
         <ValueHero instanceId={instanceId} summary={s} />
       </m.div>
       <m.div variants={staggerItem} className="fh-span-4 flex flex-col gap-3">
-        <Kpi label="Unrealised gain" value={s ? <GainLoss value={num(s.unrealized.amount)}><Sensitive>{fmtMoney(s.unrealized.amount, "USD", { noCents: true, signed: true })}</Sensitive></GainLoss> : null} sub={s ? `${fmtPct(s.unrealizedPct, 1, true)} on cost` : ""} />
+        <Kpi label="Unrealised gain" value={s ? <GainLoss value={num(s.unrealized.amount)}><span data-sensitive=""><RollingNumber value={num(s.unrealized.amount)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true, signed: true })} countUpKey="pf:unrealised" sensitive /></span></GainLoss> : null} sub={s ? `${fmtPct(s.unrealizedPct, 1, true)} on cost` : ""} />
         <Kpi label="Money-weighted return" value={s ? <span>{s.xirrAll !== undefined ? fmtPct(s.xirrAll, 1, true) : "—"}<span className="text-tertiary text-body-sm font-medium"> /yr</span></span> : null} sub={s?.xirrYtd !== undefined ? `${fmtPct(s.xirrYtd, 1, true)} year to date (XIRR)` : ""} />
-        <Kpi label="Dividends" value={s ? <Sensitive>{fmtMoney(s.divTtm.amount, "USD", { noCents: true })}</Sensitive> : null} sub={s ? <>last 12 months · <Sensitive>{fmtMoney(s.divFwd12m.amount, "USD", { noCents: true })}</Sensitive> expected next 12</> : ""} onClick={() => go("dividends")} />
+        <Kpi label="Dividends" value={s ? <span data-sensitive=""><RollingNumber value={num(s.divTtm.amount)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUpKey="pf:div" sensitive /></span> : null} sub={s ? <>last 12 months · <Sensitive>{fmtMoney(s.divFwd12m.amount, "USD", { noCents: true })}</Sensitive> expected next 12</> : ""} onClick={() => go("dividends")} />
         <Kpi label="Fees" value={s ? <Sensitive>{fmtMoney(s.feesPerYear.amount, "USD", { noCents: true })}</Sensitive> : null} sub={s ? `a year · ${fmtPct(num(s.feesPerYear.amount) / Math.max(1, num(s.totalValue.amount)), 2)} of the portfolio` : ""} />
       </m.div>
       <m.div variants={staggerItem} className="fh-span-7">
@@ -149,18 +151,7 @@ function Overview({ instanceId, summary: s, go }: { instanceId: Id; summary?: Po
 }
 
 function Kpi({ label, value, sub, onClick }: { label: string; value: React.ReactNode; sub?: React.ReactNode; onClick?: () => void }) {
-  const El = onClick ? "button" : "div";
-  return (
-    <El type={onClick ? "button" : undefined} className="fh-metric" onClick={onClick}>
-      <span className="min-w-0 flex-1 text-left">
-        <span className="block text-caption text-secondary" style={{ fontWeight: 500 }}>
-          {label}
-        </span>
-        <span className="block fh-metric-value tabular">{value ?? <Skeleton width={110} height={20} />}</span>
-        {sub ? <span className="block text-caption text-tertiary truncate" style={{ fontWeight: 400 }}>{sub}</span> : null}
-      </span>
-    </El>
-  );
+  return <MetricCard label={label} value={value ?? <span className="flex items-center h-[28px]"><Skeleton width={110} height={20} /></span>} sub={sub} onClick={onClick} visual={onClick ? <ChevronRight size={16} className="text-tertiary fh-nudge-x" /> : undefined} />;
 }
 
 const RANGES: { value: PerfRange; label: string }[] = [
@@ -172,146 +163,113 @@ const RANGES: { value: PerfRange; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
+// Built once: toLocaleDateString(…, opts) constructs a new Intl.DateTimeFormat on every call, which made scrubbing crawl.
+const DAY_FMT = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const MONTH_YEAR_FMT = new Intl.DateTimeFormat(undefined, { month: "short", year: "2-digit" });
+const FULL_FMT = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
+const fmtDay = (v: unknown) => DAY_FMT.format(new Date(Number(v)));
+const fmtMonthYear = (v: unknown) => MONTH_YEAR_FMT.format(new Date(Number(v)));
+const fmtFull = (v: unknown) => FULL_FMT.format(new Date(Number(v)));
+const HERO_SERIES = [
+  { key: "value", label: "Value", color: "var(--chart-line)", area: true },
+  { key: "contributions", label: "Contributed", color: "var(--text-tertiary)", dashed: true },
+];
+const fmtWhole = (n: number) => fmtMoney(Math.round(n), "USD", { noCents: true });
+
+type HeroPoint = { t: number; value: number; contributions: number };
+
 function ValueHero({ instanceId, summary: s }: { instanceId: Id; summary?: PortfolioSummary }) {
   const [range, setRange] = useState<PerfRange>("1y");
-  const [idx, setIdx] = useState<number | null>(null);
   const perf = useAsync(() => api.portfolio.performance({ instanceId, range }), [instanceId, range]);
-  const data = useMemo(() => (perf.data ? perf.data.t.map((t, i) => ({ t, value: perf.data!.value[i], contributions: perf.data!.contributions[i] })) : []), [perf.data]);
-  const cur = idx !== null ? data[idx] : null;
-  const first = data[0];
-  const value = cur ? cur.value : s ? num(s.totalValue.amount) : null;
-  const growth = cur && first ? cur.value - first.value - (cur.contributions - first.contributions) : null;
+  const data = useMemo<HeroPoint[]>(() => (perf.data ? perf.data.t.map((t, i) => ({ t: Number(t), value: perf.data!.value[i], contributions: perf.data!.contributions[i] })) : []), [perf.data]);
   const long = range === "5y" || range === "all";
-  const xf = (v: unknown) => {
-    const d = new Date(Number(v));
-    return long ? d.toLocaleDateString(undefined, { month: "short", year: "2-digit" }) : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  };
+  const xf = long ? fmtMonthYear : fmtDay;
+  // The scrub index lives in a tiny store, so only the readouts re-render while scrubbing — never the chart.
+  const scrub = useScrubStore();
   return (
-    <section className="fh-card" style={{ paddingBottom: 12 }}>
+    <section className="fh-card fh-hero" data-light="" ref={scrub.hostRef} style={{ paddingBottom: 12 }}>
+      <EdgeLight specular />
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
-            Total value
-          </div>
-          <div className="mt-1 h-[44px] flex items-center">{value !== null ? <HeroMoney value={value} cents={false} /> : <Skeleton width={220} height={36} />}</div>
-          <div className="flex items-center gap-2 h-6 mt-1">
-            {cur && first ? (
-              <>
-                <span className="text-caption tabular font-semibold" style={{ color: (growth ?? 0) >= 0 ? "var(--gain-text)" : "var(--loss-text)" }}>
-                  <Sensitive>{fmtMoney(growth ?? 0, "USD", { noCents: true, signed: true })}</Sensitive> market growth
-                </span>
-                <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                  since {xf(first.t)} · {new Date(cur.t).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                </span>
-              </>
-            ) : s ? (
-              <>
-                <DeltaPill value={s.dayChangePct} digits={2} />
-                <span className="text-caption tabular font-semibold" style={{ color: num(s.dayChange.amount) >= 0 ? "var(--gain-text)" : "var(--loss-text)" }}>
-                  <Sensitive>{fmtMoney(s.dayChange.amount, "USD", { noCents: true, signed: true })}</Sensitive>
-                </span>
-                <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                  today
-                </span>
-              </>
-            ) : null}
-          </div>
-        </div>
+        <HeroReadout scrub={scrub} data={data} summary={s} xf={xf} />
         <Segmented size="sm" value={range} onValueChange={setRange} options={RANGES} aria-label="Range" />
       </div>
       <div className="mt-3">
         <LineChart
           data={data}
           x="t"
-          series={[
-            { key: "value", label: "Value", color: "var(--accent-solid)", area: true },
-            { key: "contributions", label: "Contributed", color: "var(--text-tertiary)", dashed: true },
-          ]}
+          series={HERO_SERIES}
           colorBySign={false}
           startReference={false}
           height={220}
           curve="linear"
           xFormat={xf}
-          xTooltipFormat={(v) => new Date(Number(v)).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-          onScrub={setIdx}
+          xTooltipFormat={fmtFull}
+          onScrub={scrub.set}
           tooltip={false}
-          live
+          hero
           loading={perf.loading && !perf.data}
           summaryLabel="Portfolio value versus contributions"
         />
       </div>
-      <div className="flex items-center gap-5 pt-2 mt-1 border-t border-subtle text-caption" style={{ fontWeight: 400 }}>
-        <span className="inline-flex items-center gap-1.5 text-tertiary">
-          <i className="fh-key" style={{ background: "var(--accent-solid)" }} />
-          Value <b className="text-primary tabular font-medium ml-1"><Sensitive>{cur ? fmtMoney(cur.value, "USD", { noCents: true }) : s ? fmtMoney(s.totalValue.amount, "USD", { noCents: true }) : "—"}</Sensitive></b>
-        </span>
-        <span className="inline-flex items-center gap-1.5 text-tertiary">
-          <i className="fh-key" style={{ background: "var(--text-tertiary)" }} />
-          Contributed <b className="text-primary tabular font-medium ml-1"><Sensitive>{cur ? fmtMoney(cur.contributions, "USD", { noCents: true }) : data.length ? fmtMoney(data[data.length - 1].contributions, "USD", { noCents: true }) : "—"}</Sensitive></b>
-        </span>
-        {perf.data?.xirr !== undefined ? <span className="ml-auto text-tertiary">XIRR this period {fmtPct(perf.data.xirr, 1, true)}/yr</span> : null}
-      </div>
+      <div className="fh-groove -mx-5 mt-1" />
+      <HeroLegend scrub={scrub} data={data} summary={s} xirr={perf.data?.xirr} />
     </section>
   );
 }
 
-/** Concentric rings: outer thin ring = target, inner ring = current allocation (§16.3 "allocation donut with a target ring"). */
-function AllocationRings({ rows, size = 196 }: { rows: { cls: string; current: number; target: number; color: string }[]; size?: number }) {
-  const [hover, setHover] = useState<string | null>(null);
-  const reduced = useReducedMotionPref();
-  const cx = size / 2;
-  const arcs = (key: "current" | "target", r: number, w: number) => {
-    const total = rows.reduce((a, x) => a + x[key], 0) || 1;
-    let a0 = -Math.PI / 2;
-    return rows.map((x) => {
-      const frac = x[key] / total;
-      const a1 = a0 + frac * Math.PI * 2;
-      const gap = rows.length > 1 ? 0.012 : 0;
-      const s = a0 + gap;
-      const e = Math.max(s, a1 - gap);
-      a0 = a1;
-      const large = e - s > Math.PI ? 1 : 0;
-      const p = (ang: number, rr: number) => `${cx + rr * Math.cos(ang)} ${cx + rr * Math.sin(ang)}`;
-      const d = `M ${p(s, r)} A ${r} ${r} 0 ${large} 1 ${p(e, r)}`;
-      return (
-        <m.path
-          key={`${key}-${x.cls}`}
-          d={d}
-          fill="none"
-          stroke={x.color}
-          strokeWidth={w}
-          strokeLinecap="butt"
-          style={{ opacity: hover && hover !== x.cls ? 0.3 : key === "target" ? 0.5 : 1, transition: "opacity 160ms cubic-bezier(.2,0,0,1)" }}
-          initial={reduced ? false : { pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          onMouseEnter={() => setHover(x.cls)}
-          onMouseLeave={() => setHover(null)}
-        />
-      );
-    });
-  };
-  const shown = rows.find((r) => r.cls === hover);
+function HeroReadout({ scrub, data, summary: s, xf }: { scrub: ScrubStore; data: HeroPoint[]; summary?: PortfolioSummary; xf: (v: unknown) => string }) {
+  const idx = useScrubIdx(scrub);
+  const cur = idx !== null ? data[idx] : null;
+  const first = data[0];
+  // At rest the hero, the legend and the chart's end all read the series' last point (the live total once loaded).
+  const value = cur ? cur.value : s ? num(s.totalValue.amount) : null;
+  const growth = cur && first ? cur.value - first.value - (cur.contributions - first.contributions) : null;
   return (
-    <div className="relative flex-none" style={{ width: size, height: size }}>
-      <svg width={size} height={size} role="img" aria-label="Current allocation (inner ring) against target (outer ring)">
-        {arcs("target", size / 2 - 5, 4)}
-        {arcs("current", size / 2 - 22, 22)}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-        {shown ? (
-          <>
-            <span className="text-caption text-tertiary" style={{ fontWeight: 500 }}>{shown.cls}</span>
-            <span className="tabular" style={{ fontSize: 20, fontWeight: 640 }}>{shown.current.toFixed(1)}%</span>
-            <span className="text-caption text-tertiary">target {shown.target.toFixed(0)}%</span>
-          </>
-        ) : (
-          <>
-            <span className="text-caption text-tertiary" style={{ fontWeight: 500 }}>Inner: now</span>
-            <span className="text-caption text-tertiary" style={{ fontWeight: 500 }}>Outer: target</span>
-          </>
-        )}
+    <div>
+      <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
+        Total value
       </div>
+      <div className="mt-1 h-[48px] flex items-center">{value !== null ? <HeroMoney value={value} cents={false} countUpKey="pf:value" scrubbing={idx !== null} /> : <Skeleton width={220} height={38} />}</div>
+      <div className="flex items-center gap-2 h-6 mt-1">
+        {cur && first ? (
+          <>
+            <span className="text-caption tabular font-semibold whitespace-nowrap" style={{ color: (growth ?? 0) >= 0 ? "var(--gain-text)" : "var(--loss-text)" }} data-sensitive="">
+              <RollingNumber value={growth ?? 0} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true, signed: true })} scrubbing countUp={false} sensitive /> market growth
+            </span>
+            <span className="text-caption text-tertiary whitespace-nowrap" style={{ fontWeight: 400 }}>
+              since {xf(first.t)} · {fmtFull(cur.t)}
+            </span>
+          </>
+        ) : s ? (
+          <>
+            <DeltaPill value={s.dayChangePct} digits={2} />
+            <span className="text-caption tabular font-semibold" style={{ color: num(s.dayChange.amount) >= 0 ? "var(--gain-text)" : "var(--loss-text)" }}>
+              <Sensitive>{fmtMoney(s.dayChange.amount, "USD", { noCents: true, signed: true })}</Sensitive>
+            </span>
+            <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
+              today
+            </span>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function HeroLegend({ scrub, data, summary: s, xirr }: { scrub: ScrubStore; data: HeroPoint[]; summary?: PortfolioSummary; xirr?: number }) {
+  const idx = useScrubIdx(scrub);
+  const cur = idx !== null ? data[idx] : null;
+  return (
+    <div className="flex items-center gap-5 pt-2.5 text-caption" style={{ fontWeight: 400 }}>
+      <span className="inline-flex items-center gap-1.5 text-tertiary">
+        <i className="fh-key" style={{ background: "var(--chart-line)" }} />
+        Value <b className="text-primary tabular font-medium ml-1"><Sensitive>{cur ? fmtWhole(cur.value) : s ? fmtWhole(num(s.totalValue.amount)) : "—"}</Sensitive></b>
+      </span>
+      <span className="inline-flex items-center gap-1.5 text-tertiary">
+        <i className="fh-key" style={{ background: "var(--text-tertiary)" }} />
+        Contributed <b className="text-primary tabular font-medium ml-1"><Sensitive>{cur ? fmtWhole(cur.contributions) : data.length ? fmtWhole(data[data.length - 1].contributions) : "—"}</Sensitive></b>
+      </span>
+      {xirr !== undefined ? <span className="ml-auto text-tertiary">XIRR this period {fmtPct(xirr, 1, true)}/yr</span> : null}
     </div>
   );
 }
@@ -325,10 +283,14 @@ function Allocation({ summary: s, onRebalance }: { summary?: PortfolioSummary; o
     return list.map((x) => ({ ...x, cls: x.assetClass, color: seriesColor(t, colors.get(x.assetClass) ?? 0) }));
   }, [s, t]);
   const outside = rows.filter((r) => r.status === "outside_band").length;
+  const [view, setView] = useState<"current" | "target">("current");
+  const [active, setActive] = useState<string | null>(null);
+  const now = rows.map((r) => ({ id: r.cls, label: r.cls, value: r.current, color: r.color }));
+  const tgt = rows.map((r) => ({ id: r.cls, label: r.cls, value: r.target, color: r.color }));
   return (
     <Section
       title="Allocation vs target"
-      subtitle={s ? (outside ? `${outside} ${outside === 1 ? "class is" : "classes are"} outside the band · max drift ${fmtPp(s.maxDrift)}` : "Every class is within its band") : null}
+      subtitle={s ? (outside ? `${outside} ${outside === 1 ? "class is" : "classes are"} outside the band · max drift ${fmtPp(s.maxDrift)}` : "Every class is within its band") : "\u00a0"}
       actions={
         <Button size="xs" variant={outside ? "primary" : "ghost"} iconRight={ChevronRight} onClick={onRebalance}>
           Rebalance
@@ -336,10 +298,24 @@ function Allocation({ summary: s, onRebalance }: { summary?: PortfolioSummary; o
       }
     >
       {!s ? (
-        <Skeleton height={220} radius={10} />
+        <Skeleton height={276} radius={10} />
       ) : (
         <div className="flex items-center gap-6">
-          <AllocationRings rows={rows} />
+          <div className="flex flex-col items-center gap-3 flex-none">
+            <SpendWheel
+              data={view === "current" ? now : tgt}
+              ghost={view === "current" ? tgt : now}
+              size={188}
+              thickness={20}
+              active={active}
+              onActive={setActive}
+              centerLabel={view === "current" ? "Max drift" : "Target mix"}
+              centerValue={view === "current" ? fmtPp(s.maxDrift) : `${rows.length} classes`}
+              format={(n) => `${n.toFixed(1)}%`}
+              summary={`Allocation ${view === "current" ? "now" : "at target"}: ${rows.map((r) => `${r.cls} ${(view === "current" ? r.current : r.target).toFixed(1)}%`).join(", ")}`}
+            />
+            <Segmented size="sm" value={view} onValueChange={setView} aria-label="Show allocation" options={[{ value: "current", label: "Now" }, { value: "target", label: "Target" }]} />
+          </div>
           <div className="flex-1 min-w-0">
             <DivergingBars
               rows={rows.map((r) => ({
@@ -355,9 +331,11 @@ function Allocation({ summary: s, onRebalance }: { summary?: PortfolioSummary; o
               }))}
               max={Math.max(6, ...rows.map((r) => Math.abs(r.drift)))}
               format={(v) => fmtPp(v)}
+              active={active}
+              onActive={setActive}
             />
             <div className="text-caption text-tertiary mt-3" style={{ fontWeight: 400 }}>
-              Bars show drift from target in percentage points. Amber means outside the band (±5 pp or 25% of target).
+              Bars show drift from target in percentage points; amber is outside the band (±5 pp or 25% of target). The thin outer ring is the {view === "current" ? "target" : "current mix"}.
             </div>
           </div>
         </div>
@@ -373,7 +351,7 @@ function TopHoldings({ instanceId, summary: s }: { instanceId: Id; summary?: Por
     <Section title="Holdings" subtitle="Live prices · click a holding for lots, chart and research notes" pad={false}>
       {!s ? (
         <div className="p-4">
-          <Skeleton height={220} radius={10} />
+          <Skeleton height={352} radius={10} />
         </div>
       ) : (
         <table className="fh-table">

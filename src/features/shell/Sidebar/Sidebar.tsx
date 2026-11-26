@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronsUpDown,
   CircleHelp,
-  Ellipsis,
   Eye,
   EyeOff,
   FileDown,
@@ -31,8 +30,8 @@ import {
   WifiOff,
   Calendar,
 } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
-import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { AnimatePresence, LayoutGroup, m } from "motion/react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { createPageAndOpen, runCommand } from "@/app/commands";
 import { navigate, routesEqual, useRoute, type AppRoute } from "@/app/router";
@@ -58,12 +57,14 @@ import { Kbd } from "@/ui/Kbd";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/ui/Menu";
 import { Resizable } from "@/ui/Resizable";
 import { Tooltip } from "@/ui/Tooltip";
-import { spring } from "@/ui/motion/tokens";
+import { ease, spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PageIcon } from "../PageIcon";
 import { PageContextItems, PageMenuItems, pageActions } from "../PageMenu";
 import { lifeAppIdentity } from "./lifeAppIdentity";
-import { PageTree } from "./PageTree";
+import { LazyMenu, PageTree } from "./PageTree";
+import { SelectionSlab } from "./SelectionSlab";
+import { setPaletteOrigin } from "@/features/search/origin";
 import { useTreeDrag } from "./useTreeDrag";
 
 // ───────────────────────────────────────────────────────────────────────────── frame
@@ -82,11 +83,15 @@ export function SidebarFrame({ compact }: SidebarFrameProps) {
   const collapsed = collapsedPref || compact;
   const [liveWidth, setLiveWidth] = useState(width);
   const enterTimer = useRef<number | undefined>(undefined);
+  const asideRef = useRef<HTMLElement>(null);
   const leaveTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => setLiveWidth(width), [width]);
-  useEffect(() => {
-    document.documentElement.style.setProperty("--sb-live-w", `${liveWidth}px`);
+  // The live (dragging) width goes on the main column only — `--sb-live-w` is registered as non-inherited
+  // (shell.css @property), so a resize restyles one element instead of the whole document.
+  useLayoutEffect(() => {
+    const main = asideRef.current?.parentElement?.querySelector<HTMLElement>(":scope > .emp-main");
+    main?.style.setProperty("--sb-live-w", `${liveWidth}px`);
   }, [liveWidth]);
   useEffect(() => {
     if (!collapsed) setPeeking(false);
@@ -105,7 +110,6 @@ export function SidebarFrame({ compact }: SidebarFrameProps) {
 
   const floating = collapsed && peeking;
   const visible = !collapsed || peeking;
-  const asideRef = useRef<HTMLElement>(null);
 
   // A peeking sidebar closes on outside press, Escape, or navigation.
   useEffect(() => {
@@ -176,7 +180,9 @@ export function SidebarFrame({ compact }: SidebarFrameProps) {
 
 // ───────────────────────────────────────────────────────────────────────────── content
 
-function SidebarContent({ floating }: { floating: boolean }) {
+// Memoised: the frame re-renders on every resize pointermove; the content (and its layout-animated sections, which
+// measure on render) must not.
+const SidebarContent = memo(function SidebarContent({ floating }: { floating: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const getScroll = useCallback(() => scrollRef.current, []);
   const [scrolled, setScrolled] = useState(false);
@@ -188,26 +194,30 @@ function SidebarContent({ floating }: { floating: boolean }) {
       {trafficLights ? <div className="drag-region absolute inset-x-0 top-0 h-[40px]" data-tauri-drag-region /> : null}
       <WorkspaceRow />
       <PrimaryRows />
-      <div
+      <m.div
         ref={scrollRef}
+        layoutScroll
         className="emp-sidebar-scroll"
         data-scrolled={scrolled ? "" : undefined}
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 2)}
       >
-        <div>
+        <LayoutGroup id="sidebar-sections">
+        <div className="emp-sb-body">
+          <SelectionSlab />
           <FavoritesSection dropActive={!!drag.drag?.favorites} dragging={!!drag.drag} />
           <LifeAppsSection />
           <Section id="pages" title="Pages" onAdd={() => void createPageAndOpen(null)} addLabel="New page" addShortcut="mod+n">
             <PageTree scrollEl={getScroll} drag={drag} />
             <EmptyPagesHint />
           </Section>
-          <div className="emp-sb-section">
+          <MorphBlock className="emp-sb-section">
             <NavRow icon={LayoutTemplate} label="Templates" onClick={() => runCommand("templates.open")} />
             <NavRow icon={FileDown} label="Import" onClick={() => runCommand("import.open")} />
             <NavRow icon={Trash2} label="Trash" route={{ t: "trash" }} />
-          </div>
+          </MorphBlock>
         </div>
-      </div>
+        </LayoutGroup>
+      </m.div>
       <SidebarFooter />
       {drag.drag ? (
         <div className="emp-drag-ghost" style={{ left: drag.drag.x + 14, top: drag.drag.y + 12 }} aria-hidden>
@@ -217,7 +227,7 @@ function SidebarContent({ floating }: { floating: boolean }) {
       ) : null}
     </div>
   );
-}
+});
 
 function EmptyPagesHint() {
   const count = useTree((s) => s.byId.size);
@@ -238,7 +248,7 @@ interface NavRowProps {
   icon: ComponentType<{ className?: string; size?: number; "aria-hidden"?: boolean }>;
   label: string;
   route?: AppRoute;
-  onClick?: () => void;
+  onClick?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
   shortcut?: string;
   trailing?: ReactNode;
   match?: (r: AppRoute) => boolean;
@@ -252,7 +262,7 @@ function NavRow({ icon: Icon, label, route, onClick, shortcut, trailing, match }
       type="button"
       className="emp-sb-row"
       aria-current={active ? "page" : undefined}
-      onClick={() => (onClick ? onClick() : route && navigate(route))}
+      onClick={(e) => (onClick ? onClick(e) : route && navigate(route))}
       onPointerEnter={route ? () => preloadRoute(route) : undefined}
     >
       <span className="ico">
@@ -271,8 +281,17 @@ function NavRow({ icon: Icon, label, route, onClick, shortcut, trailing, match }
 
 function PrimaryRows() {
   return (
-    <nav className="flex flex-col gap-px px-2 pb-1" aria-label="Main">
-      <NavRow icon={Search} label="Search" shortcut="mod+k" onClick={() => useUi.getState().openPalette("all")} />
+    <nav className="emp-sb-primary" aria-label="Main">
+      <SelectionSlab />
+      <NavRow
+        icon={Search}
+        label="Search"
+        shortcut="mod+k"
+        onClick={(e) => {
+          setPaletteOrigin(e.currentTarget);
+          useUi.getState().openPalette("all");
+        }}
+      />
       <NavRow icon={House} label="Home" route={{ t: "home" }} />
       <NavRow icon={CalendarDays} label="Today" route={{ t: "today" }} />
       <NavRow icon={Sparkles} label="Life apps" route={{ t: "lifeapps" }} match={(r) => r.t === "lifeapps"} />
@@ -326,8 +345,9 @@ function Section({
   "data-drop-favorites"?: string;
 }) {
   const [open, toggle] = useSectionOpen(id);
+  const reduced = useReducedMotionPref();
   return (
-    <section className={cn("emp-sb-section", className)} aria-label={title} {...rest}>
+    <m.section layout={reduced ? false : "position"} transition={spring.morph} className={cn("emp-sb-section", className)} aria-label={title} {...rest}>
       <div className="emp-sb-head" data-collapsed={open ? undefined : ""}>
         <button type="button" onClick={toggle} aria-expanded={open}>
           {title}
@@ -343,21 +363,32 @@ function Section({
           </span>
         ) : null}
       </div>
-      <AnimatePresence initial={false}>
+      {/* Collapse is a layout morph (§5.4.5): the body pops out of flow and folds up while the sections below glide
+          into place on the morph spring; expanding unfolds the rows from under the header. No height animation. */}
+      <AnimatePresence initial={false} mode="popLayout">
         {open ? (
           <m.div
             key="body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1, transition: { duration: 0.2 } }}
-            exit={{ height: 0, opacity: 0, transition: { duration: 0.14 } }}
-            style={{ overflow: "hidden" }}
-            className="flex flex-col gap-px"
+            className="emp-sb-sec-body flex flex-col gap-px"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scaleY: 0.96 }}
+            animate={{ opacity: 1, y: 0, scaleY: 1, transition: reduced ? { duration: 0.12 } : { ...spring.morph, opacity: { duration: 0.2, ease: ease.out } } }}
+            exit={reduced ? { opacity: 0, transition: { duration: 0.1 } } : { opacity: 0, y: -6, scaleY: 0.96, transition: { duration: 0.14, ease: ease.in } }}
           >
             {children}
           </m.div>
         ) : null}
       </AnimatePresence>
-    </section>
+    </m.section>
+  );
+}
+
+/** A plain block that rides the sections' layout morph. */
+function MorphBlock({ className, children }: { className?: string; children: ReactNode }) {
+  const reduced = useReducedMotionPref();
+  return (
+    <m.div layout={reduced ? false : "position"} transition={spring.morph} className={className}>
+      {children}
+    </m.div>
   );
 }
 
@@ -366,6 +397,8 @@ function FavoritesSection({ dropActive, dragging }: { dropActive: boolean; dragg
   const ids = useWorkspace(useShallow((s) => s.workspace?.favorites ?? []));
   const metas = useTree(useShallow((s) => ids.map((id) => s.byId.get(id)).filter((m): m is PageMeta => !!m)));
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const [ctxId, setCtxId] = useState<Id | null>(null);
+  const ctxMeta = ctxId ? metas.find((m) => m.id === ctxId) : undefined;
   if (!metas.length && !dragging) return null;
   const onEnd = (e: DragEndEvent) => {
     const from = ids.indexOf(String(e.active.id));
@@ -375,69 +408,80 @@ function FavoritesSection({ dropActive, dragging }: { dropActive: boolean; dragg
   };
   return (
     <Section id="favorites" title="Favorites" data-drop-favorites="" className={dropActive ? "rounded-md bg-selected shadow-[inset_0_0_0_1px_var(--accent-solid)]" : undefined}>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onEnd}>
-        <SortableContext items={metas.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-          {metas.map((meta) => (
-            <FavoriteRow key={meta.id} meta={meta} />
-          ))}
-        </SortableContext>
-      </DndContext>
+      {/* One shared context menu for the list (not a Radix menu root per row); the row comes from the event target. */}
+      <ContextMenu onOpenChange={(o) => !o && setCtxId(null)}>
+        <ContextMenuTrigger asChild>
+          <div
+            className="flex flex-col gap-px"
+            onContextMenu={(e) => {
+              const id = (e.target as HTMLElement).closest<HTMLElement>("[data-fav-id]")?.dataset.favId;
+              if (!id) e.preventDefault();
+              else setCtxId(id);
+            }}
+          >
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onEnd}>
+              <SortableContext items={metas.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+                {metas.map((meta) => (
+                  <FavoriteRow key={meta.id} meta={meta} ctxOpen={ctxId === meta.id} />
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
+        </ContextMenuTrigger>
+        {ctxMeta ? (
+          <ContextMenuContent width={264}>
+            <PageContextItems actions={pageActions(ctxMeta)} />
+          </ContextMenuContent>
+        ) : null}
+      </ContextMenu>
       {!metas.length ? <p className="px-2 py-1.5 text-caption text-tertiary">Drop a page here to pin it</p> : null}
     </Section>
   );
 }
 
-function FavoriteRow({ meta }: { meta: PageMeta }) {
+function FavoriteRow({ meta, ctxOpen }: { meta: PageMeta; ctxOpen: boolean }) {
   const route = useRoute();
   const active = route.t === "page" && route.id === meta.id;
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meta.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meta.id, transition: { duration: 380, easing: "var(--spring-morph)" } });
   const [menuOpen, setMenuOpen] = useState(false);
+  const [armed, setArmed] = useState(false);
   const title = meta.title || "Untitled";
   return (
-    <ContextMenu onOpenChange={setMenuOpen}>
-      <ContextMenuTrigger asChild>
-        <div
-          ref={setNodeRef}
-          {...attributes}
-          {...listeners}
-          role="link"
-          tabIndex={0}
-          className="emp-sb-row"
-          aria-current={active ? "page" : undefined}
-          data-menu-open={menuOpen ? "" : undefined}
-          style={{ transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 2 : undefined, boxShadow: isDragging ? "var(--elev-4)" : undefined, background: isDragging ? "var(--bg-overlay)" : undefined }}
-          onClick={(e) => (e.shiftKey ? useUi.getState().openPeek({ t: "page", id: meta.id }) : navigate({ t: "page", id: meta.id }))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") navigate({ t: "page", id: meta.id });
-          }}
-          onPointerEnter={() => preloadRoute({ t: "page", id: meta.id })}
-        >
-          <span className="ico">
-            <PageIcon icon={meta.icon} kind={meta.kind} size={18} />
-          </span>
-          <span className="label">{title}</span>
-          <span className="trail hover-only">
-            <Menu onOpenChange={setMenuOpen}>
-              <MenuTrigger asChild>
-                <button type="button" tabIndex={-1} className="emp-sb-mini" aria-label={`Actions for ${title}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                  <Ellipsis aria-hidden />
-                </button>
-              </MenuTrigger>
-              {menuOpen ? (
-                <MenuContent width={264}>
-                  <PageMenuItems actions={pageActions(meta)} />
-                </MenuContent>
-              ) : null}
-            </Menu>
-          </span>
-        </div>
-      </ContextMenuTrigger>
-      {menuOpen ? (
-        <ContextMenuContent width={264}>
-          <PageContextItems actions={pageActions(meta)} />
-        </ContextMenuContent>
-      ) : null}
-    </ContextMenu>
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      role="link"
+      tabIndex={0}
+      className="emp-sb-row"
+      data-fav-id={meta.id}
+      aria-current={active ? "page" : undefined}
+      data-menu-open={menuOpen || ctxOpen ? "" : undefined}
+      data-fav-dragging={isDragging ? "" : undefined}
+      style={{
+        transform: isDragging && transform ? `${CSS.Translate.toString(transform)} scale(1.03) rotate(-1deg)` : CSS.Translate.toString(transform),
+        transition: isDragging ? "transform 60ms linear" : transition,
+      }}
+      onClick={(e) => (e.shiftKey ? useUi.getState().openPeek({ t: "page", id: meta.id }) : navigate({ t: "page", id: meta.id }))}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") navigate({ t: "page", id: meta.id });
+      }}
+      onFocus={() => setArmed(true)}
+      onPointerEnter={() => {
+        preloadRoute({ t: "page", id: meta.id });
+        setArmed(true);
+      }}
+    >
+      <span className="ico">
+        <PageIcon icon={meta.icon} kind={meta.kind} size={18} />
+      </span>
+      <span className="label">{title}</span>
+      <span className="trail hover-only">
+        <LazyMenu armed={armed} open={menuOpen} onOpenChange={setMenuOpen} label={`Actions for ${title}`}>
+          <PageMenuItems actions={pageActions(meta)} />
+        </LazyMenu>
+      </span>
+    </div>
   );
 }
 
@@ -489,11 +533,7 @@ function WorkspaceGlyph({ ws, size = 22 }: { ws: Pick<Workspace, "name" | "icon"
   const emoji = ws?.icon?.t === "emoji" ? ws.icon.v : null;
   const letter = (ws?.name.trim()[0] ?? "E").toUpperCase();
   return (
-    <span
-      className="flex flex-none items-center justify-center rounded-[6px] bg-inverse font-semibold text-on-inverse"
-      style={{ width: size, height: size, fontSize: emoji ? size * 0.68 : size * 0.5, background: emoji ? "var(--bg-surface-3)" : undefined }}
-      aria-hidden
-    >
+    <span className="emp-ws-glyph" data-emoji={emoji ? "" : undefined} style={{ width: size, height: size, fontSize: emoji ? size * 0.64 : size * 0.5 }} aria-hidden>
       {emoji ?? letter}
     </span>
   );
@@ -511,7 +551,7 @@ function WorkspaceRow() {
           <button type="button" className="emp-ws-button" aria-label={`Workspace: ${ws?.name ?? ""}. Switch workspace`}>
             <WorkspaceGlyph ws={ws} />
             <span className="name">{ws?.name ?? "Workspace"}</span>
-            <ChevronsUpDown size={14} className="flex-none text-tertiary" aria-hidden />
+            <ChevronsUpDown size={14} className="chev flex-none text-tertiary" aria-hidden />
             {encrypted ? (
               <Tooltip content="Encrypted on this device">
                 <Lock size={12} className="flex-none text-tertiary" aria-label="Encrypted" />

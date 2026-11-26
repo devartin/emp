@@ -1,7 +1,7 @@
 /** Today widget (§6.4 row 1): next events (Google, Life OS blocks, ICS), tasks due, and a habit strip. */
 import { ArrowRight, CalendarDays, CheckCircle2 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
 import type { CalendarEvent, RowDTO } from "@/backend/types";
 import { navigate } from "@/app/router";
@@ -10,10 +10,11 @@ import { formatTime } from "@/lib/dates";
 import { notify } from "@/stores/toasts";
 import { useUi } from "@/stores/ui";
 import { Button } from "@/ui/Button";
+import { Checkbox } from "@/ui/Checkbox";
+import { Ring } from "@/ui/Ring";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
-import { celebrate } from "@/ui/motion/Celebrate";
-import { spring } from "@/ui/motion/tokens";
+import { ease, spring } from "@/ui/motion/tokens";
 import { localDay, optionId, read, write } from "@/features/lifeapps/cells";
 import { useAppDatabases, useRows, useStableNow } from "@/features/lifeapps/data";
 import { identity } from "@/features/lifeapps/identity";
@@ -21,13 +22,13 @@ import { useAppInstance, useUpcomingEvents } from "./useHomeData";
 
 const isAllDay = (e: CalendarEvent) => e.allDay;
 
-function EventRow({ e, now }: { e: CalendarEvent; now: Date }) {
+function EventRow({ e, now, next }: { e: CalendarEvent; now: Date; next: boolean }) {
   const start = new Date(e.start);
   const end = new Date(e.end);
   const live = !e.allDay && start <= now && end > now;
   return (
     <button type="button" className="hm-event" onClick={() => (e.link ? useUi.getState().openPeek(e.link) : navigate({ t: "calendar" } as never))}>
-      <span className="hm-event-time tabular">{e.allDay ? "All day" : formatTime(e.start)}</span>
+      <span className="hm-event-time tabular" data-next={next ? "" : undefined}>{e.allDay ? "All day" : formatTime(e.start)}</span>
       <span className="hm-event-bar" style={{ background: `var(--block-${e.color}-text, var(--accent-solid))` }} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-body-sm font-medium text-primary">{e.title}</span>
@@ -72,18 +73,43 @@ export function TodayWidget() {
       .slice(0, 4);
   }, [tasks, tasksDb, today]);
 
-  const complete = async (r: RowDTO, el: HTMLElement) => {
-    if (!tasksDb) return;
+  // S13: the box pops, rays burst, the label is struck through; the row leaves after the moment has landed.
+  const [checking, setChecking] = useState<ReadonlySet<string>>(() => new Set());
+  // The write is deferred until the moment has landed (a live refresh would otherwise yank the row mid-strike);
+  // pending writes flush immediately if the widget unmounts, so a completion is never lost.
+  const pending = useRef(new Map<string, { timer: number; run: () => void }>());
+  useEffect(() => {
+    const map = pending.current;
+    return () => {
+      map.forEach(({ timer, run }) => {
+        window.clearTimeout(timer);
+        run();
+      });
+      map.clear();
+    };
+  }, []);
+  const complete = (r: RowDTO) => {
+    if (!tasksDb || checking.has(r.id)) return;
     const status = tasksDb.p("task.status");
     const done = optionId(status, "Done");
     if (!status || !done) return;
-    celebrate(el, { badge: false, particles: 6 });
-    setRows((rows) => rows.filter((x) => x.id !== r.id));
-    try {
-      await api.db.rowsUpdate({ updates: [{ id: r.id, values: { [status.id]: write.status(done) } }] });
-    } catch (e) {
-      notify.fromError(e, "Couldn’t complete the task");
-    }
+    setChecking((s) => new Set(s).add(r.id));
+    const run = () => {
+      pending.current.delete(r.id);
+      void api.db.rowsUpdate({ updates: [{ id: r.id, values: { [status.id]: write.status(done) } }] }).catch((e) => {
+        notify.fromError(e, "Couldn’t complete the task");
+        setChecking((s) => {
+          const n = new Set(s);
+          n.delete(r.id);
+          return n;
+        });
+      });
+    };
+    const timer = window.setTimeout(() => {
+      setRows((rows) => rows.filter((x) => x.id !== r.id));
+      run();
+    }, 640);
+    pending.current.set(r.id, { timer, run });
   };
 
   const habitDots = useMemo(() => {
@@ -100,7 +126,7 @@ export function TodayWidget() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div data-widget-head="" className="flex items-center justify-between">
         <h2 className="hm-title"><CalendarDays size={15} aria-hidden />Today</h2>
         <Button size="xs" variant="ghost" iconRight={ArrowRight} onClick={() => navigate({ t: "calendar" } as never)}>
           Calendar
@@ -112,7 +138,7 @@ export function TodayWidget() {
             {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} height={36} radius={8} />)}
           </div>
         ) : upcoming.length ? (
-          upcoming.map((e) => <EventRow key={e.id} e={e} now={now} />)
+          upcoming.map((e, i) => <EventRow key={e.id} e={e} now={now} next={i === upcoming.findIndex((x) => !x.allDay && new Date(x.start) > now)} />)
         ) : (
           <p className="py-3 text-body-sm text-tertiary">Nothing else on the calendar today.</p>
         )}
@@ -120,20 +146,27 @@ export function TodayWidget() {
       {lifeos ? (
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <span className="text-micro uppercase text-tertiary">Due</span>
+            <span className="hm-section-label">Due</span>
             <Button size="xs" variant="link" onClick={() => navigate({ t: "app", instanceId: lifeos.id, tab: "today" })}>Life OS</Button>
           </div>
           {!due ? (
             <Skeleton height={64} radius={8} />
           ) : due.length ? (
-            <AnimatePresence initial={false}>
+            <AnimatePresence initial={false} mode="popLayout">
               {due.map((r) => {
                 const d = read.date(r, tasksDb?.p("task.due"))?.start?.slice(0, 10) ?? "";
+                const title = read.text(r, tasksDb?.p("task.title"));
+                const isDone = checking.has(r.id);
                 return (
-                  <m.div key={r.id} layout="position" exit={{ opacity: 0, height: 0 }} className="hm-task">
-                    <button type="button" className="lo-check" aria-label={`Complete ${read.text(r, tasksDb?.p("task.title"))}`} onClick={(e) => void complete(r, e.currentTarget)} style={{ ["--app" as string]: identity("life-os").color }} />
-                    <span className="min-w-0 flex-1 truncate text-body-sm text-primary">{read.text(r, tasksDb?.p("task.title"))}</span>
-                    <span className={cn("text-caption tabular", d < today ? "text-loss-text font-semibold" : "text-tertiary")}>{d < today ? "Overdue" : "Today"}</span>
+                  <m.div
+                    key={r.id}
+                    layout="position"
+                    transition={spring.morph}
+                    exit={{ opacity: 0, x: 8, transition: { duration: 0.16, ease: ease.in } }}
+                    className="hm-task"
+                  >
+                    <Checkbox celebrate checked={isDone} label={title || "Untitled task"} aria-label={`Complete ${title}`} onCheckedChange={(v) => v && complete(r)} />
+                    <span className={cn("text-caption tabular transition-opacity", isDone && "opacity-0", d < today ? "text-loss-text font-semibold" : "text-tertiary")}>{d < today ? "Overdue" : "Today"}</span>
                   </m.div>
                 );
               })}
@@ -144,8 +177,8 @@ export function TodayWidget() {
         </div>
       ) : null}
       {habitsInst && habitDots ? (
-        <button type="button" className="hm-habits" onClick={() => navigate({ t: "app", instanceId: habitsInst.id })} style={{ ["--app" as string]: identity("habits").color }}>
-          <span className="text-micro uppercase text-tertiary">Habits</span>
+        <button type="button" className="hm-habits well" onClick={() => navigate({ t: "app", instanceId: habitsInst.id })} style={{ ["--app" as string]: identity("habits").color }}>
+          <span className="hm-section-label">Habits</span>
           <span className="flex flex-1 items-center gap-1.5">
             {habitDots.map((h) => (
               <Tooltip key={h.id} content={`${h.name}${h.done ? " · done" : ""}`}>
@@ -155,7 +188,11 @@ export function TodayWidget() {
               </Tooltip>
             ))}
           </span>
-          <span className="text-caption tabular text-secondary">{habitDots.filter((h) => h.done).length}/{habitDots.length}</span>
+          <Ring value={habitDots.length ? habitDots.filter((h) => h.done).length / habitDots.length : 0} size={40} completeMoment aria-label={`${habitDots.filter((h) => h.done).length} of ${habitDots.length} habits done today`}>
+            <span className="text-[11px] font-semibold tabular text-secondary">
+              {habitDots.filter((h) => h.done).length}/{habitDots.length}
+            </span>
+          </Ring>
         </button>
       ) : null}
     </div>

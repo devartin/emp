@@ -1,13 +1,13 @@
 import { useId, useMemo } from "react";
 import { lttbValues } from "@/lib/lttb";
-import { alpha, useChartTheme } from "./theme";
+import { alpha, resolveColor, useChartTheme } from "./theme";
 
 export interface SparklineProps {
   data: readonly number[];
   width?: number | string;
   height?: number;
-  /** "trend" colours by sign of last − first (default); "accent" uses the accent; or any CSS colour. */
-  color?: "trend" | "accent" | string;
+  /** "ink" = --chart-line (default, DESIGN §2.3: single-series trend lines are ink — gain/loss lives on the delta pill); "trend" colours by sign of last − first; "accent"; or any CSS colour / var(). */
+  color?: "trend" | "ink" | "accent" | string;
   /** Show the 4px end dot. */
   endDot?: boolean;
   area?: boolean;
@@ -19,14 +19,15 @@ export interface SparklineProps {
 }
 
 /**
- * Sparkline (§5.10): stroke 1.5, area gradient .16→0, 4px end dot. Pure SVG (no Recharts) so dozens can render in a
+ * Sparkline (docs/DESIGN.md §6.4): stroke 1.5, area gradient .16→0, 4px end dot; a 500ms clip reveal on mount. Pure SVG (no Recharts) so dozens can render in a
  * dashboard cheaply; downsampled with LTTB above 120 points. Uses a 100-wide viewBox stretched to the box.
  */
-export function Sparkline({ data, width = "100%", height = 32, color = "trend", endDot = true, area = true, strokeWidth = 1.5, className, live, ...aria }: SparklineProps) {
+export function Sparkline({ data, width = "100%", height = 32, color = "ink", endDot = true, area = true, strokeWidth = 1.5, className, live, ...aria }: SparklineProps) {
   const t = useChartTheme();
   const gid = useId().replace(/:/g, "");
   const pts = useMemo(() => (data.length > 120 ? lttbValues(data, 120) : data.slice()), [data]);
-  const stroke = color === "trend" ? ((pts[pts.length - 1] ?? 0) >= (pts[0] ?? 0) ? t.gain : t.loss) : color === "accent" ? t.accent : color;
+  const stroke =
+    color === "trend" ? ((pts[pts.length - 1] ?? 0) >= (pts[0] ?? 0) ? t.gain : t.loss) : color === "accent" ? t.accent : color === "ink" ? t.chartLine : (resolveColor(color) ?? color);
   const geom = useMemo(() => {
     if (pts.length < 2) return null;
     let min = Infinity;
@@ -48,7 +49,7 @@ export function Sparkline({ data, width = "100%", height = 32, color = "trend", 
     <div className={className} style={{ width, height, position: "relative" }} role="img" aria-label={aria["aria-label"] ?? "Trend"}>
       {geom ? (
         <>
-          <svg width="100%" height={height} viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" aria-hidden style={{ overflow: "visible" }}>
+          <svg className="emp-spark-reveal" width="100%" height={height} viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" aria-hidden style={{ overflow: "visible" }}>
             <defs>
               <linearGradient id={`sg${gid}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0" stopColor={stroke} stopOpacity={0.16} />
@@ -71,6 +72,7 @@ export function Sparkline({ data, width = "100%", height = 32, color = "trend", 
                 borderRadius: 9999,
                 background: stroke,
                 boxShadow: `0 0 0 2px ${alpha(stroke, 0.18)}`,
+                animation: "emp-fade-in 200ms var(--ease-out) 380ms both",
               }}
             >
               {live ? <span className="emp-live-dot" style={{ position: "absolute", inset: -5, borderRadius: 9999, background: stroke, opacity: 0 }} /> : null}
