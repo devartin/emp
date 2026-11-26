@@ -71,6 +71,7 @@ export const SETTING_ENTRIES: SettingEntry[] = [
   { id: "text-size", section: "appearance", title: "Text size", keywords: ["font size", "bigger", "smaller"] },
   { id: "motion", section: "appearance", title: "Motion", keywords: ["animation", "reduced motion"] },
   { id: "effects", section: "appearance", title: "Visual effects", keywords: ["glass", "blur", "transparency", "shadows"] },
+  { id: "transparency", section: "appearance", title: "Transparency", keywords: ["glass", "blur", "frosted", "translucent", "opaque", "linux"] },
   { id: "contrast", section: "appearance", title: "Contrast", keywords: ["accessibility", "borders"] },
   { id: "number-colors", section: "appearance", title: "Gain and loss colours", keywords: ["colour blind", "cvd", "east asian", "red green"] },
   { id: "readable-font", section: "appearance", title: "Readable font", keywords: ["atkinson", "dyslexia", "accessibility"] },

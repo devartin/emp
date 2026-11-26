@@ -7,6 +7,7 @@ import { Check, Palette } from "lucide-react";
 import { m } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Accent, DeviceSettings, ThemeSetting } from "@/backend/types";
+import { retestGlass, setGlassPref, useGlass, type GlassPref, type GlassStatus } from "@/app/glass";
 import { cn } from "@/lib/cn";
 import { useSettings } from "@/stores/settings";
 import { Button } from "@/ui/Button";
@@ -18,7 +19,7 @@ import { Switch } from "@/ui/Switch";
 import { Tag } from "@/ui/Tag";
 import { spring } from "@/ui/motion/tokens";
 import { switchThemeWithReveal } from "@/ui/motion/themeTransition";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
+import { useReducedEffects, useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Group, Row, SectionHeader } from "../parts";
 
 const THEMES: { id: ThemeSetting; name: string }[] = [
@@ -190,9 +191,10 @@ export function AppearanceSection() {
           <MotionDemo />
           <Segmented size="sm" value={device.motion} onValueChange={(v) => set({ motion: v })} options={[{ value: "system", label: "System" }, { value: "reduced", label: "Reduced" }, { value: "full", label: "Full" }]} aria-label="Motion" />
         </Row>
-        <Row id="effects" label="Visual effects" description={device.effects === "reduced" ? "No glass or blur, softer shadows, no particles. Lighter on older computers." : device.effects === "full" ? "Glass, blur and depth everywhere they’re allowed." : "Full effects, reduced automatically on Linux or when frames drop."}>
+        <Row id="effects" label="Visual effects" description={device.effects === "reduced" ? "No glass or blur, softer shadows, no particles. Lighter on older computers." : device.effects === "full" ? "Glass, blur and depth everywhere they’re allowed." : "Full effects, reduced automatically when frames drop or your system asks for less transparency."}>
           <Segmented size="sm" value={device.effects} onValueChange={(v) => set({ effects: v })} options={[{ value: "auto", label: "Auto" }, { value: "full", label: "Full" }, { value: "reduced", label: "Reduced" }]} aria-label="Visual effects" />
         </Row>
+        <TransparencyRow />
         <Row id="contrast" label="Contrast" description="More contrast strengthens borders and secondary text, and turns off glass.">
           <Segmented size="sm" value={device.contrast} onValueChange={(v) => set({ contrast: v })} options={[{ value: "system", label: "System" }, { value: "more", label: "More" }]} aria-label="Contrast" />
         </Row>
@@ -227,6 +229,51 @@ export function AppearanceSection() {
         </div>
       </Group>
     </div>
+  );
+}
+
+const TRANSPARENCY_NOTES: Record<GlassStatus, string> = {
+  "forced-on": "Frosted glass on menus, dialogs and the command palette, even where Auto would turn it off.",
+  "forced-off": "Menus, dialogs and the command palette are solid. Every other effect stays.",
+  "auto-on": "Frosted glass on menus, dialogs and the command palette, unless your system asks for less transparency.",
+  "auto-probing": "Glass is on while EMP checks that menus and dialogs stay smooth on this computer.",
+  "auto-passed": "Glass is on — menus and dialogs are staying smooth on this computer.",
+  "auto-stepped-down": "Turned off on this computer because menus and dialogs dropped frames with glass.",
+  "auto-os": "Off because your system asks for reduced transparency.",
+  "auto-effects": "Off while visual effects are reduced.",
+};
+
+/** Transparency: Auto / On / Off (glass on floating layers). Auto measures on Linux and steps down if frames drop. */
+function TransparencyRow() {
+  const g = useGlass();
+  const effectsReduced = useReducedEffects();
+  let note = TRANSPARENCY_NOTES[g.status];
+  if (g.status === "forced-on" && effectsReduced) note = "On, but glass stays solid while visual effects are reduced.";
+  return (
+    <Row
+      id="transparency"
+      label="Transparency"
+      description={
+        g.status === "auto-stepped-down" ? (
+          <>
+            {note}{" "}
+            <Button size="xs" variant="link" onClick={() => retestGlass()}>
+              Test again
+            </Button>
+          </>
+        ) : (
+          note
+        )
+      }
+    >
+      <Segmented<GlassPref>
+        size="sm"
+        value={g.pref}
+        onValueChange={(v) => void setGlassPref(v)}
+        options={[{ value: "auto", label: "Auto" }, { value: "on", label: "On" }, { value: "off", label: "Off" }]}
+        aria-label="Transparency"
+      />
+    </Row>
   );
 }
 
