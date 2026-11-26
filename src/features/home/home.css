@@ -1,6 +1,6 @@
-/* Home = the day (PROGRAMME-v3 K4): one 720px column, ruled not boxed, no containers, no motion on arrival (C0).
-   Tokens only; Phase 2 polishes the values. */
-.hm-page { width: 100%; max-width: 720px; margin: 0 auto; padding: 56px 24px 96px; }
+/* Home = the day (PROGRAMME-v3 K4, DESIGN v3 §5): one 720px column, ruled not boxed, 36px rows with a hairline
+   between, no containers, no motion on arrival (C0). Tokens only. */
+.hm-page { width: 100%; max-width: 720px; margin: 0 auto; padding: 48px 24px 96px; }
 
 .hm-head { margin-bottom: 20px; }
 .hm-date {
@@ -26,19 +26,20 @@
 .hm-quiet-link:hover { color: var(--text-primary); }
 .hm-sub .hm-quiet-link { font-size: inherit; }
 .hm-quiet-link.is-underlined { text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+/* --ring is the colour; --focus-ring is a box-shadow recipe and is not valid in `outline` */
 .hm-quiet-link:focus-visible,
 .hm-row:focus-visible,
 .hm-money-part:focus-visible,
-.hm-todo-title:focus-visible { outline: var(--focus-width, 2px) solid var(--focus-ring); outline-offset: 1px; border-radius: var(--radius-xs); }
+.hm-todo-title:focus-visible { outline: var(--focus-width, 2px) solid var(--ring); outline-offset: 1px; border-radius: var(--radius-xs); }
 
 /* ── capture ── */
-.hm-capture { margin-bottom: 28px; }
+.hm-capture { margin-bottom: 12px; }
 .hm-capture-field { position: relative; display: flex; align-items: center; }
 .hm-capture-input {
   width: 100%;
-  height: 40px;
+  height: var(--control-lg);
   padding: 0 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-field);
   border-radius: var(--radius-md);
   background: var(--bg-canvas);
   color: var(--text-primary);
@@ -46,8 +47,8 @@
   font-size: calc(14rem / 14);
 }
 .hm-capture-input::placeholder { color: var(--text-tertiary); }
-.hm-capture-input:hover { border-color: var(--border-strong); }
-.hm-capture-input:focus { outline: var(--focus-width, 2px) solid var(--focus-ring); outline-offset: 1px; border-color: var(--border-strong); }
+.hm-capture-input:hover { border-color: var(--border-field-hover); }
+.hm-capture-input:focus { outline: var(--focus-width, 2px) solid var(--ring); outline-offset: 1px; border-color: var(--border-field-hover); }
 .hm-capture-hint {
   position: absolute;
   right: 12px;
@@ -75,7 +76,7 @@
 
 /* ── sections: a heading and ruled rows ── */
 .hm-section { margin-top: 28px; }
-.hm-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.hm-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border-subtle); }
 .hm-section-title { margin: 0; font-size: calc(14rem / 14); line-height: calc(20 / 14); font-weight: 600; color: var(--text-primary); }
 
 .hm-list { list-style: none; margin: 0; padding: 0; }
@@ -85,7 +86,7 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 32px;
+  min-height: var(--row-list);
   padding: 4px 0;
   background: none;
   border: 0;
@@ -111,10 +112,11 @@ button.hm-row:hover .hm-row-title { text-decoration: underline; text-decoration-
 
 .hm-todo-title { background: none; border: 0; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
 .hm-todo.is-done .hm-todo-title { color: var(--text-tertiary); text-decoration: line-through; text-decoration-color: var(--text-tertiary); transition: color 150ms var(--ease-out); }
-.hm-habits { color: var(--text-secondary); }
+/* the habits line sets its link on the text baseline (14/20 and 13/18 centred sat ~1px apart) */
+.hm-list > li.hm-habits { align-items: baseline; padding-block: 8px; color: var(--text-secondary); }
 
 /* ── money: one line plus at most one alert ── */
-.hm-money { margin: 4px 0 0; font-size: calc(14rem / 14); line-height: calc(24 / 14); color: var(--text-secondary); }
+.hm-money { margin: 8px 0 0; font-size: calc(14rem / 14); line-height: calc(24 / 14); color: var(--text-secondary); }
 .hm-money-part { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .hm-money-part:hover { color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
 .hm-num { font-weight: 500; color: var(--text-primary); }

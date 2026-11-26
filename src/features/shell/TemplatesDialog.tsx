@@ -1,9 +1,9 @@
 /**
  * Template gallery (sidebar → Templates, palette "Browse templates"): built-in templates plus pages marked as
  * templates, grouped by category. Applying creates the page at the top level (or inside the current page) and opens it.
+ * A ruled list (glyph, title, category), not a card grid; the list is present at once (no stagger).
  */
-import { LayoutTemplate, Plus } from "lucide-react";
-import { m } from "motion/react";
+import { LayoutTemplate } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { navigate, routePageId, useRoute } from "@/app/router";
 import { api } from "@/backend";
@@ -16,9 +16,7 @@ import { Dialog } from "@/ui/Dialog";
 import { EmptyState } from "@/ui/EmptyState";
 import { Segmented } from "@/ui/Segmented";
 import { Skeleton } from "@/ui/Skeleton";
-import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { PageIcon } from "./PageIcon";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
 
 export function TemplatesDialog() {
   const open = useUi((s) => s.templatesOpen);
@@ -69,7 +67,7 @@ export function TemplatesDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen} size="xl" title="Templates" description="Start from a ready-made page. Mark any page as a template from its menu to see it here.">
+    <Dialog open={open} onOpenChange={setOpen} size="lg" title="Templates" description="Mark any page as a template from its menu to add it here.">
       <div className="flex flex-wrap items-center gap-3">
         {cats.length > 1 ? (
           <Segmented size="sm" aria-label="Category" value={cat} onValueChange={setCat} options={[{ value: "all", label: "All" }, ...cats.map((c) => ({ value: c, label: c }))]} />
@@ -88,37 +86,32 @@ export function TemplatesDialog() {
           />
         ) : null}
       </div>
-      <div className="mt-4 max-h-[58vh] overflow-y-auto px-1 pb-2 pr-1 pt-1">
+      <div className="mt-4 max-h-[58vh] overflow-y-auto">
         {list === null ? (
-          <div className="grid grid-cols-3 gap-3">
+          <ul className="emp-tpl-list" aria-hidden>
             {Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="emp-tpl-card panel" data-flat="">
-                <Skeleton width={36} height={36} radius={10} />
-                <Skeleton width="70%" height={11} />
-                <Skeleton width="40%" height={9} />
-              </div>
+              <li key={i} className="emp-tpl-row">
+                <Skeleton width={16} height={16} radius={4} />
+                <Skeleton width={`${40 - i * 4}%`} height={10} />
+              </li>
             ))}
-          </div>
+          </ul>
         ) : shown.length ? (
-          <m.div className="grid grid-cols-3 gap-3" variants={staggerList(0.025)} initial="hidden" animate="show">
+          <ul className="emp-tpl-list">
             {shown.map((t) => (
-              <m.div key={t.id} variants={staggerItem} className="flex">
-                <button type="button" className="emp-tpl-card panel w-full" data-raise data-light onClick={() => void apply(t)} disabled={!!busy} aria-busy={busy === t.id || undefined}>
-                  <EdgeLight />
+              <li key={t.id}>
+                <button type="button" className="emp-tpl-row" onClick={() => void apply(t)} disabled={!!busy} aria-busy={busy === t.id || undefined}>
                   <span className="tile">
-                    <PageIcon icon={t.icon} kind={t.kind} size={20} />
+                    <PageIcon icon={t.icon} kind={t.kind} size={16} />
                   </span>
-                  <span className="text-body font-medium text-primary">{t.title}</span>
-                  <span className="flex items-center gap-1 text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                    {t.builtin ? t.category : "My template"}
-                    <Plus size={12} className="ml-auto opacity-60" aria-hidden />
-                  </span>
+                  <span className="min-w-0 flex-1 truncate text-body text-primary">{t.title}</span>
+                  <span className="flex-none text-caption text-tertiary">{t.builtin ? t.category : "My template"}</span>
                 </button>
-              </m.div>
+              </li>
             ))}
-          </m.div>
+          </ul>
         ) : (
-          <EmptyState icon={LayoutTemplate} title="No templates here" body="Pages you mark as templates appear in this gallery." />
+          <EmptyState icon={LayoutTemplate} title="No templates here" body="Pages you mark as templates appear in this list." />
         )}
       </div>
     </Dialog>

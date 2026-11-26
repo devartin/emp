@@ -19,10 +19,9 @@
 }
 
 /* ─── Sidebar ─── */
-/* The sidebar is a flat sheet of window paper flush to the window edge (DESIGN v3: no gradient wash), with a hairline
-   on its right edge instead of a border. */
+/* The sidebar is a flat sheet of window paper (--bg-window in every theme, DESIGN v3 §2.1: #f7f6f4 / #1f1f1e) flush to
+   the window edge, with a hairline on its right edge. */
 .emp-sidebar {
-  --sb-bot: var(--bg-window);
   position: absolute;
   inset: 0 auto 0 0;
   z-index: 15;
@@ -30,25 +29,9 @@
   display: flex;
   flex-direction: column;
   width: var(--sb-w);
-  background: var(--sb-bot);
+  background: var(--bg-window);
   /* no paint containment: it clipped the outer half of the resize handle (which straddles the edge) */
   contain: layout style;
-}
-:root:is([data-theme="dark"], [data-theme="midnight"]) .emp-sidebar {
-  --sb-bot: var(--panel-bot);
-}
-.emp-sidebar::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: url("../../styles/grain.png") 0 0 / 180px;
-  mix-blend-mode: var(--grain-blend);
-  opacity: var(--grain-op);
-}
-:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-sidebar::before {
-  display: none;
 }
 .emp-sidebar[data-floating] {
   inset: calc(var(--topbar-h) + 4px) auto 8px 8px;
@@ -56,14 +39,7 @@
   border-radius: 12px;
   background: var(--bg-overlay);
   box-shadow: var(--elev-3);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   overflow: hidden;
-}
-:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-sidebar[data-floating] {
-  background: var(--glass-solid);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 .emp-sidebar-inner {
   display: flex;
@@ -77,7 +53,7 @@
   right: 0;
   bottom: 0;
   width: 1px;
-  background: color-mix(in oklab, var(--groove-dark), transparent 10%);
+  background: var(--border);
   pointer-events: none;
 }
 .emp-sidebar[data-floating] .emp-sidebar-sep {
@@ -110,12 +86,10 @@
 }
 .emp-sidebar-scroll {
   position: relative;
-  /* rows fade under the top and bottom edges instead of being cut */
-  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--sb-fade-top, 0px), #000 calc(100% - 14px), transparent);
-  mask-image: linear-gradient(180deg, transparent 0, #000 var(--sb-fade-top, 0px), #000 calc(100% - 14px), transparent);
+  border-top: 1px solid transparent;
 }
 .emp-sidebar-scroll[data-scrolled] {
-  --sb-fade-top: 14px;
+  border-top-color: var(--border-subtle);
 }
 .emp-sb-body {
   position: relative;
@@ -146,26 +120,15 @@
   padding: 0 6px;
   border-radius: 6px;
   color: var(--text-primary);
-  transition: background-color var(--dur-base) var(--ease-out);
-}
-.emp-ws-button {
-  position: relative;
-  isolation: isolate;
-  transform: translateY(0) scale(1);
-  transition: background-color var(--dur-base) var(--ease-out), transform var(--dur-release) var(--spring-release);
 }
 .emp-ws-button:hover,
 .emp-ws-button[data-state="open"] {
-  background: var(--ghost-hover);
-  transition-duration: var(--dur-fast), var(--dur-release);
+  background: var(--state-hover);
 }
 .emp-ws-button:active {
-  background: var(--ghost-press);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-  transform: scale(0.98);
-  transition: transform var(--dur-press) var(--ease-press);
+  background: var(--state-active);
 }
-/* The workspace mark is a primary mini-slab: the same keycap as the icon's lit top face. */
+/* The workspace mark: the initial set in paper on an ink square (Notion's workspace letter). */
 .emp-ws-glyph {
   position: relative;
   display: flex;
@@ -188,7 +151,6 @@
   white-space: nowrap;
   font-size: 1rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
 }
 
 /* Rows (28px, compact 24) */
@@ -207,109 +169,40 @@
   -webkit-user-select: none;
   user-select: none;
   outline: none;
-  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
   width: 100%;
   text-align: left;
 }
 .emp-sb-row:hover {
   background: var(--state-hover);
   color: var(--text-primary);
-  transition-duration: var(--dur-fast);
 }
 .emp-sb-row:focus-visible {
   outline: 1.5px solid var(--ring);
   outline-offset: -1px;
 }
-[data-sel-host] .emp-sb-row,
-[data-sel-host] .emp-sb-row:hover,
-[data-sel-host] .emp-sb-row[aria-current="page"],
-[data-sel-host] .emp-sb-row[aria-selected="true"] {
-  background: transparent;
-}
-[data-sel-host] .emp-sb-row[data-drop="inside"] {
-  background: var(--state-selected);
-}
-
-/* ─── Selection slab + hover ghost (S11) ─── */
-.sb-slab,
-.sb-ghost {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 0;
-  border-radius: 6px;
-  pointer-events: none;
-  opacity: 0;
-}
-/* promoted only while a glide is in flight (SelectionSlab sets data-gliding) */
-:is(.sb-slab, .sb-ghost)[data-gliding] {
-  will-change: transform;
-}
-.sb-slab {
-  --edge: 1.5px;
-  transition: transform var(--dur-glide) var(--spring-glide), opacity 90ms var(--ease-out);
-}
-.sb-slab[data-on] {
-  opacity: 1;
-  transition: transform var(--dur-glide) var(--spring-glide), opacity var(--dur-fast) var(--ease-out);
-}
-.sb-slab-face {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  isolation: isolate;
-  transform-origin: 50% 50%;
-}
-/* The current row is a flat selected wash (v3: depth only on things you press). The side layer is retired. */
-.sb-slab-face::before,
-.sb-slab-face::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-}
-.sb-slab-face::before {
-  display: none;
-}
-.sb-slab-face::after {
-  z-index: -1;
-  background: var(--state-selected);
-}
-.sb-ghost {
-  background: var(--ghost-hover);
-  transition: transform var(--dur-morph) var(--spring-morph), opacity 160ms var(--ease-out), background-color 120ms var(--ease-out);
-}
-.sb-ghost[data-on] {
-  opacity: 1;
-  transition: transform var(--dur-morph) var(--spring-morph), opacity var(--dur-fast) var(--ease-out), background-color 120ms var(--ease-out);
-}
-[data-sel-host]:has(.emp-sb-row:active) .sb-ghost {
-  background: var(--ghost-press);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
-}
-:is(.sb-slab, .sb-ghost)[data-jump] {
-  transition: opacity var(--dur-fast) var(--ease-out) !important;
-}
-.emp-sidebar:has(.emp-drag-ghost) .sb-ghost {
-  opacity: 0;
-}
-:root[data-motion="reduced"] :is(.sb-slab, .sb-ghost),
-:root[data-motion="reduced"] .sb-slab-face::before,
-:root[data-motion="reduced"] .sb-slab-face::after {
-  transition: opacity 120ms linear !important;
-}
-:root[data-contrast="more"] .sb-slab-face::after {
-  box-shadow: inset 0 0 0 1.5px var(--text-secondary);
-}
+/* the current row: a flat selected wash (DESIGN §2.1 --state-selected), never raised */
 .emp-sb-row[aria-current="page"],
 .emp-sb-row[aria-selected="true"] {
-  background: var(--state-active);
+  background: var(--state-selected);
   color: var(--text-primary);
 }
-.emp-sb-row[data-drop="inside"] {
+.emp-sb-row[aria-current="page"]:hover,
+.emp-sb-row[aria-selected="true"]:hover {
+  background: var(--state-active);
+}
+:root[data-contrast="more"] .emp-sb-row[aria-current="page"] {
+  outline: 1.5px solid var(--text-secondary);
+  outline-offset: -1.5px;
+}
+.emp-sb-row[data-drop="inside"],
+.emp-sb-drop {
   background: var(--state-selected);
-  box-shadow: inset 0 0 0 1px var(--accent-solid);
+  outline: 1px solid var(--text-tertiary);
+  outline-offset: -1px;
   color: var(--text-primary);
+}
+.emp-sb-drop {
+  border-radius: 6px;
 }
 .emp-sb-row[data-dragging] {
   opacity: 0.4;
@@ -352,7 +245,6 @@
   bottom: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--dur-fast) var(--ease-out);
 }
 .emp-sb-row:has(> .hover-only) {
   --trail-w: 20px;
@@ -373,9 +265,6 @@
 .emp-sb-row[data-menu-open] .hover-only {
   opacity: 1;
 }
-.emp-sb-row .kbd-hint {
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
 .emp-sb-mini {
   display: flex;
   align-items: center;
@@ -385,12 +274,10 @@
   border-radius: 4px;
   color: var(--text-tertiary);
   flex: none;
-  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
 }
 .emp-sb-mini:hover {
   background: var(--state-active);
   color: var(--text-primary);
-  transition-duration: var(--dur-fast);
 }
 .emp-sb-mini svg {
   width: 14px;
@@ -406,7 +293,6 @@
   border-radius: 4px;
   color: var(--text-tertiary);
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 .emp-sb-row:hover .emp-sb-chevron,
 .emp-sb-row:focus-visible .emp-sb-chevron {
@@ -419,13 +305,9 @@
 .emp-sb-chevron svg {
   width: 14px;
   height: 14px;
-  transition: transform var(--dur-release) var(--spring-release);
 }
 .emp-sb-chevron[data-open] svg {
   transform: rotate(90deg);
-}
-:root[data-motion="reduced"] .emp-sb-chevron svg {
-  transition: none;
 }
 .emp-sb-row:hover .ico.swap-on-hover,
 .emp-sb-row:focus-visible .ico.swap-on-hover {
@@ -438,15 +320,15 @@
   margin: 0 -4px;
   padding: 0 4px;
   border-radius: 4px;
-  border: 1px solid var(--accent-solid);
-  box-shadow: var(--focus-ring);
+  border: 1px solid var(--border-field-hover);
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
   background: var(--bg-canvas);
   color: var(--text-primary);
   font: inherit;
-  outline: none;
 }
 
-/* Section headers (28px, micro, tertiary) */
+/* Section headers (28px; 12/500 tertiary, the menu group-label recipe) */
 .emp-sb-section {
   margin-top: 14px;
 }
@@ -461,10 +343,9 @@
   padding: 0 4px 0 8px;
   border-radius: 6px;
   color: var(--text-tertiary);
-  font-size: calc(11rem / 14);
-  line-height: calc(14 / 11);
-  font-weight: 600;
-  
+  font-size: calc(12rem / 14);
+  line-height: calc(16 / 12);
+  font-weight: 500;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -476,7 +357,6 @@
   padding: 0 4px;
   margin-left: -4px;
   border-radius: 4px;
-  transition: color var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out);
 }
 .emp-sb-head > button:first-child:hover {
   color: var(--text-secondary);
@@ -486,7 +366,6 @@
   width: 10px;
   height: 10px;
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-glide) var(--spring-glide);
 }
 .emp-sb-head:hover .caret {
   opacity: 1;
@@ -499,27 +378,10 @@
   display: flex;
   gap: 2px;
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out);
 }
 .emp-sb-head:hover .actions,
 .emp-sb-head:focus-within .actions {
   opacity: 1;
-}
-
-.emp-app-tile {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  color: #fff;
-  flex: none;
-
-}
-.emp-app-tile svg {
-  width: 11px;
-  height: 11px;
 }
 
 /* Footer (40px) */
@@ -528,8 +390,8 @@
   align-items: center;
   gap: 2px;
   height: 42px;
-  padding: 2px 8px 0 12px;
-  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
+  padding: 0 8px 0 12px;
+  border-top: 1px solid var(--border-subtle);
   flex: none;
 }
 .emp-status-dot {
@@ -542,28 +404,16 @@
 }
 .emp-status-dot[data-tone="off"] {
   background: var(--text-disabled);
-  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.25);
-}
-.emp-status-dot[data-pulse]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: inherit;
-  animation: emp-pulse-halo 1.6s var(--ease-out) 1;
 }
 
-/* Tree drop indicator (§4.2): 2px accent line + 6px circle cap */
+/* Tree drop indicator: a 2px ink line with a 6px ring cap; no glow */
 .emp-drop-line {
   position: absolute;
   height: 2px;
-  background: var(--lit-b);
-  box-shadow: 0 0 6px var(--lit-glow);
-  transition: transform var(--dur-glide) var(--spring-glide);
+  background: var(--text-primary);
   border-radius: 0;
   pointer-events: none;
   z-index: 3;
-  animation: emp-fade-in 80ms var(--ease-out);
 }
 .emp-drop-line::before {
   content: "";
@@ -573,7 +423,7 @@
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  border: 1.5px solid var(--lit-b);
+  border: 1.5px solid var(--text-primary);
   background: var(--bg-window);
   box-sizing: border-box;
 }
@@ -594,28 +444,8 @@
   font-size: calc(13rem / 14);
   font-weight: 500;
   white-space: nowrap;
-  rotate: -1.5deg;
-  animation: emp-ghost-lift var(--dur-release) var(--spring-release) both;
 }
-@keyframes emp-ghost-lift {
-  from {
-    scale: 0.92;
-    rotate: 0deg;
-    opacity: 0;
-  }
-}
-:root[data-motion="reduced"] .emp-drag-ghost {
-  rotate: none;
-  animation: none;
-}
-/* tree slots glide when rows reflow (expand, collapse, reorder): §5.4.5 */
-.emp-tree-slot {
-  transition: transform var(--dur-morph) var(--spring-morph);
-}
-:root[data-motion="reduced"] .emp-tree-slot {
-  transition: none;
-}
-/* favourites being dragged lift like a picked-up keycap */
+/* a favourite being dragged floats (E2) */
 .emp-sb-row[data-fav-dragging] {
   z-index: 3;
   color: var(--text-primary);
@@ -624,7 +454,7 @@
 }
 
 /* ─── Main column ─── */
-/* Skip link: invisible until keyboard focus, then a small raised keycap over the top-left corner. */
+/* Skip link: invisible until keyboard focus, then a floating paper chip over the top-left corner. */
 .emp-skip-link {
   position: fixed;
   top: 8px;
@@ -636,23 +466,17 @@
   font-size: calc(13rem / 14);
   font-weight: 600;
   color: var(--text-primary);
-  background: var(--panel-top);
-  box-shadow: inset 0 0 0 1px var(--panel-rim), var(--panel-raise);
+  background: var(--bg-overlay);
   outline: none;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-6px);
-  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release);
 }
 .emp-skip-link:focus-visible {
   opacity: 1;
   pointer-events: auto;
-  transform: none;
-  box-shadow: inset 0 0 0 1px var(--panel-rim), var(--panel-raise), 0 0 0 2px var(--ring);
-}
-:root[data-motion="reduced"] .emp-skip-link {
-  transition: opacity 120ms linear;
-  transform: none;
+  box-shadow: var(--elev-2);
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
 }
 .emp-main {
   position: relative;
@@ -691,35 +515,19 @@
   background: transparent;
   contain: layout style;
 }
-/* Once content scrolls, the bar becomes an opaque strip with a hairline bottom edge; content dissolves under a short
-   fade. Both layers fade with opacity (no shadow animation). */
-.emp-topbar::before,
-.emp-topbar::after {
+/* Once content scrolls, the bar becomes opaque paper with a hairline bottom edge (instant, no fade). */
+.emp-topbar::before {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity var(--dur-moderate) var(--ease-out);
-}
-.emp-topbar::before {
   inset: 0;
   z-index: -1;
-  background: var(--glass-fill-a);
-  box-shadow: inset 0 -1px 0 var(--groove-dark);
+  pointer-events: none;
+  opacity: 0;
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--border-subtle);
 }
-.emp-topbar::after {
-  top: 100%;
-  height: 16px;
-}
-.emp-topbar[data-scrolled]::before,
-.emp-topbar[data-scrolled]::after {
+.emp-topbar[data-scrolled]::before {
   opacity: 1;
-}
-/* the fade is painted only while content is scrolled under the bar */
-.emp-topbar[data-scrolled]::after {
-  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-canvas) 80%, transparent), transparent);
 }
 .emp-topbar .grow {
   flex: 1;
@@ -748,8 +556,6 @@
   flex: 0 1 auto;
 }
 .emp-crumb {
-  position: relative;
-  isolation: isolate;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -762,40 +568,18 @@
   font-size: calc(13rem / 14);
   font-weight: 500;
   white-space: nowrap;
-  transform: scale(1);
-  transition: color var(--dur-base) var(--ease-out), transform var(--dur-release) var(--spring-release);
 }
-/* ghost plate (DESIGN §4.2 ghost): scales in on hover, becomes a well on press */
-.emp-crumb::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--ghost-hover);
-  opacity: 0;
-  transform: scale(0.92);
-  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
-}
-.emp-crumb:hover::before,
-.emp-crumb[data-state="open"]::before {
-  opacity: 1;
-  transform: scale(1);
-  transition-duration: 140ms;
+.emp-crumb:hover,
+.emp-crumb[data-state="open"] {
+  background: var(--state-hover);
+  color: var(--text-primary);
 }
 .emp-crumb:active {
-  transform: scale(0.97);
-  transition: transform var(--dur-press) var(--ease-press);
-}
-.emp-crumb:active::before {
-  background: var(--ghost-press);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+  background: var(--state-active);
 }
 .emp-crumb:disabled {
   cursor: default;
-}
-.emp-crumb:disabled::before {
-  display: none;
+  background: none;
 }
 .emp-crumb:focus-visible {
   outline: 1.5px solid var(--ring);
@@ -805,9 +589,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.emp-crumb:hover {
-  color: var(--text-primary);
-}
 .emp-crumb[aria-current="page"] {
   color: var(--text-primary);
 }
@@ -815,16 +596,6 @@
   color: var(--text-disabled);
   margin: 0 -1px;
   flex: none;
-  transition: transform var(--dur-release) var(--spring-release), color var(--dur-fast) var(--ease-out);
-}
-/* the chevron after a hovered crumb nudges toward its child */
-.emp-crumb-slot:hover + .emp-crumb-slot > .emp-crumb-sep {
-  transform: translateX(2px);
-  color: var(--text-tertiary);
-}
-:root[data-motion="reduced"] :is(.emp-crumb, .emp-crumb-sep),
-:root[data-motion="reduced"] .emp-crumb::before {
-  transition-duration: 0ms !important;
 }
 
 /* Lock indicator ring countdown (last 60 s) */
@@ -849,7 +620,7 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-canvas);
-  border-left: 1px solid var(--groove-dark);
+  border-left: 1px solid var(--border);
   contain: layout paint style;
 }
 .emp-outline-item {
@@ -861,12 +632,10 @@
   color: var(--text-secondary);
   font-size: calc(13rem / 14);
   line-height: calc(18 / 13);
-  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
 }
 .emp-outline-item:hover {
   background: var(--state-hover);
   color: var(--text-primary);
-  transition-duration: var(--dur-fast);
 }
 .emp-info-row {
   display: flex;
@@ -874,10 +643,10 @@
   gap: 12px;
   padding: 8px 0;
   font-size: calc(13rem / 14);
-  box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .emp-info-row:last-child {
-  box-shadow: none;
+  border-bottom: 0;
 }
 .emp-info-row dt {
   color: var(--text-tertiary);
@@ -888,83 +657,62 @@
   margin: 0;
 }
 
-/* ─── Trash ─── */
+/* ─── Trash: ruled, not boxed. A 12/500 group label, 36px rows with a hairline between, bare glyphs. ─── */
 .emp-trash-group {
+  margin: 20px 0 0;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: calc(12rem / 14);
+  line-height: calc(16 / 12);
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.emp-trash-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 6px;
-  padding: 0 10px;
-  font-size: calc(11rem / 14);
-  font-weight: 600;
-  
-  color: var(--text-tertiary);
-}
-.emp-trash-group::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-.emp-trash-row {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 8px 10px;
-  border-radius: 12px;
+  min-height: var(--row-list);
+  padding: 0 4px;
+  border-bottom: 1px solid var(--border-subtle);
   outline: none;
 }
-.emp-trash-row::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--ghost-hover);
-  opacity: 0;
-  transform: scale(0.98);
-  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
-}
-.emp-trash-row:hover::before,
-.emp-trash-row:focus-within::before {
-  opacity: 1;
-  transform: scale(1);
-  transition-duration: 140ms;
+.emp-trash-row:hover,
+.emp-trash-row:focus-within {
+  background: var(--state-hover);
 }
 .emp-trash-row:focus-visible {
   outline: 1.5px solid var(--ring);
-  outline-offset: 1px;
+  outline-offset: -1.5px;
+}
+/* the actions take the meta's place on hover or focus (an instant swap) */
+.emp-trash-meta {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(12rem / 14);
+  color: var(--text-tertiary);
 }
 .emp-trash-row .actions {
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transform: translateX(6px);
-  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-release) var(--spring-release);
+  display: none;
+  flex: none;
+  gap: 2px;
 }
-.emp-trash-row:hover .actions,
-.emp-trash-row:focus-within .actions {
-  opacity: 1;
-  transform: none;
-}
-.emp-trash-tile {
+.emp-trash-row:is(:hover, :focus-within) .actions {
   display: flex;
+}
+.emp-trash-row:is(:hover, :focus-within) .emp-trash-meta {
+  display: none;
+}
+.emp-trash-glyph {
+  display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  flex: none;
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
-  filter: saturate(0.6);
-}
-:root[data-motion="reduced"] .emp-trash-row .actions,
-:root[data-motion="reduced"] .emp-trash-row::before {
-  transition-duration: 0ms;
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
 }
 /* Route skeletons fade in only if loading outlasts 120ms, so fast routes never flash a skeleton. */
 .emp-route-skeleton {
@@ -983,16 +731,6 @@
   margin-inline: -4px;
   padding: 2px 4px 12px;
   scrollbar-width: thin;
-  --fade-top: 16px;
-  --fade-bottom: 28px;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent);
-  mask-image: linear-gradient(180deg, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent);
-}
-.emp-keys-scroll[data-at-top] {
-  --fade-top: 0px;
-}
-.emp-keys-scroll[data-at-end] {
-  --fade-bottom: 0px;
 }
 .emp-keys-group + .emp-keys-group {
   margin-top: 18px;
@@ -1002,17 +740,17 @@
   align-items: baseline;
   gap: 8px;
   margin-bottom: 2px;
-  font-size: calc(11rem / 14);
-  line-height: 16px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 1rem;
+  line-height: calc(20 / 14);
   font-weight: 600;
-  
-  color: var(--text-tertiary);
+  color: var(--text-primary);
 }
 .emp-keys-where {
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--text-disabled);
+  font-size: calc(12rem / 14);
+  font-weight: 400;
+  color: var(--text-tertiary);
 }
 .emp-keys-cols {
   display: grid;
@@ -1026,18 +764,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  height: 34px;
-  padding-bottom: 2px;
+  height: var(--row-sidebar);
   font-size: calc(13rem / 14);
   color: var(--text-secondary);
-  box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark);
-}
-.emp-keys-row[data-col-end] {
-  box-shadow: none;
 }
 .emp-keys-scope {
   margin-left: 6px;
-  font-size: calc(11.5rem / 14);
+  font-size: calc(12rem / 14);
   color: var(--text-tertiary);
 }
 @media (max-width: 640px) {
@@ -1048,28 +781,34 @@
   }
 }
 
-/* Template cards */
-.emp-tpl-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px;
-  border-radius: 12px;
-  text-align: left;
+/* Templates: a ruled list, 36px rows, bare 16px glyphs, an instant ink wash on hover */
+.emp-tpl-list {
+  border-top: 1px solid var(--border-subtle);
 }
-.emp-tpl-card .tile {
+.emp-tpl-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
-  transition: transform var(--dur-release) var(--spring-release);
+  gap: 10px;
+  width: 100%;
+  min-height: var(--row-list);
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
 }
-.emp-tpl-card:hover .tile {
-  transform: translateY(-1px) scale(1.06);
+button.emp-tpl-row:hover {
+  background: var(--state-hover);
+}
+button.emp-tpl-row:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: -1.5px;
+}
+.emp-tpl-row .tile {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
 }
 
 /* Compact breakpoint: content padding tightens; peek-only sidebar handled in JS. */
@@ -1077,18 +816,4 @@
   .emp-topbar {
     padding-left: 4px;
   }
-}
-
-/* Rows that just appeared in the tree (expand, create): 200ms fade + small drop (§4.2 tree expand). */
-.emp-row-in {
-  animation: emp-row-in 200ms var(--ease-out) both;
-}
-@keyframes emp-row-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-:root[data-motion="reduced"] .emp-row-in {
-  animation: emp-fade-in 120ms var(--ease-out) both;
 }

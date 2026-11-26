@@ -7,8 +7,12 @@ import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type D
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ArrowDown,
+  ArrowUp,
   CandlestickChart,
   Check,
+  Eye,
+  EyeOff,
   ChevronDown,
   ChevronsUpDown,
   FileDown,
@@ -23,7 +27,7 @@ import {
   Trash2,
   Calendar,
 } from "lucide-react";
-import { AnimatePresence, LayoutGroup, m } from "motion/react";
+import { m } from "motion/react";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { createPageAndOpen, openPaletteHeld, runCommand } from "@/app/commands";
@@ -41,7 +45,7 @@ import { useVault } from "@/stores/vault";
 import { useWorkspace } from "@/stores/workspace";
 import { useNav } from "@/stores/nav";
 import { Button } from "@/ui/Button";
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/ui/ContextMenu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/ui/ContextMenu";
 import { Dialog } from "@/ui/Dialog";
 import { IconButton } from "@/ui/IconButton";
 import { Input } from "@/ui/Input";
@@ -49,14 +53,13 @@ import { Kbd } from "@/ui/Kbd";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/ui/Menu";
 import { Resizable } from "@/ui/Resizable";
 import { Tooltip } from "@/ui/Tooltip";
-import { ease, spring } from "@/ui/motion/tokens";
+import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PageIcon } from "../PageIcon";
 import { PageContextItems, PageMenuItems, pageActions } from "../PageMenu";
 import { LockIndicator } from "../LockIndicator";
 import { lifeAppIdentity } from "./lifeAppIdentity";
 import { LazyMenu, PageTree } from "./PageTree";
-import { SelectionSlab } from "./SelectionSlab";
 import { setPaletteOrigin } from "@/features/search/origin";
 import { useTreeDrag } from "./useTreeDrag";
 
@@ -187,30 +190,21 @@ const SidebarContent = memo(function SidebarContent({ floating }: { floating: bo
       {trafficLights ? <div className="drag-region absolute inset-x-0 top-0 h-[40px]" data-tauri-drag-region /> : null}
       <WorkspaceRow />
       <PrimaryRows />
-      <m.div
-        ref={scrollRef}
-        layoutScroll
-        className="emp-sidebar-scroll"
-        data-scrolled={scrolled ? "" : undefined}
-        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 2)}
-      >
-        <LayoutGroup id="sidebar-sections">
+      <div ref={scrollRef} className="emp-sidebar-scroll" data-scrolled={scrolled ? "" : undefined} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 2)}>
         <div className="emp-sb-body">
-          <SelectionSlab />
           <FavoritesSection dropActive={!!drag.drag?.favorites} dragging={!!drag.drag} />
           <LifeAppsSection />
           <Section id="pages" title="Pages" onAdd={() => void createPageAndOpen(null)} addLabel="New page" addShortcut="mod+n">
             <PageTree scrollEl={getScroll} drag={drag} />
             <EmptyPagesHint />
           </Section>
-          <MorphBlock className="emp-sb-section">
+          <div className="emp-sb-section">
             <NavRow icon={LayoutTemplate} label="Templates" onClick={() => runCommand("templates.open")} />
             <NavRow icon={FileDown} label="Import" onClick={() => runCommand("import.open")} />
             <NavRow icon={Trash2} label="Trash" route={{ t: "trash" }} />
-          </MorphBlock>
+          </div>
         </div>
-        </LayoutGroup>
-      </m.div>
+      </div>
       <SidebarFooter />
       {drag.drag ? (
         <div className="emp-drag-ghost" style={{ left: drag.drag.x + 14, top: drag.drag.y + 12 }} aria-hidden>
@@ -274,22 +268,130 @@ function NavRow({ icon: Icon, label, route, onClick, shortcut, trailing, match, 
   );
 }
 
+// The primary rows (Search, Home, Calendar) can be hidden and reordered (PROGRAMME-v3 K4). The layout is a per-device
+// preference, kept beside the sections' collapse state.
+type PrimaryId = "search" | "home" | "calendar";
+const PRIMARY_IDS: PrimaryId[] = ["search", "home", "calendar"];
+const PRIMARY_LABEL: Record<PrimaryId, string> = { search: "Search", home: "Home", calendar: "Calendar" };
+const PRIMARY_KEY = "emp.sb.primary";
+
+interface PrimaryLayout {
+  order: PrimaryId[];
+  hidden: PrimaryId[];
+}
+
+function readPrimary(): PrimaryLayout {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PRIMARY_KEY) ?? "null") as Partial<PrimaryLayout> | null;
+    const known = (xs: unknown): PrimaryId[] => (Array.isArray(xs) ? xs.filter((x): x is PrimaryId => PRIMARY_IDS.includes(x as PrimaryId)) : []);
+    const order = known(raw?.order);
+    return { order: [...new Set([...order, ...PRIMARY_IDS])], hidden: known(raw?.hidden) };
+  } catch {
+    return { order: PRIMARY_IDS, hidden: [] };
+  }
+}
+
+let primaryState: PrimaryLayout | null = null;
+const primaryListeners = new Set<() => void>();
+
+function setPrimary(next: PrimaryLayout) {
+  primaryState = next;
+  try {
+    localStorage.setItem(PRIMARY_KEY, JSON.stringify(next));
+  } catch {
+    /* storage unavailable: the change lasts for this session */
+  }
+  primaryListeners.forEach((l) => l());
+}
+
+function usePrimaryLayout(): PrimaryLayout {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const l = () => bump((n) => n + 1);
+    primaryListeners.add(l);
+    return () => void primaryListeners.delete(l);
+  }, []);
+  return currentPrimary();
+}
+
+function movePrimary(id: PrimaryId, dir: -1 | 1) {
+  const cur = currentPrimary();
+  const visible = cur.order.filter((x) => !cur.hidden.includes(x));
+  const i = visible.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= visible.length) return;
+  const swap = visible[j];
+  const order = [...cur.order];
+  const a = order.indexOf(id);
+  const b = order.indexOf(swap);
+  [order[a], order[b]] = [order[b], order[a]];
+  setPrimary({ ...cur, order });
+}
+
+function currentPrimary(): PrimaryLayout {
+  primaryState ??= readPrimary();
+  return primaryState;
+}
+
+/** "Search", "Search and Home", "Search, Home and Calendar". */
+function listNames(ids: PrimaryId[]): string {
+  const n = ids.map((id) => PRIMARY_LABEL[id]);
+  return n.length > 1 ? `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}` : n.join("");
+}
+
 function PrimaryRows() {
+  const layout = usePrimaryLayout();
+  const visible = layout.order.filter((id) => !layout.hidden.includes(id));
+  const [ctx, setCtx] = useState<PrimaryId | null>(null);
+  const at = ctx ? visible.indexOf(ctx) : -1;
+  if (!visible.length) return null;
+  const row = (id: PrimaryId) => {
+    if (id === "search")
+      return (
+        <NavRow
+          key={id}
+          icon={Search}
+          label="Search"
+          shortcut="mod+k"
+          onClick={(e) => {
+            setPaletteOrigin(e.currentTarget);
+            openPaletteHeld("all");
+          }}
+        />
+      );
+    if (id === "home") return <NavRow key={id} icon={House} label="Home" route={{ t: "home" }} />;
+    return <NavRow key={id} icon={Calendar} label="Calendar" route={{ t: "calendar" }} />;
+  };
   return (
-    <nav className="emp-sb-primary" aria-label="Main">
-      <SelectionSlab />
-      <NavRow
-        icon={Search}
-        label="Search"
-        shortcut="mod+k"
-        onClick={(e) => {
-          setPaletteOrigin(e.currentTarget);
-          openPaletteHeld("all");
-        }}
-      />
-      <NavRow icon={House} label="Home" route={{ t: "home" }} />
-      <NavRow icon={Calendar} label="Calendar" route={{ t: "calendar" }} />
-    </nav>
+    <ContextMenu onOpenChange={(o) => !o && setCtx(null)}>
+      <ContextMenuTrigger asChild>
+        <nav
+          className="emp-sb-primary"
+          aria-label="Main"
+          onContextMenu={(e) => {
+            const i = [...e.currentTarget.children].findIndex((el) => el.contains(e.target as Node));
+            if (i < 0) e.preventDefault();
+            else setCtx(visible[i]);
+          }}
+        >
+          {visible.map(row)}
+        </nav>
+      </ContextMenuTrigger>
+      {ctx ? (
+        <ContextMenuContent width={200}>
+          <ContextMenuItem icon={ArrowUp} disabled={at <= 0} onSelect={() => movePrimary(ctx, -1)}>
+            Move up
+          </ContextMenuItem>
+          <ContextMenuItem icon={ArrowDown} disabled={at >= visible.length - 1} onSelect={() => movePrimary(ctx, 1)}>
+            Move down
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem icon={EyeOff} onSelect={() => setPrimary({ ...layout, hidden: [...layout.hidden, ctx] })}>
+            Hide {PRIMARY_LABEL[ctx]}
+          </ContextMenuItem>
+        </ContextMenuContent>
+      ) : null}
+    </ContextMenu>
   );
 }
 
@@ -336,9 +438,9 @@ function Section({
   "data-drop-favorites"?: string;
 }) {
   const [open, toggle] = useSectionOpen(id);
-  const reduced = useReducedMotionPref();
+  // Expand and collapse are instant (C0): the rows are there or they are not.
   return (
-    <m.section layout={reduced ? false : "position"} transition={spring.morph} className={cn("emp-sb-section", className)} aria-label={title} {...rest}>
+    <section className={cn("emp-sb-section", className)} aria-label={title} {...rest}>
       <div className="emp-sb-head" data-collapsed={open ? undefined : ""}>
         <button type="button" onClick={toggle} aria-expanded={open}>
           {title}
@@ -354,36 +456,12 @@ function Section({
           </span>
         ) : null}
       </div>
-      {/* Collapse is a layout morph (§5.4.5): the body pops out of flow and folds up while the sections below glide
-          into place on the morph spring; expanding unfolds the rows from under the header. No height animation. */}
-      <AnimatePresence initial={false} mode="popLayout">
-        {open ? (
-          <m.div
-            key="body"
-            className="emp-sb-sec-body flex flex-col gap-px"
-            initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scaleY: 0.96 }}
-            animate={{ opacity: 1, y: 0, scaleY: 1, transition: reduced ? { duration: 0.12 } : { ...spring.morph, opacity: { duration: 0.2, ease: ease.out } } }}
-            exit={reduced ? { opacity: 0, transition: { duration: 0.1 } } : { opacity: 0, y: -6, scaleY: 0.96, transition: { duration: 0.14, ease: ease.in } }}
-          >
-            {children}
-          </m.div>
-        ) : null}
-      </AnimatePresence>
-    </m.section>
+      {open ? <div className="emp-sb-sec-body flex flex-col gap-px">{children}</div> : null}
+    </section>
   );
 }
 
-/** A plain block that rides the sections' layout morph. */
-function MorphBlock({ className, children }: { className?: string; children: ReactNode }) {
-  const reduced = useReducedMotionPref();
-  return (
-    <m.div layout={reduced ? false : "position"} transition={spring.morph} className={className}>
-      {children}
-    </m.div>
-  );
-}
-
-// Favorites — sortable (dnd-kit, spring.layout-like transitions) and a drop target for tree rows.
+// Favorites — sortable (dnd-kit; the reorder is the C2 220ms ease-out) and a drop target for tree rows.
 function FavoritesSection({ dropActive, dragging }: { dropActive: boolean; dragging: boolean }) {
   const ids = useWorkspace(useShallow((s) => s.workspace?.favorites ?? []));
   const metas = useTree(useShallow((s) => ids.map((id) => s.byId.get(id)).filter((m): m is PageMeta => !!m)));
@@ -398,7 +476,7 @@ function FavoritesSection({ dropActive, dragging }: { dropActive: boolean; dragg
     void useWorkspace.getState().reorderFavorites(arrayMove(ids, from, to));
   };
   return (
-    <Section id="favorites" title="Favorites" data-drop-favorites="" className={dropActive ? "rounded-md bg-selected shadow-[inset_0_0_0_1px_var(--accent-solid)]" : undefined}>
+    <Section id="favorites" title="Favorites" data-drop-favorites="" className={dropActive ? "emp-sb-drop" : undefined}>
       {/* One shared context menu for the list (not a Radix menu root per row); the row comes from the event target. */}
       <ContextMenu onOpenChange={(o) => !o && setCtxId(null)}>
         <ContextMenuTrigger asChild>
@@ -433,7 +511,7 @@ function FavoritesSection({ dropActive, dragging }: { dropActive: boolean; dragg
 function FavoriteRow({ meta, ctxOpen }: { meta: PageMeta; ctxOpen: boolean }) {
   const route = useRoute();
   const active = route.t === "page" && route.id === meta.id;
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meta.id, transition: { duration: 380, easing: "var(--spring-morph)" } });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meta.id, transition: { duration: 220, easing: "var(--ease-out)" } });
   const [menuOpen, setMenuOpen] = useState(false);
   const [armed, setArmed] = useState(false);
   const title = meta.title || "Untitled";
@@ -450,8 +528,8 @@ function FavoriteRow({ meta, ctxOpen }: { meta: PageMeta; ctxOpen: boolean }) {
       data-menu-open={menuOpen || ctxOpen ? "" : undefined}
       data-fav-dragging={isDragging ? "" : undefined}
       style={{
-        transform: isDragging && transform ? `${CSS.Translate.toString(transform)} scale(1.03) rotate(-1deg)` : CSS.Translate.toString(transform),
-        transition: isDragging ? "transform 60ms linear" : transition,
+        transform: CSS.Translate.toString(transform),
+        transition: isDragging ? "none" : transition,
       }}
       onClick={(e) => (e.shiftKey ? useUi.getState().openPeek({ t: "page", id: meta.id }) : navigate({ t: "page", id: meta.id }))}
       onKeyDown={(e) => {
@@ -545,6 +623,7 @@ function WorkspaceRow() {
   const ws = useWorkspace((s) => s.workspace);
   const workspaces = useWorkspace((s) => s.workspaces);
   const encrypted = useVault((s) => !!s.status?.encrypted);
+  const primary = usePrimaryLayout();
   const [dialog, setDialog] = useState<null | "new" | "rename">(null);
   return (
     <div className="emp-ws-row">
@@ -579,6 +658,11 @@ function WorkspaceRow() {
             New workspace…
           </MenuItem>
           <MenuSeparator />
+          {primary.hidden.length ? (
+            <MenuItem icon={Eye} onSelect={() => setPrimary({ ...primary, hidden: [] })}>
+              Show {listNames(primary.hidden)} in the sidebar
+            </MenuItem>
+          ) : null}
           <MenuItem icon={SquarePen} onSelect={() => setDialog("rename")}>
             Rename workspace…
           </MenuItem>

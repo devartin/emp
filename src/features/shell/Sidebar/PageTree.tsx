@@ -6,7 +6,7 @@
  */
 import { observeElementRect, useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight, Ellipsis, Plus } from "lucide-react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { navigate, routePageId, useRoute } from "@/app/router";
 import { preloadRoute } from "@/app/routes";
 import type { Id, PageMeta } from "@/backend/types";
@@ -51,7 +51,6 @@ export function PageTree({ scrollEl, renameId, onRenameDone, drag }: PageTreePro
   const [focusId, setFocusId] = useState<Id | null>(null);
   const [renaming, setRenaming] = useState<Id | null>(null);
   const [ctxId, setCtxId] = useState<Id | null>(null);
-  const seen = useRef<Set<Id> | null>(null);
 
   useEffect(() => {
     if (renameId) setRenaming(renameId);
@@ -110,15 +109,6 @@ export function PageTree({ scrollEl, renameId, onRenameDone, drag }: PageTreePro
   useEffect(() => {
     virtualizer.measure();
   }, [rowH, virtualizer]);
-
-  // Rows that just appeared (expand / create) fade in; the first render doesn't animate.
-  const fresh = useMemo(() => {
-    const prev = seen.current;
-    const next = new Set(rows.map((r) => r.id));
-    seen.current = next;
-    if (!prev) return new Set<Id>();
-    return new Set(rows.filter((r) => !prev.has(r.id)).map((r) => r.id));
-  }, [rows]);
 
   const indexOf = useCallback((id: Id | null) => (id ? rows.findIndex((r) => r.id === id) : -1), [rows]);
 
@@ -218,7 +208,6 @@ export function PageTree({ scrollEl, renameId, onRenameDone, drag }: PageTreePro
               row={row}
               selected={row.id === currentId}
               tabbable={row.id === tabbable}
-              fresh={fresh.has(row.id)}
               renaming={renaming === row.id}
               dragging={dragState?.id === row.id}
               drop={dragState?.target?.id === row.id && dragState.target.zone === "inside"}
@@ -269,7 +258,6 @@ interface TreeItemProps {
   row: TreeRow;
   selected: boolean;
   tabbable: boolean;
-  fresh: boolean;
   renaming: boolean;
   dragging: boolean;
   drop: boolean;
@@ -281,7 +269,7 @@ interface TreeItemProps {
   onPointerDown: (id: Id, e: ReactPointerEvent) => void;
 }
 
-const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renaming, dragging, drop, ctxOpen, onFocusRow, onRename, onRenameEnd, onPointerDown }: TreeItemProps) {
+const TreeItem = memo(function TreeItem({ row, selected, tabbable, renaming, dragging, drop, ctxOpen, onFocusRow, onRename, onRenameEnd, onPointerDown }: TreeItemProps) {
   const { meta, depth, hasChildren, expanded } = row;
   const [menuOpen, setMenuOpen] = useState(false);
   // The row's dropdown mounts on first hover/focus (see LazyMenu).
@@ -318,7 +306,7 @@ const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renami
           data-dragging={dragging ? "" : undefined}
           data-drop={drop ? "inside" : undefined}
           data-menu-open={menuOpen || ctxOpen ? "" : undefined}
-          className={"emp-sb-row" + (fresh ? " emp-row-in" : "")}
+          className="emp-sb-row"
           style={{ paddingLeft: pad }}
           onClick={open}
           onDoubleClick={(e) => {
@@ -336,7 +324,7 @@ const TreeItem = memo(function TreeItem({ row, selected, tabbable, fresh, renami
           }}
         >
           <span className="relative flex h-[18px] w-[18px] flex-none items-center justify-center">
-            <span className={"ico" + (hasChildren ? " swap-on-hover" : "")} style={{ transition: "opacity 120ms var(--ease-out)" }}>
+            <span className={"ico" + (hasChildren ? " swap-on-hover" : "")}>
               <PageIcon icon={meta.icon} kind={meta.kind} size={18} />
             </span>
             {hasChildren ? (

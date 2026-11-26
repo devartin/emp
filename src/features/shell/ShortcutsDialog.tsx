@@ -54,7 +54,7 @@ export function ShortcutsDialog() {
   }, [open, groups]);
 
   return (
-    <Dialog open={open} onOpenChange={(o) => (setOpen(o), o || setQ(""))} size="lg" title="Keyboard shortcuts" description="Work faster without leaving the keyboard.">
+    <Dialog open={open} onOpenChange={(o) => (setOpen(o), o || setQ(""))} size="lg" title="Keyboard shortcuts">
       <SearchField value={q} onChange={(e) => setQ(e.currentTarget.value)} onClear={() => setQ("")} placeholder="Filter shortcuts" shortcut={null} autoFocus data-autofocus aria-label="Filter shortcuts" />
       {/* Each section spans both columns: its header first, then its rows filling the left column top-down and then
           the right, so the two columns always start level. The body fades under its edges while it can scroll. */}

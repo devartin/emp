@@ -1,9 +1,11 @@
 /**
- * First run (PROGRAMME-v3 K4, Flow r2 §2.6): a centred panel with three screens, five with encryption, then the
- * build. Enter continues, ⌘[ goes back, Esc does nothing; focus moves to each step's heading.
+ * First run (PROGRAMME-v3 K4, Flow r2 §2.6): three screens set straight on the paper, no card. Enter continues, ⌘[ goes
+ * back, Esc does nothing; focus moves to each step's heading.
  *
- *   welcome (name, how you start) → what do you want to track → protect → (password → recovery key)
- *   → building: the picked life apps are installed for real with their defaults (quick mode, no personal data)
+ *   1 Welcome  (name, how you start)
+ *   2 Track    (which life apps to build)
+ *   3 Protect  (encrypt or not; with encryption: password, then the recovery key, still step 3)
+ *   → the build: the picked life apps are installed for real with their defaults (quick mode, no personal data)
  *   → Home. Starting with pages or a bank file opens the import dialog over Home.
  */
 import { AnimatePresence, m, useIsPresent } from "motion/react";
@@ -19,7 +21,8 @@ import { useWorkspace } from "@/stores/workspace";
 import { openFinanceImport } from "@/features/finance/ImportWizard/request";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import "../vault.css";
-import { appsFor, autoLockFor, INITIAL_DRAFT, stepsFor, TRACK_OPTIONS, type Draft, type StepId } from "./model";
+import "./onboarding.css";
+import { appsFor, autoLockFor, INITIAL_DRAFT, SCREENS, screenOf, stepsFor, TRACK_OPTIONS, type Draft, type StepId } from "./model";
 import { BuildingStep, PasswordStep, ProtectStep, RecoveryStep, TrackStep, WelcomeStep, type BuildTask } from "./steps";
 
 const MIN_SECURE_MS = 600;
@@ -183,12 +186,12 @@ export default function Onboarding() {
   };
 
   const props = { draft, update, next: forward, back };
-  const wide = step === "recovery" || step === "track";
-  const progress = index < 0 ? 0 : index;
+  const wide = step === "recovery";
+  const screen = screenOf(step);
 
   return (
     <m.div
-      className="emp-stage emp-vault-stage"
+      className="emp-stage emp-vault-stage onb-stage"
       onScroll={(e) => e.currentTarget.scrollLeft && (e.currentTarget.scrollLeft = 0)}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: reduced ? 0 : 0.16 } }}
@@ -198,24 +201,29 @@ export default function Onboarding() {
       <div className="emp-stage-drag drag-region" data-tauri-drag-region />
       <WindowControls className="absolute right-0 top-0" />
       <div
-        className="emp-vault-card emp-onb-panel"
+        className="onb-panel"
         data-wide={wide ? "" : undefined}
         data-inert={isPresent ? undefined : ""}
         role="dialog"
         aria-modal="true"
         aria-label="Set up Ultra Note"
       >
-        <div className="emp-onb-stepper" aria-hidden>
-          {steps.map((s, i) => (
-            <span key={s} data-on={i <= progress ? "" : undefined} />
-          ))}
-        </div>
+        {screen >= 0 ? (
+          <ol className="onb-steps" aria-label={`Step ${screen + 1} of ${SCREENS.length}`}>
+            {SCREENS.map((label, i) => (
+              <li key={label} aria-current={i === screen ? "step" : undefined} data-done={i < screen ? "" : undefined}>
+                {label}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="onb-steps" aria-hidden />
+        )}
         <span className="sr-only" aria-live="polite">
-          {/* "building" is the progress screen, not a step: counting it made "Step 3 of 6" jump to "Step 4 of 4". */}
-          {step === "building" ? "Setting up your workspace" : index >= 0 ? `Step ${index + 1} of ${steps.filter((x) => x !== "building").length}` : ""}
+          {step === "building" ? "Setting up your workspace" : screen >= 0 ? `Step ${screen + 1} of ${SCREENS.length}, ${SCREENS[screen]}` : ""}
         </span>
         <AnimatePresence mode="wait" initial={false}>
-          <m.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: reduced ? 0 : 0.12 } }} exit={{ opacity: 0, transition: { duration: reduced ? 0 : 0.08 } }}>
+          <m.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: reduced ? 0 : 0.12 } }} exit={{ opacity: 0, transition: { duration: reduced ? 0 : 0.06 } }}>
             {step === "welcome" ? <WelcomeStep {...props} /> : null}
             {step === "track" ? <TrackStep {...props} /> : null}
             {step === "protect" ? <ProtectStep {...props} next={() => void onProtectContinue()} creating={creating && !draft.encrypt} /> : null}
@@ -225,7 +233,7 @@ export default function Onboarding() {
           </m.div>
         </AnimatePresence>
         {createError && (step === "protect" || step === "building") ? (
-          <p className="emp-helper mt-3" data-invalid="" role="alert">
+          <p className="emp-helper mt-4" data-invalid="" role="alert">
             <span>{createError}</span>
           </p>
         ) : null}

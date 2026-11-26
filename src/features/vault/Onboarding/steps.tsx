@@ -2,28 +2,17 @@
  * First-run steps (PROGRAMME-v3 K4). Each step renders its own heading (focused on entry) and footer. Plain copy:
  * what the step does, no coaching.
  */
-import {
-  ArrowLeft,
-  Check,
-  CircleHelp,
-  Download,
-  FilePlus,
-  Info,
-  Landmark,
-  Lock,
-  LockOpen,
-  RefreshCw,
-  Wand2,
-} from "lucide-react";
+import { ArrowLeft, Check, CircleHelp, CircleAlert, RefreshCw } from "lucide-react";
 import { AnimatePresence, m, useIsPresent } from "motion/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { api, errorMessage } from "@/backend";
 import type { PasswordStrength } from "@/backend/types";
 import { Button } from "@/ui/Button";
-import { ChoiceCard } from "@/ui/ChoiceCard";
+import { Checkbox } from "@/ui/Checkbox";
 import { Input } from "@/ui/Input";
 import { Kbd } from "@/ui/Kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
+import { Radio, RadioGroupRoot } from "@/ui/Radio";
 import { Segmented } from "@/ui/Segmented";
 import { Spinner } from "@/ui/Spinner";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
@@ -47,24 +36,24 @@ export function StepHeading({ title, sub, center }: { title: ReactNode; sub?: Re
     // §6.2: focus moves to the step's heading — unless a field on the step asked for autofocus.
     const t = window.setTimeout(() => {
       const active = document.activeElement;
-      if (active && active !== document.body && ref.current?.closest(".emp-onb-panel")?.contains(active)) return;
+      if (active && active !== document.body && ref.current?.closest(".onb-panel")?.contains(active)) return;
       ref.current?.focus({ preventScroll: true });
     }, 30);
     return () => window.clearTimeout(t);
   }, []);
   return (
     <div className={center ? "text-center" : undefined}>
-      <h1 ref={ref} tabIndex={-1} className="emp-onb-title">
+      <h1 ref={ref} tabIndex={-1} className="onb-title">
         {title}
       </h1>
-      {sub ? <p className="emp-onb-sub">{sub}</p> : null}
+      {sub ? <p className="onb-sub">{sub}</p> : null}
     </div>
   );
 }
 
 export function Footer({ back, children, hint = true }: { back: (() => void) | null; children: ReactNode; hint?: boolean }) {
   return (
-    <div className="emp-onb-foot">
+    <div className="onb-foot">
       {back ? (
         <Button variant="ghost" icon={ArrowLeft} onClick={back}>
           Back
@@ -72,7 +61,7 @@ export function Footer({ back, children, hint = true }: { back: (() => void) | n
       ) : null}
       <span className="flex-1" />
       {hint ? (
-        <span className="mr-1 hidden items-center gap-1.5 text-caption text-tertiary sm:flex" style={{ fontWeight: 400 }}>
+        <span className="onb-hint">
           <Kbd keys="enter" size="xs" /> to continue
         </span>
       ) : null}
@@ -81,22 +70,46 @@ export function Footer({ back, children, hint = true }: { back: (() => void) | n
   );
 }
 
+/** A ruled list of single-choice rows: the radio, a title and one line of detail. The whole row is the target. */
+function ChoiceRows<V extends string>({ label, value, onChange, options }: { label: string; value: V | null; onChange: (v: V) => void; options: { value: V; title: string; detail: string; note?: string }[] }) {
+  const base = useId();
+  return (
+    <RadioGroupRoot className="onb-list" aria-label={label} value={value ?? undefined} onValueChange={(v) => onChange(v as V)}>
+      {options.map((o) => {
+        const id = `${base}-${o.value}`;
+        return (
+          <label key={o.value} htmlFor={id} className="onb-row" data-on={value === o.value ? "" : undefined}>
+            <span className="onb-row-ctl">
+              <Radio id={id} value={o.value} />
+            </span>
+            <span className="onb-row-text">
+              <span className="onb-row-title">
+                {o.title}
+                {o.note ? <span className="onb-row-note">{o.note}</span> : null}
+              </span>
+              <span className="onb-row-detail">{o.detail}</span>
+            </span>
+          </label>
+        );
+      })}
+    </RadioGroupRoot>
+  );
+}
+
 // ───────────────────────────────────────────────────────────────────────────── 1 · welcome
 
-const STARTS: { value: StartWith; title: string; description: string; icon: typeof Download }[] = [
-  { value: "fresh", title: "Start fresh", description: "An empty workspace with the apps you pick next.", icon: FilePlus },
-  { value: "pages", title: "Bring in Notion, Markdown or Obsidian", description: "Pages and simple databases. Relations and formulas may not survive.", icon: Download },
-  { value: "money", title: "Bring in money", description: "A bank file (OFX, QFX or CSV) goes into Money HQ.", icon: Landmark },
+const STARTS: { value: StartWith; title: string; detail: string }[] = [
+  { value: "fresh", title: "Start fresh", detail: "An empty workspace with the apps you pick next." },
+  { value: "pages", title: "Bring in Notion, Markdown or Obsidian", detail: "Pages and simple databases. Relations and formulas may not come across." },
+  { value: "money", title: "Bring in money", detail: "A bank file (OFX, QFX or CSV) goes into Money HQ." },
 ];
 
 export function WelcomeStep({ draft, update, next }: StepProps) {
   return (
     <div>
-      <div className="flex items-center gap-4">
-        <AppMark size={48} stage="rest" />
-        <StepHeading title="Welcome to Ultra Note" sub="Notes, tasks and money, on this device." />
-      </div>
-      <div className="mt-6">
+      <AppMark size={40} stage="rest" className="onb-mark" />
+      <StepHeading title="Welcome to Ultra Note" sub="Notes, tasks and money, kept on this device." />
+      <div className="onb-field">
         <Input
           label="Your name"
           helper="Optional. Shown on the lock screen."
@@ -111,17 +124,13 @@ export function WelcomeStep({ draft, update, next }: StepProps) {
               next();
             }
           }}
-          size="lg"
           autoFocus
         />
       </div>
-      <div className="mt-5 flex flex-col gap-2" role="radiogroup" aria-label="How do you want to start?">
-        {STARTS.map((o) => (
-          <ChoiceCard key={o.value} className="emp-onb-start" selected={draft.start === o.value} onSelect={() => update({ start: o.value })} icon={o.icon} title={o.title} description={o.description} />
-        ))}
-      </div>
+      <h2 className="onb-section">How do you want to start?</h2>
+      <ChoiceRows label="How do you want to start?" value={draft.start} onChange={(start) => update({ start })} options={STARTS} />
       <Footer back={null}>
-        <Button variant="primary" size="lg" onClick={next}>
+        <Button variant="primary" onClick={next}>
           Continue
         </Button>
       </Footer>
@@ -131,43 +140,33 @@ export function WelcomeStep({ draft, update, next }: StepProps) {
 
 // ───────────────────────────────────────────────────────────────────────────── 3 · protect
 
+const PROTECT: { value: "yes" | "no"; title: string; detail: string; note?: string }[] = [
+  {
+    value: "yes",
+    title: "Encrypt with a password",
+    note: "Recommended",
+    detail: "Everything is encrypted on disk with XChaCha20-Poly1305. Without your password or recovery key it can't be read.",
+  },
+  { value: "no", title: "Don't encrypt", detail: "Quicker to set up. You can turn on encryption later in Settings." },
+];
+
 export function ProtectStep({ draft, update, next, back, creating }: StepProps & { creating: boolean }) {
   return (
     <div>
-      <StepHeading title="Protect your workspace" sub="Choose how Ultra Note stores your data on this device." />
-      <div className="mt-6 grid grid-cols-2 gap-3" role="radiogroup" aria-label="Encryption">
-        <ChoiceCard
-          selected={draft.encrypt === true}
-          onSelect={() => update({ encrypt: true })}
-          icon={Lock}
-          recommended
-          title="Encrypt with a password"
-          description="Your data is encrypted with XChaCha20-Poly1305. Without your password or recovery key, nobody, including us, can read it."
-        />
-        <ChoiceCard
-          selected={draft.encrypt === false}
-          onSelect={() => update({ encrypt: false })}
-          icon={LockOpen}
-          title="Don't encrypt"
-          description="Faster setup. You can turn on encryption later in Settings."
-        />
-      </div>
-      <AnimatePresence mode="wait" initial={false}>
-        <m.p
-          key={String(draft.encrypt)}
-          className="mt-4 flex gap-2 text-body-sm text-secondary"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { duration: 0.16 } }}
-          exit={{ opacity: 0, transition: { duration: 0.1 } }}
-        >
-          <Info size={15} className="mt-0.5 flex-none text-tertiary" aria-hidden />
-          {draft.encrypt
-            ? "Your password never leaves this device and can't be reset. Your recovery key is the only other way in."
-            : "Your workspace lives on this computer. Ultra Note has no servers and no accounts, and your data is never sent anywhere."}
-        </m.p>
-      </AnimatePresence>
+      <StepHeading title="Protect your workspace" sub="Your workspace lives on this computer. Ultra Note has no servers and no accounts." />
+      <ChoiceRows
+        label="Encryption"
+        value={draft.encrypt === null ? null : draft.encrypt ? "yes" : "no"}
+        onChange={(v) => update({ encrypt: v === "yes" })}
+        options={PROTECT}
+      />
+      <p className="onb-note">
+        {draft.encrypt
+          ? "Your password never leaves this device and can't be reset. The recovery key is the only other way in."
+          : "Anyone who can open your user account on this computer can read the files."}
+      </p>
       <Footer back={back}>
-        <Button variant="primary" size="lg" onClick={next} loading={creating} disabled={draft.encrypt === null}>
+        <Button variant="primary" onClick={next} loading={creating} disabled={draft.encrypt === null}>
           Continue
         </Button>
       </Footer>
@@ -222,15 +221,14 @@ export function PasswordStep({
           onStrength={setStrength}
           autoFocus
           trailing={
-            <Button size="xs" variant="soft" icon={Wand2} loading={generating} onClick={() => void generate()} tooltip="5 random words, about 65 bits">
-              Generate passphrase
+            <Button size="xs" variant="ghost" loading={generating} onClick={() => void generate()} tooltip="5 random words, about 65 bits">
+              Suggest a passphrase
             </Button>
           }
         />
         <PasswordField
           label="Confirm password"
           purpose="new"
-          size="lg"
           value={draft.confirm}
           onChange={(confirm) => update({ confirm })}
           error={draft.confirm && !match ? "Passwords don't match" : undefined}
@@ -250,7 +248,7 @@ export function PasswordStep({
         </p>
       ) : null}
       <Footer back={creating ? null : back}>
-        <Button variant="primary" size="lg" onClick={onCreate} disabled={!canContinue && !creating} loading={creating} className="min-w-[132px]">
+        <Button variant="primary" onClick={onCreate} disabled={!canContinue && !creating} loading={creating} className="min-w-[132px]">
           Continue
         </Button>
       </Footer>
@@ -274,7 +272,8 @@ export function PasswordStep({
 }
 
 /**
- * S3 "forge your vault": three exploded slabs assemble into the EMP stack while the key-derivation groove fills.
+ * While the key is derived: the three slabs of the mark close up as the progress line fills (part of the vault
+ * moment; the length is the real KDF work).
  * Key derivation reports no intermediate progress, so the groove eases toward 92% on the KDF's time scale and closes
  * the last stretch when the vault exists (the overlay's exit) — it never claims completion early.
  */
@@ -305,7 +304,7 @@ function ForgeGlyph() {
         <span className="emp-forge-groove" aria-hidden>
           <i style={{ transform: `scaleX(${shown})` }} />
         </span>
-        <span className="text-body-sm text-secondary">{present ? "Forging your encryption key…" : "Vault sealed"}</span>
+        <span className="text-body-sm text-secondary">{present ? "Deriving your encryption key…" : "Encrypted"}</span>
       </div>
     </>
   );
@@ -328,7 +327,7 @@ function StrengthTable() {
       </PopoverTrigger>
       <PopoverContent side="top" align="end" className="w-[320px]">
         <p className="text-body-sm font-semibold text-primary">Time to try every guess</p>
-        <p className="mt-0.5 text-caption text-tertiary" style={{ fontWeight: 400 }}>
+        <p className="mt-0.5 text-caption text-tertiary">
           Order-of-magnitude estimate at a million guesses per second.
         </p>
         <table className="mt-3 w-full text-body-sm">
@@ -370,43 +369,37 @@ export function RecoveryStep({ draft, update, next }: StepProps) {
 
 export function TrackStep({ draft, update, next, back }: StepProps) {
   const picks = new Set(draft.picks);
-  const toggle = (id: string) => {
+  const set = (id: string, on: boolean) => {
     const nextPicks = new Set(picks);
-    if (nextPicks.has(id)) nextPicks.delete(id);
-    else nextPicks.add(id);
+    if (on) nextPicks.add(id);
+    else nextPicks.delete(id);
     update({ picks: TRACK_OPTIONS.filter((o) => nextPicks.has(o.appId)).map((o) => o.appId) });
   };
   const n = appsFor(draft).length;
+  const base = useId();
   return (
     <div>
-      <StepHeading title="What do you want to track?" sub="Each pick is built as a life app with its own pages and databases. You can add or remove apps later." />
-      <div className="emp-onb-choice-grid mt-6" role="group" aria-label="Life apps">
+      <StepHeading title="What do you want to track?" sub="Each pick becomes a life app with its own pages and databases. Add or remove apps later." />
+      <div className="onb-list" role="group" aria-label="Life apps">
         {TRACK_OPTIONS.map((o) => {
+          const id = `${base}-${o.appId}`;
           const on = picks.has(o.appId);
-          const Icon = o.icon;
           return (
-            <button key={o.appId} type="button" role="checkbox" aria-checked={on} className="emp-onb-chip" onClick={() => toggle(o.appId)}>
-              <span className="tile">
-                <Icon aria-hidden />
+            <label key={o.appId} htmlFor={id} className="onb-row is-compact" data-on={on ? "" : undefined}>
+              <span className="onb-row-ctl">
+                <Checkbox id={id} checked={on} onCheckedChange={(v) => set(o.appId, v)} />
               </span>
-              <span className="flex min-w-0 flex-col">
-                <span className="text-body-sm font-medium">{o.label}</span>
-                <span className="text-caption text-tertiary">{o.detail}</span>
-              </span>
-              {on ? (
-                <span className="ml-auto flex h-4 w-4 flex-none items-center justify-center rounded-full bg-accent text-accent-contrast">
-                  <Check size={10} strokeWidth={3} aria-hidden />
-                </span>
-              ) : null}
-            </button>
+              <span className="onb-row-title">{o.label}</span>
+              <span className="onb-row-meta">{o.detail}</span>
+            </label>
           );
         })}
       </div>
-      <p className="mt-4 text-body-sm text-secondary" aria-live="polite">
+      <p className="onb-note" aria-live="polite">
         {n ? `${n} ${n === 1 ? "app" : "apps"} to build` : "No apps. You'll start with a blank workspace."}
       </p>
       <Footer back={back}>
-        <Button variant="primary" size="lg" onClick={next}>
+        <Button variant="primary" onClick={next}>
           Continue
         </Button>
       </Footer>
@@ -474,17 +467,17 @@ export function BuildingStep({ tasks, onOpen, opening }: { tasks: BuildTask[]; o
 
   return (
     <div>
-      <StepHeading title={done ? "Ready" : "Building your workspace"} sub={done ? "Opening your workspace." : "Each app gets its own pages and databases."} />
-      <ul className="mt-6 flex flex-col">
+      <StepHeading title={done ? "Ready" : "Setting up your workspace"} sub={done ? "Opening Home." : undefined} />
+      <ul className="onb-list">
         {tasks.map((t, i) => (
-          <li key={t.id} className="emp-build-row" data-state={states[i] === "done" ? "done" : states[i] === "pending" ? "pending" : undefined}>
-            <span className="emp-build-dot" aria-hidden>
-              {states[i] === "running" ? <Spinner size={16} /> : null}
-              {states[i] === "done" ? <Check size={12} strokeWidth={3} /> : null}
-              {states[i] === "error" ? <Info size={14} className="text-loss-text" /> : null}
+          <li key={t.id} className="onb-build-row" data-state={states[i]}>
+            <span className="onb-build-mark" aria-hidden>
+              {states[i] === "running" ? <Spinner size={14} /> : null}
+              {states[i] === "done" ? <Check size={16} strokeWidth={1.5} absoluteStrokeWidth /> : null}
+              {states[i] === "error" ? <CircleAlert size={16} strokeWidth={1.25} absoluteStrokeWidth /> : null}
             </span>
             <span className="flex-1">{t.label}</span>
-            {states[i] === "running" && progress[i] > 0 ? <span className="text-caption tabular text-tertiary">{Math.round(progress[i] * 100)}%</span> : null}
+            {states[i] === "running" && progress[i] > 0 ? <span className="onb-row-meta tabular">{Math.round(progress[i] * 100)}%</span> : null}
             <span className="sr-only">{states[i]}</span>
           </li>
         ))}
@@ -508,9 +501,9 @@ export function BuildingStep({ tasks, onOpen, opening }: { tasks: BuildTask[]; o
         </div>
       ) : null}
       {done ? (
-        <div className="emp-onb-foot">
+        <div className="onb-foot">
           <span className="flex-1" />
-          <Button variant="primary" size="lg" onClick={onOpen} loading={opening} kbd="enter" autoFocus>
+          <Button variant="primary" onClick={onOpen} loading={opening} kbd="enter" autoFocus>
             Open
           </Button>
         </div>

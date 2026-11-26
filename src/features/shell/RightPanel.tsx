@@ -107,7 +107,7 @@ function OutlineTab({ meta }: { meta: PageMeta }) {
           key={it.blockId}
           type="button"
           className="emp-outline-item"
-          style={{ paddingLeft: 8 + (it.level - 1) * 14, fontWeight: it.level === 1 ? 550 : 400, color: it.level === 1 ? "var(--text-primary)" : undefined }}
+          style={{ paddingLeft: 8 + (it.level - 1) * 14, fontWeight: it.level === 1 ? 500 : 400, color: it.level === 1 ? "var(--text-primary)" : undefined }}
           onClick={() => navigate({ t: "page", id: meta.id, blockId: it.blockId }, { replace: true })}
         >
           {it.text || "Untitled heading"}
@@ -177,7 +177,7 @@ function InfoTab({ meta }: { meta: PageMeta }) {
                     <PageIcon icon={l.sourceIcon} size={15} />
                     <span className="truncate">{l.sourceTitle || "Untitled"}</span>
                   </span>
-                  {l.snippet ? <span className="line-clamp-2 text-caption text-tertiary" style={{ fontWeight: 400 }}>{l.snippet}</span> : null}
+                  {l.snippet ? <span className="line-clamp-2 text-caption text-tertiary">{l.snippet}</span> : null}
                 </button>
               </li>
             ))}
@@ -250,11 +250,11 @@ function Checklist({ inst }: { inst: LifeAppInstance }) {
                 type="button"
                 disabled={c.done}
                 onClick={() => void tick(c.id)}
-                className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-body-sm transition-colors duration-160 hover:bg-hover disabled:hover:bg-transparent"
+                className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-body-sm hover:bg-hover disabled:hover:bg-transparent"
               >
                 <span
                   className="flex h-4 w-4 flex-none items-center justify-center rounded-full"
-                  style={c.done ? { background: "var(--accent-solid)", color: "var(--accent-contrast)" } : { boxShadow: "inset 0 0 0 1.5px var(--border-strong)" }}
+                  style={c.done ? { background: "var(--accent-solid)", color: "var(--accent-contrast)" } : { border: "1.25px solid var(--border-strong)" }}
                   aria-hidden
                 >
                   {c.done ? <Check size={10} strokeWidth={3} /> : null}

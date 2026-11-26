@@ -1,0 +1,200 @@
+/* First run (PROGRAMME-v3 K4, DESIGN v3 §5): the steps sit straight on the paper. No card, no backdrop, no shadow;
+   choices are ruled rows (a hairline between, one level), the one ink key is Continue. Tokens only. */
+
+.onb-stage.emp-vault-stage {
+  align-items: flex-start;
+  background: var(--bg-canvas);
+  padding: max(56px, 12vh) 24px 56px;
+}
+
+/* One left edge for every step: a 600px column whose steps set at 480 (the recovery key uses the full width). */
+.onb-panel {
+  position: relative;
+  width: 600px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+.onb-panel:not([data-wide]) > * {
+  max-width: 480px;
+}
+
+/* the step index: three words, the current one in ink */
+.onb-steps {
+  display: flex;
+  gap: 16px;
+  min-height: 16px;
+  margin: 0 0 32px;
+  padding: 0;
+  list-style: none;
+  font-size: calc(12rem / 14);
+  line-height: calc(16 / 12);
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.onb-steps li[data-done] {
+  color: var(--text-secondary);
+}
+.onb-steps li[aria-current="step"] {
+  color: var(--text-primary);
+}
+
+.onb-mark {
+  display: block;
+  margin-bottom: 20px;
+}
+
+.onb-title {
+  margin: 0;
+  font-size: calc(24rem / 14);
+  line-height: calc(31 / 24);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  outline: none;
+}
+.onb-sub {
+  margin: 6px 0 0;
+  font-size: 1rem;
+  line-height: calc(20 / 14);
+  color: var(--text-secondary);
+}
+
+.onb-field {
+  margin-top: 28px;
+}
+
+/* a section head: 14/600 (the hairline is the list's first rule) */
+.onb-section {
+  margin: 28px 0 4px;
+  font-size: 1rem;
+  line-height: calc(20 / 14);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.onb-title + .onb-list,
+.onb-sub + .onb-list,
+div:has(> .onb-sub) + .onb-list,
+div:has(> .onb-title) + .onb-list {
+  margin-top: 24px;
+}
+
+/* ── ruled rows ── */
+.onb-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-subtle);
+}
+.onb-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.onb-row.is-compact {
+  align-items: center;
+  min-height: var(--row-list);
+  padding: 0;
+}
+.onb-row-ctl {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+}
+.onb-row-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.onb-row-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  line-height: calc(20 / 14);
+  font-weight: 500;
+}
+.onb-row.is-compact .onb-row-title {
+  font-weight: 400;
+}
+.onb-row-note {
+  margin-left: 8px;
+  font-size: calc(12rem / 14);
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+.onb-row-detail {
+  font-size: calc(13rem / 14);
+  line-height: calc(18 / 13);
+  color: var(--text-secondary);
+}
+.onb-row-meta {
+  flex: none;
+  font-size: calc(12rem / 14);
+  line-height: calc(16 / 12);
+  color: var(--text-tertiary);
+}
+
+.onb-note {
+  margin: 12px 0 0;
+  font-size: calc(13rem / 14);
+  line-height: calc(18 / 13);
+  color: var(--text-secondary);
+}
+
+.onb-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 32px;
+}
+.onb-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+  font-size: calc(12rem / 14);
+  color: var(--text-tertiary);
+}
+@media (max-width: 560px) {
+  .onb-hint {
+    display: none;
+  }
+}
+
+/* ── the build: one ruled row per piece of real work ── */
+.onb-build-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--row-list);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+.onb-build-row[data-state="pending"] {
+  color: var(--text-tertiary);
+}
+.onb-build-mark {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+}
+.onb-build-row[data-state="done"] .onb-build-mark {
+  color: var(--text-primary);
+}
+.onb-build-row[data-state="error"] .onb-build-mark {
+  color: var(--loss-text);
+}
