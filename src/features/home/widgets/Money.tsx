@@ -15,6 +15,7 @@ import { Skeleton } from "@/ui/Skeleton";
 import { openWizard } from "@/features/lifeapps/wizardStore";
 import { identity } from "@/features/lifeapps/identity";
 import { localDay } from "@/features/lifeapps/cells";
+import { spendingBudget } from "@/features/finance/shared/figures";
 import { useMoney } from "./useHomeData";
 
 const n = (m: { amount: string } | undefined) => (m ? Number(m.amount) : 0);
@@ -54,9 +55,8 @@ export function MoneyWidget() {
       </div>
     );
   const cur = overview?.netWorth.currency ?? "USD";
-  const assigned = overview?.budget.reduce((s, b) => s + n(b.assigned), 0) ?? 0;
-  const spent = overview?.budget.reduce((s, b) => s + Math.max(0, -n(b.activity)), 0) ?? 0;
-  const pct = assigned ? spent / assigned : 0;
+  // Same definition as Money HQ's "Budget envelopes" (spending envelopes only; savings & debt payments excluded).
+  const { assigned, remaining, ratio: pct } = spendingBudget(overview?.budget);
   const today = localDay();
   const in7 = new Date();
   in7.setDate(in7.getDate() + 7);
@@ -92,7 +92,7 @@ export function MoneyWidget() {
                 <span className="text-[13px] font-semibold tabular text-primary">{Math.round(pct * 100)}%</span>
               </Ring>
               <div className="flex min-w-0 flex-col">
-                <Sensitive className="text-body font-semibold tabular text-primary">{formatCurrency(Math.max(0, assigned - spent), cur, { maximumFractionDigits: 0 })}</Sensitive>
+                <Sensitive className="text-body font-semibold tabular text-primary">{formatCurrency(remaining, cur, { maximumFractionDigits: 0 })}</Sensitive>
                 <span className="text-caption text-tertiary">left of <Sensitive>{formatCurrency(assigned, cur, { maximumFractionDigits: 0 })}</Sensitive></span>
               </div>
             </div>

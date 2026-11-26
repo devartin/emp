@@ -199,6 +199,9 @@ export interface BlockVisit {
   text: string;
 }
 
+/** Nodes whose children are separate blocks (their text is joined with a newline, never glued). */
+const BLOCK_LEVEL = new Set(['columnList', 'column', 'blockGroup', 'blockContainer']);
+
 export function inlineText(node: TipTapNode | undefined): string {
   if (!node) return '';
   if (node.type === 'text') return node.text ?? '';
@@ -212,7 +215,9 @@ export function inlineText(node: TipTapNode | undefined): string {
     return '';
   }
   if (!node.content) return '';
-  const sep = node.type === 'tableRow' ? ' · ' : node.type === 'table' ? '\n' : '';
+  // Block-level children never run together: "…net worth." + "Portfolio —…" must not read "net worth.Portfolio".
+  const sep =
+    node.type === 'tableRow' ? ' · ' : node.type === 'table' || BLOCK_LEVEL.has(node.type) ? '\n' : node.type === 'tableCell' || node.type === 'tableHeader' ? ' ' : '';
   return node.content.map(inlineText).join(sep);
 }
 
@@ -222,6 +227,10 @@ function contentText(content: TipTapNode): string {
       return String((content.attrs as { latex?: string } | undefined)?.latex ?? '');
     case 'image':
       return String((content.attrs as { caption?: string } | undefined)?.caption ?? '');
+    case 'columnList':
+    case 'column':
+      // Layout only: the blocks inside the columns are walked (and indexed) on their own.
+      return '';
     case 'codeBlock':
     case 'table':
     default:

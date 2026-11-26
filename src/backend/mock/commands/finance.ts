@@ -362,47 +362,62 @@ function investmentValue(ctx: MockCtx, day: string): number | null {
   }
 }
 
-interface NetWorthPoint {
+export interface NetWorthPoint {
   assets: number;
   liabilities: number;
+  /** Portfolio market value counted in `assets` (null when the investment accounts are at their ledger balance). */
+  investments: number | null;
 }
 
-function netWorthAt(ctx: MockCtx, l: Ledger, day: string, bal = balances(l, day)): NetWorthPoint {
+/**
+ * Net worth as of `day` — THE definition every Money HQ figure uses (overview hero, Accounts tiles, Net worth tab,
+ * Home widget), mirrored by the Rust backend (`emp_finance::networth::point`):
+ *  - open accounts only (closed accounts are excluded at every date);
+ *  - each balance is opening + every transaction dated on or before `day` (future-dated rows don't count);
+ *  - sign decides the side, not the account type: a positive balance is an asset (an overpaid card too), a negative
+ *    one a liability (debts carry negative balances; an overdrawn checking account is a liability);
+ *  - only accounts in the base currency count (the ledger keeps no FX rates; Rust reports others as missing rates);
+ *  - when Portfolio is installed, its market value (holdings at the day's price + cash) replaces the ledger balances
+ *    of every open investment account, once (§16.8); otherwise investment accounts count at their ledger balance.
+ */
+export function netWorthAt(ctx: MockCtx, l: Ledger, day: string, bal = balances(l, day), base = 'USD'): NetWorthPoint {
   let assets = 0;
   let liabilities = 0;
   const inv = investmentValue(ctx, day);
   for (const a of l.accounts) {
-    if (a.closed) continue;
+    if (a.closed || (a.currency && a.currency !== base)) continue;
     if (a.type === 'investment' && inv !== null) continue;
     const b = bal.get(a.id) ?? 0;
-    if (DEBT_TYPES.has(a.type) || b < 0) liabilities += Math.max(0, -b);
-    else assets += b;
+    if (b >= 0) assets += b;
+    else liabilities -= b;
   }
   if (inv !== null) assets += inv;
-  return { assets, liabilities };
+  return { assets, liabilities, investments: inv };
 }
 
 function ledgerStart(l: Ledger): string {
   return l.txns[0]?.date ?? iso(Date.now());
 }
 
-/** Backfill before the ledger starts: cash grows into the start balance, debts were higher (§15.5 backfill). */
-function backfilledNetWorth(ctx: MockCtx, l: Ledger, day: string): NetWorthPoint {
+/** Backfill before the ledger starts: cash grows into the start balance, debts were higher (§15.5 backfill).
+ * Same sides and account set as {@link netWorthAt}. */
+function backfilledNetWorth(ctx: MockCtx, l: Ledger, day: string, base = 'USD'): NetWorthPoint {
   const start = ledgerStart(l);
   const atStart = balances(l, addDays(start, -1));
   const months = Math.max(0, dayDiff(day, start) / 30.44);
   let cash = 0;
   let debt = 0;
+  const inv = investmentValue(ctx, day);
   for (const a of l.accounts) {
-    if (a.type === 'investment') continue;
+    if (a.closed || (a.currency && a.currency !== base)) continue;
+    if (a.type === 'investment' && inv !== null) continue;
     const b = atStart.get(a.id) ?? 0;
-    if (DEBT_TYPES.has(a.type) || b < 0) debt += Math.max(0, -b);
-    else cash += b;
+    if (b >= 0) cash += b;
+    else debt -= b;
   }
   const debtPay = l.accounts.filter((a) => DEBT_TYPES.has(a.type) && a.type !== 'credit_card').reduce((s, a) => s + a.minPayment * 0.62, 0);
   const assetsCash = Math.max(cash * 0.2, cash - months * 410_00 + Math.sin(months / 3) * 260_00);
-  const inv = investmentValue(ctx, day) ?? 0;
-  return { assets: Math.round(assetsCash + inv), liabilities: Math.round(debt + months * debtPay) };
+  return { assets: Math.round(assetsCash + (inv ?? 0)), liabilities: Math.round(debt + months * debtPay), investments: inv };
 }
 
 // ── budget
@@ -489,41 +504,67 @@ function pace(ctx: MockCtx, month: string): number {
 
 // ── income / spending metrics
 
-function flows(l: Ledger, from: string, to: string): { income: number; spending: number } {
+/** A savings / investing category: its outflows count as saving, not spending (Rust `Category::is_saving`). */
+function isSavingCat(c: Category | undefined): boolean {
+  return !!c && !c.income && c.group.toLowerCase().includes('saving');
+}
+
+/**
+ * Income and spending over `[from, to]` — the §15.5 definition shared with Rust `metrics::income_spending`:
+ * transfers never count; income = rows in income categories; rows in saving categories are saving (neither);
+ * every other row — uncategorised ones and refunds included — is (net) spending. Split parents are replaced by
+ * their parts.
+ */
+export function flows(l: Ledger, from: string, to: string): { income: number; spending: number } {
   let income = 0;
   let spending = 0;
   for (const t of spendRows(l)) {
     if (t.date < from || t.date > to || isTransfer(l, t)) continue;
-    const acct = t.accountId ? l.acctById.get(t.accountId) : undefined;
-    if (acct && acct.type === 'investment') continue;
     const cat = t.categoryId ? l.catById.get(t.categoryId) : undefined;
-    if (cat?.income || (!cat && t.amount > 0)) income += t.amount;
-    else spending += -t.amount;
+    if (cat?.income) income += t.amount;
+    else if (!isSavingCat(cat)) spending += -t.amount;
   }
   return { income, spending };
 }
 
-function essentialMonthly(l: Ledger, today: string): number {
-  const sums: number[] = [];
-  for (let k = 1; k <= 3; k++) {
-    const m = addMonths(today.slice(0, 7), -k);
-    let s = 0;
-    for (const t of spendRows(l)) {
-      if (t.date.slice(0, 7) !== m || isTransfer(l, t)) continue;
-      const c = t.categoryId ? l.catById.get(t.categoryId) : undefined;
-      if (c?.essential) s += -t.amount;
-    }
-    sums.push(s);
-  }
-  sums.sort((a, b) => a - b);
-  return sums[1] ?? 0;
+/** `day` moved by `n` calendar months, the day clamped to the target month (Rust `period::add_months`). */
+function addMonthsToDay(day: string, n: number): string {
+  const m = addMonths(day.slice(0, 7), n);
+  return `${m}-${String(Math.min(Number(day.slice(8, 10)), daysInMonth(m))).padStart(2, '0')}`;
 }
 
-function emergencyBalance(l: Ledger, today: string): number {
+/** Savings rate over the trailing 3 months ending `today` (Rust `metrics::savings_rate_3m`); 0 without income. */
+export function savingsRate3m(l: Ledger, today: string): number {
+  const fl = flows(l, addDays(addMonthsToDay(today, -3), 1), today);
+  return fl.income > 0 ? (fl.income - fl.spending) / fl.income : 0;
+}
+
+/**
+ * Essential monthly spend (Rust `metrics::essential_monthly_spend`): the median of the three trailing 30-day sums
+ * (days 0–29, 30–59, 60–89 before `today`) of net outflows in categories marked essential; never negative.
+ */
+export function essentialMonthly(l: Ledger, today: string): number {
+  const sums = [0, 0, 0];
+  for (const t of spendRows(l)) {
+    if (isTransfer(l, t)) continue;
+    const age = dayDiff(t.date, today);
+    if (age < 0 || age >= 90) continue;
+    const c = t.categoryId ? l.catById.get(t.categoryId) : undefined;
+    if (c?.essential && !c.income) sums[Math.floor(age / 30)] += -t.amount;
+  }
+  sums.sort((a, b) => a - b);
+  return Math.max(0, sums[1]);
+}
+
+/**
+ * Emergency-fund balance (`ef_balance`, shared with Rust `ef_balance`): the balance as of `today` of the account
+ * linked to the emergency-fund goal; else that goal's saved amount; else the total of the open savings accounts.
+ */
+export function emergencyBalance(l: Ledger, today: string): number {
   const ef = l.goals.find((g) => g.kind === 'emergency');
-  if (ef?.accountId) return balanceAt(l, ef.accountId, today);
+  if (ef?.accountId && l.acctById.has(ef.accountId)) return balanceAt(l, ef.accountId, today);
   if (ef) return ef.saved;
-  return l.accounts.filter((a) => a.type === 'savings').reduce((s, a) => s + balanceAt(l, a.id, today), 0);
+  return l.accounts.filter((a) => a.type === 'savings' && !a.closed).reduce((s, a) => s + balanceAt(l, a.id, today), 0);
 }
 
 // ───────────────────────────────────────────────────────────────────────────── recurrence
@@ -1131,8 +1172,8 @@ export const handlers: MockHandlers = {
     const today = ctx.clock.today();
     const month = validMonth(ctx, req.month);
     const cur = set.baseCurrency;
-    const nw = netWorthAt(ctx, l, today);
-    const nw30 = netWorthAt(ctx, l, addDays(today, -30));
+    const nw = netWorthAt(ctx, l, today, undefined, cur);
+    const nw30 = netWorthAt(ctx, l, addDays(today, -30), undefined, cur);
     const b = computeBudget(ctx, l, month > today.slice(0, 7) ? month : today.slice(0, 7));
     const cm = b.cats.get(month) ?? new Map<Id, CatMonth>();
     const pc = pace(ctx, month);
@@ -1142,7 +1183,6 @@ export const handlers: MockHandlers = {
         const v = cm.get(c.id) ?? { assigned: 0, activity: 0, available: 0, rollover: 0 };
         return { categoryId: c.id, name: c.name, group: c.group, color: blockColor(c.color), assigned: money(v.assigned, cur), activity: money(v.activity, cur), available: money(v.available, cur), pace: pc };
       });
-    const fl = flows(l, addDays(today, -90), today);
     const ess = essentialMonthly(l, today);
     const ef = emergencyBalance(l, today);
     const debts = debtsOf(l, today);
@@ -1158,9 +1198,15 @@ export const handlers: MockHandlers = {
     return {
       netWorth: money(nw.assets - nw.liabilities, cur),
       netWorthDelta30d: money(nw.assets - nw.liabilities - (nw30.assets - nw30.liabilities), cur),
+      assets: money(nw.assets, cur),
+      liabilities: money(nw.liabilities, cur),
+      investments: nw.investments !== null ? money(nw.investments, cur) : undefined,
+      efBalance: money(ef, cur),
+      essentialMonthly: money(ess, cur),
       toBeAssigned: set.method === 'zero_based' || set.method === 'envelopes' ? money(b.tba.get(month) ?? 0, cur) : undefined,
-      leftToSpend: money(spendable, cur),
-      savingsRate3m: fl.income > 0 ? (fl.income - fl.spending) / fl.income : 0,
+      // Like Rust `budget::compute`: zero-based and envelope budgets report To be assigned instead.
+      leftToSpend: set.method === 'zero_based' || set.method === 'envelopes' ? undefined : money(spendable, cur),
+      savingsRate3m: savingsRate3m(l, today),
       efMonths: ess > 0 ? ef / ess : 0,
       debtFreeDate: plan && plan.months < 600 ? addMonths(today.slice(0, 7), plan.months - 1) : undefined,
       budget: lines,
@@ -1187,7 +1233,7 @@ export const handlers: MockHandlers = {
     for (let d = today; d >= from; d = addDays(d, -step)) days.unshift(d);
     const out = { t: [] as string[], assets: [] as number[], liabilities: [] as number[], net: [] as number[], currency: set.baseCurrency };
     for (const d of days) {
-      const p = d < start ? backfilledNetWorth(ctx, l, d) : netWorthAt(ctx, l, d);
+      const p = d < start ? backfilledNetWorth(ctx, l, d, set.baseCurrency) : netWorthAt(ctx, l, d, undefined, set.baseCurrency);
       out.t.push(d);
       out.assets.push(p.assets / 100);
       out.liabilities.push(p.liabilities / 100);

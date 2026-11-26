@@ -1,15 +1,23 @@
 //! Net worth (§15.5): snapshots in the base currency and backfill from transactions.
 //!
-//! Positive balances are assets; negative balances (debts carry negative balances) are liabilities.
-//! Foreign-currency balances are converted with [`crate::fx`]; accounts without a rate are reported in
-//! `missing_rates` and excluded rather than guessed.
+//! **One definition** ([`point`]), used for every net-worth figure — the Money HQ overview, its 30-day delta, the
+//! chart series, the automatic snapshots — and mirrored by the browser mock (`netWorthAt` in
+//! `src/backend/mock/commands/finance.ts`):
+//! * open accounts only (closed accounts are excluded at every date);
+//! * each balance is the opening balance plus every counted transaction dated on or before `as_of`;
+//! * the sign decides the side, not the account type: positive balances are assets (an overpaid card too),
+//!   negative balances liabilities (debts carry negative balances; an overdrawn checking account is a liability);
+//! * foreign-currency balances are converted with [`crate::fx`]; accounts without a rate are reported in
+//!   `missing_rates` and excluded rather than guessed;
+//! * when Portfolio values the investments (§16.8), its market value replaces the balances of every open
+//!   investment account, once; otherwise investment accounts count at their ledger balance.
 
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::fx::{FxRates, convert};
-use crate::ledger::{Account, Txn, balance_as_of};
+use crate::ledger::{Account, AccountType, Txn, balance_as_of};
 use crate::money::{Currency, Money, to_f64};
 use crate::period::YearMonth;
 
@@ -85,8 +93,40 @@ pub fn snapshot(
     }
 }
 
-/// Reconstructs month-end snapshots for `from..=to` from opening balances and transactions. The current
-/// month (containing `today`) is valued as of `today`. Closed accounts are included (their history counts).
+/// Net worth as of `as_of` — the single definition described in the module docs. `investments` is Portfolio's
+/// market value on `as_of` (in `base`) when Portfolio is installed: it replaces every open investment account.
+pub fn point(
+    accounts: &[Account],
+    txns: &[Txn],
+    as_of: NaiveDate,
+    base: &Currency,
+    rates: &FxRates,
+    investments: Option<Decimal>,
+) -> Snapshot {
+    let balances: Vec<AccountBalance> = accounts
+        .iter()
+        .filter(|a| !a.closed && a.opening_date.is_none_or(|od| od <= as_of))
+        .filter(|a| investments.is_none() || a.kind != AccountType::Investment)
+        .map(|a| AccountBalance {
+            account_id: a.id.clone(),
+            balance: Money::new(balance_as_of(a, txns, as_of), a.currency.clone()),
+        })
+        .collect();
+    let mut s = snapshot(YearMonth::of(as_of), as_of, &balances, base, rates);
+    if let Some(v) = investments {
+        if v >= Decimal::ZERO {
+            s.assets += v;
+        } else {
+            s.liabilities -= v;
+        }
+        s.net_worth = s.assets - s.liabilities;
+    }
+    s
+}
+
+/// Reconstructs month-end snapshots for `from..=to` with [`point`]. The current month (containing `today`) is
+/// valued as of `today`. `investments` gives Portfolio's market value on a date (`None`: no Portfolio).
+#[allow(clippy::too_many_arguments)]
 pub fn backfill_from_transactions(
     accounts: &[Account],
     txns: &[Txn],
@@ -95,6 +135,7 @@ pub fn backfill_from_transactions(
     today: NaiveDate,
     base: &Currency,
     rates: &FxRates,
+    investments: &dyn Fn(NaiveDate) -> Option<Decimal>,
 ) -> Vec<Snapshot> {
     let mut out = Vec::new();
     let mut m = from;
@@ -109,15 +150,7 @@ pub fn backfill_from_transactions(
         if as_of > today {
             break;
         }
-        let balances: Vec<AccountBalance> = accounts
-            .iter()
-            .filter(|a| a.opening_date.is_none_or(|od| od <= as_of))
-            .map(|a| AccountBalance {
-                account_id: a.id.clone(),
-                balance: Money::new(balance_as_of(a, txns, as_of), a.currency.clone()),
-            })
-            .collect();
-        let mut s = snapshot(m, as_of, &balances, base, rates);
+        let mut s = point(accounts, txns, as_of, base, rates, investments(as_of));
         s.source = "backfill".into();
         out.push(s);
         m = m.next();
@@ -177,7 +210,6 @@ pub fn series(snaps: &[Snapshot], base: &Currency) -> NetWorthSeries {
 mod tests {
     use super::*;
     use crate::fx::RateTable;
-    use crate::ledger::AccountType;
     use crate::testutil::{dec, txn};
 
     fn acct(id: &str, kind: AccountType, cur: &str, opening: &str) -> Account {
@@ -258,6 +290,7 @@ mod tests {
             "2026-03-05".parse().unwrap(),
             &usd,
             &FxRates::new(),
+            &|_| None,
         );
         assert_eq!(snaps.len(), 3);
         assert_eq!(snaps[0].net_worth, dec("1400"));
@@ -277,5 +310,61 @@ mod tests {
             missing_months(&[], "2026-03-05".parse().unwrap()),
             vec!["2026-03".parse().unwrap()]
         );
+    }
+
+    #[test]
+    fn point_is_the_one_net_worth_definition() {
+        let usd = Currency::new("USD").unwrap();
+        let d = |s: &str| -> NaiveDate { s.parse().unwrap() };
+        let mut closed = acct("old", AccountType::Savings, "USD", "999");
+        closed.closed = true;
+        let accounts = vec![
+            acct("chk", AccountType::Checking, "USD", "-50"), // overdrawn: a liability
+            acct("sav", AccountType::Savings, "USD", "400"),
+            acct("card", AccountType::CreditCard, "USD", "25"), // overpaid card: an asset
+            acct("loan", AccountType::AutoLoan, "USD", "-1000"),
+            acct("brk", AccountType::Investment, "USD", "300"), // contributions at ledger value
+            acct("eur", AccountType::Savings, "EUR", "100"),    // no rate: excluded
+            closed,
+        ];
+        let txns = vec![
+            txn("1", "sav", "2026-02-01", "500"),
+            txn("2", "sav", "2026-04-01", "-9999"), // future-dated: not counted
+        ];
+        let p = point(
+            &accounts,
+            &txns,
+            d("2026-03-01"),
+            &usd,
+            &FxRates::new(),
+            None,
+        );
+        assert_eq!(p.assets, dec("1225")); // 900 + 25 + 300
+        assert_eq!(p.liabilities, dec("1050")); // 50 + 1000
+        assert_eq!(p.net_worth, dec("175"));
+        assert_eq!(p.missing_rates, vec!["eur"]);
+        // Portfolio's market value replaces the investment account, once.
+        let p = point(
+            &accounts,
+            &txns,
+            d("2026-03-01"),
+            &usd,
+            &FxRates::new(),
+            Some(dec("2000")),
+        );
+        assert_eq!(p.assets, dec("2925"));
+        assert_eq!(p.net_worth, dec("1875"));
+        // The backfill's points are the same function.
+        let snaps = backfill_from_transactions(
+            &accounts,
+            &txns,
+            "2026-03".parse().unwrap(),
+            "2026-03".parse().unwrap(),
+            d("2026-03-01"),
+            &usd,
+            &FxRates::new(),
+            &|_| Some(dec("2000")),
+        );
+        assert_eq!(snaps[0].net_worth, dec("1875"));
     }
 }

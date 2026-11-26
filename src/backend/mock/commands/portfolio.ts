@@ -703,6 +703,9 @@ export function setup(ctx: MockCtx): void {
     if (!set || !dbs(c).has(set.dbs.txns)) return null;
     const l = readPortfolio(c, set);
     const today = c.clock.today();
+    // Today's value IS portfolio_summary.totalValue (same quotes and rounding), so Money HQ's Brokerage row, net
+    // worth and Portfolio's "Total value" can never differ — not even by a cent.
+    if (day >= today) return strToCents(summary(c, l).totalValue.amount);
     return valueOfBook(c, l, rebuild(l, day), day, today);
   });
   /** Realised gains and dividends for the tax estimator (§16.4). */

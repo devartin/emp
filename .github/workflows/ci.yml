@@ -27,6 +27,30 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
+  platform:
+    # Native code that only compiles on macOS / Windows (AppKit observers, Win32 message window: src-tauri/src/platform).
+    name: Platform check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned toolchain (rust-toolchain.toml)
+        shell: bash
+        run: |
+          channel="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)"
+          rustup toolchain install "$channel" --profile minimal --component clippy --component rustfmt
+          rustc --version
+          cargo clippy --version
+      - uses: swatinem/rust-cache@v2
+      # tauri-build needs `frontendDist` (../dist) to exist; the frontend is not built here.
+      - run: mkdir -p dist
+        shell: bash
+      - run: cargo clippy -p emp-app --all-targets -- -D warnings
+        shell: bash
+
   frontend:
     name: Frontend (typecheck, test, build)
     runs-on: ubuntu-22.04

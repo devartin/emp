@@ -20,6 +20,7 @@ import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { addMonths, assignColors, dayLabel, fmtMoney, fmtPct, monthLabel, num, relDays, toMoney, todayIso } from "../shared/format";
+import { isIncomeGroup, isSavingGroup, spendingBudget } from "../shared/figures";
 import { useAsync, useDbChanged, useScrubIdx, useScrubStore, type ScrubStore } from "../shared/hooks";
 import { InsightCard, Quiet, Section } from "../shared/ui";
 import { SpendWheel, WheelLegendRow } from "../shared/SpendWheel";
@@ -290,9 +291,11 @@ function useMonthlyFlows(months = 6) {
       if (!row || t.transferId) continue;
       const parts = t.splits.length ? t.splits : [t];
       for (const p of parts) {
+        // The backend's §15.5 definition (savingsRate3m): income = income categories; savings & debt categories are
+        // saving; everything else — uncategorised rows and refunds too — is net spending.
         const c = p.categoryId ? l.cat.get(p.categoryId) : undefined;
-        if (c?.group === "Savings & Debt") continue;
-        if (p.amount > 0) row.income += p.amount;
+        if (c && isIncomeGroup(c.group)) row.income += p.amount;
+        else if (c && isSavingGroup(c.group)) continue;
         else {
           row.spend -= p.amount;
           if (c?.essential) row.essential -= p.amount;
@@ -343,7 +346,9 @@ function MetricDetail({ id, onClose }: { id: string; onClose: () => void }) {
     );
   }
   const months = ov.efMonths;
-  const ess = flows.slice(-3).reduce((a, f) => a + f.essential, 0) / 3;
+  // The backend's figures behind efMonths, so "Covered today" is the fund itself, not a re-derivation.
+  const ess = ov.essentialMonthly ? num(ov.essentialMonthly.amount) : flows.slice(-3).reduce((a, f) => a + f.essential, 0) / 3;
+  const covered = ov.efBalance ? num(ov.efBalance.amount) : ess * months;
   const bars = flows.map((f) => ({ key: f.month, label: monthLabel(f.month, true), value: f.essential, display: fmtCompact(f.essential), tone: "ink" as const }));
   return (
     <KpiDetail
@@ -355,8 +360,8 @@ function MetricDetail({ id, onClose }: { id: string; onClose: () => void }) {
       aside={
         <>
           <div className="fh-kv">Essentials / month <b data-sensitive="">{fmtMoney(ess, "USD", { noCents: true })}</b></div>
-          <div className="fh-kv">Covered today <b data-sensitive="">{fmtMoney(ess * months, "USD", { noCents: true })}</b></div>
-          <div className="fh-kv">To 6 months <b data-sensitive="">{months >= 6 ? "Funded" : fmtMoney(Math.max(0, ess * (6 - months)), "USD", { noCents: true })}</b></div>
+          <div className="fh-kv">Covered today <b data-sensitive="">{fmtMoney(covered, "USD", { noCents: true })}</b></div>
+          <div className="fh-kv">To 6 months <b data-sensitive="">{months >= 6 ? "Funded" : fmtMoney(Math.max(0, ess * 6 - covered), "USD", { noCents: true })}</b></div>
           <Button size="sm" variant="secondary" iconRight={ArrowRight} iconMotion="arrow" className="mt-auto" onClick={() => go("goals")}>
             Open goals
           </Button>
@@ -379,13 +384,12 @@ function Envelopes() {
   const list: EnvelopeData[] = useMemo(() => {
     if (!ov) return [];
     return ov.budget
-      .filter((b) => b.group !== "Savings & Debt" && num(b.assigned.amount) > 0)
+      .filter((b) => !isSavingGroup(b.group) && num(b.assigned.amount) > 0)
       .map((b) => ({ category: l.cat.get(b.categoryId) ?? { id: b.categoryId, name: b.name, group: b.group, color: b.color, icon: "circle-dollar-sign", essential: false, rollover: false, target: 0 }, assigned: num(b.assigned.amount), spent: -num(b.activity.amount), available: num(b.available.amount), pace: b.pace }))
       .sort((a, b) => b.spent / Math.max(1, b.assigned) - a.spent / Math.max(1, a.assigned))
       .slice(0, 8);
   }, [ov, l.cat]);
-  const totalAssigned = ov?.budget.filter((b) => b.group !== "Savings & Debt").reduce((s, b) => s + num(b.assigned.amount), 0) ?? 0;
-  const totalSpent = ov?.budget.filter((b) => b.group !== "Savings & Debt").reduce((s, b) => s - num(b.activity.amount), 0) ?? 0;
+  const { assigned: totalAssigned, spent: totalSpent } = spendingBudget(ov?.budget);
   const pace = ov?.budget[0]?.pace ?? 0;
   return (
     <Section

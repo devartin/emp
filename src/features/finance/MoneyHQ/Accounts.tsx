@@ -19,9 +19,10 @@ import { Dialog } from "@/ui/Dialog";
 import { MoneyField } from "@/ui/MoneyField";
 import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { Sensitive } from "@/ui/Sensitive";
+import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
 import { daysBetween, dayLabel, fmtMoney, fmtPct, num, toMoney, todayIso } from "../shared/format";
-import { useAsync, V } from "../shared/hooks";
+import { V } from "../shared/hooks";
 import { ACCOUNT_GLYPH, Glyph, Section } from "../shared/ui";
 import { ACCOUNT_TYPE_LABEL, DEBT_TYPES, useLedgerCtx, type Account } from "./ledger";
 import { useMoney } from "./MoneyHQ";
@@ -35,9 +36,8 @@ const GROUPS: { key: string; title: string; types: string[] }[] = [
 
 export default function Accounts() {
   const l = useLedgerCtx();
-  const { reloadOverview } = useMoney();
+  const { reloadOverview, overview } = useMoney();
   const pfInstance = useWorkspace((s) => s.lifeapps.find((i) => i.appId === "portfolio")?.id);
-  const pf = useAsync(() => (pfInstance ? api.portfolio.summary({ instanceId: pfInstance }) : Promise.resolve(null)), [pfInstance]);
   const [reconciling, setReconciling] = useState<Account | null>(null);
   const history = useMemo(() => {
     // 90-day daily balances per account, walking back from today's balance.
@@ -60,33 +60,54 @@ export default function Accounts() {
     }
     return out;
   }, [l.accounts, l.txns]);
-  const valueOf = (a: Account) => (a.type === "investment" && pf.data ? num(pf.data.totalValue.amount) : a.balance);
-  const assets = l.accounts.filter((a) => !a.closed && !DEBT_TYPES.has(a.type)).reduce((s, a) => s + Math.max(0, valueOf(a)), 0);
-  const liabilities = l.accounts.filter((a) => !a.closed && (DEBT_TYPES.has(a.type) || a.balance < 0)).reduce((s, a) => s + Math.max(0, -a.balance), 0);
+  // One source of truth: the tiles are the backend's net-worth figures (`finance_overview`), never re-derived here.
+  // Investment accounts are replaced by Portfolio's market value when the backend counted it (`investments`), shown
+  // once on the first open investment account — the same rule the backend applies (see FinanceOverview.netWorth).
+  const pfValue = overview?.investments ? num(overview.investments.amount) : null;
+  const firstInvestment = l.accounts.find((a) => a.type === "investment" && !a.closed)?.id;
+  const valueOf = (a: Account): number | null => (a.type === "investment" && pfValue !== null ? (a.id === firstInvestment ? pfValue : null) : a.balance);
+  const assets = overview ? num(overview.assets.amount) : null;
+  const liabilities = overview ? num(overview.liabilities.amount) : null;
+  const netWorth = overview ? num(overview.netWorth.amount) : null;
   return (
     <div className="flex flex-col gap-4">
       <div className="fh-kpis" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
         <SummaryTile label="Assets" value={assets} />
-        <SummaryTile label="Liabilities" value={-liabilities} />
-        <SummaryTile label="Net worth" value={assets - liabilities} emphasis />
+        <SummaryTile label="Liabilities" value={liabilities === null ? null : -liabilities} />
+        <SummaryTile label="Net worth" value={netWorth} emphasis />
       </div>
       <m.div className="flex flex-col gap-4" variants={staggerList(0.05)} initial="hidden" animate="show">
         {GROUPS.map((g) => {
           const list = l.accounts.filter((a) => g.types.includes(a.type) && !a.closed);
           if (!list.length) return null;
-          const total = list.reduce((s, a) => s + valueOf(a), 0);
+          const total = list.reduce((s, a) => s + (valueOf(a) ?? 0), 0);
           return (
             <m.div key={g.key} variants={staggerItem}>
               <Section title={g.title} actions={<span className="text-body-sm font-semibold tabular"><Sensitive>{fmtMoney(total)}</Sensitive></span>} pad={false}>
                 <div className="pb-2">
                   {list.map((a) => (
-                    <AccountRow key={a.id} a={a} value={valueOf(a)} spark={history.get(a.id) ?? []} viaPortfolio={a.type === "investment" && !!pf.data} pfInstance={pfInstance} onReconcile={() => setReconciling(a)} />
+                    <AccountRow key={a.id} a={a} value={valueOf(a)} spark={history.get(a.id) ?? []} viaPortfolio={a.type === "investment" && pfValue !== null} pfInstance={pfInstance} onReconcile={() => setReconciling(a)} />
                   ))}
                 </div>
               </Section>
             </m.div>
           );
         })}
+        {pfValue !== null && !firstInvestment ? (
+          // Portfolio counts in net worth even without an investment account in Money HQ: show where it went.
+          <m.div variants={staggerItem}>
+            <Section title="Investments" actions={<span className="text-body-sm font-semibold tabular"><Sensitive>{fmtMoney(pfValue)}</Sensitive></span>} pad={false}>
+              <div className="fh-acct">
+                <Glyph name={ACCOUNT_GLYPH.investment} color="blue" size={36} />
+                <div className="min-w-0 flex-1 text-body font-medium">Portfolio</div>
+                <Button size="xs" variant="ghost" iconRight={ExternalLink} onClick={() => pfInstance && navigate({ t: "app", instanceId: pfInstance })}>
+                  Valued by Portfolio
+                </Button>
+                <Amount value={toMoney(pfValue)} className="text-body font-semibold w-[130px]" align="end" />
+              </div>
+            </Section>
+          </m.div>
+        ) : null}
       </m.div>
       {reconciling ? (
         <ReconcileDialog
@@ -109,20 +130,20 @@ function shift(day: string, n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function SummaryTile({ label, value, emphasis }: { label: string; value: number; emphasis?: boolean }) {
+function SummaryTile({ label, value, emphasis }: { label: string; value: number | null; emphasis?: boolean }) {
   return (
     <div className="fh-card" style={{ padding: "14px 18px" }}>
       <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
         {label}
       </div>
       <div className="tabular mt-1" style={{ fontSize: emphasis ? 24 : 20, lineHeight: "30px", fontWeight: 620, letterSpacing: "-0.018em" }}>
-        <Sensitive>{fmtMoney(value, "USD", { noCents: true })}</Sensitive>
+        {value === null ? <Skeleton width={120} height={22} radius={6} /> : <Sensitive>{fmtMoney(value, "USD", { noCents: true })}</Sensitive>}
       </div>
     </div>
   );
 }
 
-function AccountRow({ a, value, spark, viaPortfolio, pfInstance, onReconcile }: { a: Account; value: number; spark: number[]; viaPortfolio: boolean; pfInstance?: Id; onReconcile: () => void }) {
+function AccountRow({ a, value, spark, viaPortfolio, pfInstance, onReconcile }: { a: Account; value: number | null; spark: number[]; viaPortfolio: boolean; pfInstance?: Id; onReconcile: () => void }) {
   const debt = DEBT_TYPES.has(a.type);
   const util = a.type === "credit_card" && a.limit ? Math.max(0, -a.balance) / a.limit : null;
   const reconciledAgo = a.reconciled ? daysBetween(a.reconciled, todayIso()) : null;
@@ -167,7 +188,13 @@ function AccountRow({ a, value, spark, viaPortfolio, pfInstance, onReconcile }: 
         ) : null}
       </div>
       <div className="flex flex-col items-end w-[130px] flex-none">
-        <Amount value={toMoney(value)} className="text-body font-semibold" align="end" />
+        {value === null ? (
+          <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
+            In the Portfolio value
+          </span>
+        ) : (
+          <Amount value={toMoney(value)} className="text-body font-semibold" align="end" />
+        )}
         {!viaPortfolio && Math.abs(a.cleared - a.balance) > 0.004 ? (
           <span className="text-caption text-tertiary tabular" style={{ fontWeight: 400 }}>
             <Sensitive>{fmtMoney(a.cleared)}</Sensitive> cleared

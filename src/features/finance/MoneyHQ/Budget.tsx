@@ -116,7 +116,9 @@ export default function Budget() {
         </div>
         <div className="fh-budget-figs">
           <Fig label="Assigned" value={totals.assigned} />
-          <Fig label="Spent" value={totals.spent} />
+          {/* Net activity across every envelope, savings & debt payments included (the table column). "Spent" is kept
+              for the spending-only figure on Overview and Home (shared/figures.ts) so the two never collide. */}
+          <Fig label="Activity" value={-totals.spent} />
           <Fig label="Available" value={totals.available} />
         </div>
         <div className="flex flex-col gap-1.5 flex-none">

@@ -223,6 +223,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn on_exit(app: &AppHandle) {
+    system_events::stop();
     let state = app.state::<AppState>();
     if let Some(store) = state.store_opt() {
         background::snapshot_on_quit(&state);

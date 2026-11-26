@@ -53,10 +53,30 @@ libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3.6", features = ["apple-native"] }
+# Already in the tree (tao / wry); used for NSWorkspace sleep / screen-lock observers (SPEC §9.9).
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "NSDistributedNotificationCenter",
+  "NSNotification",
+  "NSOperation",
+  "NSString",
+] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6", features = ["windows-native"] }
-windows-sys = { version = "0.59", features = ["Win32_System_Diagnostics_Debug"] }
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Power",
+  "Win32_System_RemoteDesktop",
+  "Win32_UI_WindowsAndMessaging",
+] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Already in the tree (tauri plugins); used for logind sleep / screen-lock signals (SPEC §9.9).

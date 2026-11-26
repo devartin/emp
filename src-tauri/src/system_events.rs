@@ -5,10 +5,18 @@
 //!   signal and its `LockedHint` property; and `ActiveChanged(true)` from the desktop screen saver on the session bus
 //!   (`org.freedesktop.ScreenSaver`, `org.gnome.ScreenSaver`, …). Without a bus (containers, minimal sessions) the
 //!   watchers log once and stop.
-//! * **macOS / Windows**: not wired natively yet (`NSWorkspaceWillSleepNotification` /
-//!   `com.apple.screenIsLocked` and `WM_POWERBROADCAST` / `WTS_SESSION_LOCK` need an AppKit observer or a hidden
-//!   message window). There, and everywhere as a backstop, the ticker's monotonic-gap detection
-//!   ([`crate::autolock::SLEEP_GAP`]) locks after a resume from sleep.
+//! * **macOS**: `NSWorkspaceWillSleepNotification` (sleep), `NSWorkspaceScreensDidSleepNotification`,
+//!   `NSWorkspaceSessionDidResignActiveNotification` (fast user switching) and the distributed
+//!   `com.apple.screenIsLocked` (screen lock), observed on the main thread.
+//! * **Windows**: `WM_POWERBROADCAST` / `PBT_APMSUSPEND` (via `RegisterSuspendResumeNotification`) and
+//!   `WM_WTSSESSION_CHANGE` with `WTS_SESSION_LOCK` / `WTS_CONSOLE_DISCONNECT` / `WTS_REMOTE_DISCONNECT`, on a
+//!   message-only window with its own thread.
+//!
+//! The FFI lives in [`crate::platform`]; this module only sees safe callbacks. On macOS and Windows the callbacks
+//! hand the signal to one worker thread (the lock sequence never runs on the main thread); a sleep signal waits for
+//! the lock, bounded by [`SLEEP_WAIT`], so the OS suspends after the keys are gone where it lets us delay it. If a
+//! platform refuses registration the failure is logged once and the idle lock keeps working. Everywhere, as a
+//! backstop, the ticker's monotonic-gap detection ([`crate::autolock::SLEEP_GAP`]) locks after a resume from sleep.
 //!
 //! Every signal ends in [`handle`], which applies the vault's auto-lock settings (`onSleep`, `onScreenLock`).
 
@@ -63,8 +71,101 @@ pub fn handle(app: &AppHandle, event: SystemEvent) {
 pub fn start(app: &AppHandle) {
     #[cfg(target_os = "linux")]
     linux::start(app);
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(target_os = "macos", windows))]
+    native::start(app);
+    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
     let _ = app;
+}
+
+/// Unregisters the native observers (macOS / Windows; the Linux bus watchers end with the process).
+pub fn stop() {
+    #[cfg(any(target_os = "macos", windows))]
+    native::stop();
+}
+
+/// How long a sleep signal may hold up suspend while the lock sequence runs. The OS bounds this further (Windows
+/// gives `PBT_APMSUSPEND` about two seconds); a lock still running then finishes after resume.
+pub const SLEEP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// macOS / Windows: the safe side of [`crate::platform::watch_system_signals`].
+#[cfg(any(target_os = "macos", windows))]
+mod native {
+    use std::sync::{Arc, Mutex, PoisonError, mpsc};
+
+    use tauri::AppHandle;
+
+    use super::{SLEEP_WAIT, SystemEvent, handle};
+    use crate::platform::{SignalHandler, SignalWatcher, watch_system_signals};
+
+    /// The live registration, dropped (unregistered) by [`stop`].
+    static WATCHER: Mutex<Option<SignalWatcher>> = Mutex::new(None);
+
+    /// A signal for the worker, with an acknowledgement channel when the caller waits for the lock.
+    type Job = (SystemEvent, Option<mpsc::SyncSender<()>>);
+
+    pub(super) fn start(app: &AppHandle) {
+        let (tx, rx) = mpsc::channel::<Job>();
+        let worker_app = app.clone();
+        let spawned = std::thread::Builder::new()
+            .name("emp-system-signals".into())
+            .spawn(move || {
+                // Sequential on purpose: a sleep queued behind a screen lock is acknowledged only once that lock
+                // has finished, i.e. after the keys are gone.
+                for (event, done) in rx {
+                    handle(&worker_app, event);
+                    if let Some(done) = done {
+                        let _ = done.send(());
+                    }
+                }
+            });
+        if spawned.is_err() {
+            tracing::warn!("could not start the system signal worker; idle lock still applies");
+            return;
+        }
+        let handler: SignalHandler = Arc::new(move |event| {
+            if event == SystemEvent::Sleep {
+                let (done_tx, done_rx) = mpsc::sync_channel(1);
+                if tx.send((event, Some(done_tx))).is_ok()
+                    && done_rx.recv_timeout(SLEEP_WAIT).is_err()
+                {
+                    tracing::info!("lock still running as the system goes to sleep");
+                }
+            } else {
+                let _ = tx.send((event, None));
+            }
+        });
+        // AppKit observers are registered on the main thread (setup already runs there; `run_on_main_thread`
+        // executes immediately in that case). Windows uses its own thread, so any thread will do.
+        #[cfg(target_os = "macos")]
+        if app.run_on_main_thread(move || register(handler)).is_err() {
+            tracing::warn!(
+                "could not reach the main thread; native sleep / screen-lock signals are off"
+            );
+        }
+        #[cfg(windows)]
+        register(handler);
+    }
+
+    fn register(handler: SignalHandler) {
+        match watch_system_signals(handler) {
+            Ok(watcher) => {
+                *WATCHER.lock().unwrap_or_else(PoisonError::into_inner) = Some(watcher);
+                tracing::info!("native sleep / screen-lock signals registered");
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "native sleep / screen-lock signals unavailable; idle lock still applies");
+            }
+        }
+    }
+
+    pub(super) fn stop() {
+        // Take it out first so the lock is not held while the observers are removed.
+        let watcher = WATCHER
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        drop(watcher);
+    }
 }
 
 #[cfg(target_os = "linux")]

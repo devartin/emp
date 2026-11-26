@@ -98,7 +98,7 @@ pub fn block_text(content: &TipTapNode) -> String {
         "table" => {
             let mut rows = Vec::new();
             for row in content.children() {
-                let cells: Vec<String> = row.children().iter().map(inline_text).collect();
+                let cells: Vec<String> = row.children().iter().map(cell_text).collect();
                 rows.push(cells.join("\t"));
             }
             rows.join("\n")
@@ -114,8 +114,23 @@ pub fn block_text(content: &TipTapNode) -> String {
             s
         }
         "kpi" => content.attr_str("label").unwrap_or("").to_owned(),
+        // Layout only: the blocks inside the columns are visited (and indexed) on their own. Taking the columns'
+        // inline text here glued every block together ("…net worth.Portfolio —…") and indexed it twice.
+        "columnList" | "column" => String::new(),
         _ => inline_text(content),
     }
+}
+
+/// Plain text of a table cell: its paragraphs separated by a space, never glued together.
+#[must_use]
+pub fn cell_text(cell: &TipTapNode) -> String {
+    let parts: Vec<String> = cell
+        .children()
+        .iter()
+        .map(inline_text)
+        .filter(|t| !t.is_empty())
+        .collect();
+    parts.join(" ")
 }
 
 /// Finds a block container by id.

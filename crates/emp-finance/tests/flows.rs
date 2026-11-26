@@ -158,6 +158,7 @@ fn money_hq_month() {
         today,
         &usd,
         &FxRates::new(),
+        &|_| None,
     );
     assert_eq!(snaps.len(), 6);
     assert!(snaps.windows(2).all(|w| w[1].net_worth > w[0].net_worth));

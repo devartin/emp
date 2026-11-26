@@ -1,4 +1,5 @@
-//! Platform-specific process hardening (SPEC §9.11). The only module allowed to use `unsafe` (FFI calls).
+//! Platform-specific process hardening (SPEC §9.11) and native sleep / screen-lock signals (SPEC §9.9, see
+//! [`crate::system_events`]). The only module allowed to use `unsafe` (FFI calls).
 #![allow(unsafe_code)]
 
 /// Applies best-effort process hardening. Failures are logged, never fatal.
@@ -51,4 +52,58 @@ pub fn core_dumps_disabled() -> bool {
     // SAFETY: `limit` is a valid out-parameter.
     let rc = unsafe { libc::getrlimit(libc::RLIMIT_CORE, &mut limit) };
     rc == 0 && limit.rlim_cur == 0
+}
+
+// ── Native sleep / screen-lock signals (SPEC §9.9) ──────────────────────────────────────────────────────────────
+
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(windows)]
+mod windows;
+
+/// Receives native power / session signals. Called on an OS-owned thread (the AppKit main thread on macOS, the
+/// signal window's thread on Windows); a [`SystemEvent::Sleep`](crate::system_events::SystemEvent::Sleep) call
+/// should return once the vault is locked (or a bounded wait elapsed), since returning lets the OS proceed.
+#[cfg(any(target_os = "macos", windows))]
+pub type SignalHandler =
+    std::sync::Arc<dyn Fn(crate::system_events::SystemEvent) + Send + Sync + 'static>;
+
+/// A live registration for native sleep / screen-lock signals. Dropping it unregisters every observer.
+#[cfg(any(target_os = "macos", windows))]
+pub struct SignalWatcher {
+    #[cfg(target_os = "macos")]
+    _inner: macos::Watcher,
+    #[cfg(windows)]
+    _inner: windows::Watcher,
+}
+
+/// Registers for the platform's sleep and screen-lock signals and forwards them to `handler`.
+///
+/// * macOS: `NSWorkspaceWillSleepNotification` (→ `Sleep`), `NSWorkspaceScreensDidSleepNotification` and
+///   `NSWorkspaceSessionDidResignActiveNotification` (fast user switching) on the shared workspace's notification
+///   center, and the distributed `com.apple.screenIsLocked` (→ `ScreenLocked`). Must be called on the main thread
+///   (the distributed notification is delivered through the registering thread's run loop).
+/// * Windows: a message-only window on a dedicated thread with its own message loop, registered with
+///   `RegisterSuspendResumeNotification` (`WM_POWERBROADCAST` / `PBT_APMSUSPEND` → `Sleep`) and
+///   `WTSRegisterSessionNotification` (`WTS_SESSION_LOCK`, `WTS_CONSOLE_DISCONNECT`, `WTS_REMOTE_DISCONNECT` →
+///   `ScreenLocked`).
+///
+/// # Errors
+/// A human-readable reason when nothing could be registered (the caller logs it; idle lock still works).
+#[cfg(any(target_os = "macos", windows))]
+pub fn watch_system_signals(handler: SignalHandler) -> Result<SignalWatcher, String> {
+    #[cfg(target_os = "macos")]
+    let inner = macos::watch(handler)?;
+    #[cfg(windows)]
+    let inner = windows::watch(handler)?;
+    Ok(SignalWatcher { _inner: inner })
+}
+
+/// Runs a signal handler without letting a panic unwind into OS code (which would abort the process).
+#[cfg(any(target_os = "macos", windows))]
+fn deliver(handler: &SignalHandler, event: crate::system_events::SystemEvent) {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler(event)));
+    if result.is_err() {
+        tracing::error!(?event, "system signal handler panicked");
+    }
 }

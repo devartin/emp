@@ -8,6 +8,7 @@ import { COMMAND_FLAGS, isCommandName, type CommandName } from '../contract';
 import { BackendError, toBackendError } from '../errors';
 import type { Transport } from '../facade';
 import type { EventMap, EventName, JobEvent } from '../types';
+import { installDateShim } from './clock';
 import { installControl } from './control';
 import { createMockContext, type MockContextInternals } from './context';
 import type { MockCallCtx, MockHandler, MockModule, SeedModule } from './ctx';
@@ -332,6 +333,10 @@ export async function createMockTransport(): Promise<Transport> {
   if (!singleton) {
     singleton = new MockBackend(optionsFromLocation());
     installControl(singleton);
+    // One "now" for the preview: UI code reads Date.now()/new Date(), handlers read ctx.clock — make them the same
+    // clock (see clock.ts). Follows reset() too, which swaps in a fresh context and clock.
+    const backend = singleton;
+    installDateShim(() => backend.ctx.clock.wallNow());
     if (typeof console !== 'undefined') {
       console.info(
         `%cEMP%c browser preview · mock backend (${singleton.options.seed}${singleton.options.encrypted ? ', encrypted — password "demo"' : ''})`,

@@ -677,13 +677,52 @@ impl Ledger {
         balance_as_of(a, &self.txns, as_of)
     }
 
-    /// Net worth in the base currency (accounts in other currencies are skipped without rates).
+    /// Net worth as of `as_of` — the one definition, [`emp_finance::networth::point`] (open accounts, sign decides
+    /// asset or liability, base currency only without FX rates, investment accounts replaced by Portfolio's market
+    /// value `investments` when given). The browser mock's `netWorthAt` implements the same rules.
+    pub fn net_worth_point(
+        &self,
+        as_of: NaiveDate,
+        investments: Option<Decimal>,
+    ) -> ApiResult<emp_finance::networth::Snapshot> {
+        let base = Currency::new(&self.currency).map_err(fin_err)?;
+        Ok(emp_finance::networth::point(
+            &self.accounts,
+            &self.txns,
+            as_of,
+            &base,
+            &emp_finance::fx::FxRates::new(),
+            investments,
+        ))
+    }
+
+    /// Emergency-fund balance (`ef_balance`, §15.5), the same definition as the mock's `emergencyBalance`: the
+    /// balance as of `today` of the account linked to the emergency-fund goal; else that goal's saved amount; else
+    /// the total of the open savings accounts.
     #[must_use]
-    pub fn net_worth(&self, as_of: NaiveDate) -> Decimal {
+    pub fn ef_balance(&self, today: NaiveDate) -> Decimal {
+        if let Some(d) = self.dbs.get("goals") {
+            let kind = d.col("goal.kind", &["Kind", "Type"]);
+            let acct = d.col_id("goal.account", &["Account"]);
+            let saved = d.col_id("goal.saved", &["Saved"]);
+            if let Some(r) = d.rows.iter().find(|r| {
+                d.option_name(r, kind)
+                    .is_some_and(|k| norm(&k).contains("emergency"))
+            }) {
+                let linked = acct
+                    .as_ref()
+                    .and_then(|c| rel(r.values.get(c)))
+                    .and_then(|id| self.accounts.iter().find(|a| a.id == id));
+                if let Some(a) = linked {
+                    return self.balance(a, today);
+                }
+                return amount(saved.as_ref().and_then(|c| r.values.get(c))).unwrap_or_default();
+            }
+        }
         self.accounts
             .iter()
-            .filter(|a| !a.closed && a.currency.code() == self.currency)
-            .map(|a| self.balance(a, as_of))
+            .filter(|a| a.kind == AccountType::Savings && !a.closed)
+            .map(|a| self.balance(a, today))
             .sum()
     }
 
@@ -816,8 +855,18 @@ pub struct UpcomingRow {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Overview {
+    /// `assets − liabilities` as of today ([`Ledger::net_worth_point`]).
     net_worth: MoneyDto,
     net_worth_delta30d: MoneyDto,
+    assets: MoneyDto,
+    liabilities: MoneyDto,
+    /// Portfolio's market value counted in `assets` in place of the investment accounts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    investments: Option<MoneyDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ef_balance: Option<MoneyDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    essential_monthly: Option<MoneyDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     to_be_assigned: Option<MoneyDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -879,13 +928,222 @@ fn debt_free_date(l: &Ledger, today: NaiveDate) -> Option<String> {
     plan.strategies.first()?.payoff_date.map(|m| m.to_string())
 }
 
+// ───────────────────────────────────────────────────────────────────────────── Portfolio valuation (§16.8)
+
+/// Portfolio's market value over time — what Money HQ counts in place of its investment accounts (§16.8 "Investment
+/// account values become Net worth assets"). Today's value is exactly `portfolio_summary.totalValue` (same lots,
+/// quotes and [`emp_finance::portfolio::holdings::value`]); an earlier date values the positions held at the end of
+/// that day at that day's close (daily bars, cache first), falling back to today's price, then to average cost.
+/// Without any market data (offline, no provider) every date is valued at cost, like `portfolio_summary`.
+#[derive(Debug, Clone, Default)]
+pub struct PortfolioMarks {
+    today: NaiveDate,
+    now_value: Decimal,
+    txns: Vec<emp_finance::portfolio::InvTxn>,
+    closes: HashMap<String, BTreeMap<NaiveDate, Decimal>>,
+    fallback: HashMap<String, Decimal>,
+}
+
+impl PortfolioMarks {
+    /// Builds the marks from loaded Portfolio data and whatever market data is at hand.
+    fn build(
+        data: &super::portfolio::PortfolioData,
+        prices: &HashMap<String, emp_finance::portfolio::holdings::PriceQuote>,
+        closes: HashMap<String, BTreeMap<NaiveDate, Decimal>>,
+        today: NaiveDate,
+    ) -> Self {
+        let book = data.book();
+        let now_value =
+            emp_finance::portfolio::holdings::value(&book, prices, &data.securities, today)
+                .total_value;
+        let mut cost: HashMap<String, (Decimal, Decimal)> = HashMap::new();
+        for l in &book.lots {
+            let e = cost.entry(l.security.clone()).or_default();
+            e.0 += l.qty;
+            e.1 += l.basis;
+        }
+        let mut fallback: HashMap<String, Decimal> = HashMap::new();
+        for t in &data.txns {
+            if let Some(p) = t.price.filter(|p| *p > Decimal::ZERO) {
+                fallback.insert(t.security.clone(), p);
+            }
+        }
+        for (sym, (q, b)) in cost {
+            if q > Decimal::ZERO {
+                fallback.insert(sym, b / q);
+            }
+        }
+        for (sym, q) in prices {
+            fallback.insert(sym.clone(), q.price);
+        }
+        PortfolioMarks {
+            today,
+            now_value,
+            txns: data.txns.clone(),
+            closes,
+            fallback,
+        }
+    }
+
+    /// Portfolio's value at the end of `d` (today and later: the live valuation).
+    #[must_use]
+    pub fn value_at(&self, d: NaiveDate) -> Decimal {
+        if d >= self.today {
+            return self.now_value;
+        }
+        let pos = super::portfolio::positions_by_day(&self.txns, &[d]);
+        pos.first().map_or(Decimal::ZERO, |p| {
+            p.iter()
+                .map(|(sym, q)| {
+                    let close = self
+                        .closes
+                        .get(sym)
+                        .and_then(|m| m.range(..=d).next_back().map(|(_, c)| *c));
+                    *q * close
+                        .or_else(|| self.fallback.get(sym).copied())
+                        .unwrap_or_default()
+                })
+                .sum()
+        })
+    }
+}
+
+/// The Portfolio instance installed next to Money HQ instance `money_id` (same workspace), if any.
+fn portfolio_instance_for(store: &Store, money_id: &str) -> ApiResult<Option<String>> {
+    let (ws, _) = find_instance(store, money_id)?;
+    Ok(store
+        .lifeapp_instances(&ws)?
+        .into_iter()
+        .find(|i| i.app_id == "portfolio" && !i.detached)
+        .map(|i| i.id))
+}
+
+/// Offline marks (no network): cost basis and cached quotes only. Used where no async router call is possible
+/// (the background net-worth snapshot); `None` without a Portfolio instance.
+pub fn portfolio_marks_offline(
+    store: &Store,
+    money_id: &str,
+    today: NaiveDate,
+) -> ApiResult<Option<PortfolioMarks>> {
+    let Some(pf) = portfolio_instance_for(store, money_id)? else {
+        return Ok(None);
+    };
+    let data = super::portfolio::PortfolioData::load(store, &pf)?;
+    Ok(Some(PortfolioMarks::build(
+        &data,
+        &HashMap::new(),
+        HashMap::new(),
+        today,
+    )))
+}
+
+/// Live marks for `finance_overview` / `finance_networth_series`: today's quotes (as `portfolio_summary`) and daily
+/// closes back to `history_from` for the earlier dates. `None` without a Portfolio instance; network failures fall
+/// back to the cache / cost basis rather than failing the finance command.
+pub async fn portfolio_marks(
+    app: &AppHandle,
+    money_id: &str,
+    history: Option<chrono::Duration>,
+) -> ApiResult<Option<PortfolioMarks>> {
+    let (app2, id) = (app.clone(), money_id.to_owned());
+    let loaded = blocking(move || {
+        let state = app2.state::<AppState>();
+        let store = state.session()?;
+        let Some(pf) = portfolio_instance_for(&store, &id)? else {
+            return Ok(None);
+        };
+        let data = super::portfolio::PortfolioData::load(&store, &pf)?;
+        let today = local_today(&store);
+        let router = super::market::router(&state).ok();
+        Ok(Some((data, today, router)))
+    })
+    .await?;
+    let Some((data, today, router)) = loaded else {
+        return Ok(None);
+    };
+    let mut prices = HashMap::new();
+    let mut closes: HashMap<String, BTreeMap<NaiveDate, Decimal>> = HashMap::new();
+    if let Some(r) = router {
+        let book = data.book();
+        let held: Vec<String> = super::portfolio::PortfolioData::held(&book)
+            .into_keys()
+            .take(super::portfolio::MAX_SYMBOLS)
+            .collect();
+        if !held.is_empty() {
+            for q in super::market::quotes_for(&r, &held).await {
+                if !q.is_sane() {
+                    continue;
+                }
+                let Some(as_of) =
+                    chrono::DateTime::from_timestamp_millis(q.as_of).map(|t| t.date_naive())
+                else {
+                    continue;
+                };
+                prices.insert(
+                    q.symbol.clone(),
+                    emp_finance::portfolio::holdings::PriceQuote {
+                        price: emp_finance::money::from_f64(q.price),
+                        prev_close: q
+                            .prev_close
+                            .filter(|x| x.is_finite() && *x > 0.0)
+                            .map(emp_finance::money::from_f64),
+                        as_of,
+                    },
+                );
+            }
+        }
+        if let Some(from) = history.map(|h| today - h).filter(|f| *f < today) {
+            let mut symbols: Vec<String> = data
+                .txns
+                .iter()
+                .filter(|t| t.date <= today)
+                .map(|t| t.security.clone())
+                .filter(|s| !s.is_empty())
+                .collect();
+            symbols.sort();
+            symbols.dedup();
+            symbols.truncate(super::portfolio::MAX_HISTORY_SYMBOLS);
+            for sym in symbols {
+                if let Ok(series) = r
+                    .bars(
+                        &sym,
+                        emp_integrations::market::BarInterval::Day,
+                        from - chrono::Duration::days(7),
+                        today,
+                        true,
+                        &BTreeMap::new(),
+                    )
+                    .await
+                {
+                    closes.insert(
+                        sym,
+                        series
+                            .bars
+                            .iter()
+                            .filter(|b| b.close.is_finite() && b.close > 0.0)
+                            .map(|b| (b.date, emp_finance::money::from_f64(b.close)))
+                            .collect(),
+                    );
+                }
+            }
+        }
+    }
+    Ok(Some(PortfolioMarks::build(&data, &prices, closes, today)))
+}
+
 /// Computes `finance_overview`.
-pub fn overview(store: &Store, instance_id: &str, m: YearMonth) -> ApiResult<Overview> {
+pub fn overview(
+    store: &Store,
+    instance_id: &str,
+    m: YearMonth,
+    marks: Option<&PortfolioMarks>,
+) -> ApiResult<Overview> {
     let l = Ledger::load(store, instance_id)?;
     let today = local_today(store);
     let cur = l.currency.clone();
-    let nw = l.net_worth(today);
-    let nw30 = l.net_worth(today - chrono::Duration::days(30));
+    let day30 = today - chrono::Duration::days(30);
+    let nw = l.net_worth_point(today, marks.map(|k| k.value_at(today)))?;
+    let nw30 = l.net_worth_point(day30, marks.map(|k| k.value_at(day30)))?;
     let bm = budget_month(store, instance_id, &l, m)?;
     let period = budget_period(m, budget_config(store, instance_id).month_start_day);
     let pace = budget::pace(&period, today);
@@ -935,16 +1193,16 @@ pub fn overview(store: &Store, instance_id: &str, m: YearMonth) -> ApiResult<Ove
         }
         upcoming.sort_by(|a, b| a.due.cmp(&b.due));
     }
-    let ef_balance: Decimal = l
-        .accounts
-        .iter()
-        .filter(|a| a.kind == AccountType::Savings && !a.closed)
-        .map(|a| l.balance(a, today))
-        .sum();
+    let ef_balance = l.ef_balance(today);
     let essential = emp_finance::metrics::essential_monthly_spend(&l.txns, &l.categories, today);
     Ok(Overview {
-        net_worth: MoneyDto::of(nw, &cur),
-        net_worth_delta30d: MoneyDto::of(nw - nw30, &cur),
+        net_worth: MoneyDto::of(nw.net_worth, &cur),
+        net_worth_delta30d: MoneyDto::of(nw.net_worth - nw30.net_worth, &cur),
+        assets: MoneyDto::of(nw.assets, &cur),
+        liabilities: MoneyDto::of(nw.liabilities, &cur),
+        investments: marks.map(|k| MoneyDto::of(k.value_at(today), &cur)),
+        ef_balance: Some(MoneyDto::of(ef_balance, &cur)),
+        essential_monthly: Some(MoneyDto::of(essential, &cur)),
         to_be_assigned: bm.to_be_assigned.map(|x| MoneyDto::of(x, &cur)),
         left_to_spend: bm.left_to_spend.map(|x| MoneyDto::of(x, &cur)),
         savings_rate3m: emp_finance::metrics::savings_rate_3m(&l.txns, &l.categories, today)
@@ -968,7 +1226,17 @@ pub fn overview(store: &Store, instance_id: &str, m: YearMonth) -> ApiResult<Ove
 pub async fn finance_overview(app: AppHandle, req: MonthReq) -> ApiResult<Overview> {
     validate::id("instanceId", &req.instance_id)?;
     let m = month("month", &req.month)?;
-    blocking(move || overview(&app.state::<AppState>().session()?, &req.instance_id, m)).await
+    // 30 days of history for the 30-day delta.
+    let marks = portfolio_marks(&app, &req.instance_id, Some(chrono::Duration::days(31))).await?;
+    blocking(move || {
+        overview(
+            &app.state::<AppState>().session()?,
+            &req.instance_id,
+            m,
+            marks.as_ref(),
+        )
+    })
+    .await
 }
 
 /// `finance_networth_series` request.
@@ -995,67 +1263,92 @@ pub async fn finance_networth_series(
         "all" => None,
         _ => return Err(ApiError::invalid("range", "must be 6m, 1y, 3y, 5y or all")),
     };
+    let history = months.map_or(chrono::Duration::days(366 * 10), |n| {
+        chrono::Duration::days(31 * i64::from(n) + 31)
+    });
+    let marks = portfolio_marks(&app, &req.instance_id, Some(history)).await?;
     blocking(move || {
         let store = app.state::<AppState>().session()?;
-        let l = Ledger::load(&store, &req.instance_id)?;
-        let today = local_today(&store);
-        let base = Currency::new(&l.currency).map_err(fin_err)?;
-        let to = YearMonth::of(today);
-        let earliest = l
-            .txns
-            .iter()
-            .map(|t| YearMonth::of(t.date))
-            .min()
-            .unwrap_or(to);
-        let from = match months {
-            Some(n) => to.plus_months(-(n - 1)),
-            None => earliest,
-        };
-        let mut snaps: BTreeMap<YearMonth, emp_finance::networth::Snapshot> = BTreeMap::new();
-        for s in emp_finance::networth::backfill_from_transactions(
-            &l.accounts,
-            &l.txns,
-            from.max(earliest).min(to),
-            to,
-            today,
-            &base,
-            &emp_finance::fx::FxRates::new(),
-        ) {
-            snaps.insert(s.month, s);
-        }
-        if let Some(d) = l.dbs.get("networth") {
-            let a = d.keyed_id("assets", &["Assets"]);
-            let li = d.keyed_id("liabilities", &["Liabilities"]);
-            for r in &d.rows {
-                let Ok(m) = d.title(r).trim().parse::<YearMonth>() else {
-                    continue;
-                };
-                if m < from || m > to {
-                    continue;
-                }
-                let assets = amount(a.as_ref().and_then(|c| r.values.get(c))).unwrap_or_default();
-                let liabilities = amount(li.as_ref().and_then(|c| r.values.get(c)))
-                    .unwrap_or_default()
-                    .abs();
-                snaps.insert(
-                    m,
-                    emp_finance::networth::Snapshot {
-                        month: m,
-                        as_of: m.last_day(),
-                        assets,
-                        liabilities,
-                        net_worth: assets - liabilities,
-                        currency: base.clone(),
-                        missing_rates: Vec::new(),
-                        source: "snapshot".into(),
-                    },
-                );
-            }
-        }
-        let list: Vec<_> = snaps.into_values().collect();
-        Ok(emp_finance::networth::series(&list, &base))
+        networth_series(&store, &req.instance_id, months, marks.as_ref())
     })
     .await
+}
+
+/// Computes `finance_networth_series` (pure over the store): one [`emp_finance::networth::point`] per month — month
+/// ends, the current month as of today, so the last point is exactly the overview's net worth. Snapshot rows the
+/// user entered (any source but *Automatic*) override past months; automatic rows are a record of the same
+/// computation and never override it, and the current month is always live.
+pub fn networth_series(
+    store: &Store,
+    instance_id: &str,
+    months: Option<i32>,
+    marks: Option<&PortfolioMarks>,
+) -> ApiResult<emp_finance::networth::NetWorthSeries> {
+    let l = Ledger::load(store, instance_id)?;
+    let today = local_today(store);
+    let base = Currency::new(&l.currency).map_err(fin_err)?;
+    let to = YearMonth::of(today);
+    let earliest = l
+        .txns
+        .iter()
+        .map(|t| YearMonth::of(t.date))
+        .min()
+        .unwrap_or(to);
+    let from = match months {
+        Some(n) => to.plus_months(-(n - 1)),
+        None => earliest,
+    };
+    let mut snaps: BTreeMap<YearMonth, emp_finance::networth::Snapshot> = BTreeMap::new();
+    for s in emp_finance::networth::backfill_from_transactions(
+        &l.accounts,
+        &l.txns,
+        from.max(earliest).min(to),
+        to,
+        today,
+        &base,
+        &emp_finance::fx::FxRates::new(),
+        &|d| marks.map(|k| k.value_at(d)),
+    ) {
+        snaps.insert(s.month, s);
+    }
+    if let Some(d) = l.dbs.get("networth") {
+        let a = d.keyed_id("assets", &["Assets"]);
+        let li = d.keyed_id("liabilities", &["Liabilities"]);
+        let source = d.keyed("source", &["Source"]);
+        for r in &d.rows {
+            let Ok(m) = d.title(r).trim().parse::<YearMonth>() else {
+                continue;
+            };
+            if m < from || m >= to {
+                continue;
+            }
+            let automatic = d
+                .option_name(r, source)
+                .is_some_and(|n| matches!(norm(&n).as_str(), "automatic" | "auto"));
+            if automatic {
+                continue;
+            }
+            let assets = amount(a.as_ref().and_then(|c| r.values.get(c))).unwrap_or_default();
+            let liabilities = amount(li.as_ref().and_then(|c| r.values.get(c)))
+                .unwrap_or_default()
+                .abs();
+            snaps.insert(
+                m,
+                emp_finance::networth::Snapshot {
+                    month: m,
+                    as_of: m.last_day(),
+                    assets,
+                    liabilities,
+                    net_worth: assets - liabilities,
+                    currency: base.clone(),
+                    missing_rates: Vec::new(),
+                    source: "snapshot".into(),
+                },
+            );
+        }
+    }
+    let list: Vec<_> = snaps.into_values().collect();
+    Ok(emp_finance::networth::series(&list, &base))
 }
 
 // ───────────────────────────────────────────────────────────────────────────── automatic net-worth snapshots
@@ -1138,6 +1431,9 @@ fn networth_snapshot_rows(
         v: Some(v.round_dp(2).normalize().to_string()),
         cur: l.currency.clone(),
     };
+    // No market access here (background task): Portfolio is valued offline, at cost. These rows are a record; the
+    // live series recomputes every month with market prices and does not read them back (`networth_series`).
+    let marks = portfolio_marks_offline(store, instance_id, today)?;
     let rows: Vec<BTreeMap<String, CellValue>> = emp_finance::networth::backfill_from_transactions(
         &l.accounts,
         &l.txns,
@@ -1146,6 +1442,7 @@ fn networth_snapshot_rows(
         today,
         &base,
         &emp_finance::fx::FxRates::new(),
+        &|d| marks.as_ref().map(|k| k.value_at(d)),
     )
     .into_iter()
     .filter(|s| months.contains(&s.month))
@@ -2733,7 +3030,7 @@ mod tests {
         assert!(!l.txns.is_empty(), "transactions");
         assert!(l.dbs.contains_key("budgets"));
         let today = local_today(&store);
-        let o = overview(&store, &inst, YearMonth::of(today)).unwrap();
+        let o = overview(&store, &inst, YearMonth::of(today), None).unwrap();
         let v = serde_json::to_value(&o).unwrap();
         assert!(v["netWorth"]["amount"].is_string());
         assert!(v["budget"].is_array());
@@ -2746,6 +3043,147 @@ mod tests {
             today,
         );
         assert!(!sankey.nodes.is_empty());
+    }
+
+    fn money_of(v: &serde_json::Value) -> Decimal {
+        v["amount"].as_str().unwrap().parse().unwrap()
+    }
+
+    #[test]
+    fn net_worth_is_one_figure_on_every_screen() {
+        let (_dir, store) = test_support::temp_store();
+        let (_, money) = test_support::install(&store, "money-hq");
+        let today = local_today(&store);
+        let month = YearMonth::of(today);
+        assert!(
+            portfolio_marks_offline(&store, &money, today)
+                .unwrap()
+                .is_none()
+        );
+        let check = |marks: Option<&PortfolioMarks>| {
+            let o = serde_json::to_value(overview(&store, &money, month, marks).unwrap()).unwrap();
+            let (nw, a, li) = (
+                money_of(&o["netWorth"]),
+                money_of(&o["assets"]),
+                money_of(&o["liabilities"]),
+            );
+            assert_eq!(nw, a - li);
+            // The hero (series' last point) and the overview (Accounts tiles, Home) are the same number.
+            for months in [Some(6), Some(12), None] {
+                let s = networth_series(&store, &money, months, marks).unwrap();
+                let last = s.net.last().copied().unwrap();
+                assert!(
+                    (last - emp_finance::money::to_f64(nw)).abs() < 0.005,
+                    "{last} vs {nw}"
+                );
+            }
+            o
+        };
+        let without = check(None);
+        assert!(without.get("investments").is_none());
+
+        // With Portfolio installed its value replaces the investment accounts, once.
+        test_support::install(&store, "portfolio");
+        let marks = portfolio_marks_offline(&store, &money, today)
+            .unwrap()
+            .expect("portfolio");
+        let with = check(Some(&marks));
+        let inv = money_of(&with["investments"]);
+        assert_eq!(inv, marks.value_at(today));
+        let l = Ledger::load(&store, &money).unwrap();
+        let ledger_inv: Decimal = l
+            .accounts
+            .iter()
+            .filter(|a| a.kind == AccountType::Investment && !a.closed)
+            .map(|a| l.balance(a, today))
+            .sum();
+        assert_eq!(
+            money_of(&with["netWorth"]) - money_of(&without["netWorth"]),
+            inv - ledger_inv
+        );
+        // efMonths is exactly efBalance / essentialMonthly.
+        let ef = emp_finance::money::to_f64(money_of(&with["efBalance"]));
+        let ess = emp_finance::money::to_f64(money_of(&with["essentialMonthly"]));
+        if ess > 0.0 {
+            assert!((with["efMonths"].as_f64().unwrap() - ef / ess).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn manual_snapshots_override_past_months_but_automatic_ones_do_not() {
+        let (_dir, store) = test_support::temp_store();
+        let (_, inst) = test_support::install(&store, "money-hq");
+        let today = local_today(&store);
+        let l = Ledger::load(&store, &inst).unwrap();
+        let d = l.dbs.get("networth").unwrap();
+        let ids: Vec<String> = d.rows.iter().map(|r| r.id.clone()).collect();
+        store.db_rows_delete(&ids).unwrap();
+        let (acol, lcol) = (
+            d.keyed_id("assets", &["Assets"]).unwrap(),
+            d.keyed_id("liabilities", &["Liabilities"]).unwrap(),
+        );
+        let auto = d.keyed("source", &["Source"]).and_then(|p| {
+            p.select_options()
+                .into_iter()
+                .find(|o| norm(&o.name) == "automatic")
+                .map(|o| (p.id.clone(), o.id))
+        });
+        let cur = YearMonth::of(today);
+        let row = |m: YearMonth, assets: &str, automatic: bool| {
+            let mut v = BTreeMap::new();
+            v.insert(d.title_id().to_owned(), CellValue::text(&m.to_string()));
+            v.insert(
+                acol.clone(),
+                CellValue::Money {
+                    v: Some(assets.into()),
+                    cur: "USD".into(),
+                },
+            );
+            v.insert(
+                lcol.clone(),
+                CellValue::Money {
+                    v: Some("0".into()),
+                    cur: "USD".into(),
+                },
+            );
+            if let (true, Some((col, opt))) = (automatic, &auto) {
+                v.insert(
+                    col.clone(),
+                    CellValue::Select {
+                        v: Some(opt.clone()),
+                    },
+                );
+            }
+            v
+        };
+        store
+            .db_rows_insert_bulk(
+                d.id(),
+                vec![
+                    row(cur.plus_months(-1), "1", false),
+                    row(cur.plus_months(-2), "2", true),
+                    row(cur, "3", false),
+                ],
+                None,
+            )
+            .unwrap();
+        let s = networth_series(&store, &inst, Some(6), None).unwrap();
+        let at = |m: YearMonth| {
+            s.t.iter()
+                .position(|t| *t == m.to_string())
+                .map(|i| s.net[i])
+        };
+        assert_eq!(
+            at(cur.plus_months(-1)),
+            Some(1.0),
+            "a manual snapshot is the user's record"
+        );
+        assert_ne!(
+            at(cur.plus_months(-2)),
+            Some(2.0),
+            "automatic rows never override the computation"
+        );
+        assert_ne!(at(cur), Some(3.0), "the current month is always live");
     }
 
     #[test]

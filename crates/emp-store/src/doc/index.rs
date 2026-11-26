@@ -167,7 +167,9 @@ pub fn extract(doc: &TipTapDoc) -> DocExtract {
                     out.assets.push(a.to_owned());
                 }
             }
-            "mathBlock" | "codeBlock" | "kpi" => text = block_text(content),
+            "mathBlock" | "codeBlock" | "kpi" | "columnList" | "column" => {
+                text = block_text(content);
+            }
             _ => {
                 let mut t = String::new();
                 let mut l = Vec::new();
@@ -344,6 +346,39 @@ mod tests {
                 .map(|n| container(n, None).unwrap())
                 .collect(),
         )
+    }
+
+    #[test]
+    fn column_blocks_are_indexed_separately_not_glued() {
+        let para = |t: &str| {
+            container(
+                TipTapNode::new("paragraph").with_content(vec![TipTapNode::text(t)]),
+                None,
+            )
+            .unwrap()
+        };
+        let col = |b: TipTapNode| {
+            TipTapNode::new("column")
+                .with_content(vec![TipTapNode::new("blockGroup").with_content(vec![b])])
+        };
+        let list = TipTapNode::new("columnList").with_content(vec![
+            col(para("Money HQ — budget and net worth.")),
+            col(para("Portfolio — holdings.")),
+        ]);
+        let doc = TipTapDoc::from_blocks(vec![container(list, None).unwrap()]);
+        let x = extract(&doc);
+        let texts: Vec<&str> = x.blocks.iter().map(|b| b.text.as_str()).collect();
+        assert_eq!(
+            texts,
+            vec!["Money HQ — budget and net worth.", "Portfolio — holdings."]
+        );
+        assert!(!x.full_text().contains("worth.Portfolio"));
+        let mut cell = TipTapNode::new("tableCell");
+        cell.content = Some(vec![
+            TipTapNode::new("paragraph").with_content(vec![TipTapNode::text("one.")]),
+            TipTapNode::new("paragraph").with_content(vec![TipTapNode::text("Two")]),
+        ]);
+        assert_eq!(super::super::walk::cell_text(&cell), "one. Two");
     }
 
     #[test]

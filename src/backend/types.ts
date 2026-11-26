@@ -1002,8 +1002,25 @@ export interface BudgetLine {
 }
 
 export interface FinanceOverview {
+  /**
+   * Net worth as of today = `assets − liabilities`. One definition on both backends (mock `netWorthAt`, Rust
+   * `emp_finance::networth::point`): open accounts in the base currency, balances as of today (future-dated rows
+   * excluded), positive balances are assets and negative ones liabilities whatever the account type, and the open
+   * investment accounts are replaced by Portfolio's market value when Portfolio is installed (§16.8).
+   */
   netWorth: Money;
   netWorthDelta30d: Money;
+  /** Total assets (≥ 0) behind `netWorth`. */
+  assets: Money;
+  /** Total liabilities (≥ 0) behind `netWorth`. */
+  liabilities: Money;
+  /** Portfolio market value counted in `assets` in place of the investment accounts; absent without Portfolio. */
+  investments?: Money;
+  /** `efMonths = efBalance / essentialMonthly` — the emergency-fund balance (the emergency goal's account, else the
+   * goal's saved amount, else the open savings accounts) … */
+  efBalance?: Money;
+  /** … and the median of the three trailing 30-day essential-spending sums. */
+  essentialMonthly?: Money;
   toBeAssigned?: Money;
   leftToSpend?: Money;
   savingsRate3m: number;
