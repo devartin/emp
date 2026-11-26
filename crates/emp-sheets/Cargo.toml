@@ -1,0 +1,13 @@
+[package]
+name = "emp-sheets"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+calamine = "0.31"
+rust_xlsxwriter = "0.90"
+csv = "1"

@@ -1,0 +1,19 @@
+[package]
+name = "emp-store"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+parking_lot.workspace = true
+zeroize.workspace = true
+base64.workspace = true
+emp-crypto.workspace = true
+rusqlite = { version = "0.37", features = ["bundled", "serde_json"] }
+
+[dev-dependencies]
+tempfile = "3"
