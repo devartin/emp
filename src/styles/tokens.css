@@ -16,7 +16,7 @@
   --bg-inverse: #18181b;
   --text-primary: #18181b;
   --text-secondary: #52525b;
-  --text-tertiary: #6e6e77;
+  --text-tertiary: #6b6b74;
   --text-disabled: #a1a1aa;
   --text-on-inverse: #ffffff;
   --border-subtle: rgba(24, 24, 27, 0.06);
@@ -145,6 +145,14 @@
   --dur-base: 160ms;
   --dur-moderate: 220ms;
   --dur-slow: 320ms;
+  --dur-press: 70ms;
+  --dur-hover: 180ms;
+  --dur-deliberate: 480ms;
+  --dur-chart: 700ms;
+  --dur-draw: 1100ms;
+  --dur-cinematic: 2000ms;
+  --ease-press: cubic-bezier(0.3, 0, 0.6, 1);
+  --ease-sheen: cubic-bezier(0.3, 0.7, 0.2, 1);
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
@@ -155,11 +163,7 @@
   --focus-width: 2px;
   --focus-ring: 0 0 0 3px color-mix(in oklab, var(--accent-solid) 22%, transparent);
 }
-@supports (transition-timing-function: linear(0, 1)) {
-  :root {
-    --ease-spring-ui: linear(0, 0.157, 0.48, 0.74, 0.89, 0.963, 0.993, 1.003, 1.004, 1.001, 1);
-  }
-}
+/* --ease-spring-ui is redefined in material.css as the `glide` spring (§5.2). */
 
 /* ─── Dark ─── */
 :root[data-theme="dark"],

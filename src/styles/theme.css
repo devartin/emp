@@ -96,6 +96,8 @@
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-linear: linear;
+  --ease-press: cubic-bezier(0.3, 0, 0.6, 1);
+  --ease-sheen: cubic-bezier(0.3, 0.7, 0.2, 1);
 
   --animate-spin: emp-spin 700ms linear infinite;
   --animate-shimmer: emp-shimmer 1.6s linear infinite;
@@ -193,6 +195,29 @@
   --shadow-none: none;
 
   --ease-spring: var(--ease-spring-ui);
+
+  /* Design v2 materials (docs/DESIGN.md §4) — bg-well, bg-panel, shadow-panel, ease-release, duration-press … */
+  --color-well: var(--well-bg);
+  --color-panel: var(--panel-top);
+  --color-glass: var(--glass-solid);
+  --color-ghost: var(--ghost-hover);
+  --color-ghost-press: var(--ghost-press);
+  --color-ring: var(--ring);
+  --color-chart-line: var(--chart-line);
+  --color-groove: var(--groove-dark);
+  --shadow-panel: var(--panel-shadow);
+  --shadow-raise: var(--panel-raise);
+  --shadow-glass: var(--glass-shadow);
+  --shadow-glass-1: var(--glass-1-shadow);
+  --shadow-well: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  --shadow-glow-gain: var(--glow-gain);
+  --shadow-glow-loss: var(--glow-loss);
+  --ease-release: var(--spring-release);
+  --ease-thumb: var(--spring-thumb);
+  --ease-pop: var(--spring-pop);
+  --ease-glide: var(--spring-glide);
+  --ease-settle: var(--spring-settle);
+  --ease-morph: var(--spring-morph);
 }
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="midnight"], [data-theme="midnight"] *));
@@ -200,6 +225,8 @@
 @custom-variant reduced-effects (&:where([data-effects="reduced"], [data-effects="reduced"] *));
 @custom-variant compact (&:where([data-density="compact"], [data-density="compact"] *));
 @custom-variant privacy (&:where([data-privacy="on"], [data-privacy="on"] *));
+@custom-variant more-contrast (&:where([data-contrast="more"], [data-contrast="more"] *));
+@custom-variant midnight (&:where([data-theme="midnight"], [data-theme="midnight"] *));
 
 @utility tabular {
   font-variant-numeric: tabular-nums;
