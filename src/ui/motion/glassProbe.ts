@@ -105,8 +105,14 @@ export function estimateRefresh(intervals: readonly number[]): number {
 
 // ───────────────────────────────────────────────────────────────────────────── DOM driver
 
-/** Floating glass layers. `[data-opaque]` glass (opened inside another overlay) has no backdrop and doesn't count. */
-export const GLASS_OVERLAY_SELECTOR = ":is(.glass-1, .glass-2, .glass-3):not([data-opaque])";
+/**
+ * Floating glass layers: the `.glass-*` recipes plus the kit overlays that carry their own backdrop blur (menu,
+ * popover/select/combobox/date picker, dialog, sheet, toast), the editor's floating toolbar, the markets search list
+ * and the floating sidebar. Persistent bars (topbar, bulk-action bars) aren't overlays and don't count.
+ * `[data-opaque]` glass (opened inside another overlay) has no backdrop and doesn't count either.
+ */
+export const GLASS_OVERLAY_SELECTOR =
+  ":is(.glass-1, .glass-2, .glass-3, .emp-menu, .emp-popover, .emp-dialog, .emp-sheet, .emp-toast, .emp-floating, .mk-search-list, .emp-sidebar[data-floating]):not([data-opaque])";
 /** After a glass layer mounts or unmounts, its open/close choreography runs for about this long. */
 const ACTIVE_AFTER_MUTATION_MS = 520;
 /** Pointer/scroll/key input over open glass repaints it (highlight plate, list scroll, typing in the palette). */
