@@ -26,6 +26,7 @@ import { useWorkspace } from '@/stores/workspace';
 import { installJobTracking } from '@/stores/jobs';
 import { resetMarket } from '@/stores/market';
 import { registerAppCommands } from './commands';
+import { installGlass, syncGlassFromKv } from './glass';
 import { initialHashRoute, isContentRoute, startRouter, type AppRoute } from './router';
 import { installShortcuts } from './shortcuts';
 
@@ -75,6 +76,8 @@ function setPhase(phase: AppPhase, error?: string) {
 /** Decide the first screen. Safe to call once at startup. */
 export async function boot(): Promise<AppPhase> {
   mark('boot:start');
+  // Synchronous, before the first paint: takes over data-glass from initAppearance's platform default.
+  installGlass();
   try {
     await backendReady();
   } catch (e) {
@@ -115,7 +118,7 @@ export async function enterShell(opts: { route?: AppRoute } = {}): Promise<void>
   mark('shell:enter');
   void preloadShell();
   const ui = useUi.getState();
-  await Promise.all([useSettings.getState().load(), ui.loadPrefs(), useSearch.getState().load()]);
+  await Promise.all([useSettings.getState().load(), ui.loadPrefs(), useSearch.getState().load(), syncGlassFromKv()]);
   const ws = await useWorkspace.getState().openDefault();
   const vault = useSettings.getState().vault;
 
