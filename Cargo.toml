@@ -32,7 +32,7 @@ emp-integrations = { path = "crates/emp-integrations" }
 codegen-units = 1
 lto = "fat"
 opt-level = 3
-panic = "abort"
+panic = "unwind"
 strip = true
 debug = false
 incremental = false
