@@ -1,10 +1,8 @@
-import { m } from "motion/react";
 import type { HTMLAttributes, KeyboardEvent, ReactNode, Ref } from "react";
 import { cn } from "@/lib/cn";
-import { spring } from "./motion/tokens";
-import { useReducedMotionPref } from "./motion/useReducedEffects";
+import { EdgeLight } from "./motion/EdgeLight";
 
-export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "title" | "onDrag" | "onDragStart" | "onDragEnd" | "onAnimationStart"> {
+export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title?: ReactNode;
   subtitle?: ReactNode;
   /** Header trailing actions. */
@@ -12,14 +10,23 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "title" 
   icon?: ReactNode;
   pad?: "none" | "md" | "lg";
   flat?: boolean;
-  /** Hover lift (y −1, elev-1→2 via pseudo-element) + press scale .985 (§4.2). */
+  /** Interactive plate: lifts 2px with a pre-baked raise shadow on hover, presses to .99 (CSS, §4.5). */
   interactive?: boolean;
+  /** Pointer-tracked edge light (hero cards, widgets, KPI tiles — never rows). */
+  light?: boolean;
+  /** Broad specular wash under the pointer (hero cards and KPI only). Implies `light`. */
+  specular?: boolean;
+  /** Pointer tilt, at most 3° (KPI tiles, gallery tiles, choice cards). */
+  tilt?: boolean;
   ref?: Ref<HTMLDivElement>;
 }
 
-/** Card (§5.10): radius 14, surface-1, 1px subtle border, elev-1, padding 16 (compact 12, large 20), header gap 12. */
-export function Card({ title, subtitle, actions, icon, pad = "md", flat, interactive, className, children, onClick, ref, ...rest }: CardProps) {
-  const reduced = useReducedMotionPref();
+/**
+ * Card — a machined panel (docs/DESIGN.md §4.5, §6.3): top-lit gradient, inner highlight, rim, grain and a soft
+ * contact shadow. Radius 14, padding 16 (compact 12, large 20), header 15/22 600.
+ */
+export function Card({ title, subtitle, actions, icon, pad = "md", flat, interactive, light, specular, tilt, className, children, onClick, onKeyDown, ref, ...rest }: CardProps) {
+  const lit = light || specular;
   const header =
     title || actions ? (
       <div className="emp-card-header">
@@ -28,37 +35,34 @@ export function Card({ title, subtitle, actions, icon, pad = "md", flat, interac
           {title ? <h3 className="emp-card-title truncate">{title}</h3> : null}
           {subtitle ? <span className="emp-card-sub truncate">{subtitle}</span> : null}
         </div>
-        {actions ? <div className="flex items-center gap-1 -my-1 -mr-1">{actions}</div> : null}
+        {actions ? <div className="emp-card-actions flex items-center gap-1 -my-1 -mr-1">{actions}</div> : null}
       </div>
     ) : null;
-  if (interactive) {
-    return (
-      <m.div
-        ref={ref}
-        role={onClick ? "button" : undefined}
-        tabIndex={onClick ? 0 : undefined}
-        className={cn("emp-card", className)}
-        data-pad={pad === "md" ? undefined : pad}
-        data-flat={flat ? "" : undefined}
-        data-interactive=""
-        whileTap={reduced ? undefined : { scale: 0.985 }}
-        transition={spring.snappy}
-        onClick={onClick}
-        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-          if (onClick && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault();
-            (e.currentTarget as HTMLDivElement).click();
-          }
-        }}
-        {...(rest as object)}
-      >
-        {header}
-        {children}
-      </m.div>
-    );
-  }
+  const clickable = interactive && !!onClick;
   return (
-    <div ref={ref} className={cn("emp-card", className)} data-pad={pad === "md" ? undefined : pad} data-flat={flat ? "" : undefined} onClick={onClick} {...rest}>
+    <div
+      ref={ref}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      className={cn("emp-card panel", className)}
+      data-pad={pad === "md" ? undefined : pad}
+      data-flat={flat ? "" : undefined}
+      data-interactive={interactive ? "" : undefined}
+      data-raise={interactive ? "" : undefined}
+      data-light={lit ? "" : undefined}
+      data-specular={specular ? "" : undefined}
+      data-tilt={tilt && interactive ? "3" : undefined}
+      onClick={onClick}
+      onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+        if (clickable && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          e.currentTarget.click();
+        }
+        onKeyDown?.(e);
+      }}
+      {...rest}
+    >
+      {lit ? <EdgeLight specular={specular} /> : null}
       {header}
       {children}
     </div>
