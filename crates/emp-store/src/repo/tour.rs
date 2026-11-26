@@ -35,13 +35,10 @@ pub const ITEMS: [(&str, &str); 7] = [
         "create_page",
         "**Create a page**: press `⌘N` or the + next to Pages.",
     ),
-    (
-        "try_slash",
-        "**Try /**: type `/` on an empty line to add any block.",
-    ),
+    ("try_slash", "**Add any block**: type `/` on an empty line."),
     (
         "open_palette",
-        "**Open ⌘K** to search everything and run any command.",
+        "**Search everything**: press `⌘K` to find a page or run any command.",
     ),
     (
         "add_transaction",
@@ -49,11 +46,11 @@ pub const ITEMS: [(&str, &str); 7] = [
     ),
     (
         "hide_numbers",
-        "**Hide numbers with ⌘⇧H** when someone can see your screen.",
+        "**Hide numbers**: press `⌘⇧H` when someone can see your screen.",
     ),
     (
         "lock",
-        "**Lock with ⌘⇧L**: an encrypted workspace locks at once.",
+        "**Lock**: press `⌘⇧L` and an encrypted workspace locks at once.",
     ),
     (
         "templates",

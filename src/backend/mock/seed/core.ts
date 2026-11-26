@@ -123,11 +123,11 @@ function createWorkspace(ctx: MockCtx, name: string): WorkspaceRecord {
 
 const GS_ITEMS: { key: string; content: Inline[] }[] = [
   { key: 'create_page', content: [t.bold('Create a page'), ': press ', t.code('⌘N'), ' or the + next to Pages.'] },
-  { key: 'try_slash', content: [t.bold('Try /'), ': type ', t.code('/'), ' on an empty line to add any block.'] },
-  { key: 'open_palette', content: [t.bold('Open ⌘K'), ' to search everything and run any command.'] },
+  { key: 'try_slash', content: [t.bold('Add any block'), ': type ', t.code('/'), ' on an empty line.'] },
+  { key: 'open_palette', content: [t.bold('Search everything'), ': press ', t.code('⌘K'), ' to find a page or run any command.'] },
   { key: 'add_transaction', content: [t.bold('Add a transaction'), ' in Money HQ, or import a bank statement.'] },
-  { key: 'hide_numbers', content: [t.bold('Hide numbers with ⌘⇧H'), ' when someone can see your screen.'] },
-  { key: 'lock', content: [t.bold('Lock with ⌘⇧L'), ': an encrypted workspace locks at once.'] },
+  { key: 'hide_numbers', content: [t.bold('Hide numbers'), ': press ', t.code('⌘⇧H'), ' when someone can see your screen.'] },
+  { key: 'lock', content: [t.bold('Lock'), ': press ', t.code('⌘⇧L'), ' and an encrypted workspace locks at once.'] },
   { key: 'templates', content: [t.bold('Browse templates'), ' for meeting notes, weekly reviews, trip plans and more.'] },
 ];
 
@@ -466,7 +466,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     'page',
     tourDoc([
       b.callout(
-        'Your password never leaves this device, and we can’t reset it. Your recovery key is the only other way in, so keep it safe.',
+        'Your password never leaves this device, and nobody can reset it. Your recovery key is the only other way in, so keep it safe.',
         { icon: lucide('key-round'), tone: 'yellow' },
       ),
       b.h2('How it works'),
@@ -498,7 +498,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       b.toggle('Is Ultra Note military-grade encryption?', {
         children: [
           b.p(
-            '“Military grade” isn’t a technical standard, so we don’t use the term. Ultra Note uses modern, widely reviewed cryptography (XChaCha20-Poly1305 with 256-bit keys and Argon2id password hashing) with conservative settings. It has not been certified by any government program. In practice, your security depends most on a strong password and keeping your computer free of malware. If someone can run software on your computer while Ultra Note is unlocked, no app-level encryption can stop them.',
+            '“Military grade” isn’t a technical standard, so Ultra Note doesn’t use the term. It uses modern, widely reviewed cryptography (XChaCha20-Poly1305 with 256-bit keys and Argon2id password hashing) with conservative settings. It has not been certified by any government program. In practice, your security depends most on a strong password and keeping your computer free of malware. If someone can run software on your computer while Ultra Note is unlocked, no app-level encryption can stop them.',
           ),
         ],
       }),
@@ -700,7 +700,7 @@ function createProjects(ctx: MockCtx, workspaceId: string, journalId: string): {
     'page',
     makeDoc([
       b.callout(
-        [t.bold('One sentence: '), 'a faster, clearer site that turns visitors into trial sign-ups — live by ', t.date({ start: launchDay, time: false }), '.'],
+        [t.bold('One sentence: '), 'a faster, clearer site that turns visitors into trial sign-ups, live by ', t.date({ start: launchDay, time: false }), '.'],
         { icon: lucide('lightbulb'), tone: 'yellow' },
       ),
       b.h2('Goals'),
