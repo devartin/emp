@@ -352,7 +352,7 @@ export function buildLoan(b: BookBuilder, opts: { principal?: number; rate?: num
     .name('Payment', 'Inputs!$B$13');
 
   inputs.set('A1', 'Mortgage calculator', S.title);
-  inputs.set('A2', 'Change the blue inputs — the schedule, payoff date and scenarios update instantly', S.subtitle);
+  inputs.set('A2', 'Change the blue inputs; the schedule, payoff date and scenarios update instantly', S.subtitle);
   legend(inputs, 'D3');
   inputs.height(1, 34);
   inputs.row('A4', ['Inputs', ''], S.header);

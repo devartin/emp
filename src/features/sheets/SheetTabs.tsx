@@ -5,7 +5,6 @@
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { LayoutGroup, m } from 'motion/react';
 import { Eye, EyeOff, List, Palette, PenLine, Plus, Trash2 } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { BlockColor, SheetMeta } from '@/backend/types';
@@ -14,7 +13,6 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/ui/ContextMenu';
 import { IconButton } from '@/ui/IconButton';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '@/ui/Menu';
-import { spring } from '@/ui/motion/tokens';
 import { useGridSelector, type GridController } from './GridController';
 import { TAB_COLORS } from './palette';
 import { StatusBar } from './StatusBar';
@@ -69,28 +67,26 @@ export const SheetTabs = memo(function SheetTabs({ ctrl }: SheetTabsProps) {
         <div className="emp-sheet-tabs-scroll">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={visible.map((s) => s.id)} strategy={horizontalListSortingStrategy}>
-              <LayoutGroup id={`tabs-${ctrl.workbookId}`}>
-                {visible.map((s) => (
-                  <SheetTab
-                    key={s.id}
-                    sheet={s}
-                    active={s.id === ctrl.sheetId}
-                    renaming={renaming === s.id}
-                    canDelete={ctrl.sheets.length > 1}
-                    canHide={visible.length > 1}
-                    onSelect={() => void ctrl.setSheet(s.id).then(() => ctrl.focusGrid?.())}
-                    onRename={() => setRenaming(s.id)}
-                    onRenameDone={async (name) => {
-                      setRenaming(null);
-                      if (name && name !== s.name) await ctrl.renameSheet(s.id, name);
-                      ctrl.focusGrid?.();
-                    }}
-                    onColor={(c) => void ctrl.colorSheet(s.id, c)}
-                    onHide={() => void ctrl.hideSheet(s.id, true)}
-                    onDelete={() => setConfirmDelete(s)}
-                  />
-                ))}
-              </LayoutGroup>
+              {visible.map((s) => (
+                <SheetTab
+                  key={s.id}
+                  sheet={s}
+                  active={s.id === ctrl.sheetId}
+                  renaming={renaming === s.id}
+                  canDelete={ctrl.sheets.length > 1}
+                  canHide={visible.length > 1}
+                  onSelect={() => void ctrl.setSheet(s.id).then(() => ctrl.focusGrid?.())}
+                  onRename={() => setRenaming(s.id)}
+                  onRenameDone={async (name) => {
+                    setRenaming(null);
+                    if (name && name !== s.name) await ctrl.renameSheet(s.id, name);
+                    ctrl.focusGrid?.();
+                  }}
+                  onColor={(c) => void ctrl.colorSheet(s.id, c)}
+                  onHide={() => void ctrl.hideSheet(s.id, true)}
+                  onDelete={() => setConfirmDelete(s)}
+                />
+              ))}
             </SortableContext>
           </DndContext>
           {hidden.length ? <span className="emp-tab-hidden-note">{hidden.length} hidden</span> : null}
@@ -163,7 +159,7 @@ function SheetTab({ sheet, active, renaming, canDelete, canHide, onSelect, onRen
           aria-selected={active}
           tabIndex={active ? 0 : -1}
         >
-          {active ? <m.span layoutId="emp-sheet-tab-active" className="emp-sheet-tab-bg" transition={spring.ui} /> : null}
+          {active ? <span className="emp-sheet-tab-bg" aria-hidden /> : null}
           {sheet.color ? <span className="emp-sheet-tab-color" aria-hidden /> : null}
           {renaming ? (
             <input

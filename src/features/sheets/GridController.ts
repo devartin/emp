@@ -13,6 +13,7 @@ import { cellKey, cellName, colName, MAX_COLS, MAX_ROWS, normRect, parseCell, re
 import { tokenize } from './engine/lexer';
 import { adjustDecimals } from './engine/numfmt';
 import { toTSV } from './engine/ops';
+import { shiftFormula } from './engine/refs';
 
 export const TILE_ROWS = 256;
 export const TILE_COLS = 32;
@@ -903,7 +904,7 @@ export class GridController {
           for (let c = rect.c0; c <= rect.c1; c++) {
             const dr = r - e.r;
             const dc = c - e.c;
-            edits.push({ row: r, col: c, input: text === '' ? null : text.startsWith('=') ? (await import('./engine/refs')).shiftFormula(text, dr, dc) : text });
+            edits.push({ row: r, col: c, input: text === '' ? null : text.startsWith('=') ? shiftFormula(text, dr, dc) : text });
           }
       }
     } else edits.push({ row: e.r, col: e.c, input: text === '' ? null : text });

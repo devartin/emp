@@ -114,7 +114,7 @@ export function FormulaAssist({ anchor, state, open, onPick, onHover }: FormulaA
           {showList ? (
             <div className="emp-fa-list-wrap glass-1">
               <ul className="emp-fa-list" role="listbox" aria-label="Functions" style={{ maxHeight: Math.min(pos.maxH, 300) }}>
-                <GlideHighlight selector='[aria-selected="true"]' tone="slab" attributes={['aria-selected']} />
+                <GlideHighlight selector='[aria-selected="true"]' tone="ghost" attributes={['aria-selected']} />
                 {state.items.map((it, i) => (
                   <li
                     key={`${it.kind}:${it.name}`}

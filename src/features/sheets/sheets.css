@@ -1,7 +1,7 @@
-/* Sheets — design language v2 "Slab" (docs/DESIGN.md §8.3, S15). Layered over src/styles/grid.css (shared chrome);
-   selectors are scoped under `.emp-sheet-page` so they win without !important. The grid canvas itself stays flat for
-   performance — depth lives in the chrome around it: a machined toolbar plate, a recessed formula well with an fx
-   keycap, slab sheet tabs and a grooved footer. Animate transform / opacity / filter only. */
+/* Sheets — design language v3 "paper, ink & keys" (docs/DESIGN.md). Layered over src/styles/grid.css (shared chrome);
+   selectors are scoped under `.emp-sheet-page` so they win without !important. Ruled, not boxed: the toolbar, formula
+   bar and footer sit flat on paper between 1px hairlines. Toolbar buttons are ghost keys (kit `.slab-ghost`); a latched
+   button is a flat ink wash. Fields are flat fields with a 2px ink focus ring. Hover is instant; nothing moves at rest. */
 
 .emp-sheet-page {
   background: var(--bg-canvas);
@@ -14,37 +14,35 @@
 }
 .emp-sheet-page .emp-wb-title {
   border: 0;
-  border-radius: 8px;
-  transition: background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
 }
 .emp-sheet-page .emp-wb-title:hover {
-  background: var(--ghost-hover);
+  background: var(--state-hover);
 }
 .emp-sheet-page .emp-wb-title:focus {
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+  background: var(--bg-canvas);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
-/* ── toolbar: a machined plate between two grooves; room under the keys for their slab edge */
+/* ── toolbar: flat paper between two hairlines */
 .emp-sheet-page .emp-sheet-toolbar {
-  height: 46px;
-  padding: 0 12px 2px;
+  height: 44px;
+  padding: 0 12px;
   gap: 2px;
   border: 0;
-  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
-  box-shadow:
-    inset 0 1px 0 var(--groove-dark),
-    inset 0 2px 0 var(--groove-lite),
-    inset 0 -1px 0 var(--groove-lite),
-    inset 0 -2px 0 var(--groove-dark);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-canvas);
+  box-shadow: none;
 }
 .emp-sheet-page .emp-tb-sep {
-  width: 2px;
-  height: 20px;
-  margin: 0 7px;
-  background: linear-gradient(90deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px);
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--border);
 }
-/* groups: trailing ones collapse into the "More" menu as the plate narrows (Toolbar.tsx measures them). A collapsed
+/* groups: trailing ones collapse into the "More" menu as the bar narrows (Toolbar.tsx measures them). A collapsed
    group stays in the DOM — out of flow, invisible and inert — so its width can still be measured. */
 .emp-sheet-page .emp-sheet-toolbar {
   overflow: hidden;
@@ -70,78 +68,88 @@
 .emp-tb-glyph {
   font: 600 11px/1 var(--font-ui);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
   color: var(--text-secondary);
 }
 .emp-tb-dot {
   display: block;
   width: 14px;
   height: 14px;
-  border-radius: 4px;
-  box-shadow: inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
 }
+/* "no colour": an empty square with a diagonal hairline */
 .emp-tb-dot.is-none {
-  background: linear-gradient(135deg, transparent 45%, var(--loss-text, #c23b36) 45% 55%, transparent 55%), var(--bg-canvas);
+  position: relative;
+  background: var(--bg-canvas);
+  overflow: hidden;
+}
+.emp-tb-dot.is-none::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 50%;
+  height: 1px;
+  background: var(--loss-text);
+  transform: rotate(-45deg);
 }
 .emp-tb-sub {
   max-height: min(420px, var(--radix-dropdown-menu-content-available-height, 420px));
   overflow-y: auto;
 }
 
-/* raw toolbar keys (decimals, colour, borders) behave like ghost slabs: ghost plate on hover, press down, latch */
+/* raw toolbar buttons (decimals, colour, borders): ghost; instant ink wash on hover; latched = flat pressed wash */
 .emp-sheet-page :is(.emp-tb-text, .emp-tb-color, .emp-tb-icon-menu) {
-  transform: translateY(0) scale(1);
-  transition:
-    transform var(--dur-release) var(--spring-release),
-    background-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+  border-radius: var(--radius-sm);
+  transition: none;
 }
 .emp-sheet-page :is(.emp-tb-text, .emp-tb-color, .emp-tb-icon-menu):hover {
-  background: var(--ghost-hover);
+  background: var(--state-hover);
 }
 .emp-sheet-page :is(.emp-tb-text, .emp-tb-color, .emp-tb-icon-menu):active {
-  background: var(--ghost-press);
-  transform: translateY(1px) scale(0.96);
-  transition: transform var(--dur-press) var(--ease-press), background-color var(--dur-press) var(--ease-press);
+  background: var(--state-active);
 }
 .emp-sheet-page :is(.emp-tb-color, .emp-tb-icon-menu):is([data-active], [data-state="open"]) {
-  background: var(--ghost-press);
+  background: var(--state-active);
   color: var(--text-primary);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim);
-  transform: translateY(1px);
+  box-shadow: none;
 }
 .emp-sheet-page .emp-tb-color-bar {
   height: 3px;
-  box-shadow: inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  border-radius: 1px;
+  box-shadow: none;
 }
 
-/* ── formula bar: name box and formula are recessed wells; fx is a living keycap */
+/* ── formula bar: flat fields; the name box is a field, the formula input reads as text until edited */
 .emp-sheet-page .emp-formula-bar {
   height: 40px;
   align-items: center;
   gap: 0;
-  padding: 0 10px 0 10px;
+  padding: 0 10px;
   border: 0;
+  border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-canvas);
-  box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark);
+  box-shadow: none;
   line-height: 28px;
 }
 .emp-sheet-page .emp-sheet-namebox {
   width: 112px;
   height: 28px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
-  transition: box-shadow var(--dur-fast) var(--ease-out);
+  border: 1px solid var(--border-field);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  box-shadow: none;
+}
+.emp-sheet-page .emp-sheet-namebox:hover {
+  border-color: var(--border-field-hover);
 }
 .emp-sheet-page .emp-sheet-namebox:focus-within {
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--ring);
 }
 .emp-sheet-page .emp-namebox-input {
   border-radius: inherit;
-  padding-left: 10px;
+  padding-left: 9px;
 }
 .emp-sheet-page .emp-namebox-input:focus {
   background: transparent;
@@ -152,84 +160,59 @@
 }
 .emp-sheet-page .emp-fbar-actions {
   gap: 2px;
-  padding: 0 8px 0 8px;
+  padding: 0 8px;
 }
 .emp-sheet-page .emp-fbar-actions::after {
   display: none;
 }
 .emp-sheet-page .emp-fbar-input-wrap {
   height: 28px;
-  border-radius: 8px;
-  transition: background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  border-radius: var(--radius-sm);
 }
 .emp-sheet-page .emp-fbar-input-wrap:hover {
-  background: var(--ghost-hover);
+  background: var(--state-hover);
 }
 .emp-sheet-page .emp-formula-bar[data-editing] .emp-fbar-input-wrap {
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+  background: var(--bg-canvas);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
-/* fx keycap (S15: depresses on Enter, see FormulaBar) */
+/* fx: a Kbd-style key (kit .keycap); goes down 0.5px when Enter commits a formula (FormulaBar sets data-down) */
 .emp-fx-key {
-  --edge: 2px;
   height: 22px;
-  min-width: 30px;
-  margin-bottom: 2px;
-  padding: 0 7px;
-  border-radius: 6px;
-  font: 600 12px/1 var(--font-ui);
-  letter-spacing: -0.01em;
+  min-width: 28px;
+  padding: 0 6px;
+  border-radius: var(--radius-xs);
+  font: 500 12px/1 var(--font-ui);
   color: var(--text-secondary);
   cursor: default;
 }
 .emp-fx-key i {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 14px;
+  font-style: italic;
   font-weight: 500;
-  margin-right: 0.5px;
 }
 .emp-fx-key:hover {
   color: var(--text-primary);
-}
-.emp-fx-key:hover::after {
-  filter: var(--slab-s-hover);
-}
-.emp-fx-key:active,
-.emp-fx-key[data-down] {
-  transform: translateY(var(--edge));
-  transition: transform 50ms var(--ease-press);
-}
-.emp-fx-key:active::before,
-.emp-fx-key[data-down]::before {
-  transform: translateY(0);
-  transition: transform 50ms var(--ease-press);
-}
-.emp-fx-key:active::after,
-.emp-fx-key[data-down]::after {
-  filter: var(--slab-s-press);
+  background: var(--state-hover);
 }
 .emp-fx-key[data-formula] {
   color: var(--text-primary);
 }
 .emp-fx-key:focus-visible {
   outline: 2px solid var(--ring);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
-/* ── in-cell editor: a lit frame lifted off the grid */
+/* ── in-cell editor: a 2px ink frame over the grid (no glow, no lift) */
 .emp-sheet-page .emp-cell-editor[data-editing] {
-  box-shadow:
-    0 0 0 2px var(--accent-solid),
-    0 0 0 5px color-mix(in oklab, var(--accent-solid) 16%, transparent),
-    0 10px 24px -10px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 2px var(--text-primary);
   border-radius: 2px;
 }
 
-/* ── formula assist (portal: not under .emp-sheet-page) — glass-1, gliding slab plate, rows rise at 16ms */
+/* ── formula assist (portal: not under .emp-sheet-page): opaque paper (kit glass-1 = E2), ghost highlight, no entrance */
 .emp-fa .emp-fa-list-wrap.glass-1,
 .emp-fa .emp-fa-help.glass-1 {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 .emp-fa .emp-fa-help .emp-fh {
@@ -239,17 +222,15 @@
 .emp-fa .emp-fa-list {
   position: relative;
   isolation: isolate;
-  padding: 5px;
+  padding: 4px;
 }
 .emp-fa .emp-fa-list .emp-glide {
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
 }
 .emp-fa .emp-fa-item {
   position: relative;
   z-index: 1;
-  border-radius: 7px;
-  animation: emp-fa-row-in 200ms var(--ease-out) both;
-  animation-delay: calc(var(--i, 0) * 16ms);
+  border-radius: var(--radius-sm);
 }
 .emp-fa [data-glide-ready] .emp-fa-item.is-active {
   background: transparent;
@@ -259,12 +240,12 @@
 }
 .emp-fa .emp-fa-detail,
 .emp-fa .emp-fa-foot {
-  border-top: 0;
-  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
+  border-top: 1px solid var(--border-subtle);
+  box-shadow: none;
 }
 .emp-fa .emp-fa-foot {
   gap: 5px;
-  padding: 8px 12px 9px;
+  padding: 8px 12px;
 }
 .emp-fa .emp-fa-foot .emp-kbd-group {
   display: inline-flex;
@@ -274,124 +255,161 @@
   margin: 0 1px;
 }
 .emp-fa .emp-fh-example {
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim);
-}
-@keyframes emp-fa-row-in {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-}
-:root[data-motion="reduced"] .emp-fa .emp-fa-item {
-  animation: none;
+  background: var(--bg-surface-2);
+  box-shadow: none;
+  border-radius: var(--radius-xs);
 }
 
-/* ── find panel: glass-1 floating over the grid, field is a well */
+/* ── find panel: an opaque floating layer (E2) with a flat field */
 .emp-sheet-page .emp-sheet-find {
-  border-radius: 14px;
-  background: linear-gradient(180deg, var(--glass-fill-a), var(--glass-fill-b));
-  box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-1-shadow);
-  -webkit-backdrop-filter: var(--glass-blur-1);
-  backdrop-filter: var(--glass-blur-1);
-}
-:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-sheet-page .emp-sheet-find {
-  background: var(--glass-solid);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--elev-2);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 .emp-sheet-page .emp-find-field {
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  border: 1px solid var(--border-field);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  box-shadow: none;
 }
 .emp-sheet-page .emp-find-field:focus-within {
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--ring);
 }
 .emp-sheet-page .emp-find-opt {
-  transition: transform var(--dur-release) var(--spring-release), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-}
-.emp-sheet-page .emp-find-opt:active {
-  transform: scale(0.92);
-  transition-duration: var(--dur-press);
+  border-radius: var(--radius-xs);
+  transition: none;
 }
 .emp-sheet-page .emp-find-opt.is-on {
-  background: var(--ghost-press);
+  background: var(--state-active);
   color: var(--text-primary);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim);
+  box-shadow: none;
 }
 
-/* ── footer: grooved plate with slab tabs */
+/* ── footer: a hairline over flat paper; tabs are text, the active one carries a flat selected wash */
 .emp-sheet-page .emp-wb-footer {
-  height: 44px;
+  height: 40px;
   border: 0;
-  background: linear-gradient(180deg, var(--panel-bot), var(--panel-top));
-  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-canvas);
+  box-shadow: none;
 }
 .emp-sheet-page .emp-sheet-tabs-scroll {
-  padding: 5px 6px 7px 6px;
-  gap: 3px;
+  padding: 6px;
+  gap: 2px;
 }
 .emp-sheet-page .emp-sheet-tab {
-  height: 26px;
-  padding: 0 13px;
-  border-radius: 7px;
-  transform: translateY(0) scale(1);
-  transition:
-    color var(--dur-base) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out),
-    transform var(--dur-release) var(--spring-release);
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: none;
 }
 .emp-sheet-page .emp-sheet-tab:not(.is-active):hover {
-  background: var(--ghost-hover);
-}
-.emp-sheet-page .emp-sheet-tab:not(.is-dragging):active {
-  transform: translateY(1px) scale(0.97);
-  transition-duration: var(--dur-press);
-  transition-timing-function: var(--ease-press);
+  background: var(--state-hover);
+  color: var(--text-primary);
 }
 .emp-sheet-page .emp-sheet-tab.is-active {
   color: var(--text-primary);
+  font-weight: 500;
 }
-/* the active tab is a secondary slab face (edge 1.5px) that glides between tabs (layoutId, glide spring) */
+/* the active tab: a flat selected wash; a tab colour shows as a 2px underline (user colour, no shadow) */
 .emp-sheet-page .emp-sheet-tab > .emp-sheet-tab-bg {
   position: absolute;
   inset: 0;
   z-index: -1;
-  border-radius: 7px;
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
-  box-shadow:
-    inset 0 1px 0 var(--slab-s-hl),
-    inset 0 0 0 1px var(--slab-s-rim),
-    inset 0 -2px 0 var(--tab-color, transparent),
-    0 1.5px 0 var(--slab-s-side-b),
-    0 2px 2px var(--slab-s-contact),
-    0 6px 10px -6px var(--slab-s-ambient);
+  border-radius: var(--radius-sm);
+  background: var(--state-selected);
+  box-shadow: none;
+}
+.emp-sheet-page .emp-sheet-tab[data-color] > .emp-sheet-tab-bg::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--tab-color);
 }
 :root:is([data-theme="dark"], [data-theme="midnight"]) .emp-sheet-page .emp-sheet-tab-bg {
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
+  background: var(--state-selected);
 }
+/* dragging is a summoned, floating thing: opaque paper with E2 */
 .emp-sheet-page .emp-sheet-tab.is-dragging {
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
-  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), var(--panel-raise);
+  background: var(--bg-overlay);
+  box-shadow: var(--elev-2);
   opacity: 1;
 }
 .emp-sheet-page .emp-sheet-tab-color {
-  border-radius: 3px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  box-shadow: none;
 }
 
-/* status: figures are RollingNumbers (tabular) */
+/* status: figures are tabular */
 .emp-sheet-page .emp-status-item {
   align-items: center;
 }
 .emp-sheet-page .emp-status-item b {
   display: inline-flex;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-:root[data-motion="reduced"] .emp-sheet-page :is(.emp-tb-text, .emp-tb-color, .emp-tb-icon-menu, .emp-sheet-tab, .emp-find-opt),
-:root[data-motion="reduced"] .emp-fx-key,
-:root[data-motion="reduced"] .emp-fx-key::before,
-:root[data-motion="reduced"] .emp-fx-key::after {
-  transition: none !important;
+/* ── shared-chrome overrides (src/styles/grid.css is shared; these classes are used by sheets only) */
+.emp-sheet-page .emp-formula-bar {
+  font-weight: 400;
+}
+.emp-fmt-custom-input {
+  border-color: var(--border-field);
+}
+.emp-fmt-custom-input:focus {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+/* conditional formatting: preset scales are flat hairline-framed choices; selection is a 2px ink frame (ChoiceCard) */
+.emp-cf-scale {
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: none;
+}
+.emp-cf-scale:hover {
+  background: var(--state-hover);
+  box-shadow: inset 0 0 0 1px var(--border-field-hover);
+}
+.emp-cf-scale:active {
+  transform: none;
+}
+.emp-cf-scale-swatch {
+  border-radius: var(--radius-xs);
+}
+.emp-cf-look {
+  border-radius: var(--radius-sm);
+  transition: none;
+}
+.emp-cf-look.is-active {
+  box-shadow: inset 0 0 0 2px var(--text-primary);
+}
+/* tab colour menu: user-colour swatches; current = 2px ink frame */
+.emp-tab-color-swatch {
+  border-radius: var(--radius-xs);
+  transition: none;
+}
+.emp-tab-color-swatch:hover {
+  transform: none;
+}
+.emp-tab-color-swatch.is-current {
+  box-shadow: 0 0 0 2px var(--bg-overlay), 0 0 0 4px var(--text-primary);
+}
+.emp-tab-dot {
+  border-radius: var(--radius-full);
+}
+.emp-fh-opt {
+  border-radius: var(--radius-xs);
 }
