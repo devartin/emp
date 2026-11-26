@@ -13,8 +13,6 @@ import { useUi } from '@/stores/ui';
 import { EmptyState } from '@/ui/EmptyState';
 import { Skeleton } from '@/ui/Skeleton';
 import { ease } from '@/ui/motion/tokens';
-import { useRiseOnSwitch } from './useRiseOnSwitch';
-import { markRowOrigin, notePointer } from './rowMorph';
 import { DbViewContext, type DbViewCtx } from './context';
 import { normalizeRoot, defaultCondition } from './filter/FilterBuilder';
 import { groupChildren } from './engine/filter';
@@ -137,7 +135,6 @@ export function DatabaseView({ databaseId, viewId, inline = false, readOnly = fa
   const openRow = useCallback(
     (rowId: Id, mode?: 'peek' | 'page') => {
       const m0 = mode ?? (view?.openIn === 'full_page' ? 'page' : 'peek');
-      markRowOrigin(rowId);
       if (m0 === 'page') {
         useUi.getState().closePeek();
         navigate({ t: 'row', id: rowId });
@@ -187,8 +184,6 @@ export function DatabaseView({ databaseId, viewId, inline = false, readOnly = fa
   useEffect(() => {
     prevIndex.current = viewIndex;
   }, [viewIndex]);
-  const bodyHost = useRef<HTMLDivElement>(null);
-  useRiseOnSwitch(bodyHost, view ? view.id + view.layout : '');
 
   if (error && !schema) {
     return (
@@ -240,7 +235,6 @@ export function DatabaseView({ databaseId, viewId, inline = false, readOnly = fa
       <div
         className={cn('edb-root', inline && 'is-inline')}
         data-layout={view.layout}
-        onPointerDownCapture={(e) => notePointer(e.target)}
         onKeyDown={(e) => {
           // ⌥⇧N — new row from anywhere in the database (§8.7); the table grid handles its own keys first.
           if (e.altKey && e.shiftKey && e.code === 'KeyN' && !readOnly && !e.defaultPrevented) {
@@ -255,7 +249,7 @@ export function DatabaseView({ databaseId, viewId, inline = false, readOnly = fa
           <ViewTabs schema={schema} activeId={view.id} onSelect={select} readOnly={readOnly} compact={inline} />
           <Toolbar filterSignal={filterSignal} />
         </div>
-        <div className="edb-body-host" ref={bodyHost}>
+        <div className="edb-body-host">
           <AnimatePresence mode="wait" initial={false} custom={navSign}>
             <m.div key={view.id + view.layout} className="edb-body" custom={navSign} variants={switchVariants} initial="enter" animate="center" exit="exit">
               <Body layout={view.layout} />

@@ -54,7 +54,7 @@ export default function DailyNote() {
       <div className="emp-page" aria-busy="true">
         {show ? (
           <div className="emp-page-column">
-            <Skeleton height={40} width="45%" radius={8} className="mt-16" />
+            <Skeleton height={40} width="45%" radius={6} className="mt-16" />
           </div>
         ) : null}
       </div>

@@ -4,6 +4,7 @@
  */
 import type { Editor } from '@tiptap/core';
 import {
+  LayoutGrid,
   BarChart3,
   Calendar,
   CalendarDays,
@@ -36,7 +37,6 @@ import {
   Rows3,
   Sheet,
   Sigma,
-  Sparkles,
   SquareCheck,
   SquareFunction,
   Table2,
@@ -131,7 +131,7 @@ const BASE: SlashItem[] = [
   { id: 'chart', title: 'Chart', description: 'Chart a database, sheet or life-app metric.', group: 'Ultra Note', icon: TrendingUp, aliases: ['graph', 'plot', 'visualise'], run: (e) => void insertAtom(e, 'chart', { source: null, spec: null }) },
   { id: 'kpi', title: 'KPI', description: 'One number that matters, live.', group: 'Ultra Note', icon: Gauge, aliases: ['metric', 'number', 'stat', 'tile'], run: (e) => void insertAtom(e, 'kpi', { source: null, agg: 'sum', label: '', format: 'number' }) },
   { id: 'watchlist', title: 'Watchlist', description: 'Live quotes for symbols you follow.', group: 'Ultra Note', icon: TrendingUp, aliases: ['stocks', 'quotes', 'tickers', 'market'], run: (e) => void insertAtom(e, 'watchlist', { watchlistId: null }) },
-  { id: 'lifeapp', title: 'Life app…', description: 'Set up Money HQ, Habits, Life OS and more.', group: 'Ultra Note', icon: Sparkles, aliases: ['app', 'template', 'money', 'habits'], run: () => navigate({ t: 'lifeapps' }) },
+  { id: 'lifeapp', title: 'Life app…', description: 'Set up Money HQ, Habits, Life OS and more.', group: 'Ultra Note', icon: LayoutGrid, aliases: ['app', 'template', 'money', 'habits'], run: () => navigate({ t: 'lifeapps' }) },
 
   { id: 'table', title: 'Table', description: 'A simple table with rows and columns.', group: 'Advanced', icon: Grid3x3, aliases: ['simple table', 'grid'], run: (e) => insertTable(e) },
   { id: 'col2', title: '2 columns', description: 'Two side-by-side columns.', group: 'Advanced', icon: Columns2, aliases: ['columns', 'layout', 'side by side'], run: (e) => insertColumns(e, 2) },

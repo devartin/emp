@@ -11,7 +11,6 @@ import type { DateValue, Icon } from '@/backend/types';
 import { navigate } from '@/app/router';
 import { formatBytes } from '@/lib/format';
 import { formatDateValue } from '@/lib/dates';
-import { css } from '@/ui/motion/tokens';
 import { glyphSvg } from '@/ui/icons/domGlyph';
 import { glyphName } from '@/ui/icons/Icon';
 import { isToggleLike } from '../lib/blockTypes';
@@ -20,8 +19,6 @@ import { cachedAsset, loadAsset, pickFiles, uploadBlob } from '../lib/assets';
 import { editorContext, prefersReducedMotion } from '../lib/context';
 import { domIcon, el } from '../lib/domIcons';
 import { pageInfo, subscribePageInfo } from '../lib/pageInfo';
-import { riseStagger } from '../lib/fx';
-import { burst } from '@/ui/motion/Celebrate';
 import { openOverlay, rectOf } from '../menus/overlay';
 import { renderKatex } from '../lib/katex';
 import { languageLabel } from '../lib/languages';
@@ -83,56 +80,11 @@ export const containerView: NodeViewRenderer = ({ node }) => {
 
 // ───────────────────────────────────────────────────────────────────────────── toggles
 
-/**
- * Expand/collapse (S22 language, §5.4.5): compositor-only. Collapsing lifts the children out (opacity → 0, y −4, 120ms
- * ease-in) before the attribute flips; expanding flips first, then the children rise in from under the header on the
- * settle spring with a 16ms stagger (cap 12). Height is never animated.
- */
+/** Expand/collapse: instant (a frequent action, motion class C0). Only the chevron turns (160ms, editor.css). */
 export function setToggleCollapsed(view: EditorView, contentPos: number, collapsed: boolean): void {
   const content = view.state.doc.nodeAt(contentPos);
   if (!content || !isToggleLike(content)) return;
-  const containerPos = contentPos - 1;
-  const containerEl = view.nodeDOM(containerPos) as HTMLElement | null;
-  const group = containerEl?.querySelector<HTMLElement>(':scope > .emp-group') ?? null;
-  const apply = () => {
-    const cur = view.state.doc.nodeAt(contentPos);
-    if (!cur || !isToggleLike(cur)) return;
-    view.dispatch(view.state.tr.setNodeMarkup(contentPos, undefined, { ...cur.attrs, collapsed }).setMeta('addToHistory', true));
-  };
-  const reduce = prefersReducedMotion();
-  if (!group || reduce || !containerEl) {
-    apply();
-    return;
-  }
-  const kids = (g: HTMLElement) => Array.from(g.querySelectorAll<HTMLElement>(':scope > .emp-block')).slice(0, 14);
-  if (collapsed) {
-    const list = kids(group);
-    if (!list.length) return apply();
-    let left = list.length;
-    let applied = false;
-    const finish = () => {
-      if (applied) return;
-      applied = true;
-      apply();
-    };
-    list.forEach((k, i) => {
-      const a = k.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-4px)' }], { duration: 120, delay: Math.min(i, 6) * 8, easing: css.easeIn, fill: 'forwards' });
-      a.onfinish = () => {
-        left -= 1;
-        if (left <= 0) {
-          finish();
-          // the fill is dropped once the group is hidden, so a later expand starts clean
-          requestAnimationFrame(() => list.forEach((x) => x.getAnimations().forEach((an) => an.cancel())));
-        }
-      };
-    });
-    window.setTimeout(finish, 400);
-  } else {
-    apply();
-    const g = containerEl.querySelector<HTMLElement>(':scope > .emp-group');
-    if (!g) return;
-    riseStagger(kids(g), { step: 16, cap: 12, y: -5 });
-  }
+  view.dispatch(view.state.tr.setNodeMarkup(contentPos, undefined, { ...content.attrs, collapsed }).setMeta('addToHistory', true));
 }
 
 function chevronButton(): HTMLButtonElement {
@@ -261,8 +213,8 @@ function checkFace(box: HTMLElement) {
 }
 
 /**
- * To-do (S13 task completion): the box is the kit checkbox (well at rest, lit cap when done); checking pops it on the
- * `pop` spring, fires the 8-ray burst, and draws the strike-through left → right while the text fades to tertiary.
+ * To-do: the box is the kit checkbox (ink fill and a 120ms tick when done); the text strikes through and fades to
+ * tertiary in 150ms (C1 feedback, editor.css).
  */
 export const todoView: NodeViewRenderer = ({ node, getPos, editor }) => {
   const dom = el('div', 'emp-todo');
@@ -287,18 +239,8 @@ export const todoView: NodeViewRenderer = ({ node, getPos, editor }) => {
     const pos = posOf(getPos);
     if (pos == null || !editable(editor)) return;
     const checked = !current.attrs.checked;
-    if (checked && !prefersReducedMotion()) {
-      box.classList.remove('is-popping');
-      dom.classList.remove('is-striking');
-      void box.offsetWidth;
-      box.classList.add('is-popping');
-      dom.classList.add('is-striking');
-      burst(box, { radius: 10 });
-    }
     editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, checked }));
   });
-  box.addEventListener('animationend', () => box.classList.remove('is-popping'));
-  inline.addEventListener('transitionend', () => dom.classList.remove('is-striking'));
   return {
     dom,
     contentDOM: inline,

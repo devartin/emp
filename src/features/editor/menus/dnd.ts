@@ -9,7 +9,6 @@ import type { Editor } from '@tiptap/core';
 import { Fragment, type Node as PMNode } from '@tiptap/pm/model';
 import { allowsChildren, isToggleLike } from '../lib/blockTypes';
 import { allBlocks, deleteContainer, infoAt, parentOf, type BlockInfo } from '../lib/blocks';
-import { prefersReducedMotion } from '../lib/context';
 import { landFrom } from '../lib/fx';
 import { blockSelectionKey, KEEP_BLOCK_SEL } from '../extensions/blockSelection';
 
@@ -49,8 +48,6 @@ export class BlockDrag {
   private offset: { x: number; y: number };
   private done = false;
   /** Smoothed horizontal velocity (px/ms) → the lifted plate leans into the drag (≤ 2.5°). */
-  private vx = 0;
-  private lastMove = { x: 0, t: 0 };
   private lineShown = false;
 
   constructor(
@@ -92,7 +89,6 @@ export class BlockDrag {
     this.scroller = scrollParent(view.dom);
     this.pointer = start;
     this.positionGhost();
-    requestAnimationFrame(() => this.ghost.classList.add('is-lifted'));
     window.addEventListener('pointermove', this.onMove, true);
     window.addEventListener('pointerup', this.onUp, true);
     window.addEventListener('keydown', this.onKey, true);
@@ -104,24 +100,10 @@ export class BlockDrag {
   }
 
   private onMove = (e: PointerEvent) => {
-    const now = performance.now();
-    if (this.lastMove.t) {
-      const dt = Math.max(1, now - this.lastMove.t);
-      this.vx = this.vx * 0.75 + ((e.clientX - this.lastMove.x) / dt) * 0.25;
-    }
-    this.lastMove = { x: e.clientX, t: now };
     this.pointer = { x: e.clientX, y: e.clientY };
     this.positionGhost();
     this.compute();
   };
-
-  private tilt() {
-    const deg = prefersReducedMotion() ? 0 : Math.max(-2.5, Math.min(2.5, this.vx * 2.2));
-    const plate = this.ghost.firstElementChild as HTMLElement | null;
-    plate?.style.setProperty('--tilt', `${deg.toFixed(2)}deg`);
-    // the lean decays back to level when the pointer rests
-    this.vx *= 0.9;
-  }
 
   private onUp = () => {
     this.finish(true);
@@ -137,7 +119,6 @@ export class BlockDrag {
 
   private tick = () => {
     if (this.done) return;
-    this.tilt();
     // Auto-scroll near the edges.
     const rect = this.scroller instanceof Window ? { top: 0, bottom: window.innerHeight } : this.scroller.getBoundingClientRect();
     const y = this.pointer.y;
@@ -322,7 +303,7 @@ export class BlockDrag {
     requestAnimationFrame(() => {
       const el = this.editor.view.dom.querySelector<HTMLElement>(`.emp-block[data-id="${CSS.escape(blocks[0].id)}"]`);
       if (!el) return;
-      landFrom(el, { left: ghostRect.left + 8, top: ghostRect.top + 4 }, { scale: 1.03, rotate: 0 });
+      landFrom(el, { left: ghostRect.left + 8, top: ghostRect.top + 4 });
     });
   }
 }

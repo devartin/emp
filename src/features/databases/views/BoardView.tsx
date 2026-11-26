@@ -1,10 +1,8 @@
 /**
  * Board view (§8.3, §4.2 DnD): columns from select / status / checkbox groups, 50 cards per column with infinite
  * scroll, a "No value" group, per-group rolling counts, collapse/hide groups, and pointer-driven drag between columns
- * with physics (S14) — pickup lifts the card into a raised plate (panel-raise, scale 1.03) that leans ≤ 3° into the
- * drag's horizontal velocity; siblings glide out of the way on the morph spring around a recessed landing slot; the
- * drop flies home on the drag spring and lands with a contact squash. Moving sets the group property and the manual
- * position in one call.
+ * (C2 continuity): the picked-up card floats on E3 without tilt or scale; siblings glide out of the way around the
+ * landing slot and the drop glides home. Moving sets the group property and the manual position in one call.
  * Layout animations are disabled above 300 visible cards.
  */
 import { animate, AnimatePresence, m, useMotionValue, useReducedMotion } from 'motion/react';
@@ -49,8 +47,6 @@ export function BoardView() {
   const [editTitle, setEditTitle] = useState<Id | null>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const scale = useMotionValue(1);
-  const rotate = useMotionValue(0);
 
   const gp = view.groupBy ? propsById.get(view.groupBy.prop) : undefined;
   const titleProp = propsById.get(schema.database.primaryPropId)!;
@@ -94,9 +90,6 @@ export function BoardView() {
       const x0 = e.clientX;
       const y0 = e.clientY;
       let started = false;
-      let lastX = x0;
-      let lastT = 0;
-      let vxs = 0;
       const onMove = (ev: PointerEvent) => {
         if (!started) {
           if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return;
@@ -108,25 +101,12 @@ export function BoardView() {
           x.set(r.left);
           y.set(r.top);
           setDrag(d);
-          animate(scale, reduced ? 1 : 1.03, spring.release);
-          animate(rotate, reduced ? 0 : 1.5, spring.release);
-          lastX = ev.clientX;
-          lastT = performance.now();
           document.body.classList.add('edb-dragging');
         }
         const d = dragRef.current;
         if (!d) return;
         x.set(ev.clientX - d.dx);
         y.set(ev.clientY - d.dy);
-        if (!reduced) {
-          // lean into the horizontal velocity (S14 "rotate in the drag direction"), resting at +1.5°
-          const now = performance.now();
-          const vx = (ev.clientX - lastX) / Math.max(1, now - lastT);
-          lastX = ev.clientX;
-          lastT = now;
-          vxs = vxs * 0.7 + vx * 0.3;
-          rotate.set(Math.max(-3, Math.min(3, 1.5 + vxs * 3)));
-        }
         const sc = scrollRef.current;
         if (sc) {
           const b = sc.getBoundingClientRect();
@@ -151,8 +131,6 @@ export function BoardView() {
         setDropping(true);
         const ph = scrollRef.current?.querySelector<HTMLElement>('[data-placeholder]');
         const dest = cancel || !ph ? d.origin : ph.getBoundingClientRect();
-        animate(rotate, 0, spring.drag);
-        animate(scale, 1, spring.drag);
         animate(y, dest.top, spring.drag);
         void animate(x, dest.left, spring.drag).then(() => {
           if (!cancel && (d.to !== d.from || d.index !== (colRects.current.find((c) => c.key === d.from)?.cards.findIndex((c) => c.id === d.id) ?? -1))) {
@@ -162,20 +140,6 @@ export function BoardView() {
           dragRef.current = null;
           setDrag(null);
           setDropping(false);
-          // contact squash once the real card is back in its slot
-          requestAnimationFrame(() => {
-            const landed = scrollRef.current?.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(d.id)}"] > .edb-card`);
-            if (landed && !reduced) {
-              landed.animate(
-                [
-                  { transform: 'scale(1, 1)', transformOrigin: '50% 100%' },
-                  { transform: 'scale(1.012, 0.975)', transformOrigin: '50% 100%', offset: 0.3 },
-                  { transform: 'scale(1, 1)', transformOrigin: '50% 100%' },
-                ],
-                { duration: 240, easing: 'cubic-bezier(.2,0,0,1)' },
-              );
-            }
-          });
         });
       };
       const onUp = () => finish(false);
@@ -206,7 +170,7 @@ export function BoardView() {
   };
 
   if (!gp) {
-    return <div className="edb-empty-view">Pick a select, status or checkbox property to group the board by — open Group in the toolbar.</div>;
+    return <div className="edb-empty-view">Group the board by a select, status or checkbox property. Open Group in the toolbar to choose one.</div>;
   }
 
   const dragRow = drag ? snap.rows.get(drag.id) : undefined;
@@ -259,7 +223,7 @@ export function BoardView() {
         {drag && dragRow ? (
           <m.div
             className="edb-drag-ghost"
-            style={{ x, y, scale, rotate, width: drag.w, height: drag.h, position: 'fixed', left: 0, top: 0 }}
+            style={{ x, y, width: drag.w, height: drag.h, position: 'fixed', left: 0, top: 0 }}
             initial={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: 0.08 } }}
             data-dropping={dropping ? '' : undefined}

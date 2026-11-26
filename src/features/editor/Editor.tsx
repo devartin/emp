@@ -13,7 +13,6 @@ import type { Id, PageFont, Rev, TipTapDoc } from '@/backend/types';
 import { cn } from '@/lib/cn';
 import { useSettings } from '@/stores/settings';
 import '@/styles/editor.css';
-import './editor-v2.css';
 import { editorExtensions } from './extensions';
 import { acquire, poolKey, release, retain, setPooledRev } from './editorPool';
 import { emptyParagraphBlock, infoAt } from './lib/blocks';

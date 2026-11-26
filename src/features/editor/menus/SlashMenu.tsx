@@ -306,7 +306,7 @@ export function SlashMenu({ editor, state }: { editor: Editor; state: SuggestSta
         </div>
       ) : null}
       <div className="emp-slash-list" ref={listRef} data-opening={opening ? '' : undefined} data-sub={sub ?? undefined} key={sub ?? 'root'} onMouseMove={() => (lastInput.current = 'mouse')}>
-        <GlideHighlight selector='[aria-selected="true"]' tone="slab" attributes={['aria-selected']} />
+        <GlideHighlight selector='[aria-selected="true"]' tone="ghost" attributes={['aria-selected']} />
         {rows.length === 0 ? (
           <div className="emp-slash-empty">{sub === 'linkedDb' ? 'No databases found' : sub === 'moveTo' ? 'No pages found' : 'No results'}</div>
         ) : (

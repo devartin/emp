@@ -146,7 +146,7 @@ export function TemplatesDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 <p className="edb-hint">{cur.doc ? 'This template also adds a page body.' : 'Tip: rows created from a template get its page body too.'}</p>
               </>
             ) : (
-              <EmptyState icon={LayoutTemplate} title="No templates yet" body="Templates pre-fill properties for new rows — like “Bug report” or “Weekly review”." actions={<Button variant="primary" icon={Plus} onClick={add}>New template</Button>} />
+              <EmptyState icon={LayoutTemplate} title="No templates yet" body="Templates pre-fill properties for new rows, such as “Bug report” or “Weekly review”." actions={<Button variant="primary" icon={Plus} onClick={add}>New template</Button>} />
             )}
           </m.section>
         </AnimatePresence>

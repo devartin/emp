@@ -4,7 +4,7 @@
  */
 import { AnimatePresence, m } from 'motion/react';
 import { ChevronDown, ChevronUp, Database } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, hasCode, listen } from '@/backend';
 import type { CellValue, DbRowGetResult, Id } from '@/backend/types';
 import { navigate, useRoute } from '@/app/router';
@@ -18,15 +18,13 @@ import { Button } from '@/ui/Button';
 import { EmptyState } from '@/ui/EmptyState';
 import { IconButton } from '@/ui/IconButton';
 import { Skeleton } from '@/ui/Skeleton';
-import { transitions } from '@/ui/motion/presets';
 import { Editor } from '@/features/editor/Editor';
 import '@/styles/editor.css';
-import '../editor/editor-v2.css';
 import { plainText, rt } from './engine/values';
 import { RowProperties } from './properties/RowProperties';
 import { peekNeighbours, useSchema } from './store';
-import { hasRowOrigin, playRowMorph } from './rowMorph';
 import './databases.css';
+import { PageGlyph } from '@/ui/icons/Icon';
 
 export interface RowPageProps {
   rowId: Id;
@@ -112,9 +110,6 @@ export default function RowPage({ rowId }: RowPageProps) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  // S9: the clicked row's title morphs into this page's title once it has rendered (MorphOnMount); the rest lifts in
-  const morphing = useRef(hasRowOrigin(rowId));
-  const innerRef = useRef<HTMLDivElement>(null);
 
   if (missing) {
     return (
@@ -135,7 +130,7 @@ export default function RowPage({ rowId }: RowPageProps) {
         <IconButton size="sm" icon={ChevronDown} label="Next row" shortcut="j" disabled={!nb.next} onClick={() => go(nb.next)} />
         {data ? (
           <button type="button" className="edb-rowpage-db" onClick={() => (useUi.getState().closePeek(), navigate({ t: 'db', id: data.databaseId }))}>
-            {dbMeta?.icon?.t === 'emoji' ? <span aria-hidden>{dbMeta.icon.v}</span> : <Database size={13} aria-hidden />}
+            {dbMeta?.icon ? <PageGlyph icon={dbMeta.icon} context="row" fallback="none" /> : <Database size={16} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />}
             <span className="truncate">{dbMeta?.title || schema?.database.title || 'Database'}</span>
           </button>
         ) : null}
@@ -143,7 +138,7 @@ export default function RowPage({ rowId }: RowPageProps) {
       </div>
       <AnimatePresence mode="wait" initial={false}>
         {!data || !schema || !row ? (
-          <m.div key="sk" className="edb-rowpage-inner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: morphing.current ? 0 : 0.12 } }}>
+          <m.div key="sk" className="edb-rowpage-inner" initial={false} exit={{ opacity: 0, transition: { duration: 0 } }}>
             <Skeleton width={48} height={48} radius={10} />
             <Skeleton width="60%" height={28} className="mt-4" />
             <div className="mt-6 flex flex-col gap-3">
@@ -156,15 +151,14 @@ export default function RowPage({ rowId }: RowPageProps) {
             </div>
           </m.div>
         ) : (
-          <m.div key={rowId} ref={innerRef} className="edb-rowpage-inner" initial={morphing.current ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transitions.pageIn }} exit={{ opacity: 0, transition: transitions.pageOut }}>
+          <m.div key={rowId} className="edb-rowpage-inner" initial={false} exit={{ opacity: 0, transition: { duration: 0 } }}>
             <div className="edb-rowpage-head">
-              {row.icon?.t === 'emoji' ? (
+              {row.icon && row.icon.t !== 'asset' ? (
                 <span className="edb-rowpage-icon" aria-hidden>
-                  {row.icon.v}
+                  <PageGlyph icon={row.icon} context="header" fallback="none" />
                 </span>
               ) : null}
               <TitleArea key={rowId} ref={titleRef} value={title} onSave={(t) => primary && t !== title && void update({ [primary]: { t: 'text', v: rt(t) } }, 'Rename row')} />
-              {morphing.current ? <MorphOnMount rowId={rowId} done={() => (morphing.current = false)} title={titleRef} inner={innerRef} /> : null}
             </div>
             <RowProperties schema={schema} row={row} values={row.values} onChange={(pid, v) => void update({ [pid]: v })} />
             <div className="edb-rowpage-divider" />
@@ -178,19 +172,6 @@ export default function RowPage({ rowId }: RowPageProps) {
       </AnimatePresence>
     </div>
   );
-}
-
-/** Rendered once inside the row content: plays the row → title morph in the commit that mounts the title. */
-function MorphOnMount({ rowId, done, title, inner }: { rowId: Id; done: () => void; title: React.RefObject<HTMLTextAreaElement | null>; inner: React.RefObject<HTMLDivElement | null> }) {
-  useLayoutEffect(() => {
-    done();
-    const root = inner.current;
-    const rest = root ? (Array.from(root.children).filter((c) => !c.classList.contains('edb-rowpage-head')) as HTMLElement[]) : [];
-    const icon = root?.querySelector<HTMLElement>('.edb-rowpage-icon');
-    playRowMorph(rowId, title.current, icon ? [icon, ...rest] : rest);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return null;
 }
 
 function TitleArea({ value, onSave, ref }: { value: string; onSave: (t: string) => void; ref?: React.Ref<HTMLTextAreaElement> }) {

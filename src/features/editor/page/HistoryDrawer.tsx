@@ -3,12 +3,10 @@
  * with a name and "Restore". Restoring keeps the current doc as a `pre_restore` version (backend).
  */
 import { History, RotateCcw, Save } from 'lucide-react';
-import { m } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/backend';
 import type { Id, TipTapDoc, VersionMeta } from '@/backend/types';
 import { cn } from '@/lib/cn';
-import { spring } from '@/ui/motion/tokens';
 import { formatBytes } from '@/lib/format';
 import { formatDayLabel, formatTime } from '@/lib/dates';
 import { notify } from '@/stores/toasts';
@@ -158,7 +156,7 @@ export function HistoryDrawer({ open, onOpenChange, pageId, workspaceId, title, 
       <div className="emp-history">
         <div className="emp-history-list" role="listbox" aria-label="Versions">
           {versions === null ? (
-            Array.from({ length: 6 }, (_, i) => <Skeleton key={i} height={44} radius={8} className="mb-1.5" />)
+            Array.from({ length: 6 }, (_, i) => <Skeleton key={i} height={44} radius={6} className="mb-1.5" />)
           ) : !versions.length ? (
             <EmptyState icon={History} title="No versions yet" body="Ultra Note keeps a version every 10 minutes while you edit, and whenever you save one." />
           ) : (
@@ -174,7 +172,7 @@ export function HistoryDrawer({ open, onOpenChange, pageId, workspaceId, title, 
                     className={cn('emp-history-item', v.id === selected && 'is-active')}
                     onClick={() => setSelected(v.id)}
                   >
-                    {v.id === selected ? <m.span layoutId="history-hl" className="emp-history-hl" transition={spring.glide} /> : null}
+                    {v.id === selected ? <span className="emp-history-hl" /> : null}
                     <span className="emp-history-time">{formatTime(v.createdAt)}</span>
                     <span className="emp-history-meta">
                       <span className="emp-history-reason">{v.label || REASON[v.reason] || 'Version'}</span>

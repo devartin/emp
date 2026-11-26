@@ -60,7 +60,7 @@ export function ConflictSheet({ open, pageId, draft, onResolved, onOpenChange }:
       onOpenChange={onOpenChange}
       dismissible={false}
       title="This page changed somewhere else"
-      description="Another window or an import saved a newer version while you were editing. Choose which one to keep — the other is saved in page history."
+      description="Another window or an import saved a newer version while you were editing. Choose which one to keep. The other is saved in page history."
       footer={
         <div className="flex w-full justify-end gap-2">
           <Button variant="secondary" loading={busy === 'theirs'} disabled={!!busy} onClick={() => void takeTheirs()}>

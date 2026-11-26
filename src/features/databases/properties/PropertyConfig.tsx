@@ -22,6 +22,7 @@ import { optionsOf, STATUS_GROUPS, type SelectOption } from '../engine/values';
 import { useSchema, useSchemas } from '../store';
 import { OptionEditMenu, upsertOption } from './OptionPicker';
 import { TypeIcon } from './meta';
+import { PageGlyph } from '@/ui/icons/Icon';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'SEK', 'NOK', 'INR', 'BTC', 'ETH'];
 
@@ -183,7 +184,7 @@ function RelationConfig({ schema, prop, onConfig, draft }: PropertyConfigProps) 
           placeholder="Choose a database"
           value={target || null}
           onValueChange={(v) => onConfig({ targetDatabaseId: v })}
-          options={dbs.map((d) => ({ value: d.id, label: (d.id === schema.database.id ? `${d.title || 'Untitled'} (this database)` : d.title || 'Untitled'), icon: d.icon?.t === 'emoji' ? <span aria-hidden>{d.icon.v}</span> : undefined }))}
+          options={dbs.map((d) => ({ value: d.id, label: (d.id === schema.database.id ? `${d.title || 'Untitled'} (this database)` : d.title || 'Untitled'), icon: d.icon ? <PageGlyph icon={d.icon} context="row" fallback="file" /> : undefined }))}
         />
       </Row>
       <Row label="Limit">
@@ -192,7 +193,7 @@ function RelationConfig({ schema, prop, onConfig, draft }: PropertyConfigProps) 
       {draft ? (
         <Switch size="sm" label="Show on the other database" description="Two-way: links appear on both sides and stay in sync" checked={prop.config.twoWay === true} onCheckedChange={(v) => onConfig({ twoWay: v })} />
       ) : (
-        <div className="edb-hint">{dual ? 'Two-way relation — edits sync to the linked database.' : 'One-way relation.'}</div>
+        <div className="edb-hint">{dual ? 'Two-way relation. Edits sync to the linked database.' : 'One-way relation.'}</div>
       )}
     </>
   );
@@ -208,7 +209,7 @@ function RollupConfig({ schema, prop, onConfig }: PropertyConfigProps) {
   const fns = ROLLUP_FNS.filter((f) => !f.family || f.family.includes(fam));
   return (
     <>
-      {!rels.length ? <div className="edb-hint">Add a relation first — rollups summarise the rows it links to.</div> : null}
+      {!rels.length ? <div className="edb-hint">Add a relation first. Rollups summarise the rows it links to.</div> : null}
       <Row label="Relation">
         <Select size="sm" placeholder="Choose a relation" value={relId || null} onValueChange={(v) => onConfig({ relationPropId: v, targetPropId: null })} options={rels.map((r) => ({ value: r.id, label: r.name, icon: <TypeIcon type="relation" /> }))} />
       </Row>

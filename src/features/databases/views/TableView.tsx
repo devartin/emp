@@ -36,7 +36,6 @@ import { AddPropertyMenu, PropertyMenu } from '../properties/PropertyMenu';
 import { useController, type ControllerSnapshot } from '../ViewController';
 import { RollText } from './RollText';
 import { RollingNumber } from '@/ui/motion/RollingNumber';
-import { riseStagger } from '@/features/editor/lib/fx';
 
 const GUTTER = 44;
 const MIN_W = 64;
@@ -707,7 +706,7 @@ export function TableView() {
           role="grid"
           aria-rowcount={rowCount + 1}
           aria-colcount={allCols.length}
-          aria-label={`${schema.database.title || 'Database'} — ${view.name}`}
+          aria-label={`${schema.database.title || 'Database'}, ${view.name}`}
           tabIndex={0}
           onKeyDown={onKeyDown}
           style={{ minWidth: totalW + 120 }}
@@ -825,12 +824,7 @@ function GroupedBody({ snap, rowProps, onNew, totalW }: { snap: ControllerSnapsh
   const { view, patchView, controller, propsById, readOnly } = useDbView();
   const collapsed = new Set(view.collapsedGroups);
   const gp = view.groupBy ? propsById.get(view.groupBy.prop) : undefined;
-  // group collapse: sections below glide (layout morph) and a re-opened group's rows rise in (16ms, cap 12)
-  const prevCollapsed = useRef(collapsed);
-  const opened = new Set([...prevCollapsed.current].filter((k) => !collapsed.has(k)));
-  useEffect(() => {
-    prevCollapsed.current = collapsed;
-  });
+  // group collapse: sections below glide (C2 layout morph); re-opened rows appear at once
   const glide = (snap.groups ?? []).reduce((n, g) => n + g.ids.length, 0) <= 300;
   let index = -1;
   return (
@@ -867,7 +861,7 @@ function GroupedBody({ snap, rowProps, onNew, totalW }: { snap: ControllerSnapsh
               ) : null}
             </div>
             {!isCollapsed ? (
-              <div className="edb-group-rows" ref={opened.has(g.key) ? riseRows : undefined}>
+              <div className="edb-group-rows">
                 {g.ids.map((id) => {
                   index += 1;
                   const row = snap.rows.get(id);
@@ -885,11 +879,6 @@ function GroupedBody({ snap, rowProps, onNew, totalW }: { snap: ControllerSnapsh
       })}
     </div>
   );
-}
-
-/** Callback ref: a group that was just re-opened has its rows rise in under the header. */
-function riseRows(el: HTMLDivElement | null) {
-  if (el) riseStagger(el.querySelectorAll('.edb-tr'), { step: 16, cap: 12, y: -6 });
 }
 
 /** The cell value that puts a row into group `key` (for "New" in a group and board drops). */

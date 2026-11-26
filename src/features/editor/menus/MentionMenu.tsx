@@ -186,7 +186,7 @@ export function MentionMenu({ editor, state }: { editor: Editor; state: SuggestS
   return (
     <Floating open anchor={anchor} context={view.dom} passive className="emp-slash emp-mention-menu" role="listbox" ariaLabel={pagelink ? 'Link to page' : 'Mention'} maxHeight={360}>
       <div className="emp-slash-list" onMouseMove={() => (lastInput.current = 'mouse')}>
-        <GlideHighlight selector='[aria-selected="true"]' tone="slab" attributes={['aria-selected']} />
+        <GlideHighlight selector='[aria-selected="true"]' tone="ghost" attributes={['aria-selected']} />
         {hits === null ? <div className="emp-slash-empty">Searching…</div> : null}
         {hits !== null && !rows.length ? <div className="emp-slash-empty">No matches</div> : null}
         {rows.map((r, i) => {

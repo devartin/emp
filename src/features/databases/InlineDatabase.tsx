@@ -5,6 +5,7 @@ import type { Id } from '@/backend/types';
 import { navigate } from '@/app/router';
 import { useTree } from '@/stores/tree';
 import { DatabaseView } from './DatabaseView';
+import { PageGlyph } from '@/ui/icons/Icon';
 
 export interface InlineDatabaseProps {
   databaseId: Id;
@@ -26,7 +27,7 @@ export default function InlineDatabase({ databaseId, viewId }: InlineDatabasePro
           const title = meta?.title ?? schema.database.title;
           return (
             <button type="button" className="edb-inline-title" onClick={() => navigate({ t: 'db', id: databaseId, viewId: view })} title="Open as full page">
-              {icon?.t === 'emoji' ? <span aria-hidden>{icon.v}</span> : <Database size={15} aria-hidden />}
+              {icon ? <PageGlyph icon={icon} context="row" fallback="none" /> : <Database size={16} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />}
               <span className="truncate">{title || 'Untitled database'}</span>
               <ArrowUpRight size={13} className="edb-inline-open" aria-hidden />
             </button>
