@@ -169,10 +169,7 @@ pub fn is_valid_name(name: &str) -> bool {
     }
     // R1C1-looking names are not allowed either.
     let up = name.to_ascii_uppercase();
-    if up == "R" || up == "C" {
-        return false;
-    }
-    true
+    !(up == "R" || up == "C")
 }
 
 /// A workbook.
