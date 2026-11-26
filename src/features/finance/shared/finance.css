@@ -263,9 +263,6 @@ button.fh-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2
 }
 .fh-avail[data-tone="zero"] { color: var(--text-tertiary); font-weight: 400; }
 .fh-avail[data-tone="over"] { color: var(--loss-text); }
-/* The kit's budget bar turns amber at 75% spent; in Money HQ only over-budget carries colour, so a full or nearly full
-   category stays ink (kit request: let BudgetProgress take a tone). */
-.fh-bud-bar .emp-progress[style*="var(--warning)"] { --progress-color: var(--accent-solid) !important; }
 .fh-roll { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 6px; color: var(--text-tertiary); background: var(--well-bg);  }
 .fh-target-hint { height: 20px; padding: 0 7px; border-radius: 9999px; font-size: calc(11rem / 14); font-weight: 600; color: var(--text-primary); background: var(--bg-surface-2);  opacity: 0; transition: opacity 120ms var(--ease-out); }
 .fh-bud-row:hover .fh-target-hint, .fh-target-hint:focus-visible { opacity: 1; transform: none; }

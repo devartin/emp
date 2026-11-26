@@ -168,6 +168,33 @@ export const PAGE_ICON_NAMES: string[] = PAGE_ICON_GROUPS.flatMap((grp) =>
   grp.icons.map((i) => i.name),
 );
 
+/**
+ * App glyphs: names features and stored data address directly (life-app manifests, commands, page kinds, seeded app
+ * icons) that the picker does not offer. They are in the registry so `PageGlyph`, `Glyph` and `glyphSvg` render them
+ * everywhere instead of an empty box. Real lucide-react names (two are lucide aliases: history, candlestick-chart).
+ */
+export const APP_GLYPH_NAMES: readonly string[] = [
+  'ban',
+  'bed-double',
+  'book-open-text',
+  'candlestick-chart',
+  'circle',
+  'circle-dot',
+  'folders',
+  'glass-water',
+  'history',
+  'layout-dashboard',
+  'list',
+  'phone-off',
+  'receipt-text',
+  'sheet',
+  'shield-check',
+  'shuffle',
+  'split',
+  'table',
+  'table-2',
+];
+
 /** Case-insensitive search across names, keywords and group labels. Empty query → all. */
 export function searchPageIcons(query: string): PageIconGroup[] {
   const q = query.trim().toLowerCase();

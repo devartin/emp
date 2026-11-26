@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { isReducedMotion } from "./motion/useReducedEffects";
 
 export type RingSize = 16 | 24 | 40 | 64 | 96;
 const STROKE: Record<RingSize, number> = { 16: 2, 24: 2.5, 40: 3.5, 64: 5, 96: 7 };
@@ -22,19 +21,18 @@ export interface RingProps {
 }
 
 /**
- * Progress ring (docs/DESIGN.md §6.3): an engraved groove track and a lit stroke; sweeps in on mount and animates
- * dashoffset on `settle` over 700ms. Diameters 16/24/40/64/96.
+ * Progress ring (docs/DESIGN.md §6.3): a flat track and an ink stroke. It paints at its value on mount (no sweep),
+ * and a value change settles the dashoffset over --dur-settle. The stroke stays ink at every value, 100% included
+ * (gain colour is for deltas only); pass `color` only for a deliberate per-call override. Diameters 16/24/40/64/96.
  */
 export function Ring({ value, size = 24, color, children, completeMoment, className, ...aria }: RingProps) {
   const sw = STROKE[size];
   const r = (size - sw) / 2;
   const c = 2 * Math.PI * r;
   const v = Math.max(0, Math.min(1, value));
-  const [shown, setShown] = useState(() => (isReducedMotion() ? v : 0));
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setShown(v));
-    return () => cancelAnimationFrame(id);
-  }, [v]);
+  // No draw-in on mount at any size (earned motion): the first paint is the resting value. Later value changes
+  // settle over --dur-settle via the CSS transition on stroke-dashoffset (none under reduced motion).
+  const shown = v;
 
   const moment = completeMoment ?? (!children && size >= 40);
   const prev = useRef(v);

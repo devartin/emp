@@ -66,7 +66,8 @@ function chartOptions(t: ChartTheme, fmt: (n: number) => string) {
       fontSize: 11,
       attributionLogo: false,
     },
-    grid: { vertLines: { visible: false }, horzLines: { color: t.borderSubtle } },
+    // No gridlines (§6.3): the axis stays quiet; the dotted price line is the only reference.
+    grid: { vertLines: { visible: false }, horzLines: { visible: false } },
     rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.24 } },
     timeScale: { borderVisible: false, rightOffset: 6, barSpacing: 8, minBarSpacing: 2, fixLeftEdge: true },
     crosshair: {
@@ -80,7 +81,7 @@ function chartOptions(t: ChartTheme, fmt: (n: number) => string) {
 }
 
 /**
- * lightweight-charts v5 wrapper (§13.5): transparent layout, tertiary 11px text in the UI face (--font-ui), horizontal gridlines only,
+ * lightweight-charts v5 wrapper (§13.5): transparent layout, tertiary 11px text in the UI face (--font-ui), no gridlines,
  * magnet dashed crosshair, gain/loss candles without borders, volume histogram on its own scale (alpha .35),
  * Line/Area/Candles modes and SMA overlays. Theme changes call applyOptions — the chart is never recreated.
  */
@@ -234,18 +235,19 @@ function mainOptions(mode: CandleMode, t: ChartTheme) {
   }
   if (mode === "area") {
     return {
-      lineColor: t.accent,
-      topColor: withAlpha(t.accent, t.dark ? 0.3 : 0.22),
-      bottomColor: withAlpha(t.accent, 0),
+      // Flat 6% ink wash, never a gradient (§6.3): both stops are the same colour.
+      lineColor: t.chartLine,
+      topColor: withAlpha(t.chartLine, 0.06),
+      bottomColor: withAlpha(t.chartLine, 0.06),
       lineWidth: 2,
       priceLineColor: t.textTertiary,
       priceLineStyle: LineStyle.Dotted,
       crosshairMarkerRadius: 4,
       crosshairMarkerBorderColor: t.canvas,
-      crosshairMarkerBackgroundColor: t.accent,
+      crosshairMarkerBackgroundColor: t.chartLine,
     };
   }
-  return { color: t.accent, lineWidth: 2, priceLineColor: t.textTertiary, priceLineStyle: LineStyle.Dotted, crosshairMarkerRadius: 4, crosshairMarkerBorderColor: t.canvas, crosshairMarkerBackgroundColor: t.accent };
+  return { color: t.chartLine, lineWidth: 2, priceLineColor: t.textTertiary, priceLineStyle: LineStyle.Dotted, crosshairMarkerRadius: 4, crosshairMarkerBorderColor: t.canvas, crosshairMarkerBackgroundColor: t.chartLine };
 }
 
 function volumeData(data: readonly Ohlcv[], t: ChartTheme) {

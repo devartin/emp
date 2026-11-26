@@ -27,9 +27,3 @@ export function DeltaPill({ value, format = "percent", invert, label, className,
   const text = typeof format === "function" ? format(value) : formatPercent(Math.abs(value), { digits });
   return <Delta text={text} dir={dir} invert={invert} label={label} className={cn(className)} />;
 }
-
-/** Inline signed value coloured by gain/loss (tables, tickers). */
-export function GainLoss({ value, children, invert, className }: { value: number; children: ReactNode; invert?: boolean; className?: string }) {
-  const up = value > 0 !== !!invert;
-  return <span className={cn(value === 0 ? "text-secondary" : up ? "emp-gain" : "emp-loss", "tabular", className)}>{children}</span>;
-}

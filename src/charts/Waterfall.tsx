@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import { Bar, BarChart, CartesianGrid, Rectangle, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, Rectangle, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { MARGIN, X_AXIS_HEIGHT, niceDomain, tickFormatter, tickStyle, valueFormatter, type ValueFormat } from "./axis";
 import { ChartFrame } from "./ChartFrame";
 import { useChartTheme } from "./theme";
@@ -66,7 +66,8 @@ export function Waterfall({ steps, height = 240, format = "money", currency = "U
         geo.current = [];
         return (
           <BarChart width={size.width} height={size.height} data={rows} margin={MARGIN} barCategoryGap="30%" maxBarSize={44} accessibilityLayer>
-            <CartesianGrid vertical={false} stroke={t.grid} />
+            {/* No gridlines (§6.3); a dotted zero line only when the bridge dips below zero. */}
+            {domain[0] < 0 ? <ReferenceLine y={0} stroke={t.textTertiary} strokeOpacity={0.6} strokeDasharray="1 3" /> : null}
             <XAxis
               dataKey="label"
               tickLine={false}

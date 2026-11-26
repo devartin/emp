@@ -35,6 +35,7 @@ import { TypeIcon } from '../properties/meta';
 import { AddPropertyMenu, PropertyMenu } from '../properties/PropertyMenu';
 import { useController, type ControllerSnapshot } from '../ViewController';
 import { RollText } from './RollText';
+import { revealScrollLeft } from './tableScroll';
 import { RollingNumber } from '@/ui/motion/RollingNumber';
 
 const GUTTER = 44;
@@ -386,8 +387,23 @@ export function TableView() {
     const nc = Math.max(0, Math.min(allCols.length - 1, c));
     setActive({ r: nr, c: nc });
     if (!grouped) virtualizer.scrollToIndex(nr, { align: 'auto' });
-    // horizontal reveal
-    requestAnimationFrame(() => cellEl(nr, nc)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+    requestAnimationFrame(() => {
+      const sc = scrollRef.current;
+      if (!sc) return;
+      // Vertical reveal for grouped tables (the virtualiser handles flat ones); the browser's inline reveal ignores
+      // the sticky gutter + title, so it is undone and redone against the sticky edge below.
+      if (grouped) {
+        const left = sc.scrollLeft;
+        cellEl(nr, nc)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        sc.scrollLeft = left;
+      }
+      const col = allCols[nc];
+      if (!col || nc === 0) return; // the title column is sticky: always in view
+      // Column offsets start at the grid; the scroller's left padding sits before it and is never sticky.
+      const padL = parseFloat(getComputedStyle(sc).paddingLeft) || 0;
+      const next = revealScrollLeft({ scrollLeft: sc.scrollLeft, viewWidth: sc.clientWidth - padL, stickyWidth: GUTTER + title.width, colLeft: col.left, colWidth: col.width });
+      if (next !== sc.scrollLeft) sc.scrollLeft = next;
+    });
   };
   const onCell = useCallback((r: number, c: number, el: HTMLElement, dbl: boolean) => {
     setActive({ r, c });
@@ -698,6 +714,9 @@ export function TableView() {
       <div
         ref={scrollRef}
         className={cn('edb-table-scroll', scrolled.left && 'is-scrolled-x')}
+        // Native focus reveal (Tab into a cell control, focus returning after the side peek) keeps clear of the
+        // sticky gutter + title column instead of parking the cell underneath it.
+        style={{ '--edb-sticky-w': `${GUTTER + title.width}px` } as CSSProperties}
         onScroll={onScroll}
       >
         <div

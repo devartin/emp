@@ -77,15 +77,22 @@
 .emp-fmt-custom-input:focus { border-color: var(--accent-solid); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-solid) 22%, transparent); }
 .emp-swatch-pop { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
 .emp-swatch-row { display: grid; grid-template-columns: repeat(10, 22px); gap: 6px; }
-.emp-swatch {
-  width: 22px; height: 22px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--border); cursor: pointer;
-  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+/* Sheet colour swatches: flat chips with a 1px border; hover darkens the border (no scale). Scoped to the sheet
+   popover so the kit ColorPicker's round swatches keep their own recipe. "None" is the canvas with one diagonal
+   hairline (a pseudo-element, not a gradient). */
+.emp-swatch-pop .emp-swatch {
+  width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border-field); box-shadow: none; cursor: pointer;
+  transition: border-color var(--dur-hover-out) var(--ease-out);
 }
-.emp-swatch:hover { transform: scale(1.08); box-shadow: inset 0 0 0 1px var(--border-strong); }
-.emp-swatch.is-current { box-shadow: 0 0 0 2px var(--bg-overlay), 0 0 0 3.5px var(--accent-solid); }
-.emp-swatch.is-none { background: linear-gradient(135deg, transparent 45%, var(--loss) 45%, var(--loss) 55%, transparent 55%), var(--bg-surface-1); }
+.emp-swatch-pop .emp-swatch:hover { border-color: var(--border-strong); transition-duration: 0ms; }
+.emp-swatch-pop .emp-swatch.is-current { box-shadow: 0 0 0 2px var(--bg-overlay), 0 0 0 3.5px var(--accent-solid); }
+.emp-swatch-pop .emp-swatch.is-none { background: var(--bg-canvas); overflow: hidden; }
+.emp-swatch-pop .emp-swatch.is-none::after {
+  content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; margin-left: -0.5px;
+  background: var(--text-tertiary); transform: rotate(45deg); pointer-events: none;
+}
 .emp-swatch-row:first-child .emp-swatch:not(.is-none) { color: var(--text-primary); }
-:root[data-theme="dark"] .emp-swatch, :root[data-theme="midnight"] .emp-swatch { filter: saturate(0.8) brightness(0.92); }
+:root:is([data-theme="dark"], [data-theme="midnight"]) .emp-swatch-pop .emp-swatch { filter: saturate(0.8) brightness(0.92); }
 
 /* Formula bar (§5.11: 32px, mono 13) */
 .emp-formula-bar {

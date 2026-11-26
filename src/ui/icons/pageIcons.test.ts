@@ -8,7 +8,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { GLYPHS } from "./glyphs";
 import { emojiToGlyph, glyphName } from "./Icon";
-import { PAGE_ICON_GROUPS, PAGE_ICON_NAMES, searchPageIcons } from "./pageIcons";
+import { APP_GLYPH_NAMES, PAGE_ICON_GROUPS, PAGE_ICON_NAMES, searchPageIcons } from "./pageIcons";
 
 const LUCIDE = new Set(
   readdirSync("node_modules/lucide-react/dist/esm/icons")
@@ -67,8 +67,21 @@ describe("pageIcons", () => {
     expect(searchPageIcons("zzzz")).toEqual([]);
   });
 
-  test("the registry holds exactly the curated set plus the map targets", () => {
-    const want = new Set(["file-text", "search", ...PAGE_ICON_NAMES, ...(Object.values(MAP) as string[])]);
+  test("app glyphs are real lucide names, registered, unique and never a sparkle", () => {
+    expect(new Set(APP_GLYPH_NAMES).size).toBe(APP_GLYPH_NAMES.length);
+    for (const n of APP_GLYPH_NAMES) {
+      expect(LUCIDE.has(n), n).toBe(true);
+      expect(GLYPHS[n], n).toBeTruthy();
+      expect(/sparkle/.test(n), n).toBe(false);
+    }
+    // the names life-app manifests, commands and seeded apps ask for
+    for (const n of ["list", "history", "split", "table-2", "ban", "folders", "shuffle", "shield-check", "sheet", "table", "phone-off", "candlestick-chart", "receipt-text"]) {
+      expect(glyphName({ t: "lucide", v: n }), n).toBe(n);
+    }
+  });
+
+  test("the registry holds exactly the curated set, the map targets and the app glyphs", () => {
+    const want = new Set(["file-text", "search", ...PAGE_ICON_NAMES, ...(Object.values(MAP) as string[]), ...APP_GLYPH_NAMES]);
     expect(new Set(Object.keys(GLYPHS))).toEqual(want);
   });
 });

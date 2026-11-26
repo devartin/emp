@@ -6,8 +6,9 @@ import { RollingNumber } from "./motion/RollingNumber";
 export type BadgeTone = "neutral" | "accent" | "solid" | "gain" | "loss" | "success" | "danger" | "warning" | "info" | "outline";
 
 /**
- * Badge (docs/DESIGN.md §6.3): an 18px pill, a raised half-slab (1px edge) with a semantic soft face, 11/14 600.
- * A numeric child rolls when it changes. `dot` renders a status LED (`live` makes it breathe).
+ * Badge (docs/DESIGN.md §4.3): 18px, radius 4, 11/500 on a flat semantic tint; `outline` is a 1px border on nothing
+ * (no shadow ring). A numeric child rolls when it changes. `dot` renders a static status dot (`live` is accepted
+ * and does not animate).
  */
 export function Badge({ tone = "neutral", icon, dot, live, children, className }: { tone?: BadgeTone; icon?: IconComponent | ReactNode; dot?: boolean; live?: boolean; children?: ReactNode; className?: string }) {
   return (

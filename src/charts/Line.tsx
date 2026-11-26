@@ -17,7 +17,7 @@ export interface SeriesDef {
   color?: string;
   /** Projection style: dasharray 4 4 (§13.5). */
   dashed?: boolean;
-  /** Fill this series with the area gradient (defaults to chart-level `area`). */
+  /** Fill this series with a flat 8% wash (multi-series only; defaults to chart-level `area`). */
   area?: boolean;
   /** Render in the tooltip only (no line). */
   hidden?: boolean;

@@ -3,11 +3,8 @@
  * built once per (name, size, stroke) and cloned from a cache afterwards. Synchronous, no innerHTML, and no React
  * render: the SVG is built from the icon's own node data with createElementNS, so it is safe to call from inside a
  * React lifecycle or a ProseMirror node view (a flushSync render there is deferred and returned nothing).
- * Returns null for names outside the registry.
+ * There is no React fallback. Returns null for names outside the registry.
  */
-import { createElement } from "react";
-import { flushSync } from "react-dom";
-import { createRoot } from "react-dom/client";
 import type { Icon } from "@/backend/types";
 import { GLYPHS } from "./glyphs";
 import { canonicalGlyph, glyphName, type GlyphContext } from "./Icon";
@@ -86,16 +83,6 @@ function buildSvg(data: IconData, px: number, stroke: number): SVGSVGElement {
   return svg;
 }
 
-/** Fallback for an icon whose data can't be read: render it once through React (outside a lifecycle only). */
-function renderSvg(G: (typeof GLYPHS)[string], px: number, stroke: number): SVGSVGElement | null {
-  const host = document.createElement("div");
-  const root = createRoot(host);
-  flushSync(() => root.render(createElement(G, { size: px, strokeWidth: stroke, absoluteStrokeWidth: true, "aria-hidden": true })));
-  const made = host.querySelector("svg");
-  root.unmount();
-  return made;
-}
-
 /** An SVG element for a registered glyph name, or null. */
 export function glyphSvg(name: string, context: GlyphContext = "inline", size?: number): SVGSVGElement | null {
   name = canonicalGlyph(name);
@@ -106,10 +93,12 @@ export function glyphSvg(name: string, context: GlyphContext = "inline", size?: 
   const key = `${name}|${px}|${s.stroke}`;
   let svg = cache.get(key);
   if (!svg) {
+    // Never a React render (no flushSync, no createRoot): safe synchronously from any plain-DOM caller, including
+    // ProseMirror node views constructed while React is rendering. domGlyph.test.ts checks every registry glyph
+    // exposes its node data, so a null here means a non-lucide entry, which has no glyph.
     const data = iconData(G);
-    const made = data ? buildSvg(data, px, s.stroke) : renderSvg(G, px, s.stroke);
-    if (!made) return null;
-    svg = made;
+    if (!data) return null;
+    svg = buildSvg(data, px, s.stroke);
     cache.set(key, svg);
   }
   return svg.cloneNode(true) as SVGSVGElement;

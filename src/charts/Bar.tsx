@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Bar, BarChart as RBarChart, CartesianGrid, Rectangle, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart as RBarChart, Rectangle, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { summarizeParts } from "./a11y";
 import { MARGIN, X_AXIS_HEIGHT, niceDomain, tickFormatter, tickStyle, valueFormatter, type ValueFormat } from "./axis";
 import { ChartFrame } from "./ChartFrame";
@@ -142,7 +142,8 @@ export function BarChart<T extends Datum>({
             onMouseMove={(st) => setHover(st.activeTooltipIndex == null ? null : Number(st.activeTooltipIndex))}
             onMouseLeave={() => setHover(null)}
           >
-            <CartesianGrid vertical={!!horizontal} horizontal={!horizontal} stroke={t.grid} />
+            {/* No gridlines (§6.3): bars start at zero; a dotted zero line only when values go negative. */}
+            {domain[0] < 0 ? (horizontal ? <ReferenceLine x={0} stroke={t.textTertiary} strokeOpacity={0.6} strokeDasharray="1 3" /> : <ReferenceLine y={0} stroke={t.textTertiary} strokeOpacity={0.6} strokeDasharray="1 3" />) : null}
             {horizontal ? (
               <>
                 <XAxis type="number" hide domain={domain} />

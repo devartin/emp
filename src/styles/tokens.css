@@ -323,6 +323,20 @@
   --accent-soft-hover: rgba(40, 34, 24, 0.09);
   --accent-soft-press: rgba(40, 34, 24, 0.12);
 }
+/* Accent swatches: each accent's solid colour regardless of the active accent, so pickers (Appearance, ⌘K accent
+   list) never hard-code hex. Graphite is ink, so it follows the theme; the rest are the same in every theme. */
+:root {
+  --accent-swatch-graphite: #262624;
+  --accent-swatch-iris: #5e5ce6;
+  --accent-swatch-ocean: #0b6bdf;
+  --accent-swatch-jade: #0c7d56;
+  --accent-swatch-amber: #f5a524;
+  --accent-swatch-ruby: #cc3344;
+  --accent-swatch-orchid: #a93bbd;
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) {
+  --accent-swatch-graphite: #ecebe8;
+}
 :root[data-accent="iris"] {
   --accent-solid: #5e5ce6; --accent-solid-hover: #4f4dd4; --accent-contrast: #ffffff; --accent-text: #4b49c8;
   --accent-soft: rgba(94, 92, 230, 0.1); --accent-border: rgba(94, 92, 230, 0.36); --accent-ring: #5e5ce6;

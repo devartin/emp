@@ -206,7 +206,7 @@ export default function Budget() {
                             <span className="fh-bud-num text-secondary">
                               <Amount value={toMoney(c.activity)} align="end" />
                             </span>
-                            <span className="fh-bud-bar">{savings ? <BudgetProgress spent={Math.max(0, c.available)} budget={Math.max(c.target * 12, 1)} pace={null} size={4} /> : <BudgetProgress spent={-c.activity} budget={c.assigned + Math.max(0, c.carry)} pace={pace} size={4} />}</span>
+                            <span className="fh-bud-bar">{savings ? <BudgetProgress spent={Math.max(0, c.available)} budget={Math.max(c.target * 12, 1)} pace={null} size={4} warnAt={null} /> : <BudgetProgress spent={-c.activity} budget={c.assigned + Math.max(0, c.carry)} pace={pace} size={4} warnAt={null} />}</span>
                             <span className="fh-bud-num">
                               <span className="fh-avail" data-tone={c.available < -0.004 ? "over" : c.available < 0.004 ? "zero" : savings ? "saved" : "ok"} data-sensitive="">
                                 <RollingNumber value={c.available} format={(n) => fmtMoney(n)} countUp={false} sensitive />

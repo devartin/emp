@@ -796,7 +796,7 @@
 .emp-badge:is([data-tone="loss"], [data-tone="danger"]) { --bf: var(--loss-text); --bb: var(--loss-soft); }
 .emp-badge[data-tone="warning"] { --bf: var(--warning-text); --bb: var(--warning-soft); }
 .emp-badge[data-tone="info"] { --bf: var(--info-text); --bb: var(--info-soft); }
-.emp-badge[data-tone="outline"] { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+.emp-badge[data-tone="outline"] { background: transparent; border: 1px solid var(--border); padding: 0 5px; box-shadow: none; }
 .emp-badge-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
 
 /* Tag — a 20px tint pill (Notion's ladder) */

@@ -20,7 +20,7 @@ import { AccentPicker, ColorPicker, type BlockColorValue } from "./ColorPicker";
 import { Combobox, type ComboOption } from "./Combobox";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./ContextMenu";
 import { DatePicker } from "./DatePicker";
-import { DeltaPill, GainLoss } from "./DeltaPill";
+import { DeltaPill } from "./DeltaPill";
 import { Dialog } from "./Dialog";
 import { IconPicker } from "./IconPicker";
 import { Glyph } from "./icons/Icon";
@@ -898,7 +898,6 @@ function DataSection() {
               <Amount value={{ amount: "89.99", currency: "EUR" }} colored signed />
               <Amount value={{ amount: "0.03481200", currency: "BTC" }} />
               <Amount value={{ amount: "15230.75", currency: "USD" }} dimCents />
-              <GainLoss value={-2.4}>−2.40%</GainLoss>
             </div>
           </div>
         </div>

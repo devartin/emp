@@ -37,17 +37,23 @@ export interface BudgetProgressProps {
   /** Fraction of the period elapsed; default = day-of-month ÷ days-in-month. Pass null to hide. */
   pace?: number | null;
   size?: 4 | 8;
+  /**
+   * Fraction of the budget at which the fill turns amber (default 0.75). Pass `null` to stay ink until the budget
+   * is exceeded, so only over-budget carries colour (Money HQ).
+   */
+  warnAt?: number | null;
   className?: string;
   "aria-label"?: string;
 }
 
 /**
- * Budget bar (§5.10): accent below 75%, warning 75–100%, loss above 100% with the overflow drawn as a second lap at .5.
- * Pace marker (2×12) at the elapsed-period fraction.
+ * Budget bar (§5.10): ink below `warnAt` (75% by default), warning from `warnAt` to 100%, loss above 100% with the
+ * overflow drawn as a second lap at .5. `warnAt={null}` skips the warning band. Pace marker (2×12) at the
+ * elapsed-period fraction.
  */
-export function BudgetProgress({ spent, budget, pace, size = 8, className, ...aria }: BudgetProgressProps) {
+export function BudgetProgress({ spent, budget, pace, size = 8, warnAt = 0.75, className, ...aria }: BudgetProgressProps) {
   const ratio = budget > 0 ? spent / budget : spent > 0 ? 2 : 0;
-  const color = ratio > 1 ? "var(--loss)" : ratio >= 0.75 ? "var(--warning)" : "var(--accent-solid)";
+  const color = ratio > 1 ? "var(--loss)" : warnAt !== null && ratio >= warnAt ? "var(--warning)" : "var(--accent-solid)";
   const first = Math.min(1, ratio);
   const lap = ratio > 1 ? Math.min(1, ratio - 1) : 0;
   const p = pace === undefined ? monthProgress() : pace;

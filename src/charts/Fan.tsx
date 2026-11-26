@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, ComposedChart, Line, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { MARGIN, X_AXIS_HEIGHT, edgeAwareTick, niceDomain, tickFormatter, tickStyle, valueFormatter, type ValueFormat } from "./axis";
 import { ChartFrame } from "./ChartFrame";
 import { useChartTheme } from "./theme";
@@ -74,7 +74,6 @@ export function FanChart({ data, height = 260, format = "money", currency = "USD
         const yW = Math.max(28, Math.max(...ticks.map((v) => tf(v).length)) * 6.6 + 10);
         return (
           <ComposedChart width={size.width} height={size.height} data={rows} margin={MARGIN} accessibilityLayer>
-            <CartesianGrid vertical={false} stroke={t.grid} />
             <XAxis dataKey="x" tickLine={false} axisLine={false} tick={edgeAwareTick(t, xFormat, size.width)} tickFormatter={(v) => xFormat(v)} height={X_AXIS_HEIGHT} tickMargin={8} minTickGap={28} interval="preserveStartEnd" />
             <YAxis orientation="right" width={yW} axisLine={false} tickLine={false} tick={tickStyle(t)} ticks={ticks} domain={domain} tickFormatter={tf} />
             {target ? (
