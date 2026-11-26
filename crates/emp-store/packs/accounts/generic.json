@@ -1,0 +1,11 @@
+{
+  "country": "*",
+  "name": "Generic",
+  "longTermHoldingDays": 365,
+  "types": [
+    { "id": "pension", "label": "Pension / retirement", "taxTreatment": "deferred", "note": "Tax-advantaged retirement account." },
+    { "id": "tax_free", "label": "Tax-free savings", "taxTreatment": "free", "note": "Growth is not taxed." },
+    { "id": "taxable", "label": "Taxable brokerage", "taxTreatment": "taxable", "note": "Dividends and realised gains are taxed." },
+    { "id": "crypto", "label": "Crypto wallet / exchange", "taxTreatment": "taxable", "note": "Disposals may be taxable." }
+  ]
+}

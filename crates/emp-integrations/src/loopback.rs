@@ -80,7 +80,11 @@ impl LoopbackListener {
 
     /// Wait for the single valid callback whose `state` equals `expected_state`.
     /// Consumes the listener: the socket closes when this returns.
-    pub async fn wait(self, expected_state: &SecretString, timeout: Duration) -> Result<CallbackResult> {
+    pub async fn wait(
+        self,
+        expected_state: &SecretString,
+        timeout: Duration,
+    ) -> Result<CallbackResult> {
         let expected = Arc::new(expected_state.clone());
         let claimed = Arc::new(AtomicBool::new(false));
         let host = format!("127.0.0.1:{}", self.port);
@@ -114,10 +118,16 @@ impl LoopbackListener {
     }
 
     /// Like [`wait`](Self::wait) but maps an `error=` callback to [`IntegrationError::OAuth`].
-    pub async fn wait_for_code(self, expected_state: &SecretString, timeout: Duration) -> Result<SecretString> {
+    pub async fn wait_for_code(
+        self,
+        expected_state: &SecretString,
+        timeout: Duration,
+    ) -> Result<SecretString> {
         match self.wait(expected_state, timeout).await? {
             CallbackResult::Code(code) => Ok(code),
-            CallbackResult::Error(e) => Err(IntegrationError::OAuth(format!("authorization failed: {e}"))),
+            CallbackResult::Error(e) => Err(IntegrationError::OAuth(format!(
+                "authorization failed: {e}"
+            ))),
         }
     }
 }
@@ -251,8 +261,13 @@ fn evaluate(
                 .collect();
             (200, ConnOutcome::Done(CallbackResult::Error(err)))
         }
-        (Some(code), None) if !code.is_empty() => (200, ConnOutcome::Done(CallbackResult::Code(code))),
-        _ => (200, ConnOutcome::Done(CallbackResult::Error("missing_code".into()))),
+        (Some(code), None) if !code.is_empty() => {
+            (200, ConnOutcome::Done(CallbackResult::Code(code)))
+        }
+        _ => (
+            200,
+            ConnOutcome::Done(CallbackResult::Error("missing_code".into())),
+        ),
     }
 }
 
@@ -276,9 +291,16 @@ mod tests {
     async fn accepts_valid_callback_after_rejecting_bad_ones() {
         let listener = LoopbackListener::bind().await.unwrap();
         let port = listener.port();
-        assert_eq!(listener.redirect_uri(), format!("http://127.0.0.1:{port}/oauth/callback"));
+        assert_eq!(
+            listener.redirect_uri(),
+            format!("http://127.0.0.1:{port}/oauth/callback")
+        );
         let state = SecretString::new("expected-state");
-        let waiter = tokio::spawn(async move { listener.wait_for_code(&state, Duration::from_secs(10)).await });
+        let waiter = tokio::spawn(async move {
+            listener
+                .wait_for_code(&state, Duration::from_secs(10))
+                .await
+        });
 
         // An idle pre-connect that never sends anything must not block the real callback.
         let _idle = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
@@ -292,7 +314,14 @@ mod tests {
         let r = raw_request(port, &format!("POST /oauth/callback?code=c&state=expected-state HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n")).await;
         assert!(r.starts_with("HTTP/1.1 405"), "{r}");
 
-        let r = raw_request(port, &get(port, "/oauth/callback?code=4%2F0Abc&scope=email&state=expected-state")).await;
+        let r = raw_request(
+            port,
+            &get(
+                port,
+                "/oauth/callback?code=4%2F0Abc&scope=email&state=expected-state",
+            ),
+        )
+        .await;
         assert!(r.starts_with("HTTP/1.1 200"), "{r}");
         assert!(r.contains("Content-Security-Policy: default-src 'none'"));
         assert!(r.contains(DONE_TEXT));
@@ -309,11 +338,22 @@ mod tests {
         let listener = LoopbackListener::bind().await.unwrap();
         let port = listener.port();
         let state = SecretString::new("s1");
-        let waiter = tokio::spawn(async move { listener.wait_for_code(&state, Duration::from_secs(10)).await });
-        let r = raw_request(port, &get(port, "/oauth/callback?error=access_denied&state=s1")).await;
+        let waiter = tokio::spawn(async move {
+            listener
+                .wait_for_code(&state, Duration::from_secs(10))
+                .await
+        });
+        let r = raw_request(
+            port,
+            &get(port, "/oauth/callback?error=access_denied&state=s1"),
+        )
+        .await;
         assert!(r.starts_with("HTTP/1.1 200"));
         let err = waiter.await.unwrap().unwrap_err();
-        assert!(matches!(err, IntegrationError::OAuth(ref m) if m.contains("access_denied")), "{err:?}");
+        assert!(
+            matches!(err, IntegrationError::OAuth(ref m) if m.contains("access_denied")),
+            "{err:?}"
+        );
     }
 
     #[tokio::test]
@@ -335,16 +375,37 @@ mod tests {
             let claimed = AtomicBool::new(false);
             evaluate(head, host, &st, &claimed).0
         };
-        assert_eq!(check("GET /oauth/callback?state=abc&code=x HTTP/1.1\r\nHost: 127.0.0.1:5000"), 200);
-        assert_eq!(check("GET /oauth/callback?state=abc&code=x HTTP/1.1\r\nHost: 127.0.0.1:5001"), 400);
-        assert_eq!(check("GET /oauth/callback?state=abc&code=x HTTP/1.1"), 400);
         assert_eq!(
-            check("GET /oauth/callback?state=abc&code=x HTTP/1.1\r\nHost: 127.0.0.1:5000\r\nHost: 127.0.0.1:5000"),
+            check("GET /oauth/callback?state=abc&code=x HTTP/1.1\r\nHost: 127.0.0.1:5000"),
+            200
+        );
+        assert_eq!(
+            check("GET /oauth/callback?state=abc&code=x HTTP/1.1\r\nHost: 127.0.0.1:5001"),
             400
         );
-        assert_eq!(check("GET /oauth/callback?state=abc&state=abc&code=x HTTP/1.1\r\nHost: 127.0.0.1:5000"), 400);
-        assert_eq!(check("GET /oauth/callback?code=x HTTP/1.1\r\nHost: 127.0.0.1:5000"), 400);
-        assert_eq!(check("GET http://127.0.0.1:5000/oauth/callback?state=abc HTTP/1.1\r\nHost: 127.0.0.1:5000"), 404);
+        assert_eq!(check("GET /oauth/callback?state=abc&code=x HTTP/1.1"), 400);
+        assert_eq!(
+            check(
+                "GET /oauth/callback?state=abc&code=x HTTP/1.1\r\nHost: 127.0.0.1:5000\r\nHost: 127.0.0.1:5000"
+            ),
+            400
+        );
+        assert_eq!(
+            check(
+                "GET /oauth/callback?state=abc&state=abc&code=x HTTP/1.1\r\nHost: 127.0.0.1:5000"
+            ),
+            400
+        );
+        assert_eq!(
+            check("GET /oauth/callback?code=x HTTP/1.1\r\nHost: 127.0.0.1:5000"),
+            400
+        );
+        assert_eq!(
+            check(
+                "GET http://127.0.0.1:5000/oauth/callback?state=abc HTTP/1.1\r\nHost: 127.0.0.1:5000"
+            ),
+            404
+        );
         assert_eq!(check("GARBAGE"), 400);
 
         // Single use.

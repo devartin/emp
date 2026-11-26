@@ -8,6 +8,7 @@
 pub mod calendar;
 pub mod convert;
 pub mod docs;
+pub mod docs_html;
 pub mod drive;
 pub mod sheets;
 
@@ -69,10 +70,10 @@ impl GoogleSession {
     pub async fn access_token(&self) -> Result<SecretString> {
         let mut slot = self.access.lock().await;
         let margin = chrono::Duration::from_std(REFRESH_MARGIN).unwrap_or(chrono::Duration::zero());
-        if let Some((token, expires_at)) = slot.as_ref() {
-            if *expires_at > Utc::now() + margin {
-                return Ok(token.clone());
-            }
+        if let Some((token, expires_at)) = slot.as_ref()
+            && *expires_at > Utc::now() + margin
+        {
+            return Ok(token.clone());
         }
         let fresh = self.oauth.refresh(&self.refresh_token).await?;
         *slot = Some((fresh.access_token.clone(), fresh.expires_at));
@@ -114,7 +115,9 @@ pub(crate) fn extract_file_id(input: &str, kind: &str, expected_host: &str) -> R
     }
     let valid_id = |id: &str| {
         (10..=200).contains(&id.len())
-            && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            && id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     };
     if !s.contains('/') {
         return if valid_id(s) {
@@ -123,9 +126,12 @@ pub(crate) fn extract_file_id(input: &str, kind: &str, expected_host: &str) -> R
             Err(IntegrationError::Invalid("not a Google file id".into()))
         };
     }
-    let url = url::Url::parse(s).map_err(|_| IntegrationError::Invalid("not a valid URL".into()))?;
+    let url =
+        url::Url::parse(s).map_err(|_| IntegrationError::Invalid("not a valid URL".into()))?;
     if url.scheme() != "https" || url.host_str() != Some(expected_host) {
-        return Err(IntegrationError::Invalid(format!("expected a {expected_host} link")));
+        return Err(IntegrationError::Invalid(format!(
+            "expected a {expected_host} link"
+        )));
     }
     let segments: Vec<&str> = url.path_segments().map(|p| p.collect()).unwrap_or_default();
     let pos = segments
@@ -159,14 +165,27 @@ mod tests {
     fn file_id_extraction() {
         let id = "1AbCdEfGhIjKlMnOpQrStUvWxYz_-0123456789";
         assert_eq!(
-            extract_file_id(&format!("https://docs.google.com/document/d/{id}/edit#heading=h.1"), "document", "docs.google.com").unwrap(),
+            extract_file_id(
+                &format!("https://docs.google.com/document/d/{id}/edit#heading=h.1"),
+                "document",
+                "docs.google.com"
+            )
+            .unwrap(),
             id
         );
         assert_eq!(
-            extract_file_id(&format!("https://docs.google.com/a/example.com/spreadsheets/d/{id}/edit?gid=0"), "spreadsheets", "docs.google.com").unwrap(),
+            extract_file_id(
+                &format!("https://docs.google.com/a/example.com/spreadsheets/d/{id}/edit?gid=0"),
+                "spreadsheets",
+                "docs.google.com"
+            )
+            .unwrap(),
             id
         );
-        assert_eq!(extract_file_id(id, "document", "docs.google.com").unwrap(), id);
+        assert_eq!(
+            extract_file_id(id, "document", "docs.google.com").unwrap(),
+            id
+        );
         for bad in [
             format!("https://evil.com/document/d/{id}/edit"),
             format!("http://docs.google.com/document/d/{id}/edit"),
@@ -175,7 +194,10 @@ mod tests {
             "abc".to_string(),
             format!("https://docs.google.com/spreadsheets/d/{id}"),
         ] {
-            assert!(extract_file_id(&bad, "document", "docs.google.com").is_err(), "{bad}");
+            assert!(
+                extract_file_id(&bad, "document", "docs.google.com").is_err(),
+                "{bad}"
+            );
         }
     }
 
@@ -188,13 +210,22 @@ mod tests {
     #[tokio::test]
     async fn session_refreshes_and_retries_on_401() {
         let server = TestServer::start(vec![
-            Reply::json(200, r#"{"access_token":"t1","expires_in":3600,"token_type":"Bearer"}"#),
+            Reply::json(
+                200,
+                r#"{"access_token":"t1","expires_in":3600,"token_type":"Bearer"}"#,
+            ),
             Reply::json(401, r#"{"error":{"message":"expired"}}"#),
-            Reply::json(200, r#"{"access_token":"t2","expires_in":3600,"token_type":"Bearer"}"#),
+            Reply::json(
+                200,
+                r#"{"access_token":"t2","expires_in":3600,"token_type":"Bearer"}"#,
+            ),
             Reply::json(200, r#"{"items":[]}"#),
         ])
         .await;
-        let guard = guard_for(&["oauth2.googleapis.com", "www.googleapis.com"], server.addr());
+        let guard = guard_for(
+            &["oauth2.googleapis.com", "www.googleapis.com"],
+            server.addr(),
+        );
         let oauth = GoogleOAuth::new(
             guard.clone(),
             ClientCredentials {
@@ -207,7 +238,8 @@ mod tests {
             .send(|tok| {
                 Ok(NetRequest::get(
                     ConnectorId::Google,
-                    url::Url::parse("https://www.googleapis.com/calendar/v3/users/me/calendarList").unwrap(),
+                    url::Url::parse("https://www.googleapis.com/calendar/v3/users/me/calendarList")
+                        .unwrap(),
                     "/calendar/v3/users/me/calendarList",
                 )
                 .credential(Credential::bearer(tok)))
@@ -225,7 +257,8 @@ mod tests {
 
     #[tokio::test]
     async fn session_surfaces_reauth_required() {
-        let server = TestServer::start(vec![Reply::json(400, r#"{"error":"invalid_grant"}"#)]).await;
+        let server =
+            TestServer::start(vec![Reply::json(400, r#"{"error":"invalid_grant"}"#)]).await;
         let guard = guard_for(&["oauth2.googleapis.com"], server.addr());
         let oauth = GoogleOAuth::new(
             guard.clone(),

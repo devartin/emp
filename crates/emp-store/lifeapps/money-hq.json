@@ -1,0 +1,3175 @@
+{
+  "id": "money-hq",
+  "version": "1.0.0",
+  "title": "Money HQ",
+  "tagline": "Budget, accounts, goals and bills — with a plan for every dollar.",
+  "icon": "wallet",
+  "color": "jade",
+  "category": "finance",
+  "sensitivity": "high",
+  "estMinutes": 6,
+  "disclaimer": "EMP provides estimates and common guidelines for education, not financial advice. Check important decisions with a qualified professional.",
+  "steps": [
+    {
+      "id": "currency",
+      "kind": "choice_cards",
+      "title": "Which currency do you budget in?",
+      "quick": true,
+      "skippable": false,
+      "help": "Pick your base currency. Net worth and budgets are reported in it.",
+      "why": "Budgets work best in the currency you are paid in.",
+      "default": {
+        "code": "USD",
+        "numberFormat": "en-US",
+        "monthStartDay": 1
+      },
+      "options": [
+        {
+          "value": "USD",
+          "label": "US dollar",
+          "description": "$"
+        },
+        {
+          "value": "EUR",
+          "label": "Euro",
+          "description": "€"
+        },
+        {
+          "value": "GBP",
+          "label": "British pound",
+          "description": "£"
+        },
+        {
+          "value": "CAD",
+          "label": "Canadian dollar"
+        },
+        {
+          "value": "AUD",
+          "label": "Australian dollar"
+        },
+        {
+          "value": "JPY",
+          "label": "Japanese yen"
+        },
+        {
+          "value": "CHF",
+          "label": "Swiss franc"
+        },
+        {
+          "value": "INR",
+          "label": "Indian rupee"
+        }
+      ],
+      "itemSchema": {
+        "code": "text",
+        "numberFormat": "text",
+        "monthStartDay": "number"
+      },
+      "min": 1,
+      "max": 28,
+      "step": 1
+    },
+    {
+      "id": "household",
+      "kind": "choice_cards",
+      "title": "Who shares this budget?",
+      "quick": false,
+      "skippable": true,
+      "help": "Partners can keep joint, separate or split money; we add a Shared group when it helps.",
+      "default": {
+        "mode": "single",
+        "dependents": 0,
+        "splitPct": 50
+      },
+      "options": [
+        {
+          "value": "single",
+          "label": "Just me",
+          "icon": "user"
+        },
+        {
+          "value": "partner_joint",
+          "label": "With partner — joint",
+          "icon": "users"
+        },
+        {
+          "value": "partner_separate",
+          "label": "With partner — separate",
+          "icon": "users"
+        },
+        {
+          "value": "partner_split",
+          "label": "With partner — split %",
+          "icon": "percent"
+        }
+      ],
+      "itemSchema": {
+        "mode": "enum",
+        "dependents": "number",
+        "splitPct": "percent"
+      }
+    },
+    {
+      "id": "income",
+      "kind": "list_builder",
+      "title": "What income comes in?",
+      "quick": true,
+      "skippable": false,
+      "help": "Add each regular paycheck. Use take-home (net) pay if you can.",
+      "why": "Knowing when money arrives lets us plan bills around paydays.",
+      "default": {
+        "items": [
+          {
+            "name": "Salary",
+            "amount": 0,
+            "frequency": "biweekly",
+            "net": true,
+            "nextPayDate": null
+          }
+        ],
+        "stability": "stable"
+      },
+      "itemSchema": {
+        "name": "text",
+        "amount": "money",
+        "frequency": "enum(weekly,biweekly,semimonthly,monthly,irregular)",
+        "net": "bool",
+        "nextPayDate": "date"
+      },
+      "options": [
+        {
+          "value": "stable",
+          "label": "Stable"
+        },
+        {
+          "value": "variable",
+          "label": "Variable"
+        },
+        {
+          "value": "irregular",
+          "label": "Irregular"
+        }
+      ]
+    },
+    {
+      "id": "method",
+      "kind": "choice_cards",
+      "title": "How do you want to budget?",
+      "quick": true,
+      "skippable": false,
+      "help": "You can switch methods later with a tune-up.",
+      "recommend": "recommend_budget_method",
+      "default": "fifty_thirty_twenty",
+      "options": [
+        {
+          "value": "fifty_thirty_twenty",
+          "label": "50/30/20",
+          "description": "About 50% needs, 30% wants, 20% savings and debt.",
+          "icon": "pie-chart"
+        },
+        {
+          "value": "zero_based",
+          "label": "Zero-based",
+          "description": "Give every dollar a job before the month starts.",
+          "icon": "target"
+        },
+        {
+          "value": "pay_yourself_first",
+          "label": "Pay yourself first",
+          "description": "Automate savings first, spend the rest freely.",
+          "icon": "piggy-bank"
+        },
+        {
+          "value": "envelopes",
+          "label": "Envelopes",
+          "description": "Fill category envelopes from each paycheck.",
+          "icon": "mail"
+        },
+        {
+          "value": "track_only",
+          "label": "Track only",
+          "description": "No budget — just see where money goes.",
+          "icon": "eye"
+        }
+      ]
+    },
+    {
+      "id": "bills",
+      "kind": "list_builder",
+      "title": "Which bills do you pay?",
+      "quick": false,
+      "skippable": true,
+      "help": "Add your regular bills. We create recurring items and remind you before each one is due.",
+      "default": [],
+      "options": [
+        {
+          "value": "Rent / Mortgage",
+          "label": "Rent / Mortgage"
+        },
+        {
+          "value": "Utilities",
+          "label": "Utilities"
+        },
+        {
+          "value": "Phone",
+          "label": "Phone"
+        },
+        {
+          "value": "Internet",
+          "label": "Internet"
+        },
+        {
+          "value": "Health insurance",
+          "label": "Health insurance"
+        },
+        {
+          "value": "Auto insurance",
+          "label": "Auto insurance"
+        },
+        {
+          "value": "Home insurance",
+          "label": "Home insurance"
+        },
+        {
+          "value": "Renters insurance",
+          "label": "Renters insurance"
+        },
+        {
+          "value": "Life insurance",
+          "label": "Life insurance"
+        },
+        {
+          "value": "Childcare",
+          "label": "Childcare"
+        },
+        {
+          "value": "Transit",
+          "label": "Transit"
+        },
+        {
+          "value": "Loans",
+          "label": "Loans"
+        },
+        {
+          "value": "Subscriptions",
+          "label": "Subscriptions"
+        }
+      ],
+      "itemSchema": {
+        "name": "text",
+        "amount": "money",
+        "schedule": "recurrence",
+        "dueDay": "number",
+        "autopay": "bool",
+        "account": "text"
+      }
+    },
+    {
+      "id": "accounts",
+      "kind": "list_builder",
+      "title": "Which accounts do you have?",
+      "quick": true,
+      "skippable": false,
+      "help": "Add checking, savings, cards and loans with their current balances. Card and loan balances are what you owe.",
+      "default": [
+        {
+          "name": "Checking",
+          "type": "checking",
+          "balance": 0,
+          "onBudget": true
+        }
+      ],
+      "itemSchema": {
+        "name": "text",
+        "type": "enum(checking,savings,credit_card,student_loan,auto_loan,mortgage,personal_loan,investment,cash,other_asset,other_liability)",
+        "balance": "money",
+        "apr": "percent",
+        "minPayment": "money",
+        "limit": "money",
+        "onBudget": "bool"
+      }
+    },
+    {
+      "id": "debt",
+      "kind": "choice_cards",
+      "title": "How do you want to pay down debt?",
+      "quick": false,
+      "skippable": true,
+      "when": "answers.accounts_type_credit_card or answers.accounts_type_student_loan or answers.accounts_type_auto_loan or answers.accounts_type_mortgage or answers.accounts_type_personal_loan or answers.accounts_type_other_liability",
+      "help": "Choose a payoff order and how much extra you can put toward debt each month.",
+      "why": "Avalanche saves the most interest; snowball builds momentum with quick wins.",
+      "recommend": "recommend_debt_strategy",
+      "default": {
+        "strategy": "avalanche",
+        "extra": 100
+      },
+      "options": [
+        {
+          "value": "avalanche",
+          "label": "Avalanche",
+          "description": "Highest APR first — least interest.",
+          "icon": "trending-down"
+        },
+        {
+          "value": "snowball",
+          "label": "Snowball",
+          "description": "Smallest balance first — quickest wins.",
+          "icon": "snowflake"
+        },
+        {
+          "value": "hybrid",
+          "label": "Hybrid",
+          "description": "Two smallest first, then highest APR."
+        },
+        {
+          "value": "custom",
+          "label": "Custom",
+          "description": "Your own order."
+        }
+      ],
+      "min": 0,
+      "max": 2000,
+      "step": 25
+    },
+    {
+      "id": "emergency",
+      "kind": "money",
+      "title": "How big should your emergency fund be?",
+      "quick": false,
+      "skippable": true,
+      "help": "Tell us what you have saved for emergencies and pick a target.",
+      "why": "Common guideline: 3–6 months of essential expenses; 9–12 if income is irregular.",
+      "recommend": "recommend_ef_months",
+      "default": {
+        "current": 0,
+        "months": 6,
+        "starter": 1000
+      },
+      "options": [
+        {
+          "value": "3",
+          "label": "3 months"
+        },
+        {
+          "value": "6",
+          "label": "6 months"
+        },
+        {
+          "value": "9",
+          "label": "9–12 months"
+        }
+      ]
+    },
+    {
+      "id": "goals",
+      "kind": "list_builder",
+      "title": "What are you saving for?",
+      "quick": false,
+      "skippable": true,
+      "help": "Sinking funds turn big, predictable costs into small monthly amounts.",
+      "default": [],
+      "options": [
+        {
+          "value": "Car replacement",
+          "label": "Car replacement"
+        },
+        {
+          "value": "Holidays and gifts",
+          "label": "Holidays and gifts"
+        },
+        {
+          "value": "Annual insurance",
+          "label": "Annual insurance"
+        },
+        {
+          "value": "Vacation",
+          "label": "Vacation"
+        },
+        {
+          "value": "Home repair",
+          "label": "Home repair"
+        },
+        {
+          "value": "Medical deductible",
+          "label": "Medical deductible"
+        },
+        {
+          "value": "Down payment",
+          "label": "Down payment"
+        }
+      ],
+      "itemSchema": {
+        "name": "text",
+        "target": "money",
+        "date": "date",
+        "priority": "enum(high,medium,low)"
+      }
+    },
+    {
+      "id": "data",
+      "kind": "file_import",
+      "title": "Bring in your transactions",
+      "quick": true,
+      "skippable": true,
+      "help": "Import CSV, OFX, QFX or QIF files from your bank, start blank, or explore with sample data.",
+      "default": {
+        "source": "blank"
+      },
+      "options": [
+        {
+          "value": "import",
+          "label": "Import files",
+          "description": "CSV / OFX / QFX / QIF",
+          "icon": "upload"
+        },
+        {
+          "value": "blank",
+          "label": "Start blank",
+          "icon": "file"
+        },
+        {
+          "value": "sample",
+          "label": "Use sample data",
+          "icon": "sparkles"
+        }
+      ]
+    },
+    {
+      "id": "privacy",
+      "kind": "toggle",
+      "title": "Privacy",
+      "quick": false,
+      "skippable": true,
+      "help": "Financial data is sensitive. Encryption protects it if someone gets your files.",
+      "default": {
+        "encrypt": false,
+        "hideAmounts": false
+      }
+    },
+    {
+      "id": "rituals",
+      "kind": "recurrence",
+      "title": "Money rituals",
+      "quick": false,
+      "skippable": true,
+      "help": "A short weekly check-in and a monthly review keep the budget honest.",
+      "why": "Ten minutes a week is a common guideline for staying on track.",
+      "default": {
+        "weekly": {
+          "rrule": "FREQ=WEEKLY;BYDAY=SU",
+          "time": "10:00"
+        },
+        "monthly": {
+          "rrule": "FREQ=MONTHLY;BYDAY=1SA",
+          "time": "10:00"
+        },
+        "billDays": 3
+      },
+      "itemSchema": {
+        "weekly": "recurrence",
+        "monthly": "recurrence",
+        "billDays": "number"
+      }
+    }
+  ],
+  "templates": [
+    {
+      "key": "hq",
+      "kind": "dashboard",
+      "optional": false,
+      "spec": {
+        "title": "Money HQ",
+        "icon": "lucide:wallet",
+        "subtitle": "Your budget, accounts, goals and bills in one place.",
+        "tabs": [
+          "Overview",
+          "Transactions",
+          "Budget",
+          "Accounts",
+          "Goals",
+          "Bills",
+          "Reports"
+        ],
+        "tiles": [
+          {
+            "t": "kpi",
+            "metric": "net_worth",
+            "label": "Net worth",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "budget_headline",
+            "label": "{{if(answers.method == \"zero_based\" or answers.method == \"envelopes\", \"To be assigned\", \"Left to spend\")}}",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "savings_rate_3m",
+            "label": "Savings rate (3 months)",
+            "format": "percent"
+          },
+          {
+            "t": "kpi",
+            "metric": "ef_months",
+            "label": "Emergency fund",
+            "format": "months"
+          },
+          {
+            "t": "kpi",
+            "metric": "debt_free_date",
+            "label": "Debt-free date",
+            "format": "date"
+          },
+          {
+            "t": "kpi",
+            "metric": "upcoming_bills_7d",
+            "label": "Bills in the next 7 days",
+            "format": "money"
+          },
+          {
+            "t": "chart",
+            "db": "transactions",
+            "view": "by_category",
+            "title": "Spending this month"
+          },
+          {
+            "t": "chart",
+            "db": "budgets",
+            "view": "vs_actual",
+            "title": "Budget vs actual"
+          },
+          {
+            "t": "chart",
+            "db": "networth",
+            "view": "trend",
+            "title": "Net worth"
+          },
+          {
+            "t": "chart",
+            "db": "transactions",
+            "view": "monthly",
+            "title": "Monthly cash flow"
+          }
+        ],
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## This month"
+          },
+          {
+            "t": "database",
+            "db": "budgets",
+            "view": "month"
+          },
+          {
+            "t": "md",
+            "md": "## Needs attention"
+          },
+          {
+            "t": "database",
+            "db": "transactions",
+            "view": "uncategorized"
+          },
+          {
+            "t": "md",
+            "md": "## Guides"
+          },
+          {
+            "t": "pageLink",
+            "page": "how"
+          },
+          {
+            "t": "pageLink",
+            "page": "order"
+          },
+          {
+            "t": "pageLink",
+            "page": "ef_guide"
+          },
+          {
+            "t": "pageLink",
+            "page": "debt_guide"
+          },
+          {
+            "t": "md",
+            "md": "## Rituals"
+          },
+          {
+            "t": "pageLink",
+            "page": "weekly"
+          },
+          {
+            "t": "pageLink",
+            "page": "monthly"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "how",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "How your budget works",
+        "icon": "📘",
+        "blocks": [
+          {
+            "t": "callout",
+            "icon": "🧭",
+            "color": "blue",
+            "md": "Method: **50/30/20**. You can change it any time with a tune-up."
+          },
+          {
+            "t": "md",
+            "md": "## The idea\nSplit take-home pay into three buckets: about **50% for needs**, **30% for wants** and **20% for savings and debt**. It is a common guideline because it is simple enough to keep.\n\n## With your numbers\nThe paychecks you entered add up to **{{fmt_money(answers.income_items_amount_sum)}}** per pay period. As a common guideline, aim for these shares of each month's take-home pay:\n\n| Bucket | Share | What goes here |\n|---|---|---|\n| Needs | 50% | Rent or mortgage, utilities, groceries, insurance, minimum debt payments, transport to work |\n| Wants | 30% | Dining out, entertainment, shopping, travel, subscriptions |\n| Savings & Debt | 20% | Emergency fund, extra debt payments, retirement, sinking funds |\n\n## How to use it\n- Each category belongs to one group (see **Categories**). The Budget tab compares each group with its share.\n- If needs are above 50% (common in high-cost areas), consider trimming wants first rather than savings.\n- Review the split monthly; it is a starting point, not a rule."
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      },
+      "when": "answers.method == \"fifty_thirty_twenty\""
+    },
+    {
+      "key": "how_zero_based",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "How your budget works",
+        "icon": "📘",
+        "blocks": [
+          {
+            "t": "callout",
+            "icon": "🧭",
+            "color": "blue",
+            "md": "Method: **Zero-based**. You can change it any time with a tune-up."
+          },
+          {
+            "t": "md",
+            "md": "## The idea\nBefore the month starts, **assign every dollar of income a job** — bills, spending, savings, debt — until *To be assigned* reaches zero. Nothing is left unplanned.\n\n## Why it was suggested\nZero-based budgeting is a common guideline when income is irregular, debt has a high APR, or cash is tight: you only budget money you already have.\n\n## How to use it\n1. When income arrives, it lands in **To be assigned** on the Money HQ dashboard.\n2. Assign it to categories on the **Budgets** page until To be assigned is 0.\n3. Overspent a category? Move money from another category — the budget always balances.\n4. With irregular income, consider **budgeting last month's income**: hold this month's pay in a \"Next month\" buffer category."
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      },
+      "when": "answers.method == \"zero_based\""
+    },
+    {
+      "key": "how_pay_yourself_first",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "How your budget works",
+        "icon": "📘",
+        "blocks": [
+          {
+            "t": "callout",
+            "icon": "🧭",
+            "color": "blue",
+            "md": "Method: **Pay yourself first**. You can change it any time with a tune-up."
+          },
+          {
+            "t": "md",
+            "md": "## The idea\nMove savings out **as soon as you are paid** — emergency fund, retirement, goals — then spend what is left without tracking every category.\n\n## Why it was suggested\nYour income is stable with room after bills, so automating a savings rate of 20% or more is a common guideline that keeps things simple.\n\n## How to use it\n- Set up automatic transfers on payday (see **Recurring**, kind *Savings*).\n- Watch two numbers on the dashboard: **Savings rate (3 months)** and **Left to spend**.\n- If the savings rate drifts down for three months, the advisor will let you know."
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      },
+      "when": "answers.method == \"pay_yourself_first\""
+    },
+    {
+      "key": "how_envelopes",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "How your budget works",
+        "icon": "📘",
+        "blocks": [
+          {
+            "t": "callout",
+            "icon": "🧭",
+            "color": "blue",
+            "md": "Method: **Envelopes**. You can change it any time with a tune-up."
+          },
+          {
+            "t": "md",
+            "md": "## The idea\nEach category is an **envelope** filled from each paycheck. When an envelope is empty, spending in that category stops (or you move money from another envelope).\n\n## How to use it\n- Fill envelopes on payday on the **Budgets** page; *To be assigned* shows what is still unallocated.\n- Turn on **Rollover** for envelopes that save up (car, gifts, travel) so unspent money carries over.\n- Keep a small *Miscellaneous* envelope for surprises instead of raiding savings."
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      },
+      "when": "answers.method == \"envelopes\""
+    },
+    {
+      "key": "how_track_only",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "How your budget works",
+        "icon": "📘",
+        "blocks": [
+          {
+            "t": "callout",
+            "icon": "🧭",
+            "color": "blue",
+            "md": "Method: **Track only**. You can change it any time with a tune-up."
+          },
+          {
+            "t": "md",
+            "md": "## The idea\nNo limits — just **see where your money goes**. Many people track for a month or two before choosing a budgeting method.\n\n## How to use it\n- Import or enter transactions and give each one a category.\n- Use the **Spending by category** chart and **Monthly cash flow** to spot patterns.\n- When you are ready, run a tune-up and switch to 50/30/20 or zero-based."
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      },
+      "when": "answers.method == \"track_only\""
+    },
+    {
+      "key": "order",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Financial order of operations",
+        "icon": "🪜",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "A common guideline for **what to do with the next dollar**. Work down the list; it is fine to split money between two steps."
+          },
+          {
+            "t": "checklist",
+            "items": [
+              "1. Budget, plus a starter emergency fund of {{fmt_money(coalesce(answers.emergency_starter, 1000))}}",
+              "2. Get the full employer retirement match (it is an instant return)",
+              "3. Pay off high-interest debt (roughly 10% APR and above)",
+              "4. Build the full emergency fund: {{coalesce(answers.emergency_months, 6)}} months of essential expenses",
+              "5. Save in tax-advantaged accounts (retirement, HSA)",
+              "6. Fund other goals: sinking funds, down payment, education",
+              "7. Invest in taxable accounts"
+            ]
+          },
+          {
+            "t": "md",
+            "md": "## Why this order\n- **A starter fund first** keeps a surprise bill from going on a credit card.\n- **The match** is free money; skipping it costs more than almost any debt.\n- **High-interest debt** is a guaranteed \"return\" equal to its APR.\n- **A full emergency fund** protects everything above it from a job loss.\n- **Tax-advantaged accounts** before taxable ones, because taxes compound too."
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "ef_guide",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Your emergency fund",
+        "icon": "🛟",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## Target\nYour target is **{{coalesce(answers.emergency_months, 6)}} months** of *essential* expenses — rent or mortgage, utilities, groceries, insurance, minimum payments and transport. It is not a share of income.\n\n| Situation | Common guideline |\n|---|---|\n| Two stable incomes, no dependents | 3 months |\n| One income, or dependents | 6 months |\n| Irregular, commission or self-employed income | 9–12 months |\n\n## Start small\nA **starter fund** of {{fmt_money(coalesce(answers.emergency_starter, 1000))}} (about one month of essentials, or a common $1,000 minimum) comes before paying extra on debt.\n\n## Where to keep it\n- A separate, high-yield **savings account** — easy to reach, but not in your daily checking.\n- Not invested in stocks: the point is that it is there when markets and jobs are bad at the same time.\n\n## When to use it\nJob loss, medical bills, urgent car or home repairs. Not for predictable costs — those are sinking funds in **Goals**."
+          },
+          {
+            "t": "database",
+            "db": "goals",
+            "view": "table"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "debt_guide",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Avalanche vs snowball",
+        "icon": "❄️",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## Two ways to pay down debt\nAlways pay the **minimum on every debt**. Then put every extra dollar on one *target* debt; when it is paid off, roll its payment into the next.\n\n| | Avalanche | Snowball |\n|---|---|---|\n| Order | Highest APR first | Smallest balance first |\n| Interest paid | Least | More |\n| Motivation | Slower first win | Quick wins |\n\nYou chose **{{if(answers.debt_strategy == \"snowball\", \"snowball\", if(answers.debt_strategy == \"hybrid\", \"hybrid\", \"avalanche\"))}}** with **{{fmt_money(coalesce(answers.debt_extra, 0))}}** extra per month. The dashboard shows your estimated debt-free date.\n\n## Good to know\n- **Hybrid** clears the two smallest balances first for momentum, then switches to avalanche.\n- Consider a balance transfer or refinancing only if the fees are lower than the interest you save.\n- Card utilization under about 30% of the limit is a common guideline for credit scores."
+          },
+          {
+            "t": "database",
+            "db": "accounts",
+            "view": "debts"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      },
+      "when": "answers.accounts_type_credit_card or answers.accounts_type_student_loan or answers.accounts_type_auto_loan or answers.accounts_type_mortgage or answers.accounts_type_personal_loan or answers.accounts_type_other_liability"
+    },
+    {
+      "key": "weekly",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Weekly check-in",
+        "icon": "🗓️",
+        "template": true,
+        "blocks": [
+          {
+            "t": "md",
+            "md": "A ten-minute routine. Duplicate this page each week, or open it from the reminder."
+          },
+          {
+            "t": "checklist",
+            "items": [
+              "Categorise new transactions",
+              "Check categories close to their limit",
+              "Look at bills due in the next 7 days",
+              "Move money to cover any overspending",
+              "Note one win and one thing to watch"
+            ]
+          },
+          {
+            "t": "database",
+            "db": "transactions",
+            "view": "uncategorized"
+          }
+        ]
+      }
+    },
+    {
+      "key": "monthly",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Monthly review",
+        "icon": "📅",
+        "template": true,
+        "blocks": [
+          {
+            "t": "md",
+            "md": "Once a month, close the books and plan the next one."
+          },
+          {
+            "t": "checklist",
+            "items": [
+              "Reconcile every account with the bank statement",
+              "Review spending by category versus budget",
+              "Check savings rate and net worth trend",
+              "Review subscriptions — cancel what you do not use",
+              "Set next month's budget",
+              "Update goal balances"
+            ]
+          },
+          {
+            "t": "chart",
+            "db": "transactions",
+            "view": "by_category"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "accounts",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Accounts",
+        "icon": "🏦",
+        "description": "Your bank accounts, cards and loans. Card and loan balances are amounts owed.",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "type",
+            "name": "Type",
+            "type": "select",
+            "role": "acct.type",
+            "options": [
+              {
+                "key": "checking",
+                "name": "Checking",
+                "color": "blue"
+              },
+              {
+                "key": "savings",
+                "name": "Savings",
+                "color": "green"
+              },
+              {
+                "key": "credit_card",
+                "name": "Credit card",
+                "color": "red"
+              },
+              {
+                "key": "student_loan",
+                "name": "Student loan",
+                "color": "orange"
+              },
+              {
+                "key": "auto_loan",
+                "name": "Auto loan",
+                "color": "orange"
+              },
+              {
+                "key": "mortgage",
+                "name": "Mortgage",
+                "color": "brown"
+              },
+              {
+                "key": "personal_loan",
+                "name": "Personal loan",
+                "color": "orange"
+              },
+              {
+                "key": "investment",
+                "name": "Investment",
+                "color": "purple"
+              },
+              {
+                "key": "cash",
+                "name": "Cash",
+                "color": "green"
+              },
+              {
+                "key": "other_asset",
+                "name": "Other asset",
+                "color": "gray"
+              },
+              {
+                "key": "other_liability",
+                "name": "Other liability",
+                "color": "pink"
+              }
+            ]
+          },
+          {
+            "key": "institution",
+            "name": "Institution",
+            "type": "text"
+          },
+          {
+            "key": "currency",
+            "name": "Currency",
+            "type": "text",
+            "role": "acct.currency"
+          },
+          {
+            "key": "opening",
+            "name": "Opening balance",
+            "type": "money",
+            "role": "acct.opening",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "balance",
+            "name": "Balance",
+            "type": "computed",
+            "description": "Opening balance plus transactions; kept up to date by EMP."
+          },
+          {
+            "key": "cleared",
+            "name": "Cleared balance",
+            "type": "computed"
+          },
+          {
+            "key": "on_budget",
+            "name": "On budget",
+            "type": "checkbox",
+            "role": "acct.on_budget"
+          },
+          {
+            "key": "apr",
+            "name": "APR",
+            "type": "number",
+            "role": "acct.apr",
+            "format": "number",
+            "decimals": 2,
+            "description": "Annual percentage rate, in percent."
+          },
+          {
+            "key": "min_payment",
+            "name": "Min payment",
+            "type": "money",
+            "role": "acct.min_payment",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "limit",
+            "name": "Credit limit",
+            "type": "money",
+            "role": "acct.limit",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "utilization",
+            "name": "Utilization",
+            "type": "formula",
+            "formula": "if(prop(\"Credit limit\") > 0, prop(\"Opening balance\") / prop(\"Credit limit\"), 0)"
+          },
+          {
+            "key": "last_reconciled",
+            "name": "Last reconciled",
+            "type": "date"
+          },
+          {
+            "key": "low_threshold",
+            "name": "Low-balance threshold",
+            "type": "money",
+            "role": "acct.low_threshold",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "closed",
+            "name": "Closed",
+            "type": "checkbox"
+          },
+          {
+            "key": "last4",
+            "name": "Last 4",
+            "type": "secret"
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All accounts",
+            "layout": "table",
+            "visible": [
+              "name",
+              "type",
+              "institution",
+              "balance",
+              "on_budget",
+              "apr",
+              "limit",
+              "last_reconciled"
+            ],
+            "sorts": [
+              {
+                "prop": "type",
+                "dir": "asc"
+              }
+            ],
+            "footer": {
+              "opening": "sum"
+            }
+          },
+          {
+            "key": "by_type",
+            "name": "By type",
+            "layout": "board",
+            "groupBy": {
+              "prop": "type"
+            }
+          },
+          {
+            "key": "debts",
+            "name": "Debts",
+            "layout": "table",
+            "filter": {
+              "prop": "type",
+              "op": "any_of",
+              "value": [
+                "opt:credit_card",
+                "opt:student_loan",
+                "opt:auto_loan",
+                "opt:mortgage",
+                "opt:personal_loan",
+                "opt:other_liability"
+              ]
+            },
+            "sorts": [
+              {
+                "prop": "apr",
+                "dir": "desc"
+              }
+            ]
+          }
+        ],
+        "rows": [
+          {
+            "key": "${item.name}",
+            "forEach": "answers.accounts",
+            "values": {
+              "name": "${item.name}",
+              "type": "${item.type}",
+              "opening": "${item.balance}",
+              "apr": "${item.apr}",
+              "min_payment": "${item.minPayment}",
+              "limit": "${item.limit}",
+              "on_budget": "${item.onBudget}",
+              "currency": "${answers.currency.code}",
+              "low_threshold": "{{if(answers.method == \"track_only\", 0, 100)}}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "payees",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Payees",
+        "icon": "🧾",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "aliases",
+            "name": "Aliases",
+            "type": "text",
+            "description": "Other spellings your bank uses, comma separated."
+          },
+          {
+            "key": "default_category",
+            "name": "Default category",
+            "type": "relation",
+            "relation": {
+              "db": "categories",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "icon",
+            "name": "Icon",
+            "type": "text"
+          }
+        ]
+      }
+    },
+    {
+      "key": "categories",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Categories",
+        "icon": "🏷️",
+        "description": "Spending categories grouped by your budgeting method. Essential categories feed the emergency-fund target.",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "group",
+            "name": "Group",
+            "type": "select",
+            "role": "cat.group",
+            "options": [
+              {
+                "key": "needs",
+                "name": "Needs",
+                "color": "blue"
+              },
+              {
+                "key": "wants",
+                "name": "Wants",
+                "color": "purple"
+              },
+              {
+                "key": "savings_debt",
+                "name": "Savings & Debt",
+                "color": "green"
+              },
+              {
+                "key": "bills",
+                "name": "Bills",
+                "color": "orange"
+              },
+              {
+                "key": "everyday",
+                "name": "Everyday",
+                "color": "yellow"
+              },
+              {
+                "key": "fun",
+                "name": "Fun",
+                "color": "pink"
+              },
+              {
+                "key": "income",
+                "name": "Income",
+                "color": "gray"
+              }
+            ]
+          },
+          {
+            "key": "essential",
+            "name": "Essential",
+            "type": "checkbox",
+            "role": "cat.essential"
+          },
+          {
+            "key": "rollover",
+            "name": "Rollover",
+            "type": "checkbox",
+            "role": "cat.rollover",
+            "description": "Unspent money carries over (sinking funds)."
+          },
+          {
+            "key": "icon",
+            "name": "Icon",
+            "type": "text"
+          },
+          {
+            "key": "color",
+            "name": "Color",
+            "type": "select",
+            "options": [
+              {
+                "key": "gray",
+                "name": "Gray",
+                "color": "gray"
+              },
+              {
+                "key": "brown",
+                "name": "Brown",
+                "color": "brown"
+              },
+              {
+                "key": "orange",
+                "name": "Orange",
+                "color": "orange"
+              },
+              {
+                "key": "yellow",
+                "name": "Yellow",
+                "color": "yellow"
+              },
+              {
+                "key": "green",
+                "name": "Green",
+                "color": "green"
+              },
+              {
+                "key": "blue",
+                "name": "Blue",
+                "color": "blue"
+              },
+              {
+                "key": "purple",
+                "name": "Purple",
+                "color": "purple"
+              },
+              {
+                "key": "pink",
+                "name": "Pink",
+                "color": "pink"
+              },
+              {
+                "key": "red",
+                "name": "Red",
+                "color": "red"
+              }
+            ]
+          },
+          {
+            "key": "target_type",
+            "name": "Target type",
+            "type": "select",
+            "role": "cat.target_type",
+            "options": [
+              {
+                "key": "none",
+                "name": "None"
+              },
+              {
+                "key": "monthly",
+                "name": "Monthly amount"
+              },
+              {
+                "key": "by_date",
+                "name": "By date"
+              }
+            ]
+          },
+          {
+            "key": "target",
+            "name": "Target",
+            "type": "money",
+            "role": "cat.target",
+            "currency": "${answers.currency.code}"
+          }
+        ],
+        "views": [
+          {
+            "key": "by_group",
+            "name": "By group",
+            "layout": "table",
+            "groupBy": {
+              "prop": "group"
+            },
+            "sorts": [
+              {
+                "prop": "name",
+                "dir": "asc"
+              }
+            ]
+          },
+          {
+            "key": "essential",
+            "name": "Essential",
+            "layout": "table",
+            "filter": {
+              "prop": "essential",
+              "op": "checked"
+            }
+          }
+        ],
+        "rows": [
+          {
+            "key": "Paycheck",
+            "values": {
+              "name": "Paycheck",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"income\", \"income\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "icon": "💵"
+          },
+          {
+            "key": "Other income",
+            "values": {
+              "name": "Other income",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"income\", \"income\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Rent / Mortgage",
+            "values": {
+              "name": "Rent / Mortgage",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"bills\")}}",
+              "essential": true,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "icon": "🏠"
+          },
+          {
+            "key": "Utilities",
+            "values": {
+              "name": "Utilities",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"bills\")}}",
+              "essential": true,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "icon": "💡"
+          },
+          {
+            "key": "Phone",
+            "values": {
+              "name": "Phone",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"bills\")}}",
+              "essential": true,
+              "rollover": false,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Internet",
+            "values": {
+              "name": "Internet",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"bills\")}}",
+              "essential": true,
+              "rollover": false,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Insurance",
+            "values": {
+              "name": "Insurance",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"bills\")}}",
+              "essential": true,
+              "rollover": true,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Groceries",
+            "values": {
+              "name": "Groceries",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"everyday\")}}",
+              "essential": true,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "icon": "🛒"
+          },
+          {
+            "key": "Transportation",
+            "values": {
+              "name": "Transportation",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"everyday\")}}",
+              "essential": true,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "icon": "🚌"
+          },
+          {
+            "key": "Medical",
+            "values": {
+              "name": "Medical",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"everyday\")}}",
+              "essential": true,
+              "rollover": true,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Childcare",
+            "values": {
+              "name": "Childcare",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"bills\")}}",
+              "essential": true,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "when": "answers.household_dependents > 0"
+          },
+          {
+            "key": "Dining out",
+            "values": {
+              "name": "Dining out",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"wants\", \"fun\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "icon": "🍽️"
+          },
+          {
+            "key": "Coffee",
+            "values": {
+              "name": "Coffee",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"wants\", \"fun\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "icon": "☕"
+          },
+          {
+            "key": "Entertainment",
+            "values": {
+              "name": "Entertainment",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"wants\", \"fun\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Shopping",
+            "values": {
+              "name": "Shopping",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"wants\", \"everyday\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Subscriptions",
+            "values": {
+              "name": "Subscriptions",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"wants\", \"bills\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Personal care",
+            "values": {
+              "name": "Personal care",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"wants\", \"everyday\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Travel",
+            "values": {
+              "name": "Travel",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"wants\", \"fun\")}}",
+              "essential": false,
+              "rollover": true,
+              "target_type": "none"
+            },
+            "icon": "✈️"
+          },
+          {
+            "key": "Gifts & holidays",
+            "values": {
+              "name": "Gifts & holidays",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"wants\", \"fun\")}}",
+              "essential": false,
+              "rollover": true,
+              "target_type": "none"
+            },
+            "icon": "🎁"
+          },
+          {
+            "key": "Emergency fund",
+            "values": {
+              "name": "Emergency fund",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"savings_debt\", \"savings_debt\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "icon": "🛟"
+          },
+          {
+            "key": "Debt payments",
+            "values": {
+              "name": "Debt payments",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"savings_debt\", \"savings_debt\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Investing",
+            "values": {
+              "name": "Investing",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"savings_debt\", \"savings_debt\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Car replacement",
+            "values": {
+              "name": "Car replacement",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"savings_debt\", \"savings_debt\")}}",
+              "essential": false,
+              "rollover": true,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Home repair",
+            "values": {
+              "name": "Home repair",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"savings_debt\", \"savings_debt\")}}",
+              "essential": false,
+              "rollover": true,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Taxes",
+            "values": {
+              "name": "Taxes",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"savings_debt\", \"savings_debt\")}}",
+              "essential": false,
+              "rollover": true,
+              "target_type": "none"
+            }
+          },
+          {
+            "key": "Shared",
+            "values": {
+              "name": "Shared",
+              "group": "{{if(answers.method == \"fifty_thirty_twenty\", \"needs\", \"bills\")}}",
+              "essential": false,
+              "rollover": false,
+              "target_type": "none"
+            },
+            "when": "answers.household_mode == \"partner_split\" or answers.household_mode == \"partner_joint\""
+          }
+        ]
+      }
+    },
+    {
+      "key": "transactions",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Transactions",
+        "icon": "💳",
+        "description": "Every inflow (positive) and outflow (negative). Imports dedupe by Import ID.",
+        "properties": [
+          {
+            "key": "desc",
+            "name": "Description",
+            "type": "title",
+            "role": "txn.raw"
+          },
+          {
+            "key": "date",
+            "name": "Date",
+            "type": "date",
+            "role": "txn.date"
+          },
+          {
+            "key": "payee",
+            "name": "Payee",
+            "type": "relation",
+            "role": "txn.payee",
+            "relation": {
+              "db": "payees",
+              "limit": "one",
+              "dual": {
+                "key": "transactions",
+                "name": "Transactions"
+              }
+            }
+          },
+          {
+            "key": "memo",
+            "name": "Memo",
+            "type": "text",
+            "role": "txn.memo"
+          },
+          {
+            "key": "amount",
+            "name": "Amount",
+            "type": "money",
+            "role": "txn.amount",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "account",
+            "name": "Account",
+            "type": "relation",
+            "role": "txn.account",
+            "relation": {
+              "db": "accounts",
+              "limit": "one",
+              "dual": {
+                "key": "transactions",
+                "name": "Transactions"
+              }
+            }
+          },
+          {
+            "key": "category",
+            "name": "Category",
+            "type": "relation",
+            "role": "txn.category",
+            "relation": {
+              "db": "categories",
+              "limit": "one",
+              "dual": {
+                "key": "transactions",
+                "name": "Transactions"
+              }
+            }
+          },
+          {
+            "key": "split_parent",
+            "name": "Split parent",
+            "type": "relation",
+            "role": "txn.split_parent",
+            "relation": {
+              "db": "transactions",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "cleared",
+            "name": "Cleared",
+            "type": "status",
+            "role": "txn.cleared",
+            "options": [
+              {
+                "key": "uncleared",
+                "name": "Uncleared",
+                "color": "gray",
+                "group": "todo"
+              },
+              {
+                "key": "cleared",
+                "name": "Cleared",
+                "color": "blue",
+                "group": "in_progress"
+              },
+              {
+                "key": "reconciled",
+                "name": "Reconciled",
+                "color": "green",
+                "group": "complete"
+              }
+            ]
+          },
+          {
+            "key": "transfer",
+            "name": "Transfer",
+            "type": "relation",
+            "role": "txn.transfer",
+            "relation": {
+              "db": "transactions",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "import_id",
+            "name": "Import ID",
+            "type": "text",
+            "role": "txn.import_id",
+            "hidden": true
+          },
+          {
+            "key": "tags",
+            "name": "Tags",
+            "type": "multi_select",
+            "options": [
+              {
+                "key": "reimbursable",
+                "name": "Reimbursable"
+              },
+              {
+                "key": "tax",
+                "name": "Tax"
+              },
+              {
+                "key": "shared",
+                "name": "Shared"
+              }
+            ]
+          },
+          {
+            "key": "receipt",
+            "name": "Receipt",
+            "type": "files"
+          },
+          {
+            "key": "source",
+            "name": "Source",
+            "type": "select",
+            "options": [
+              {
+                "key": "manual",
+                "name": "Manual"
+              },
+              {
+                "key": "import",
+                "name": "Import"
+              },
+              {
+                "key": "rule",
+                "name": "Rule"
+              }
+            ]
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "visible": [
+              "desc",
+              "date",
+              "amount",
+              "account",
+              "category",
+              "cleared"
+            ],
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "desc"
+              }
+            ],
+            "footer": {
+              "amount": "sum"
+            }
+          },
+          {
+            "key": "uncategorized",
+            "name": "Needs a category",
+            "layout": "table",
+            "filter": {
+              "and": [
+                {
+                  "prop": "category",
+                  "op": "empty"
+                },
+                {
+                  "prop": "transfer",
+                  "op": "empty"
+                }
+              ]
+            },
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "desc"
+              }
+            ]
+          },
+          {
+            "key": "this_month",
+            "name": "This month",
+            "layout": "table",
+            "filter": {
+              "prop": "date",
+              "op": "within",
+              "value": "this_month"
+            },
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "desc"
+              }
+            ],
+            "footer": {
+              "amount": "sum"
+            }
+          },
+          {
+            "key": "by_category",
+            "name": "Spending by category",
+            "layout": "chart",
+            "filter": {
+              "and": [
+                {
+                  "prop": "date",
+                  "op": "within",
+                  "value": "this_month"
+                },
+                {
+                  "prop": "amount",
+                  "op": "lt",
+                  "value": 0
+                }
+              ]
+            },
+            "chart": {
+              "type": "donut",
+              "x": {
+                "prop": "category"
+              },
+              "y": [
+                {
+                  "agg": "sum",
+                  "prop": "amount"
+                }
+              ]
+            }
+          },
+          {
+            "key": "monthly",
+            "name": "Monthly cash flow",
+            "layout": "chart",
+            "chart": {
+              "type": "bar",
+              "x": {
+                "prop": "date",
+                "bucket": "month"
+              },
+              "y": [
+                {
+                  "agg": "sum",
+                  "prop": "amount"
+                }
+              ],
+              "colors": "gainloss"
+            }
+          }
+        ],
+        "rowTemplates": [
+          {
+            "key": "manual",
+            "name": "Manual transaction",
+            "default": true,
+            "values": {
+              "date": "@today",
+              "source": "manual",
+              "cleared": "uncleared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "budgets",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Budgets",
+        "icon": "📊",
+        "description": "One row per month and category: what you assigned, what you spent and what is left.",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "month",
+            "name": "Month",
+            "type": "text",
+            "description": "YYYY-MM"
+          },
+          {
+            "key": "category",
+            "name": "Category",
+            "type": "relation",
+            "relation": {
+              "db": "categories",
+              "limit": "one",
+              "dual": {
+                "key": "budgets",
+                "name": "Budget lines"
+              }
+            }
+          },
+          {
+            "key": "assigned",
+            "name": "Assigned",
+            "type": "money",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "activity",
+            "name": "Activity",
+            "type": "computed"
+          },
+          {
+            "key": "available",
+            "name": "Available",
+            "type": "computed"
+          },
+          {
+            "key": "status",
+            "name": "Status",
+            "type": "formula",
+            "formula": "if(prop(\"Assigned\") > 0, \"On track\", \"Not budgeted\")"
+          }
+        ],
+        "views": [
+          {
+            "key": "month",
+            "name": "This month",
+            "layout": "table",
+            "visible": [
+              "name",
+              "category",
+              "assigned",
+              "activity",
+              "available",
+              "status"
+            ],
+            "sorts": [
+              {
+                "prop": "name",
+                "dir": "asc"
+              }
+            ],
+            "footer": {
+              "assigned": "sum"
+            }
+          },
+          {
+            "key": "vs_actual",
+            "name": "Budget vs actual",
+            "layout": "chart",
+            "chart": {
+              "type": "bar",
+              "x": {
+                "prop": "category"
+              },
+              "y": [
+                {
+                  "agg": "sum",
+                  "prop": "assigned"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "when": "answers.method != \"track_only\""
+    },
+    {
+      "key": "recurring",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Recurring",
+        "icon": "🔁",
+        "description": "Bills, paychecks and transfers on a schedule. They feed the 90-day forecast and bill reminders.",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "amount",
+            "name": "Amount",
+            "type": "money",
+            "role": "rec.amount",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "schedule",
+            "name": "Schedule",
+            "type": "recurrence",
+            "role": "rec.schedule"
+          },
+          {
+            "key": "next",
+            "name": "Next date",
+            "type": "computed"
+          },
+          {
+            "key": "account",
+            "name": "Account",
+            "type": "relation",
+            "role": "rec.account",
+            "relation": {
+              "db": "accounts",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "category",
+            "name": "Category",
+            "type": "relation",
+            "role": "rec.category",
+            "relation": {
+              "db": "categories",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "autopay",
+            "name": "Autopay",
+            "type": "checkbox",
+            "role": "rec.autopay"
+          },
+          {
+            "key": "reminder_days",
+            "name": "Reminder days",
+            "type": "number",
+            "role": "rec.reminder_days"
+          },
+          {
+            "key": "kind",
+            "name": "Kind",
+            "type": "select",
+            "role": "rec.kind",
+            "options": [
+              {
+                "key": "bill",
+                "name": "Bill",
+                "color": "orange"
+              },
+              {
+                "key": "income",
+                "name": "Income",
+                "color": "green"
+              },
+              {
+                "key": "subscription",
+                "name": "Subscription",
+                "color": "purple"
+              },
+              {
+                "key": "transfer",
+                "name": "Transfer",
+                "color": "gray"
+              },
+              {
+                "key": "savings",
+                "name": "Savings",
+                "color": "blue"
+              }
+            ]
+          },
+          {
+            "key": "variable",
+            "name": "Variable",
+            "type": "checkbox"
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "name",
+                "dir": "asc"
+              }
+            ],
+            "footer": {
+              "amount": "sum"
+            }
+          },
+          {
+            "key": "bills",
+            "name": "Bills",
+            "layout": "table",
+            "filter": {
+              "prop": "kind",
+              "op": "eq",
+              "value": "opt:bill"
+            }
+          }
+        ],
+        "rows": [
+          {
+            "key": "bill:${item.name}",
+            "forEach": "answers.bills",
+            "values": {
+              "name": "${item.name}",
+              "amount": "${item.amount}",
+              "kind": "bill",
+              "autopay": "${item.autopay}",
+              "account": "${item.account}",
+              "reminder_days": "${answers.rituals.billDays}",
+              "category": "${item.name}",
+              "schedule": {
+                "rrule": "${item.schedule}",
+                "dtstart": "@today"
+              }
+            }
+          },
+          {
+            "key": "income:${item.name}",
+            "forEach": "answers.income.items",
+            "when": "${item.amount} > 0",
+            "values": {
+              "name": "${item.name}",
+              "amount": "${item.amount}",
+              "kind": "income",
+              "category": "Paycheck",
+              "schedule": {
+                "rrule": "{{if(\"${item.frequency}\" == \"weekly\", \"FREQ=WEEKLY\", if(\"${item.frequency}\" == \"biweekly\", \"FREQ=WEEKLY;INTERVAL=2\", if(\"${item.frequency}\" == \"semimonthly\", \"FREQ=MONTHLY;BYMONTHDAY=1,15\", \"FREQ=MONTHLY\")))}}",
+                "dtstart": "${item.nextPayDate}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "goals",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Goals",
+        "icon": "🎯",
+        "description": "Emergency fund, sinking funds and savings goals. Monthly needed = (target − saved) ÷ months left.",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "kind",
+            "name": "Kind",
+            "type": "select",
+            "role": "goal.kind",
+            "options": [
+              {
+                "key": "emergency",
+                "name": "Emergency",
+                "color": "red"
+              },
+              {
+                "key": "sinking",
+                "name": "Sinking fund",
+                "color": "blue"
+              },
+              {
+                "key": "savings",
+                "name": "Savings",
+                "color": "green"
+              }
+            ]
+          },
+          {
+            "key": "target",
+            "name": "Target",
+            "type": "money",
+            "role": "goal.target",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "date",
+            "name": "Target date",
+            "type": "date",
+            "role": "goal.date"
+          },
+          {
+            "key": "saved",
+            "name": "Saved",
+            "type": "money",
+            "role": "goal.saved",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "monthly_needed",
+            "name": "Monthly needed",
+            "type": "formula",
+            "formula": "if(empty(prop(\"Target date\")), 0, if(dateBetween(prop(\"Target date\"), today(), \"months\") <= 0, prop(\"Target\") - prop(\"Saved\"), (prop(\"Target\") - prop(\"Saved\")) / dateBetween(prop(\"Target date\"), today(), \"months\")))"
+          },
+          {
+            "key": "priority",
+            "name": "Priority",
+            "type": "select",
+            "options": [
+              {
+                "key": "high",
+                "name": "High",
+                "color": "red"
+              },
+              {
+                "key": "medium",
+                "name": "Medium",
+                "color": "yellow"
+              },
+              {
+                "key": "low",
+                "name": "Low",
+                "color": "gray"
+              }
+            ]
+          },
+          {
+            "key": "status",
+            "name": "Status",
+            "type": "status"
+          },
+          {
+            "key": "progress",
+            "name": "Progress",
+            "type": "formula",
+            "formula": "if(prop(\"Target\") > 0, min(prop(\"Saved\") / prop(\"Target\"), 1), 0)"
+          }
+        ],
+        "views": [
+          {
+            "key": "rings",
+            "name": "Goals",
+            "layout": "gallery",
+            "card": {
+              "preview": "none",
+              "size": "m",
+              "fit": false
+            }
+          },
+          {
+            "key": "table",
+            "name": "Table",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "priority",
+                "dir": "asc"
+              }
+            ],
+            "footer": {
+              "target": "sum",
+              "saved": "sum"
+            }
+          }
+        ],
+        "rows": [
+          {
+            "key": "emergency",
+            "values": {
+              "name": "Emergency fund",
+              "kind": "emergency",
+              "target": "{{round(coalesce(answers.emergency_months, 6) * ${answers.emergency.starter}, 0)}}",
+              "saved": "${answers.emergency.current}",
+              "priority": "high"
+            },
+            "icon": "🛟"
+          },
+          {
+            "key": "${item.name}",
+            "forEach": "answers.goals",
+            "values": {
+              "name": "${item.name}",
+              "kind": "sinking",
+              "target": "${item.target}",
+              "date": "${item.date}",
+              "saved": 0,
+              "priority": "${item.priority}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "networth",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Net worth snapshots",
+        "icon": "📈",
+        "description": "A snapshot is taken on the first unlock of each month.",
+        "properties": [
+          {
+            "key": "month",
+            "name": "Month",
+            "type": "title"
+          },
+          {
+            "key": "assets",
+            "name": "Assets",
+            "type": "money",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "liabilities",
+            "name": "Liabilities",
+            "type": "money",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "net",
+            "name": "Net worth",
+            "type": "formula",
+            "formula": "prop(\"Assets\") - prop(\"Liabilities\")"
+          },
+          {
+            "key": "source",
+            "name": "Source",
+            "type": "select",
+            "options": [
+              {
+                "key": "auto",
+                "name": "Automatic"
+              },
+              {
+                "key": "backfill",
+                "name": "Backfill"
+              },
+              {
+                "key": "manual",
+                "name": "Manual"
+              }
+            ]
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "month",
+                "dir": "desc"
+              }
+            ]
+          },
+          {
+            "key": "trend",
+            "name": "Trend",
+            "layout": "chart",
+            "chart": {
+              "type": "area",
+              "x": {
+                "prop": "month"
+              },
+              "y": [
+                {
+                  "agg": "sum",
+                  "prop": "assets"
+                },
+                {
+                  "agg": "sum",
+                  "prop": "liabilities"
+                }
+              ],
+              "stacked": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "subscriptions",
+      "kind": "database",
+      "optional": true,
+      "spec": {
+        "title": "Subscriptions",
+        "icon": "📺",
+        "properties": [
+          {
+            "key": "service",
+            "name": "Service",
+            "type": "title"
+          },
+          {
+            "key": "amount",
+            "name": "Amount",
+            "type": "money",
+            "currency": "${answers.currency.code}"
+          },
+          {
+            "key": "cycle",
+            "name": "Cycle",
+            "type": "select",
+            "options": [
+              {
+                "key": "weekly",
+                "name": "Weekly"
+              },
+              {
+                "key": "monthly",
+                "name": "Monthly"
+              },
+              {
+                "key": "quarterly",
+                "name": "Quarterly"
+              },
+              {
+                "key": "yearly",
+                "name": "Yearly"
+              }
+            ]
+          },
+          {
+            "key": "next_charge",
+            "name": "Next charge",
+            "type": "date"
+          },
+          {
+            "key": "annual",
+            "name": "Annual cost",
+            "type": "formula",
+            "formula": "prop(\"Amount\") * ifs(prop(\"Cycle\") == \"Weekly\", 52, prop(\"Cycle\") == \"Quarterly\", 4, prop(\"Cycle\") == \"Yearly\", 1, 12)"
+          },
+          {
+            "key": "category",
+            "name": "Category",
+            "type": "relation",
+            "relation": {
+              "db": "categories",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "status",
+            "name": "Status",
+            "type": "select",
+            "options": [
+              {
+                "key": "active",
+                "name": "Active",
+                "color": "green"
+              },
+              {
+                "key": "paused",
+                "name": "Paused",
+                "color": "yellow"
+              },
+              {
+                "key": "cancelled",
+                "name": "Cancelled",
+                "color": "gray"
+              }
+            ]
+          },
+          {
+            "key": "last_price_change",
+            "name": "Last price change",
+            "type": "date"
+          },
+          {
+            "key": "value_rating",
+            "name": "Value rating",
+            "type": "rating",
+            "max": 5
+          },
+          {
+            "key": "cancel_url",
+            "name": "Cancel URL",
+            "type": "url"
+          }
+        ],
+        "views": [
+          {
+            "key": "active",
+            "name": "Active",
+            "layout": "table",
+            "filter": {
+              "prop": "status",
+              "op": "eq",
+              "value": "opt:active"
+            },
+            "sorts": [
+              {
+                "prop": "next_charge",
+                "dir": "asc"
+              }
+            ],
+            "footer": {
+              "annual": "sum"
+            }
+          },
+          {
+            "key": "calendar",
+            "name": "Renewals",
+            "layout": "calendar",
+            "calendar": {
+              "dateProp": "next_charge"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "rules",
+      "kind": "database",
+      "optional": true,
+      "spec": {
+        "title": "Rules",
+        "icon": "⚙️",
+        "description": "Categorisation rules applied to imports, in priority order.",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "match",
+            "name": "Match text",
+            "type": "text"
+          },
+          {
+            "key": "field",
+            "name": "Field",
+            "type": "select",
+            "options": [
+              {
+                "key": "payee",
+                "name": "Payee"
+              },
+              {
+                "key": "raw",
+                "name": "Description"
+              },
+              {
+                "key": "amount",
+                "name": "Amount"
+              }
+            ]
+          },
+          {
+            "key": "category",
+            "name": "Category",
+            "type": "relation",
+            "relation": {
+              "db": "categories",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "rename",
+            "name": "Rename payee to",
+            "type": "text"
+          },
+          {
+            "key": "priority",
+            "name": "Priority",
+            "type": "number"
+          },
+          {
+            "key": "enabled",
+            "name": "Enabled",
+            "type": "checkbox"
+          }
+        ]
+      }
+    },
+    {
+      "key": "bill_reminders",
+      "kind": "reminder",
+      "optional": true,
+      "spec": {
+        "title": "Bill reminders",
+        "text": "${item.name} is due in ${answers.rituals.billDays} days",
+        "target": "recurring",
+        "forEach": "answers.bills",
+        "rrule": "${item.schedule}",
+        "time": "09:00",
+        "daysBefore": "${answers.rituals.billDays}"
+      }
+    },
+    {
+      "key": "weekly_ritual",
+      "kind": "recurring",
+      "optional": true,
+      "spec": {
+        "title": "Weekly check-in",
+        "text": "Time for your 10-minute money check-in",
+        "target": "weekly",
+        "rrule": "${answers.rituals.weekly.rrule}",
+        "time": "${answers.rituals.weekly.time}"
+      }
+    },
+    {
+      "key": "monthly_ritual",
+      "kind": "recurring",
+      "optional": true,
+      "spec": {
+        "title": "Monthly review",
+        "text": "Close the month: reconcile and plan the next budget",
+        "target": "monthly",
+        "rrule": "${answers.rituals.monthly.rrule}",
+        "time": "${answers.rituals.monthly.time}"
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "name": "net_worth",
+      "kind": "rust",
+      "fn": "money.net_worth",
+      "deps": [
+        "accounts.acct.type",
+        "accounts.acct.opening",
+        "transactions.txn.amount"
+      ]
+    },
+    {
+      "name": "net_worth_delta_30d",
+      "kind": "rust",
+      "fn": "money.net_worth_delta_30d",
+      "deps": [
+        "accounts.acct.type",
+        "transactions.txn.amount",
+        "transactions.txn.date"
+      ]
+    },
+    {
+      "name": "to_be_assigned",
+      "kind": "rust",
+      "fn": "money.to_be_assigned",
+      "deps": [
+        "budgets",
+        "transactions.txn.amount"
+      ]
+    },
+    {
+      "name": "left_to_spend",
+      "kind": "rust",
+      "fn": "money.left_to_spend",
+      "deps": [
+        "budgets",
+        "transactions.txn.amount"
+      ]
+    },
+    {
+      "name": "savings_rate_3m",
+      "kind": "rust",
+      "fn": "money.savings_rate_3m",
+      "deps": [
+        "transactions.txn.amount",
+        "categories.cat.group"
+      ]
+    },
+    {
+      "name": "savings_rate_down_3m",
+      "kind": "rust",
+      "fn": "money.savings_rate_down_3m",
+      "deps": [
+        "transactions.txn.amount"
+      ]
+    },
+    {
+      "name": "essential_monthly_spend",
+      "kind": "rust",
+      "fn": "money.essential_monthly_spend",
+      "deps": [
+        "transactions.txn.amount",
+        "categories.cat.essential"
+      ]
+    },
+    {
+      "name": "ef_balance",
+      "kind": "rust",
+      "fn": "money.ef_balance",
+      "deps": [
+        "goals.goal.saved",
+        "accounts.acct.type"
+      ]
+    },
+    {
+      "name": "ef_months",
+      "kind": "expr",
+      "expr": "if(coalesce(metrics.essential_monthly_spend, 0) > 0, coalesce(metrics.ef_balance, 0) / metrics.essential_monthly_spend, 0)",
+      "deps": [
+        "ef_balance",
+        "essential_monthly_spend"
+      ]
+    },
+    {
+      "name": "ef_target",
+      "kind": "expr",
+      "expr": "coalesce(answers.emergency_months, 6) * coalesce(metrics.essential_monthly_spend, 0)",
+      "deps": [
+        "essential_monthly_spend"
+      ]
+    },
+    {
+      "name": "ef_starter",
+      "kind": "expr",
+      "expr": "coalesce(answers.emergency_starter, 1000)",
+      "deps": []
+    },
+    {
+      "name": "debt_free_date",
+      "kind": "rust",
+      "fn": "money.debt_free_date",
+      "deps": [
+        "accounts.acct.apr",
+        "accounts.acct.min_payment"
+      ]
+    },
+    {
+      "name": "upcoming_bills_7d",
+      "kind": "rust",
+      "fn": "money.upcoming_bills_7d",
+      "deps": [
+        "recurring.rec.schedule",
+        "recurring.rec.amount"
+      ]
+    },
+    {
+      "name": "uncategorized_count",
+      "kind": "rust",
+      "fn": "money.uncategorized_count",
+      "deps": [
+        "transactions.txn.category"
+      ]
+    },
+    {
+      "name": "txn_count",
+      "kind": "rust",
+      "fn": "money.txn_count",
+      "deps": [
+        "transactions"
+      ]
+    },
+    {
+      "name": "budget_assigned_count",
+      "kind": "rust",
+      "fn": "money.budget_assigned_count",
+      "deps": [
+        "budgets"
+      ]
+    },
+    {
+      "name": "utilization_max",
+      "kind": "rust",
+      "fn": "money.utilization_max",
+      "deps": [
+        "accounts.acct.limit"
+      ]
+    },
+    {
+      "name": "forecast_min_balance_30d",
+      "kind": "rust",
+      "fn": "money.forecast_min_balance_30d",
+      "deps": [
+        "accounts.acct.type",
+        "recurring.rec.schedule"
+      ]
+    },
+    {
+      "name": "low_balance_threshold",
+      "kind": "rust",
+      "fn": "money.low_balance_threshold",
+      "deps": [
+        "accounts.acct.low_threshold"
+      ]
+    },
+    {
+      "name": "forecast_breach",
+      "kind": "expr",
+      "expr": "metrics.forecast_min_balance_30d < metrics.low_balance_threshold",
+      "deps": [
+        "forecast_min_balance_30d",
+        "low_balance_threshold"
+      ]
+    },
+    {
+      "name": "budget_headline",
+      "kind": "expr",
+      "expr": "if(answers.method == \"zero_based\" or answers.method == \"envelopes\", metrics.to_be_assigned, metrics.left_to_spend)",
+      "deps": [
+        "to_be_assigned",
+        "left_to_spend"
+      ]
+    },
+    {
+      "name": "cat_90pct_count",
+      "kind": "rust",
+      "fn": "money.cat_90pct_count",
+      "deps": [
+        "budgets",
+        "transactions.txn.category"
+      ]
+    },
+    {
+      "name": "cat_over_count",
+      "kind": "rust",
+      "fn": "money.cat_over_count",
+      "deps": [
+        "budgets",
+        "transactions.txn.category"
+      ]
+    },
+    {
+      "name": "sub_price_up_count",
+      "kind": "rust",
+      "fn": "money.sub_price_up_count",
+      "deps": [
+        "subscriptions"
+      ]
+    },
+    {
+      "name": "sub_renewal_14d_count",
+      "kind": "rust",
+      "fn": "money.sub_renewal_14d_count",
+      "deps": [
+        "subscriptions"
+      ]
+    },
+    {
+      "name": "days_since_reconcile",
+      "kind": "rust",
+      "fn": "money.days_since_reconcile",
+      "deps": [
+        "accounts"
+      ]
+    },
+    {
+      "name": "max_debt_apr",
+      "kind": "rust",
+      "fn": "money.max_debt_apr",
+      "deps": [
+        "accounts.acct.apr"
+      ]
+    },
+    {
+      "name": "savings_grew_3m",
+      "kind": "rust",
+      "fn": "money.savings_grew_3m",
+      "deps": [
+        "accounts.acct.type",
+        "transactions.txn.amount"
+      ]
+    },
+    {
+      "name": "possible_dupes",
+      "kind": "rust",
+      "fn": "money.possible_dupes",
+      "deps": [
+        "transactions"
+      ]
+    }
+  ],
+  "advisor": [
+    {
+      "id": "cat-90pct",
+      "when": "metrics.cat_90pct_count > 0",
+      "severity": "tip",
+      "title": "{{metrics.cat_90pct_count}} categories are almost spent",
+      "body": "These categories have used 90% or more of their budget with at least 10 days left. Consider slowing down or moving money from a category with room.",
+      "mathMetrics": [
+        "cat_90pct_count"
+      ],
+      "actions": [
+        {
+          "label": "Open budget",
+          "route": "db:budgets:month"
+        }
+      ]
+    },
+    {
+      "id": "cat-over",
+      "when": "metrics.cat_over_count > 0",
+      "severity": "warn",
+      "title": "{{metrics.cat_over_count}} categories are overspent",
+      "body": "Spending is above what you assigned. Consider covering it from another category so the rest of the budget stays accurate.",
+      "mathMetrics": [
+        "cat_over_count"
+      ],
+      "actions": [
+        {
+          "label": "Open budget",
+          "route": "db:budgets:month"
+        }
+      ]
+    },
+    {
+      "id": "forecast-breach",
+      "when": "metrics.forecast_breach",
+      "severity": "warn",
+      "title": "Cash may dip below your threshold within 30 days",
+      "body": "The estimate based on recurring bills and income dips to {{fmt_money(metrics.forecast_min_balance_30d)}}, below your low-balance threshold of {{fmt_money(metrics.low_balance_threshold)}}. Consider moving a bill or topping up checking.",
+      "mathMetrics": [
+        "forecast_min_balance_30d",
+        "low_balance_threshold"
+      ],
+      "actions": [
+        {
+          "label": "See bills",
+          "route": "db:recurring:bills"
+        }
+      ]
+    },
+    {
+      "id": "ef-below-starter",
+      "when": "metrics.ef_balance < metrics.ef_starter",
+      "severity": "warn",
+      "title": "Build a starter emergency fund",
+      "body": "You have {{fmt_money(metrics.ef_balance)}} set aside. A starter fund of {{fmt_money(metrics.ef_starter)}} is a common guideline before paying extra on debt.",
+      "mathMetrics": [
+        "ef_balance",
+        "ef_starter"
+      ],
+      "actions": [
+        {
+          "label": "Emergency fund guide",
+          "route": "page:ef_guide"
+        }
+      ]
+    },
+    {
+      "id": "ef-below-target",
+      "when": "metrics.ef_balance >= metrics.ef_starter and metrics.ef_balance < metrics.ef_target",
+      "severity": "tip",
+      "title": "Your emergency fund covers {{fmt_months(metrics.ef_months)}}",
+      "body": "Your target is {{fmt_money(metrics.ef_target)}} ({{coalesce(answers.emergency_months, 6)}} months of essentials). Consider a monthly transfer until you get there.",
+      "mathMetrics": [
+        "ef_balance",
+        "ef_target",
+        "ef_months"
+      ],
+      "actions": [
+        {
+          "label": "Open goals",
+          "route": "db:goals:table"
+        }
+      ]
+    },
+    {
+      "id": "sub-price-up",
+      "when": "metrics.sub_price_up_count > 0",
+      "severity": "info",
+      "title": "A subscription changed price",
+      "body": "{{metrics.sub_price_up_count}} subscription(s) changed price in the last 30 days. Worth a look.",
+      "mathMetrics": [
+        "sub_price_up_count"
+      ],
+      "actions": [
+        {
+          "label": "Review subscriptions",
+          "route": "db:subscriptions:active"
+        }
+      ]
+    },
+    {
+      "id": "sub-renewal-14d",
+      "when": "metrics.sub_renewal_14d_count > 0",
+      "severity": "tip",
+      "title": "{{metrics.sub_renewal_14d_count}} subscription(s) renew within 14 days",
+      "body": "Cancel before the renewal date if you no longer use them.",
+      "mathMetrics": [
+        "sub_renewal_14d_count"
+      ],
+      "actions": [
+        {
+          "label": "See renewals",
+          "route": "db:subscriptions:calendar"
+        }
+      ]
+    },
+    {
+      "id": "uncategorized",
+      "when": "metrics.uncategorized_count >= 10",
+      "severity": "info",
+      "title": "{{metrics.uncategorized_count}} transactions need a category",
+      "body": "Categorising keeps the budget and reports accurate. Rules can do it automatically next time.",
+      "mathMetrics": [
+        "uncategorized_count"
+      ],
+      "actions": [
+        {
+          "label": "Categorise",
+          "route": "db:transactions:uncategorized"
+        }
+      ]
+    },
+    {
+      "id": "reconcile-30d",
+      "when": "metrics.days_since_reconcile > 30",
+      "severity": "tip",
+      "title": "Time to reconcile",
+      "body": "An on-budget account has not been reconciled for {{metrics.days_since_reconcile}} days. Compare it with your bank statement.",
+      "mathMetrics": [
+        "days_since_reconcile"
+      ],
+      "actions": [
+        {
+          "label": "Open accounts",
+          "route": "db:accounts:all"
+        }
+      ]
+    },
+    {
+      "id": "util-30",
+      "when": "metrics.utilization_max > 0.3",
+      "severity": "tip",
+      "title": "Card utilization is {{fmt_pct(metrics.utilization_max)}}",
+      "body": "Keeping card balances under about 30% of the limit is a common guideline for credit scores.",
+      "mathMetrics": [
+        "utilization_max"
+      ],
+      "actions": [
+        {
+          "label": "Debt guide",
+          "route": "page:debt_guide"
+        }
+      ]
+    },
+    {
+      "id": "debt-vs-savings",
+      "when": "metrics.max_debt_apr >= 10 and metrics.savings_grew_3m",
+      "severity": "info",
+      "title": "Savings are growing while {{metrics.max_debt_apr}}% debt remains",
+      "body": "Beyond your emergency fund, paying down high-interest debt is a guaranteed return equal to its APR. Consider redirecting some savings.",
+      "mathMetrics": [
+        "max_debt_apr"
+      ],
+      "actions": [
+        {
+          "label": "Order of operations",
+          "route": "page:order"
+        }
+      ]
+    },
+    {
+      "id": "savings-rate-down-3m",
+      "when": "metrics.savings_rate_down_3m",
+      "severity": "info",
+      "title": "Your savings rate fell three months in a row",
+      "body": "It is now {{fmt_pct(metrics.savings_rate_3m)}} over the last three months. A quick look at spending by category may show why.",
+      "mathMetrics": [
+        "savings_rate_3m"
+      ],
+      "actions": [
+        {
+          "label": "Spending by category",
+          "route": "db:transactions:by_category"
+        }
+      ]
+    },
+    {
+      "id": "possible-dupes",
+      "when": "metrics.possible_dupes > 0",
+      "severity": "tip",
+      "title": "Possible duplicate transactions",
+      "body": "{{metrics.possible_dupes}} group(s) of transactions share a date, amount and description. Check whether one is a double import.",
+      "mathMetrics": [
+        "possible_dupes"
+      ],
+      "actions": [
+        {
+          "label": "Open transactions",
+          "route": "db:transactions:all"
+        }
+      ]
+    }
+  ],
+  "checklist": [
+    {
+      "id": "import",
+      "label": "Import transactions",
+      "autoTick": {
+        "event": "finance.import_committed"
+      }
+    },
+    {
+      "id": "categorize",
+      "label": "Categorise last month",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.txn_count > 0 and metrics.uncategorized_count == 0"
+      }
+    },
+    {
+      "id": "budget",
+      "label": "Set a budget",
+      "autoTick": {
+        "event": "budget.assigned"
+      }
+    },
+    {
+      "id": "ef_goal",
+      "label": "Set an emergency-fund goal",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.ef_target > 0 and answers.emergency_months > 0"
+      }
+    },
+    {
+      "id": "subscriptions",
+      "label": "Review subscriptions",
+      "autoTick": {
+        "event": "subscriptions.reviewed"
+      }
+    },
+    {
+      "id": "weekly",
+      "label": "Do your first weekly check-in",
+      "autoTick": {
+        "event": "ritual.weekly_done"
+      }
+    }
+  ],
+  "migrations": [],
+  "sample": {
+    "generator": "money_hq",
+    "seed": 20261126
+  }
+}

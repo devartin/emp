@@ -223,6 +223,58 @@ impl IntegrationError {
         }
     }
 
+    /// A copy of this error for fanning one failure out to several callers. Variants that
+    /// carry no data are reproduced exactly; others keep their code and message.
+    pub fn replicate(&self) -> IntegrationError {
+        use IntegrationError as E;
+        match self {
+            E::Offline => E::Offline,
+            E::Timeout => E::Timeout,
+            E::TooManyRedirects => E::TooManyRedirects,
+            E::AuthRequired => E::AuthRequired,
+            E::ReauthRequired => E::ReauthRequired,
+            E::AuthTimeout => E::AuthTimeout,
+            E::Cancelled => E::Cancelled,
+            E::SyncTokenExpired => E::SyncTokenExpired,
+            E::RateLimited { retry_after } => E::RateLimited {
+                retry_after: *retry_after,
+            },
+            E::CircuitOpen {
+                connector,
+                retry_after,
+            } => E::CircuitOpen {
+                connector,
+                retry_after: *retry_after,
+            },
+            E::TooLarge { cap } => E::TooLarge { cap: *cap },
+            E::HostNotAllowed { connector, host } => E::HostNotAllowed {
+                connector,
+                host: host.clone(),
+            },
+            E::BlockedAddress { host } => E::BlockedAddress { host: host.clone() },
+            E::Http { status, message } => E::Http {
+                status: *status,
+                message: message.clone(),
+            },
+            E::UnexpectedContentType { got, expected } => E::UnexpectedContentType {
+                got: got.clone(),
+                expected,
+            },
+            E::InsecureUrl(m) => E::InsecureUrl(m.clone()),
+            E::Network(m) => E::Network(m.clone()),
+            E::Provider(m) => E::Provider(m.clone()),
+            E::Quota(m) => E::Quota(m.clone()),
+            E::Decode(m) => E::Decode(m.clone()),
+            E::OAuth(m) => E::OAuth(m.clone()),
+            E::Unsupported(m) => E::Unsupported(m.clone()),
+            E::NotFound(m) => E::NotFound(m.clone()),
+            E::Invalid(m) => E::Invalid(m.clone()),
+            E::LimitExceeded(m) => E::LimitExceeded(m.clone()),
+            E::Io(m) => E::Io(m.clone()),
+            E::Internal(m) => E::Internal(m.clone()),
+        }
+    }
+
     /// Whether this failure should count against a connector's circuit breaker
     /// and is worth retrying.
     pub(crate) fn is_transient(&self) -> bool {

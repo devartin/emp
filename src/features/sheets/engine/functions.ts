@@ -67,14 +67,13 @@ export const FUNCTIONS = new Map<string, FnSpec>();
 function argsFromSignature(sig: string): FnArgDoc[] {
   const inner = sig.slice(sig.indexOf('(') + 1, sig.lastIndexOf(')')).trim();
   if (!inner) return [];
-  return inner
-    .split(',')
-    .map((p) => p.trim())
-    .filter((p) => p && p !== '…')
-    .map((p, i, all) => {
+  const parts = inner.split(',').map((p) => p.trim());
+  return parts
+    .map((p, i) => ({ p, repeat: p.includes('…') || parts[i + 1] === '…' }))
+    .filter(({ p }) => p && p !== '…')
+    .map(({ p, repeat }) => {
       const optional = p.startsWith('[');
       const name = p.replace(/[[\]…]/g, '').trim();
-      const repeat = p.includes('…') || all[i + 1] === '…';
       return { name, optional, repeat };
     });
 }
@@ -1275,7 +1274,7 @@ def('Text', 'TEXT(value, format_text)', 'Formats a number as text with a number 
   const f = str(a[1]);
   if (isErr(v)) return v;
   if (isErr(f)) return f;
-  const n = typeof v === 'string' ? toNum(v) : v;
+  const n = typeof v === 'string' ? toNum(v) : toNum(v);
   if (isErr(n)) return v as string;
   return formatValue(n, f).text;
 });

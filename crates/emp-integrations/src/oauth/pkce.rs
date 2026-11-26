@@ -59,7 +59,10 @@ mod tests {
     #[test]
     fn rfc7636_appendix_b_vector() {
         let v = SecretString::new("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk");
-        assert_eq!(Pkce::challenge_for(&v), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+        assert_eq!(
+            Pkce::challenge_for(&v),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        );
     }
 
     #[test]
@@ -68,6 +71,10 @@ mod tests {
         let b = random_token();
         assert_ne!(a, b);
         assert_eq!(a.len(), 43);
-        assert!(a.expose().chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        assert!(
+            a.expose()
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        );
     }
 }

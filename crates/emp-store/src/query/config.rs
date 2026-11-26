@@ -221,10 +221,9 @@ mod tests {
         assert_eq!(r.dual_prop(), Some("p9"));
         let bad: RelationConfig = read(json!({"limit": 3}).as_object().unwrap());
         assert_eq!(bad, RelationConfig::default());
-        let ro: RollupConfig = serde_json::from_value(
-            json!({"relationPropId":"r","targetPropId":"t","fn":"sum"}),
-        )
-        .unwrap();
+        let ro: RollupConfig =
+            serde_json::from_value(json!({"relationPropId":"r","targetPropId":"t","fn":"sum"}))
+                .unwrap();
         assert_eq!(ro.func, RollupFn::Sum);
     }
 }

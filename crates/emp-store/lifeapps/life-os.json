@@ -1,0 +1,1295 @@
+{
+  "id": "life-os",
+  "version": "1.0.0",
+  "title": "Life OS",
+  "tagline": "Tasks, projects and areas with a daily plan and a weekly review.",
+  "icon": "kanban",
+  "color": "blue",
+  "category": "planning",
+  "sensitivity": "normal",
+  "estMinutes": 4,
+  "steps": [
+    {
+      "id": "style",
+      "kind": "choice_cards",
+      "title": "How do you like to plan?",
+      "quick": true,
+      "skippable": false,
+      "recommend": "recommend_lifeos_style",
+      "default": "simple",
+      "options": [
+        {
+          "value": "simple",
+          "label": "Simple",
+          "description": "Today and Upcoming."
+        },
+        {
+          "value": "gtd",
+          "label": "GTD",
+          "description": "Inbox, next actions, weekly review."
+        },
+        {
+          "value": "time_blocking",
+          "label": "Time-blocking",
+          "description": "Give tasks a place on the calendar."
+        },
+        {
+          "value": "para",
+          "label": "PARA",
+          "description": "Projects, Areas, Resources, Archive."
+        },
+        {
+          "value": "mix",
+          "label": "Mix",
+          "description": "A bit of everything."
+        }
+      ]
+    },
+    {
+      "id": "areas",
+      "kind": "multi_chips",
+      "title": "Which areas of life do you want to manage?",
+      "quick": true,
+      "skippable": false,
+      "default": [
+        "work",
+        "health",
+        "home"
+      ],
+      "options": [
+        {
+          "value": "work",
+          "label": "Work"
+        },
+        {
+          "value": "health",
+          "label": "Health"
+        },
+        {
+          "value": "money",
+          "label": "Money"
+        },
+        {
+          "value": "home",
+          "label": "Home"
+        },
+        {
+          "value": "relationships",
+          "label": "Relationships"
+        },
+        {
+          "value": "learning",
+          "label": "Learning"
+        },
+        {
+          "value": "fun",
+          "label": "Fun"
+        },
+        {
+          "value": "side_project",
+          "label": "Side project"
+        },
+        {
+          "value": "family",
+          "label": "Family"
+        },
+        {
+          "value": "community",
+          "label": "Community"
+        }
+      ]
+    },
+    {
+      "id": "priority",
+      "kind": "choice_cards",
+      "title": "How do you prioritise?",
+      "quick": false,
+      "skippable": true,
+      "default": "p1_p4",
+      "options": [
+        {
+          "value": "p1_p4",
+          "label": "P1–P4"
+        },
+        {
+          "value": "eisenhower",
+          "label": "Eisenhower matrix",
+          "description": "Urgent × important."
+        },
+        {
+          "value": "top3",
+          "label": "Top 3 per day"
+        }
+      ]
+    },
+    {
+      "id": "hours",
+      "kind": "choice_cards",
+      "title": "Your working hours",
+      "quick": false,
+      "skippable": true,
+      "default": {
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "start": "09:00",
+        "end": "17:30",
+        "focus": "09:00-11:30",
+        "maxFocusBlocks": 2
+      },
+      "itemSchema": {
+        "days": "multi",
+        "start": "time",
+        "end": "time",
+        "focus": "text",
+        "maxFocusBlocks": "number"
+      }
+    },
+    {
+      "id": "calendar",
+      "kind": "connect",
+      "title": "Show your Google Calendar?",
+      "quick": false,
+      "skippable": true,
+      "default": {
+        "connect": false,
+        "calendars": []
+      },
+      "help": "Read-only. Events appear on the Today timeline."
+    },
+    {
+      "id": "rituals",
+      "kind": "recurrence",
+      "title": "Planning rituals",
+      "quick": true,
+      "skippable": true,
+      "why": "A daily plan and a weekly review are the habits that keep a task system trusted.",
+      "default": {
+        "daily": {
+          "rrule": "FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR",
+          "time": "08:30"
+        },
+        "shutdown": {
+          "rrule": "FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR",
+          "time": "17:30"
+        },
+        "weekly": {
+          "rrule": "FREQ=WEEKLY;BYDAY=FR",
+          "time": "16:00"
+        },
+        "monthly": {
+          "rrule": "FREQ=MONTHLY;BYMONTHDAY=1",
+          "time": "09:00"
+        }
+      }
+    },
+    {
+      "id": "capture",
+      "kind": "toggle",
+      "title": "Quick capture",
+      "quick": false,
+      "skippable": true,
+      "default": {
+        "nlDates": true
+      },
+      "help": "Type “call Sam tomorrow 3pm #home” and dates are understood. A global capture hotkey is not part of this version."
+    }
+  ],
+  "templates": [
+    {
+      "key": "today",
+      "kind": "dashboard",
+      "optional": false,
+      "spec": {
+        "title": "Today",
+        "icon": "lucide:kanban",
+        "subtitle": "Your agenda, top 3, due tasks and insights from every app.",
+        "tabs": [
+          "Today",
+          "Inbox",
+          "Upcoming",
+          "Projects",
+          "Areas",
+          "Review"
+        ],
+        "tiles": [
+          {
+            "t": "kpi",
+            "metric": "inbox_count",
+            "label": "Inbox",
+            "format": "number"
+          },
+          {
+            "t": "kpi",
+            "metric": "overdue_count",
+            "label": "Overdue",
+            "format": "number"
+          },
+          {
+            "t": "kpi",
+            "metric": "today_scheduled_min",
+            "label": "Scheduled today (min)",
+            "format": "number"
+          },
+          {
+            "t": "kpi",
+            "metric": "projects_without_next",
+            "label": "Projects without a next action",
+            "format": "number"
+          }
+        ],
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## Due and scheduled"
+          },
+          {
+            "t": "database",
+            "db": "tasks",
+            "view": "today"
+          },
+          {
+            "t": "md",
+            "md": "## Inbox"
+          },
+          {
+            "t": "database",
+            "db": "tasks",
+            "view": "inbox"
+          },
+          {
+            "t": "md",
+            "md": "## Method"
+          },
+          {
+            "t": "pageLink",
+            "page": "method"
+          },
+          {
+            "t": "pageLink",
+            "page": "weekly"
+          }
+        ]
+      }
+    },
+    {
+      "key": "method",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "How Life OS works",
+        "icon": "🧠",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## Capture everything\nAnything on your mind goes to the **Inbox** — quick add understands dates like “tomorrow 3pm” and tags like `#home`. Capturing is not committing; it gets things out of your head.\n\n## Clarify and organise\nWhen you process the inbox, decide for each item:\n- **Is it actionable?** No → delete it, file it as a resource, or move it to *Someday*.\n- **Takes under two minutes?** Do it now.\n- **Waiting on someone?** Status *Waiting*, and note who.\n- **Has a date?** Give it a *Due* date only when there is a real deadline; use *Scheduled* for when you plan to do it.\n- **More than one step?** It is a **Project**; give it an outcome and one *Next* action.\n\n## Prioritise\n{{if(answers.priority == \"eisenhower\", \"You chose the Eisenhower matrix: do urgent + important now, schedule important, delegate urgent, drop the rest. The Eisenhower board groups tasks by quadrant.\", if(answers.priority == \"top3\", \"You chose Top 3 per day: pick the three tasks that would make today a success in your morning plan; everything else is a bonus.\", \"You chose P1–P4: P1 is today-critical, P2 this week, P3 soon, P4 whenever. Keep P1 to a handful.\"))}}\n\n## Plan the day, then shut down\nEach morning look at **Today**, choose your top 3 and give focus work a time block. At the end of the day run the shutdown checklist so work stays at work.\n\n## Weekly review\nOnce a week: get clear (inbox to zero), get current (calendar, projects without a next action, waiting list) and get creative (someday list). This is what keeps the system trusted."
+          }
+        ]
+      }
+    },
+    {
+      "key": "weekly",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Weekly review",
+        "icon": "🔁",
+        "template": true,
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## 1. Get clear"
+          },
+          {
+            "t": "checklist",
+            "items": [
+              "Inbox to zero",
+              "Empty notebooks, email flags and downloads into the inbox"
+            ]
+          },
+          {
+            "t": "md",
+            "md": "## 2. Get current"
+          },
+          {
+            "t": "checklist",
+            "items": [
+              "Review the calendar: past week and next two weeks",
+              "Every active project has a Next action",
+              "Check the Waiting list and follow up",
+              "Read this week's insights"
+            ]
+          },
+          {
+            "t": "database",
+            "db": "projects",
+            "view": "active"
+          },
+          {
+            "t": "database",
+            "db": "tasks",
+            "view": "waiting"
+          },
+          {
+            "t": "md",
+            "md": "## 3. Get creative"
+          },
+          {
+            "t": "checklist",
+            "items": [
+              "Review the Someday list — promote or delete",
+              "Choose next week's top 3"
+            ]
+          },
+          {
+            "t": "database",
+            "db": "tasks",
+            "view": "someday"
+          }
+        ]
+      }
+    },
+    {
+      "key": "tasks",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Tasks",
+        "icon": "✅",
+        "properties": [
+          {
+            "key": "title",
+            "name": "Title",
+            "type": "title"
+          },
+          {
+            "key": "status",
+            "name": "Status",
+            "type": "status",
+            "options": [
+              {
+                "key": "inbox",
+                "name": "Inbox",
+                "color": "gray",
+                "group": "todo"
+              },
+              {
+                "key": "next",
+                "name": "Next",
+                "color": "blue",
+                "group": "todo"
+              },
+              {
+                "key": "scheduled",
+                "name": "Scheduled",
+                "color": "purple",
+                "group": "in_progress"
+              },
+              {
+                "key": "waiting",
+                "name": "Waiting",
+                "color": "yellow",
+                "group": "in_progress"
+              },
+              {
+                "key": "someday",
+                "name": "Someday",
+                "color": "brown",
+                "group": "todo"
+              },
+              {
+                "key": "done",
+                "name": "Done",
+                "color": "green",
+                "group": "complete"
+              }
+            ]
+          },
+          {
+            "key": "priority",
+            "name": "Priority",
+            "type": "select",
+            "options": [
+              {
+                "key": "p1",
+                "name": "P1",
+                "color": "red"
+              },
+              {
+                "key": "p2",
+                "name": "P2",
+                "color": "orange"
+              },
+              {
+                "key": "p3",
+                "name": "P3",
+                "color": "blue"
+              },
+              {
+                "key": "p4",
+                "name": "P4",
+                "color": "gray"
+              }
+            ]
+          },
+          {
+            "key": "quadrant",
+            "name": "Quadrant",
+            "type": "select",
+            "options": [
+              {
+                "key": "do",
+                "name": "Do now (urgent, important)",
+                "color": "red"
+              },
+              {
+                "key": "schedule",
+                "name": "Schedule (important)",
+                "color": "blue"
+              },
+              {
+                "key": "delegate",
+                "name": "Delegate (urgent)",
+                "color": "yellow"
+              },
+              {
+                "key": "drop",
+                "name": "Drop (neither)",
+                "color": "gray"
+              }
+            ]
+          },
+          {
+            "key": "due",
+            "name": "Due",
+            "type": "date"
+          },
+          {
+            "key": "scheduled",
+            "name": "Scheduled",
+            "type": "date"
+          },
+          {
+            "key": "estimate",
+            "name": "Estimate (min)",
+            "type": "number"
+          },
+          {
+            "key": "area",
+            "name": "Area",
+            "type": "relation",
+            "relation": {
+              "db": "areas",
+              "limit": "one",
+              "dual": {
+                "key": "tasks",
+                "name": "Tasks"
+              }
+            }
+          },
+          {
+            "key": "project",
+            "name": "Project",
+            "type": "relation",
+            "relation": {
+              "db": "projects",
+              "limit": "one",
+              "dual": {
+                "key": "tasks",
+                "name": "Tasks"
+              }
+            }
+          },
+          {
+            "key": "context",
+            "name": "Context",
+            "type": "multi_select",
+            "options": [
+              {
+                "key": "home",
+                "name": "@home"
+              },
+              {
+                "key": "computer",
+                "name": "@computer"
+              },
+              {
+                "key": "errands",
+                "name": "@errands"
+              },
+              {
+                "key": "calls",
+                "name": "@calls"
+              }
+            ]
+          },
+          {
+            "key": "energy",
+            "name": "Energy",
+            "type": "select",
+            "options": [
+              {
+                "key": "high",
+                "name": "High"
+              },
+              {
+                "key": "medium",
+                "name": "Medium"
+              },
+              {
+                "key": "low",
+                "name": "Low"
+              }
+            ]
+          },
+          {
+            "key": "recurrence",
+            "name": "Recurrence",
+            "type": "recurrence"
+          },
+          {
+            "key": "waiting_on",
+            "name": "Waiting on",
+            "type": "text"
+          },
+          {
+            "key": "source",
+            "name": "Source",
+            "type": "text"
+          },
+          {
+            "key": "completed_at",
+            "name": "Completed at",
+            "type": "date"
+          },
+          {
+            "key": "done_flag",
+            "name": "Done",
+            "type": "checkbox",
+            "hidden": true
+          }
+        ],
+        "views": [
+          {
+            "key": "inbox",
+            "name": "Inbox",
+            "layout": "list",
+            "filter": {
+              "prop": "status",
+              "op": "eq",
+              "value": "opt:inbox"
+            },
+            "sorts": [
+              {
+                "prop": "$created",
+                "dir": "desc"
+              }
+            ]
+          },
+          {
+            "key": "today",
+            "name": "Today",
+            "layout": "table",
+            "filter": {
+              "and": [
+                {
+                  "prop": "status",
+                  "op": "neq",
+                  "value": "opt:done"
+                },
+                {
+                  "or": [
+                    {
+                      "prop": "scheduled",
+                      "op": "on_or_before",
+                      "value": "today"
+                    },
+                    {
+                      "prop": "due",
+                      "op": "on_or_before",
+                      "value": "today"
+                    }
+                  ]
+                }
+              ]
+            },
+            "sorts": [
+              {
+                "prop": "priority",
+                "dir": "asc"
+              }
+            ]
+          },
+          {
+            "key": "upcoming",
+            "name": "Upcoming",
+            "layout": "calendar",
+            "calendar": {
+              "dateProp": "due"
+            }
+          },
+          {
+            "key": "board",
+            "name": "Board",
+            "layout": "board",
+            "groupBy": {
+              "prop": "status"
+            }
+          },
+          {
+            "key": "eisenhower",
+            "name": "Eisenhower",
+            "layout": "board",
+            "groupBy": {
+              "prop": "quadrant"
+            }
+          },
+          {
+            "key": "someday",
+            "name": "Someday",
+            "layout": "list",
+            "filter": {
+              "prop": "status",
+              "op": "eq",
+              "value": "opt:someday"
+            }
+          },
+          {
+            "key": "waiting",
+            "name": "Waiting",
+            "layout": "table",
+            "filter": {
+              "prop": "status",
+              "op": "eq",
+              "value": "opt:waiting"
+            }
+          },
+          {
+            "key": "completed",
+            "name": "Completed",
+            "layout": "table",
+            "filter": {
+              "prop": "status",
+              "op": "eq",
+              "value": "opt:done"
+            },
+            "sorts": [
+              {
+                "prop": "completed_at",
+                "dir": "desc"
+              }
+            ]
+          }
+        ],
+        "rowTemplates": [
+          {
+            "key": "task",
+            "name": "Task",
+            "default": true,
+            "values": {
+              "status": "inbox"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "projects",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Projects",
+        "icon": "📁",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "area",
+            "name": "Area",
+            "type": "relation",
+            "relation": {
+              "db": "areas",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "status",
+            "name": "Status",
+            "type": "select",
+            "options": [
+              {
+                "key": "active",
+                "name": "Active",
+                "color": "blue"
+              },
+              {
+                "key": "on_hold",
+                "name": "On hold",
+                "color": "yellow"
+              },
+              {
+                "key": "done",
+                "name": "Done",
+                "color": "green"
+              },
+              {
+                "key": "archived",
+                "name": "Archived",
+                "color": "gray"
+              }
+            ]
+          },
+          {
+            "key": "outcome",
+            "name": "Outcome",
+            "type": "text",
+            "description": "What does done look like?"
+          },
+          {
+            "key": "deadline",
+            "name": "Deadline",
+            "type": "date"
+          },
+          {
+            "key": "progress",
+            "name": "Progress",
+            "type": "rollup",
+            "rollup": {
+              "relation": "tasks",
+              "target": "done_flag",
+              "fn": "pct_checked"
+            }
+          },
+          {
+            "key": "next_action",
+            "name": "Next action",
+            "type": "formula",
+            "formula": "prop(\"Tasks\").filter(current.prop(\"Status\") == \"Next\").map(current.prop(\"Title\")).first()"
+          },
+          {
+            "key": "review",
+            "name": "Review date",
+            "type": "date"
+          }
+        ],
+        "views": [
+          {
+            "key": "active",
+            "name": "Active",
+            "layout": "board",
+            "groupBy": {
+              "prop": "status"
+            }
+          },
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "deadline",
+                "dir": "asc"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "areas",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Areas",
+        "icon": "🧭",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "standard",
+            "name": "Standard",
+            "type": "text",
+            "description": "What “good” looks like in this area."
+          },
+          {
+            "key": "icon",
+            "name": "Icon",
+            "type": "text"
+          }
+        ],
+        "rows": [
+          {
+            "key": "work",
+            "when": "answers.areas_work",
+            "icon": "💼",
+            "values": {
+              "name": "Work",
+              "icon": "💼"
+            }
+          },
+          {
+            "key": "health",
+            "when": "answers.areas_health",
+            "icon": "💪",
+            "values": {
+              "name": "Health",
+              "icon": "💪"
+            }
+          },
+          {
+            "key": "money",
+            "when": "answers.areas_money",
+            "icon": "💰",
+            "values": {
+              "name": "Money",
+              "icon": "💰"
+            }
+          },
+          {
+            "key": "home",
+            "when": "answers.areas_home",
+            "icon": "🏡",
+            "values": {
+              "name": "Home",
+              "icon": "🏡"
+            }
+          },
+          {
+            "key": "relationships",
+            "when": "answers.areas_relationships",
+            "icon": "❤️",
+            "values": {
+              "name": "Relationships",
+              "icon": "❤️"
+            }
+          },
+          {
+            "key": "learning",
+            "when": "answers.areas_learning",
+            "icon": "📚",
+            "values": {
+              "name": "Learning",
+              "icon": "📚"
+            }
+          },
+          {
+            "key": "fun",
+            "when": "answers.areas_fun",
+            "icon": "🎉",
+            "values": {
+              "name": "Fun",
+              "icon": "🎉"
+            }
+          },
+          {
+            "key": "side_project",
+            "when": "answers.areas_side_project",
+            "icon": "🚀",
+            "values": {
+              "name": "Side project",
+              "icon": "🚀"
+            }
+          },
+          {
+            "key": "family",
+            "when": "answers.areas_family",
+            "icon": "👪",
+            "values": {
+              "name": "Family",
+              "icon": "👪"
+            }
+          },
+          {
+            "key": "community",
+            "when": "answers.areas_community",
+            "icon": "🤝",
+            "values": {
+              "name": "Community",
+              "icon": "🤝"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "resources",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Resources",
+        "icon": "📚",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "topic",
+            "name": "Topic",
+            "type": "text"
+          },
+          {
+            "key": "url",
+            "name": "Link",
+            "type": "url"
+          },
+          {
+            "key": "area",
+            "name": "Area",
+            "type": "relation",
+            "relation": {
+              "db": "areas",
+              "limit": "one"
+            }
+          }
+        ]
+      },
+      "when": "answers.style == \"para\" or answers.style == \"mix\""
+    },
+    {
+      "key": "daily",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Daily notes",
+        "icon": "📓",
+        "properties": [
+          {
+            "key": "title",
+            "name": "Title",
+            "type": "title"
+          },
+          {
+            "key": "date",
+            "name": "Date",
+            "type": "date"
+          },
+          {
+            "key": "top3",
+            "name": "Top 3",
+            "type": "text"
+          },
+          {
+            "key": "log",
+            "name": "Log",
+            "type": "text"
+          },
+          {
+            "key": "gratitude",
+            "name": "Gratitude",
+            "type": "text"
+          },
+          {
+            "key": "shutdown",
+            "name": "Shutdown done",
+            "type": "checkbox"
+          },
+          {
+            "key": "weekly_review",
+            "name": "Weekly review done",
+            "type": "checkbox"
+          }
+        ],
+        "views": [
+          {
+            "key": "calendar",
+            "name": "Calendar",
+            "layout": "calendar",
+            "calendar": {
+              "dateProp": "date"
+            }
+          },
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "desc"
+              }
+            ]
+          }
+        ],
+        "rowTemplates": [
+          {
+            "key": "day",
+            "name": "Daily note",
+            "default": true,
+            "values": {
+              "date": "@today"
+            },
+            "body": [
+              {
+                "t": "md",
+                "md": "## Top 3\n1. \n2. \n3. \n\n## Log\n\n## Gratitude"
+              },
+              {
+                "t": "checklist",
+                "items": [
+                  "Inbox processed",
+                  "Tomorrow's top 3 chosen",
+                  "Calendar checked for tomorrow",
+                  "Desk and tabs cleared"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "daily_plan",
+      "kind": "recurring",
+      "optional": true,
+      "spec": {
+        "title": "Daily planning",
+        "text": "Plan your day: pick today's top 3",
+        "target": "today",
+        "rrule": "${answers.rituals.daily.rrule}",
+        "time": "${answers.rituals.daily.time}"
+      }
+    },
+    {
+      "key": "shutdown",
+      "kind": "recurring",
+      "optional": true,
+      "spec": {
+        "title": "Shutdown",
+        "text": "Shutdown: process the inbox and choose tomorrow's top 3",
+        "target": "today",
+        "rrule": "${answers.rituals.shutdown.rrule}",
+        "time": "${answers.rituals.shutdown.time}"
+      }
+    },
+    {
+      "key": "weekly_ritual",
+      "kind": "recurring",
+      "optional": true,
+      "spec": {
+        "title": "Weekly review",
+        "text": "Time for your weekly review",
+        "target": "weekly",
+        "rrule": "${answers.rituals.weekly.rrule}",
+        "time": "${answers.rituals.weekly.time}"
+      }
+    },
+    {
+      "key": "monthly_reset",
+      "kind": "recurring",
+      "optional": true,
+      "spec": {
+        "title": "Monthly reset",
+        "text": "Monthly reset: review areas and projects",
+        "target": "projects",
+        "rrule": "${answers.rituals.monthly.rrule}",
+        "time": "${answers.rituals.monthly.time}"
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "name": "inbox_count",
+      "kind": "rust",
+      "fn": "life.inbox_count",
+      "deps": [
+        "tasks"
+      ]
+    },
+    {
+      "name": "overdue_count",
+      "kind": "rust",
+      "fn": "life.overdue_count",
+      "deps": [
+        "tasks"
+      ]
+    },
+    {
+      "name": "today_scheduled_min",
+      "kind": "rust",
+      "fn": "life.today_scheduled_min",
+      "deps": [
+        "tasks"
+      ]
+    },
+    {
+      "name": "working_min_today",
+      "kind": "rust",
+      "fn": "life.working_min_today",
+      "deps": []
+    },
+    {
+      "name": "projects_without_next",
+      "kind": "rust",
+      "fn": "life.projects_without_next",
+      "deps": [
+        "projects",
+        "tasks"
+      ]
+    },
+    {
+      "name": "last_review_date",
+      "kind": "rust",
+      "fn": "life.last_review_date",
+      "deps": [
+        "daily"
+      ]
+    },
+    {
+      "name": "days_since_review",
+      "kind": "rust",
+      "fn": "life.days_since_review",
+      "deps": [
+        "daily"
+      ]
+    },
+    {
+      "name": "task_count",
+      "kind": "rust",
+      "fn": "life.task_count",
+      "deps": [
+        "tasks"
+      ]
+    },
+    {
+      "name": "done_count",
+      "kind": "rust",
+      "fn": "life.done_count",
+      "deps": [
+        "tasks"
+      ]
+    }
+  ],
+  "advisor": [
+    {
+      "id": "inbox-20",
+      "when": "metrics.inbox_count > 20",
+      "severity": "tip",
+      "title": "{{metrics.inbox_count}} items in your inbox",
+      "body": "A quick processing pass keeps the system trusted: decide, delegate, schedule or delete.",
+      "mathMetrics": [
+        "inbox_count"
+      ],
+      "actions": [
+        {
+          "label": "Process inbox",
+          "route": "db:tasks:inbox"
+        }
+      ]
+    },
+    {
+      "id": "project-no-next",
+      "when": "metrics.projects_without_next > 0",
+      "severity": "tip",
+      "title": "{{metrics.projects_without_next}} project(s) have no next action",
+      "body": "A project without a Next task tends to stall. Add the very next physical step.",
+      "mathMetrics": [
+        "projects_without_next"
+      ],
+      "actions": [
+        {
+          "label": "Projects",
+          "route": "db:projects:active"
+        }
+      ]
+    },
+    {
+      "id": "overdue-5",
+      "when": "metrics.overdue_count > 5",
+      "severity": "warn",
+      "title": "{{metrics.overdue_count}} tasks are overdue",
+      "body": "Consider rescheduling honestly, or dropping what no longer matters.",
+      "mathMetrics": [
+        "overdue_count"
+      ],
+      "actions": [
+        {
+          "label": "Today",
+          "route": "db:tasks:today"
+        }
+      ]
+    },
+    {
+      "id": "overbooked",
+      "when": "metrics.today_scheduled_min > metrics.working_min_today",
+      "severity": "warn",
+      "title": "Today is overbooked",
+      "body": "{{metrics.today_scheduled_min}} minutes are scheduled but you work {{metrics.working_min_today}}. Consider moving something to tomorrow.",
+      "mathMetrics": [
+        "today_scheduled_min",
+        "working_min_today"
+      ],
+      "actions": [
+        {
+          "label": "Today",
+          "route": "db:tasks:today"
+        }
+      ]
+    },
+    {
+      "id": "review-missed",
+      "when": "metrics.days_since_review > 7",
+      "severity": "tip",
+      "title": "Your weekly review is due",
+      "body": "It has been {{metrics.days_since_review}} days. Thirty minutes now saves hours of scrambling.",
+      "mathMetrics": [
+        "days_since_review"
+      ],
+      "actions": [
+        {
+          "label": "Weekly review",
+          "route": "page:weekly"
+        }
+      ]
+    }
+  ],
+  "checklist": [
+    {
+      "id": "capture",
+      "label": "Capture 5 tasks",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.task_count >= 5"
+      }
+    },
+    {
+      "id": "inbox",
+      "label": "Process your inbox",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.task_count > 0 and metrics.inbox_count == 0"
+      }
+    },
+    {
+      "id": "project",
+      "label": "Create a project with a next action",
+      "autoTick": {
+        "event": "project.next_action_set"
+      }
+    },
+    {
+      "id": "review",
+      "label": "Do your first weekly review",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.days_since_review <= 7 and metrics.last_review_date"
+      }
+    }
+  ],
+  "migrations": [],
+  "sample": {
+    "generator": "life_os",
+    "seed": 20261130
+  }
+}

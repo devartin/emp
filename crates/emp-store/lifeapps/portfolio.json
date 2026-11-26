@@ -1,0 +1,1782 @@
+{
+  "id": "portfolio",
+  "version": "1.0.0",
+  "title": "Portfolio",
+  "tagline": "Track holdings, allocation and performance — with a plan for when markets fall.",
+  "icon": "candlestick-chart",
+  "color": "ocean",
+  "category": "investing",
+  "sensitivity": "high",
+  "estMinutes": 7,
+  "disclaimer": "Education and estimates, not investment advice. Example allocations are starting points, not recommendations. EMP never places trades.",
+  "steps": [
+    {
+      "id": "experience",
+      "kind": "choice_cards",
+      "title": "How experienced are you with investing?",
+      "quick": true,
+      "skippable": false,
+      "help": "This controls how much detail and jargon we show. Indicators appear at Advanced.",
+      "default": "beginner",
+      "options": [
+        {
+          "value": "beginner",
+          "label": "Beginner",
+          "description": "Keep it simple, explain terms."
+        },
+        {
+          "value": "intermediate",
+          "label": "Intermediate",
+          "description": "I know funds and allocation."
+        },
+        {
+          "value": "advanced",
+          "label": "Advanced",
+          "description": "Show indicators and lots."
+        }
+      ]
+    },
+    {
+      "id": "accounts",
+      "kind": "list_builder",
+      "title": "Which investment accounts do you have?",
+      "quick": true,
+      "skippable": false,
+      "help": "Account types come from your country's account pack (US: 401(k), IRA, Roth IRA, HSA, taxable, 529, crypto).",
+      "default": [
+        {
+          "name": "Brokerage",
+          "broker": "",
+          "currency": "USD",
+          "type": "taxable",
+          "taxTreatment": "taxable"
+        }
+      ],
+      "itemSchema": {
+        "name": "text",
+        "broker": "text",
+        "currency": "text",
+        "type": "enum(401k,403b,ira,roth_ira,hsa,taxable,529,crypto)",
+        "taxTreatment": "enum(taxable,deferred,free)"
+      }
+    },
+    {
+      "id": "depth",
+      "kind": "choice_cards",
+      "title": "How much history do you want to track?",
+      "quick": true,
+      "skippable": true,
+      "default": "positions",
+      "options": [
+        {
+          "value": "positions",
+          "label": "Positions only",
+          "description": "Ticker, quantity and cost per position."
+        },
+        {
+          "value": "history",
+          "label": "Full history",
+          "description": "Import a CSV of trades or enter them manually."
+        }
+      ]
+    },
+    {
+      "id": "basis",
+      "kind": "choice_cards",
+      "title": "Cost-basis method",
+      "quick": false,
+      "skippable": true,
+      "default": "fifo",
+      "help": "Used to compute realised gains when you sell.",
+      "options": [
+        {
+          "value": "fifo",
+          "label": "FIFO",
+          "description": "First in, first out (default)."
+        },
+        {
+          "value": "average",
+          "label": "Average cost"
+        }
+      ]
+    },
+    {
+      "id": "risk",
+      "kind": "choice_cards",
+      "title": "Your risk profile",
+      "quick": false,
+      "skippable": true,
+      "help": "Four quick questions give an educational stock/bond range — not a recommendation.",
+      "default": {
+        "horizon": "3to10",
+        "drop": "hold",
+        "income": "stable",
+        "goal": "growth"
+      },
+      "recommend": "recommend_risk_range",
+      "itemSchema": {
+        "horizon": "enum(lt3,3to10,gt10)",
+        "drop": "enum(sell,hold,buy)",
+        "income": "enum(unstable,stable)",
+        "goal": "text"
+      }
+    },
+    {
+      "id": "targets",
+      "kind": "choice_cards",
+      "title": "Pick a target allocation",
+      "quick": true,
+      "skippable": false,
+      "help": "Each option is an example starting point, not a recommendation. Targets must add up to 100%.",
+      "why": "A written target makes it easier to stay the course when markets move.",
+      "recommend": "recommend_targets",
+      "default": {
+        "preset": "three_fund",
+        "age": 40,
+        "custom": []
+      },
+      "options": [
+        {
+          "value": "three_fund",
+          "label": "Three-fund style",
+          "description": "US stocks, international stocks, bonds."
+        },
+        {
+          "value": "sixty_forty",
+          "label": "60/40",
+          "description": "60% stocks, 40% bonds."
+        },
+        {
+          "value": "age_based",
+          "label": "Age-based",
+          "description": "110 − age in stocks."
+        },
+        {
+          "value": "all_equity",
+          "label": "All-equity",
+          "description": "Stocks only — highest volatility."
+        },
+        {
+          "value": "custom",
+          "label": "Custom",
+          "description": "Set your own classes and weights."
+        }
+      ],
+      "itemSchema": {
+        "class": "enum(us_equity,intl_developed,emerging,bonds,inflation_linked,reit,cash,crypto,other)",
+        "target": "percent"
+      }
+    },
+    {
+      "id": "rebalance",
+      "kind": "choice_cards",
+      "title": "How do you want to rebalance?",
+      "quick": false,
+      "skippable": true,
+      "recommend": "recommend_rebalance",
+      "default": {
+        "mode": "hybrid",
+        "calendar": "annual",
+        "bandAbs": 5,
+        "bandRel": 25,
+        "cashFlowFirst": true,
+        "avoidTaxableSells": true,
+        "minTrade": 50
+      },
+      "options": [
+        {
+          "value": "calendar",
+          "label": "Calendar",
+          "description": "Quarterly, semiannual or annual."
+        },
+        {
+          "value": "threshold",
+          "label": "Threshold",
+          "description": "When a class drifts outside 5 pp / 25%."
+        },
+        {
+          "value": "hybrid",
+          "label": "Hybrid (default)",
+          "description": "Check on a schedule, trade only outside the bands."
+        }
+      ]
+    },
+    {
+      "id": "contrib",
+      "kind": "money",
+      "title": "Regular contributions",
+      "quick": false,
+      "skippable": true,
+      "default": {
+        "amount": 0,
+        "rrule": "FREQ=MONTHLY;BYMONTHDAY=1",
+        "accounts": []
+      }
+    },
+    {
+      "id": "market",
+      "kind": "connect",
+      "title": "Market data",
+      "quick": true,
+      "skippable": true,
+      "help": "Only ticker symbols leave this device — never quantities, cost basis, account names or balances.",
+      "default": {
+        "provider": "keyless"
+      },
+      "options": [
+        {
+          "value": "keyless",
+          "label": "Keyless (default)"
+        },
+        {
+          "value": "keys",
+          "label": "Use my provider keys"
+        }
+      ]
+    },
+    {
+      "id": "watchlist",
+      "kind": "list_builder",
+      "title": "Watchlist",
+      "quick": false,
+      "skippable": true,
+      "default": [],
+      "itemSchema": {
+        "ticker": "text",
+        "alertAbove": "money",
+        "alertBelow": "money",
+        "alertPct": "percent"
+      }
+    },
+    {
+      "id": "benchmark",
+      "kind": "choice_cards",
+      "title": "Benchmark",
+      "quick": false,
+      "skippable": true,
+      "default": {
+        "kind": "blend"
+      },
+      "options": [
+        {
+          "value": "blend",
+          "label": "Blend of my targets"
+        },
+        {
+          "value": "symbol",
+          "label": "A symbol (e.g. VT)"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "key": "portfolio",
+      "kind": "dashboard",
+      "optional": false,
+      "spec": {
+        "title": "Portfolio",
+        "icon": "lucide:candlestick-chart",
+        "subtitle": "Holdings, allocation, performance and dividends — EMP never places trades.",
+        "tabs": [
+          "Overview",
+          "Holdings",
+          "Allocation",
+          "Performance",
+          "Dividends",
+          "Watchlist"
+        ],
+        "tiles": [
+          {
+            "t": "kpi",
+            "metric": "total_value",
+            "label": "Total value",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "day_change",
+            "label": "Today",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "unrealized",
+            "label": "Unrealised G/L",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "xirr_ytd",
+            "label": "XIRR YTD",
+            "format": "percent"
+          },
+          {
+            "t": "kpi",
+            "metric": "xirr_all",
+            "label": "XIRR all-time",
+            "format": "percent"
+          },
+          {
+            "t": "kpi",
+            "metric": "div_ttm",
+            "label": "Dividends TTM",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "div_fwd_12m",
+            "label": "Dividends next 12 months",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "max_drift",
+            "label": "Max drift",
+            "format": "number"
+          },
+          {
+            "t": "kpi",
+            "metric": "fees_per_year",
+            "label": "Fees per year",
+            "format": "money"
+          },
+          {
+            "t": "chart",
+            "db": "targets",
+            "view": "chart",
+            "title": "Target allocation"
+          },
+          {
+            "t": "chart",
+            "db": "dividends",
+            "view": "by_month",
+            "title": "Dividends by month"
+          }
+        ],
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## Allocation"
+          },
+          {
+            "t": "database",
+            "db": "targets",
+            "view": "all"
+          },
+          {
+            "t": "md",
+            "md": "## Plan"
+          },
+          {
+            "t": "pageLink",
+            "page": "ips"
+          },
+          {
+            "t": "pageLink",
+            "page": "rebalance"
+          },
+          {
+            "t": "pageLink",
+            "page": "review"
+          },
+          {
+            "t": "md",
+            "md": "## Holdings"
+          },
+          {
+            "t": "database",
+            "db": "holdings"
+          },
+          {
+            "t": "database",
+            "db": "securities",
+            "view": "all"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "ips",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Investment Policy Statement",
+        "icon": "📜",
+        "blocks": [
+          {
+            "t": "callout",
+            "icon": "🧭",
+            "color": "blue",
+            "md": "An IPS is a one-page promise to your future self. Write it while markets are calm; read it when they are not."
+          },
+          {
+            "t": "md",
+            "md": "## Goal\n**{{if(answers.risk_goal == \"\", \"Long-term growth\", answers.risk_goal)}}** over a horizon of **{{if(answers.risk_horizon == \"gt10\", \"more than 10 years\", if(answers.risk_horizon == \"lt3\", \"under 3 years\", \"3–10 years\"))}}**.\n\n## Target allocation\nPreset: **{{answers.targets_preset}}** — an example starting point, not a recommendation. The targets live in the Target allocation table below and must add up to 100%.\n\n## Rebalancing\n- Method: **{{answers.rebalance_mode}}**, checked **{{answers.rebalance_calendar}}**.\n- Bands: rebalance a class when it drifts more than **{{answers.rebalance_bandabs}} percentage points** or **{{answers.rebalance_bandrel}}% of its target** away.\n- New money first: direct contributions to the most underweight class before selling anything.\n- Avoid selling in taxable accounts when a tax-advantaged account can do the job.\n\n## Rules I follow when markets fall\n1. I do not sell because prices dropped; I check my bands instead.\n2. I keep my emergency fund outside the portfolio so I am never a forced seller.\n3. I keep contributing on schedule — lower prices buy more shares.\n4. I wait 48 hours before any change that is not in this document.\n5. I review this statement once a year, not after every headline.\n\n## Costs\nPrefer low-cost, diversified funds. An expense ratio above 0.5% is flagged by the advisor.\n\n---\nSigned: ____________________   Date: ____________"
+          },
+          {
+            "t": "database",
+            "db": "targets",
+            "view": "all"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "rebalance",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Rebalance planner",
+        "icon": "⚖️",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## How rebalancing bands work\nEach asset class has a **target** and two bands. A class is *outside its band* when its drift (current % − target %) is more than:\n- the **absolute band** — {{answers.rebalance_bandabs}} percentage points, or\n- the **relative band** — {{answers.rebalance_bandrel}}% of the target (for a 20% target, 5 points).\n\nThis \"5/25\" rule is a common guideline: small drifts are left alone, which keeps trading and taxes low.\n\n## Steps, in order\n1. **New cash first.** Put contributions and dividends into the most underweight classes.\n2. **Tax-advantaged accounts next.** Trades inside IRAs and 401(k)s do not create taxable gains.\n3. **Taxable sells last**, and only if you allow them: losses first, then the highest-basis lots.\n4. Skip trades smaller than **{{fmt_money(coalesce(answers.rebalance_mintrade, 50))}}**.\n\nEMP suggests trades; it never places them."
+          },
+          {
+            "t": "database",
+            "db": "targets",
+            "view": "all"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "review",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Annual investing review",
+        "icon": "🔎",
+        "template": true,
+        "blocks": [
+          {
+            "t": "checklist",
+            "items": [
+              "Re-read the Investment Policy Statement",
+              "Check allocation against targets and bands",
+              "Review fees and expense ratios",
+              "Confirm contributions (employer match, IRA, HSA limits)",
+              "Look for tax-loss harvesting opportunities in taxable accounts",
+              "Update beneficiaries",
+              "Sign and date the IPS again"
+            ]
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "inv_accounts",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Investment accounts",
+        "icon": "🏛️",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "broker",
+            "name": "Broker",
+            "type": "text"
+          },
+          {
+            "key": "currency",
+            "name": "Currency",
+            "type": "text"
+          },
+          {
+            "key": "type",
+            "name": "Type",
+            "type": "select",
+            "options": [
+              {
+                "key": "401k",
+                "name": "401(k)"
+              },
+              {
+                "key": "403b",
+                "name": "403(b)"
+              },
+              {
+                "key": "ira",
+                "name": "Traditional IRA"
+              },
+              {
+                "key": "roth_ira",
+                "name": "Roth IRA"
+              },
+              {
+                "key": "hsa",
+                "name": "HSA"
+              },
+              {
+                "key": "taxable",
+                "name": "Taxable brokerage"
+              },
+              {
+                "key": "529",
+                "name": "529 plan"
+              },
+              {
+                "key": "crypto",
+                "name": "Crypto"
+              },
+              {
+                "key": "pension",
+                "name": "Pension"
+              },
+              {
+                "key": "other",
+                "name": "Other"
+              }
+            ]
+          },
+          {
+            "key": "tax_treatment",
+            "name": "Tax treatment",
+            "type": "select",
+            "options": [
+              {
+                "key": "taxable",
+                "name": "Taxable",
+                "color": "orange"
+              },
+              {
+                "key": "deferred",
+                "name": "Tax-deferred",
+                "color": "blue"
+              },
+              {
+                "key": "free",
+                "name": "Tax-free",
+                "color": "green"
+              }
+            ]
+          },
+          {
+            "key": "notes",
+            "name": "Notes",
+            "type": "text"
+          }
+        ],
+        "rows": [
+          {
+            "key": "${item.name}",
+            "forEach": "answers.accounts",
+            "values": {
+              "name": "${item.name}",
+              "broker": "${item.broker}",
+              "currency": "${item.currency}",
+              "type": "${item.type}",
+              "tax_treatment": "${item.taxTreatment}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "securities",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Securities",
+        "icon": "📈",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "ticker",
+            "name": "Ticker",
+            "type": "ticker",
+            "role": "sec.ticker"
+          },
+          {
+            "key": "class",
+            "name": "Asset class",
+            "type": "select",
+            "role": "sec.class",
+            "options": [
+              {
+                "key": "us_equity",
+                "name": "US equity",
+                "color": "blue"
+              },
+              {
+                "key": "intl_developed",
+                "name": "Intl developed",
+                "color": "purple"
+              },
+              {
+                "key": "emerging",
+                "name": "Emerging",
+                "color": "pink"
+              },
+              {
+                "key": "bonds",
+                "name": "Bonds",
+                "color": "green"
+              },
+              {
+                "key": "inflation_linked",
+                "name": "Inflation-linked",
+                "color": "yellow"
+              },
+              {
+                "key": "reit",
+                "name": "REIT",
+                "color": "brown"
+              },
+              {
+                "key": "cash",
+                "name": "Cash",
+                "color": "gray"
+              },
+              {
+                "key": "crypto",
+                "name": "Crypto",
+                "color": "orange"
+              },
+              {
+                "key": "other",
+                "name": "Other",
+                "color": "red"
+              }
+            ]
+          },
+          {
+            "key": "region",
+            "name": "Region",
+            "type": "select",
+            "options": [
+              {
+                "key": "us",
+                "name": "US"
+              },
+              {
+                "key": "intl",
+                "name": "International"
+              },
+              {
+                "key": "global",
+                "name": "Global"
+              },
+              {
+                "key": "em",
+                "name": "Emerging"
+              }
+            ]
+          },
+          {
+            "key": "type",
+            "name": "Type",
+            "type": "select",
+            "options": [
+              {
+                "key": "etf",
+                "name": "ETF"
+              },
+              {
+                "key": "mutual_fund",
+                "name": "Mutual fund"
+              },
+              {
+                "key": "stock",
+                "name": "Stock"
+              },
+              {
+                "key": "bond",
+                "name": "Bond"
+              },
+              {
+                "key": "crypto",
+                "name": "Crypto"
+              },
+              {
+                "key": "cash",
+                "name": "Cash"
+              }
+            ]
+          },
+          {
+            "key": "currency",
+            "name": "Currency",
+            "type": "text"
+          },
+          {
+            "key": "expense_ratio",
+            "name": "Expense ratio",
+            "type": "number",
+            "role": "sec.expense_ratio",
+            "description": "Percent per year."
+          },
+          {
+            "key": "last_price",
+            "name": "Last price",
+            "type": "computed"
+          },
+          {
+            "key": "day_pct",
+            "name": "Day %",
+            "type": "computed"
+          },
+          {
+            "key": "price_as_of",
+            "name": "Price as-of",
+            "type": "date"
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "class",
+                "dir": "asc"
+              }
+            ]
+          },
+          {
+            "key": "by_class",
+            "name": "By class",
+            "layout": "board",
+            "groupBy": {
+              "prop": "class"
+            }
+          }
+        ],
+        "rowTemplates": [
+          {
+            "key": "holding",
+            "name": "Holding page",
+            "default": true,
+            "body": [
+              {
+                "t": "md",
+                "md": "## Thesis\nWhy I own this, in two sentences.\n\n## What would change my mind\n-\n\n## Risks\n-\n\n## Review date"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "inv_txns",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Investment transactions",
+        "icon": "🧾",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "date",
+            "name": "Date",
+            "type": "date",
+            "role": "inv.date"
+          },
+          {
+            "key": "type",
+            "name": "Type",
+            "type": "select",
+            "role": "inv.type",
+            "options": [
+              {
+                "key": "buy",
+                "name": "Buy"
+              },
+              {
+                "key": "sell",
+                "name": "Sell"
+              },
+              {
+                "key": "dividend",
+                "name": "Dividend"
+              },
+              {
+                "key": "reinvest",
+                "name": "Reinvest"
+              },
+              {
+                "key": "fee",
+                "name": "Fee"
+              },
+              {
+                "key": "split",
+                "name": "Split"
+              },
+              {
+                "key": "transfer_in",
+                "name": "Transfer in"
+              },
+              {
+                "key": "transfer_out",
+                "name": "Transfer out"
+              },
+              {
+                "key": "return_of_capital",
+                "name": "Return of capital"
+              },
+              {
+                "key": "interest",
+                "name": "Interest"
+              }
+            ]
+          },
+          {
+            "key": "security",
+            "name": "Security",
+            "type": "relation",
+            "role": "inv.security",
+            "relation": {
+              "db": "securities",
+              "limit": "one",
+              "dual": {
+                "key": "transactions",
+                "name": "Transactions"
+              }
+            }
+          },
+          {
+            "key": "account",
+            "name": "Account",
+            "type": "relation",
+            "role": "inv.account",
+            "relation": {
+              "db": "inv_accounts",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "qty",
+            "name": "Quantity",
+            "type": "number",
+            "role": "inv.qty"
+          },
+          {
+            "key": "price",
+            "name": "Price",
+            "type": "money",
+            "role": "inv.price",
+            "currency": "USD",
+            "decimals": 4
+          },
+          {
+            "key": "amount",
+            "name": "Amount",
+            "type": "money",
+            "role": "inv.amount",
+            "currency": "USD"
+          },
+          {
+            "key": "fees",
+            "name": "Fees",
+            "type": "money",
+            "role": "inv.fees",
+            "currency": "USD"
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "desc"
+              }
+            ],
+            "footer": {
+              "amount": "sum"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "lots",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Lots",
+        "icon": "🧱",
+        "description": "Computed by EMP from investment transactions (read-only).",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "security",
+            "name": "Security",
+            "type": "relation",
+            "relation": {
+              "db": "securities",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "account",
+            "name": "Account",
+            "type": "relation",
+            "relation": {
+              "db": "inv_accounts",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "acquired",
+            "name": "Acquired",
+            "type": "date"
+          },
+          {
+            "key": "qty",
+            "name": "Quantity",
+            "type": "computed"
+          },
+          {
+            "key": "basis",
+            "name": "Cost basis",
+            "type": "computed"
+          },
+          {
+            "key": "term",
+            "name": "Term",
+            "type": "computed"
+          },
+          {
+            "key": "unrealized",
+            "name": "Unrealised",
+            "type": "computed"
+          }
+        ]
+      }
+    },
+    {
+      "key": "holdings",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Holdings",
+        "icon": "💼",
+        "description": "Computed view of positions by security.",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "security",
+            "name": "Security",
+            "type": "relation",
+            "relation": {
+              "db": "securities",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "qty",
+            "name": "Quantity",
+            "type": "computed"
+          },
+          {
+            "key": "value",
+            "name": "Value",
+            "type": "computed"
+          },
+          {
+            "key": "weight",
+            "name": "Weight",
+            "type": "computed"
+          },
+          {
+            "key": "day",
+            "name": "Today",
+            "type": "computed"
+          }
+        ]
+      }
+    },
+    {
+      "key": "targets",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Target allocation",
+        "icon": "🎯",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Asset class",
+            "type": "title"
+          },
+          {
+            "key": "class",
+            "name": "Class",
+            "type": "select",
+            "role": "alloc.class",
+            "options": [
+              {
+                "key": "us_equity",
+                "name": "US equity",
+                "color": "blue"
+              },
+              {
+                "key": "intl_developed",
+                "name": "Intl developed",
+                "color": "purple"
+              },
+              {
+                "key": "emerging",
+                "name": "Emerging",
+                "color": "pink"
+              },
+              {
+                "key": "bonds",
+                "name": "Bonds",
+                "color": "green"
+              },
+              {
+                "key": "inflation_linked",
+                "name": "Inflation-linked",
+                "color": "yellow"
+              },
+              {
+                "key": "reit",
+                "name": "REIT",
+                "color": "brown"
+              },
+              {
+                "key": "cash",
+                "name": "Cash",
+                "color": "gray"
+              },
+              {
+                "key": "crypto",
+                "name": "Crypto",
+                "color": "orange"
+              },
+              {
+                "key": "other",
+                "name": "Other",
+                "color": "red"
+              }
+            ]
+          },
+          {
+            "key": "target",
+            "name": "Target %",
+            "type": "number",
+            "role": "alloc.target"
+          },
+          {
+            "key": "band_abs",
+            "name": "Band abs (pp)",
+            "type": "number",
+            "role": "alloc.band_abs"
+          },
+          {
+            "key": "band_rel",
+            "name": "Band rel (%)",
+            "type": "number",
+            "role": "alloc.band_rel"
+          },
+          {
+            "key": "current",
+            "name": "Current %",
+            "type": "computed"
+          },
+          {
+            "key": "drift",
+            "name": "Drift",
+            "type": "computed"
+          },
+          {
+            "key": "status",
+            "name": "Status",
+            "type": "formula",
+            "formula": "if(prop(\"Target %\") > 0, \"Target set\", \"No target\")"
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "Targets",
+            "layout": "table",
+            "footer": {
+              "target": "sum"
+            }
+          },
+          {
+            "key": "chart",
+            "name": "Chart",
+            "layout": "chart",
+            "chart": {
+              "type": "bar",
+              "x": {
+                "prop": "class"
+              },
+              "y": [
+                {
+                  "agg": "sum",
+                  "prop": "target"
+                }
+              ]
+            }
+          }
+        ],
+        "rows": [
+          {
+            "key": "three_fund:us_equity",
+            "when": "answers.targets_preset == \"three_fund\"",
+            "values": {
+              "name": "US equity",
+              "class": "us_equity",
+              "target": 48,
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "three_fund:intl_developed",
+            "when": "answers.targets_preset == \"three_fund\"",
+            "values": {
+              "name": "International",
+              "class": "intl_developed",
+              "target": 32,
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "three_fund:bonds",
+            "when": "answers.targets_preset == \"three_fund\"",
+            "values": {
+              "name": "Bonds",
+              "class": "bonds",
+              "target": 20,
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "sixty_forty:us_equity",
+            "when": "answers.targets_preset == \"sixty_forty\"",
+            "values": {
+              "name": "US equity",
+              "class": "us_equity",
+              "target": 40,
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "sixty_forty:intl_developed",
+            "when": "answers.targets_preset == \"sixty_forty\"",
+            "values": {
+              "name": "International",
+              "class": "intl_developed",
+              "target": 20,
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "sixty_forty:bonds",
+            "when": "answers.targets_preset == \"sixty_forty\"",
+            "values": {
+              "name": "Bonds",
+              "class": "bonds",
+              "target": 40,
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "all_equity:us_equity",
+            "when": "answers.targets_preset == \"all_equity\"",
+            "values": {
+              "name": "US equity",
+              "class": "us_equity",
+              "target": 60,
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "all_equity:intl_developed",
+            "when": "answers.targets_preset == \"all_equity\"",
+            "values": {
+              "name": "International",
+              "class": "intl_developed",
+              "target": 30,
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "all_equity:emerging",
+            "when": "answers.targets_preset == \"all_equity\"",
+            "values": {
+              "name": "Emerging markets",
+              "class": "emerging",
+              "target": 10,
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "age:us",
+            "when": "answers.targets_preset == \"age_based\"",
+            "values": {
+              "name": "US equity",
+              "class": "us_equity",
+              "target": "{{round(max(0, min(100, 110 - coalesce(answers.targets_age, 40))) * 0.6, 0)}}",
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "age:intl",
+            "when": "answers.targets_preset == \"age_based\"",
+            "values": {
+              "name": "International",
+              "class": "intl_developed",
+              "target": "{{round(max(0, min(100, 110 - coalesce(answers.targets_age, 40))) * 0.4, 0)}}",
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "age:bonds",
+            "when": "answers.targets_preset == \"age_based\"",
+            "values": {
+              "name": "Bonds",
+              "class": "bonds",
+              "target": "{{100 - round(max(0, min(100, 110 - coalesce(answers.targets_age, 40))) * 0.6, 0) - round(max(0, min(100, 110 - coalesce(answers.targets_age, 40))) * 0.4, 0)}}",
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          },
+          {
+            "key": "custom:${item.class}",
+            "forEach": "answers.targets.custom",
+            "when": "answers.targets_preset == \"custom\"",
+            "values": {
+              "name": "${item.class}",
+              "class": "${item.class}",
+              "target": "${item.target}",
+              "band_abs": "${answers.rebalance.bandAbs}",
+              "band_rel": "${answers.rebalance.bandRel}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "watchlist",
+      "kind": "database",
+      "optional": true,
+      "spec": {
+        "title": "Watchlist",
+        "icon": "👀",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "ticker",
+            "name": "Ticker",
+            "type": "ticker"
+          },
+          {
+            "key": "alert_above",
+            "name": "Alert above",
+            "type": "money",
+            "currency": "USD"
+          },
+          {
+            "key": "alert_below",
+            "name": "Alert below",
+            "type": "money",
+            "currency": "USD"
+          },
+          {
+            "key": "alert_pct",
+            "name": "Alert % move",
+            "type": "number"
+          }
+        ],
+        "rows": [
+          {
+            "key": "${item.ticker}",
+            "forEach": "answers.watchlist",
+            "values": {
+              "name": "${item.ticker}",
+              "ticker": "${item.ticker}",
+              "alert_above": "${item.alertAbove}",
+              "alert_below": "${item.alertBelow}",
+              "alert_pct": "${item.alertPct}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "dividends",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Dividends",
+        "icon": "💸",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "date",
+            "name": "Date",
+            "type": "date"
+          },
+          {
+            "key": "security",
+            "name": "Security",
+            "type": "relation",
+            "relation": {
+              "db": "securities",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "account",
+            "name": "Account",
+            "type": "relation",
+            "relation": {
+              "db": "inv_accounts",
+              "limit": "one"
+            }
+          },
+          {
+            "key": "amount",
+            "name": "Amount",
+            "type": "money",
+            "currency": "USD"
+          },
+          {
+            "key": "kind",
+            "name": "Kind",
+            "type": "select",
+            "options": [
+              {
+                "key": "qualified",
+                "name": "Qualified"
+              },
+              {
+                "key": "ordinary",
+                "name": "Ordinary"
+              },
+              {
+                "key": "reinvested",
+                "name": "Reinvested"
+              }
+            ]
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "desc"
+              }
+            ],
+            "footer": {
+              "amount": "sum"
+            }
+          },
+          {
+            "key": "by_month",
+            "name": "By month",
+            "layout": "chart",
+            "chart": {
+              "type": "bar",
+              "x": {
+                "prop": "date",
+                "bucket": "month"
+              },
+              "y": [
+                {
+                  "agg": "sum",
+                  "prop": "amount"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "review_ritual",
+      "kind": "recurring",
+      "optional": true,
+      "spec": {
+        "title": "Annual investing review",
+        "text": "Time for your annual investing review",
+        "target": "review",
+        "rrule": "FREQ=YEARLY",
+        "at": "@today+1y",
+        "time": "10:00"
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "name": "total_value",
+      "kind": "rust",
+      "fn": "port.total_value",
+      "deps": [
+        "securities.sec.ticker",
+        "inv_txns.inv.qty"
+      ]
+    },
+    {
+      "name": "day_change",
+      "kind": "rust",
+      "fn": "port.day_change",
+      "deps": [
+        "securities"
+      ]
+    },
+    {
+      "name": "unrealized",
+      "kind": "rust",
+      "fn": "port.unrealized",
+      "deps": [
+        "inv_txns.inv.amount"
+      ]
+    },
+    {
+      "name": "xirr_ytd",
+      "kind": "rust",
+      "fn": "port.xirr_ytd",
+      "deps": [
+        "inv_txns.inv.date"
+      ]
+    },
+    {
+      "name": "xirr_all",
+      "kind": "rust",
+      "fn": "port.xirr_all",
+      "deps": [
+        "inv_txns.inv.date"
+      ]
+    },
+    {
+      "name": "div_ttm",
+      "kind": "rust",
+      "fn": "port.div_ttm",
+      "deps": [
+        "dividends"
+      ]
+    },
+    {
+      "name": "div_fwd_12m",
+      "kind": "rust",
+      "fn": "port.div_fwd_12m",
+      "deps": [
+        "dividends"
+      ]
+    },
+    {
+      "name": "max_drift",
+      "kind": "rust",
+      "fn": "port.max_drift",
+      "deps": [
+        "targets.alloc.target",
+        "securities.sec.class"
+      ]
+    },
+    {
+      "name": "fees_per_year",
+      "kind": "rust",
+      "fn": "port.fees_per_year",
+      "deps": [
+        "securities.sec.expense_ratio"
+      ]
+    },
+    {
+      "name": "out_of_band_count",
+      "kind": "rust",
+      "fn": "port.out_of_band_count",
+      "deps": [
+        "targets.alloc.band_abs"
+      ]
+    },
+    {
+      "name": "max_position_pct",
+      "kind": "rust",
+      "fn": "port.max_position_pct",
+      "deps": [
+        "inv_txns"
+      ]
+    },
+    {
+      "name": "cash_pct",
+      "kind": "rust",
+      "fn": "port.cash_pct",
+      "deps": [
+        "targets",
+        "securities.sec.class"
+      ]
+    },
+    {
+      "name": "max_er",
+      "kind": "rust",
+      "fn": "port.max_er",
+      "deps": [
+        "securities.sec.expense_ratio"
+      ]
+    },
+    {
+      "name": "price_age_days",
+      "kind": "rust",
+      "fn": "port.price_age_days",
+      "deps": [
+        "securities"
+      ]
+    },
+    {
+      "name": "taxable_losses",
+      "kind": "rust",
+      "fn": "port.taxable_losses",
+      "deps": [
+        "inv_accounts",
+        "inv_txns"
+      ]
+    },
+    {
+      "name": "days_since_install",
+      "kind": "rust",
+      "fn": "port.days_since_install",
+      "deps": []
+    },
+    {
+      "name": "position_count",
+      "kind": "rust",
+      "fn": "port.position_count",
+      "deps": [
+        "inv_txns"
+      ]
+    },
+    {
+      "name": "targets_sum",
+      "kind": "rust",
+      "fn": "port.targets_sum",
+      "deps": [
+        "targets.alloc.target"
+      ]
+    },
+    {
+      "name": "month",
+      "kind": "rust",
+      "fn": "port.month",
+      "deps": []
+    }
+  ],
+  "advisor": [
+    {
+      "id": "drift-band",
+      "when": "metrics.out_of_band_count > 0",
+      "severity": "warn",
+      "title": "{{metrics.out_of_band_count}} asset class(es) drifted outside their band",
+      "body": "Max drift is {{metrics.max_drift}} percentage points. Consider directing new money to the underweight class first.",
+      "mathMetrics": [
+        "max_drift",
+        "out_of_band_count"
+      ],
+      "actions": [
+        {
+          "label": "Rebalance planner",
+          "route": "page:rebalance"
+        }
+      ]
+    },
+    {
+      "id": "concentration-10",
+      "when": "metrics.max_position_pct > 0.1",
+      "severity": "tip",
+      "title": "One position is {{fmt_pct(metrics.max_position_pct)}} of your portfolio",
+      "body": "Positions above about 10% add single-company or single-fund risk. A broad fund counts as diversified, but check what it holds.",
+      "mathMetrics": [
+        "max_position_pct"
+      ],
+      "actions": [
+        {
+          "label": "Holdings",
+          "route": "db:securities:all"
+        }
+      ]
+    },
+    {
+      "id": "cash-drag",
+      "when": "metrics.cash_pct > 0.05",
+      "severity": "info",
+      "title": "Cash is {{fmt_pct(metrics.cash_pct)}} of the portfolio",
+      "body": "Cash above 5% for a long time can drag on returns. Consider whether it has a job (upcoming purchase, emergency fund).",
+      "mathMetrics": [
+        "cash_pct"
+      ],
+      "actions": [
+        {
+          "label": "Allocation",
+          "route": "db:targets:all"
+        }
+      ]
+    },
+    {
+      "id": "high-er",
+      "when": "metrics.max_er > 0.5",
+      "severity": "info",
+      "title": "A fund charges {{metrics.max_er}}% a year",
+      "body": "Expense ratios above 0.5% add up; low-cost index funds often charge under 0.1%. Fees per year: {{fmt_money(metrics.fees_per_year)}}.",
+      "mathMetrics": [
+        "max_er",
+        "fees_per_year"
+      ],
+      "actions": [
+        {
+          "label": "Securities",
+          "route": "db:securities:all"
+        }
+      ]
+    },
+    {
+      "id": "stale-prices",
+      "when": "metrics.price_age_days > 3",
+      "severity": "info",
+      "title": "Prices are {{metrics.price_age_days}} days old",
+      "body": "Values use the last cached prices. Refresh market data to update them.",
+      "mathMetrics": [
+        "price_age_days"
+      ],
+      "actions": [
+        {
+          "label": "Markets",
+          "route": "markets"
+        }
+      ]
+    },
+    {
+      "id": "ips-review",
+      "when": "metrics.days_since_install >= 365",
+      "severity": "tip",
+      "title": "Your yearly IPS review is due",
+      "body": "Re-read your Investment Policy Statement and check that it still fits your goals.",
+      "mathMetrics": [
+        "days_since_install"
+      ],
+      "actions": [
+        {
+          "label": "Open IPS",
+          "route": "page:ips"
+        }
+      ]
+    },
+    {
+      "id": "harvest-review",
+      "when": "metrics.month == 12 and metrics.taxable_losses < 0",
+      "severity": "info",
+      "title": "Tax-loss harvesting check",
+      "body": "Taxable accounts hold {{fmt_money(metrics.taxable_losses)}} of unrealised losses. Selling before year-end may offset gains; watch wash-sale rules.",
+      "mathMetrics": [
+        "taxable_losses"
+      ],
+      "actions": [
+        {
+          "label": "Holdings",
+          "route": "db:securities:all"
+        }
+      ]
+    }
+  ],
+  "checklist": [
+    {
+      "id": "accounts",
+      "label": "Add accounts",
+      "autoTick": {
+        "event": "metrics",
+        "where": "answers.accounts_count > 0"
+      }
+    },
+    {
+      "id": "positions",
+      "label": "Import or enter positions",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.position_count > 0"
+      }
+    },
+    {
+      "id": "targets",
+      "label": "Set target allocation",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.targets_sum == 100"
+      }
+    },
+    {
+      "id": "ips",
+      "label": "Write your IPS",
+      "autoTick": {
+        "event": "ips.signed"
+      }
+    },
+    {
+      "id": "rebalance",
+      "label": "Run your first rebalance check",
+      "autoTick": {
+        "event": "rebalance.checked"
+      }
+    }
+  ],
+  "migrations": [],
+  "sample": {
+    "generator": "portfolio",
+    "seed": 20261127
+  }
+}

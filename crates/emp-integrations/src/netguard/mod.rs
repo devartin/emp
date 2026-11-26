@@ -284,7 +284,9 @@ impl NetGuard {
                     match hinted {
                         Some(d) if d > self.inner.config.max_retry_after => break result,
                         Some(d) => tokio::time::sleep(d).await,
-                        None => tokio::time::sleep(self.inner.config.backoff.delay(attempt - 1)).await,
+                        None => {
+                            tokio::time::sleep(self.inner.config.backoff.delay(attempt - 1)).await
+                        }
                     }
                 }
                 Err(e) if more && e.is_transient() => {
@@ -328,7 +330,9 @@ impl NetGuard {
     /// Scheme, user-info, port and allowlist checks. Returns the lowercase host.
     fn validate_url(&self, url: &Url, connector: ConnectorId) -> Result<String> {
         if url.scheme() != "https" {
-            return Err(IntegrationError::InsecureUrl("only https is allowed".into()));
+            return Err(IntegrationError::InsecureUrl(
+                "only https is allowed".into(),
+            ));
         }
         if !url.username().is_empty() || url.password().is_some() {
             return Err(IntegrationError::InsecureUrl("credentials in URL".into()));
@@ -365,7 +369,9 @@ impl NetGuard {
                 connector: connector.as_str(),
                 host,
             }),
-            HostPolicy::AnyPublic if is_blocked_ip(ip) => Err(IntegrationError::BlockedAddress { host }),
+            HostPolicy::AnyPublic if is_blocked_ip(ip) => {
+                Err(IntegrationError::BlockedAddress { host })
+            }
             HostPolicy::AnyPublic => Ok(host),
         }
     }
@@ -428,8 +434,9 @@ impl NetGuard {
             }
             if let Some(cred) = &credential {
                 let name = HeaderName::from_static(cred.header);
-                let mut value = HeaderValue::from_str(cred.value.expose())
-                    .map_err(|_| IntegrationError::Invalid("credential contains invalid characters".into()))?;
+                let mut value = HeaderValue::from_str(cred.value.expose()).map_err(|_| {
+                    IntegrationError::Invalid("credential contains invalid characters".into())
+                })?;
                 value.set_sensitive(true);
                 rb = rb.header(name, value);
             }
@@ -461,7 +468,9 @@ impl NetGuard {
                     .headers()
                     .get(reqwest::header::LOCATION)
                     .and_then(|v| v.to_str().ok())
-                    .ok_or_else(|| IntegrationError::Provider("redirect without Location".into()))?;
+                    .ok_or_else(|| {
+                        IntegrationError::Provider("redirect without Location".into())
+                    })?;
                 let next = url
                     .join(location)
                     .map_err(|_| IntegrationError::Provider("invalid redirect Location".into()))?;
@@ -477,11 +486,11 @@ impl NetGuard {
             let retry_after = header_string(resp.headers(), reqwest::header::RETRY_AFTER);
             let success = (200..300).contains(&status);
             let read = if success {
-                if status != 204 {
-                    if let Err(e) = req.expect.check(content_type.as_deref()) {
-                        self.log_entry(req, method, &host, hop_path(req, hops), status, 0);
-                        return Err(e);
-                    }
+                if status != 204
+                    && let Err(e) = req.expect.check(content_type.as_deref())
+                {
+                    self.log_entry(req, method, &host, hop_path(req, hops), status, 0);
+                    return Err(e);
                 }
                 read_capped(&mut resp, req.cap.bytes(), false).await
             } else {
@@ -585,7 +594,9 @@ async fn read_capped(resp: &mut reqwest::Response, cap: u64, truncate: bool) -> 
         let total = buf.len() as u64 + chunk.len() as u64;
         if total > cap {
             if truncate {
-                let room = usize::try_from(cap).unwrap_or(usize::MAX).saturating_sub(buf.len());
+                let room = usize::try_from(cap)
+                    .unwrap_or(usize::MAX)
+                    .saturating_sub(buf.len());
                 buf.extend_from_slice(&chunk[..room.min(chunk.len())]);
                 break;
             }
@@ -609,14 +620,12 @@ fn map_reqwest_error(e: &reqwest::Error, host: &str) -> IntegrationError {
     if e.is_timeout() {
         IntegrationError::Timeout
     } else {
-        // `without_url` keeps query strings (which may carry keys) out of messages.
-        let msg = e.to_string();
-        let clean = reqwest_error_text(e).unwrap_or(msg);
-        IntegrationError::Network(crate::error::short_message(&clean))
+        // Never use reqwest's Display: it embeds the URL, whose query may carry keys.
+        IntegrationError::Network(crate::error::short_message(&reqwest_error_text(e)))
     }
 }
 
-fn reqwest_error_text(e: &reqwest::Error) -> Option<String> {
+fn reqwest_error_text(e: &reqwest::Error) -> String {
     // reqwest::Error is not Clone; rebuild a URL-free description from its kind and source.
     let kind = if e.is_connect() {
         "connection failed"
@@ -628,10 +637,10 @@ fn reqwest_error_text(e: &reqwest::Error) -> Option<String> {
         "transport error"
     };
     let detail = std::error::Error::source(e).map(|s| s.to_string());
-    Some(match detail {
+    match detail {
         Some(d) => format!("{kind}: {d}"),
         None => kind.to_string(),
-    })
+    }
 }
 
 #[cfg(test)]
@@ -703,7 +712,11 @@ mod tests {
         let server = TestServer::start(vec![Reply::json(200, "{}")]).await;
         let guard = guard_for(&["stooq.com"], server.addr());
         guard.set_offline(true);
-        let req = NetRequest::get(ConnectorId::Stooq, url("https://stooq.com/q/d/l/?s=aapl.us"), "/q/d/l/");
+        let req = NetRequest::get(
+            ConnectorId::Stooq,
+            url("https://stooq.com/q/d/l/?s=aapl.us"),
+            "/q/d/l/",
+        );
         let err = guard.send(req).await.unwrap_err();
         assert!(matches!(err, IntegrationError::Offline));
         assert_eq!(guard.dispatched_count(), 0);
@@ -719,11 +732,20 @@ mod tests {
         let guard = guard_for(&["stooq.com"], server.addr());
         for (connector, u) in [
             (ConnectorId::Stooq, "https://evil.example.com/x"),
-            (ConnectorId::Google, "https://accounts.google.com/o/oauth2/v2/auth"),
+            (
+                ConnectorId::Google,
+                "https://accounts.google.com/o/oauth2/v2/auth",
+            ),
             (ConnectorId::Finnhub, "https://1.2.3.4/api"),
         ] {
-            let err = guard.send(NetRequest::get(connector, url(u), "/")).await.unwrap_err();
-            assert!(matches!(err, IntegrationError::HostNotAllowed { .. }), "{u}: {err:?}");
+            let err = guard
+                .send(NetRequest::get(connector, url(u), "/"))
+                .await
+                .unwrap_err();
+            assert!(
+                matches!(err, IntegrationError::HostNotAllowed { .. }),
+                "{u}: {err:?}"
+            );
         }
         for u in [
             "http://stooq.com/x",
@@ -734,7 +756,10 @@ mod tests {
                 .send(NetRequest::get(ConnectorId::Stooq, url(u), "/"))
                 .await
                 .unwrap_err();
-            assert!(matches!(err, IntegrationError::InsecureUrl(_)), "{u}: {err:?}");
+            assert!(
+                matches!(err, IntegrationError::InsecureUrl(_)),
+                "{u}: {err:?}"
+            );
         }
         assert_eq!(guard.dispatched_count(), 0);
     }
@@ -751,10 +776,15 @@ mod tests {
             "https://localhost/a.png",
         ] {
             let err = guard
-                .send(NetRequest::get(ConnectorId::RemoteImage, url(u), "/img").expect(Expect::Image))
+                .send(
+                    NetRequest::get(ConnectorId::RemoteImage, url(u), "/img").expect(Expect::Image),
+                )
                 .await
                 .unwrap_err();
-            assert!(matches!(err, IntegrationError::BlockedAddress { .. }), "{u}: {err:?}");
+            assert!(
+                matches!(err, IntegrationError::BlockedAddress { .. }),
+                "{u}: {err:?}"
+            );
         }
         assert_eq!(guard.dispatched_count(), 0);
     }
@@ -767,9 +797,16 @@ mod tests {
             Reply::json(200, "{}"),
         ])
         .await;
-        let guard = guard_for(&["www.googleapis.com", "sheets.googleapis.com"], server.addr());
-        let req = NetRequest::get(ConnectorId::Google, url("https://www.googleapis.com/x"), "/x")
-            .credential(Credential::bearer(&crate::SecretString::new("tok")));
+        let guard = guard_for(
+            &["www.googleapis.com", "sheets.googleapis.com"],
+            server.addr(),
+        );
+        let req = NetRequest::get(
+            ConnectorId::Google,
+            url("https://www.googleapis.com/x"),
+            "/x",
+        )
+        .credential(Credential::bearer(&crate::SecretString::new("tok")));
         let resp = guard.send(req).await.unwrap();
         assert_eq!(resp.status, 200);
         assert_eq!(resp.final_url.host_str(), Some("sheets.googleapis.com"));
@@ -779,10 +816,15 @@ mod tests {
         assert_eq!(seen[1].header("authorization"), None);
 
         // Redirect outside the allowlist: refused.
-        let server = TestServer::start(vec![Reply::redirect(302, "https://evil.example.com/steal")]).await;
+        let server =
+            TestServer::start(vec![Reply::redirect(302, "https://evil.example.com/steal")]).await;
         let guard = guard_for(&["www.googleapis.com"], server.addr());
         let err = guard
-            .send(NetRequest::get(ConnectorId::Google, url("https://www.googleapis.com/x"), "/x"))
+            .send(NetRequest::get(
+                ConnectorId::Google,
+                url("https://www.googleapis.com/x"),
+                "/x",
+            ))
             .await
             .unwrap_err();
         assert!(matches!(err, IntegrationError::HostNotAllowed { .. }));
@@ -795,7 +837,11 @@ mod tests {
         let server = TestServer::start(vec![r(), r(), r(), r(), r()]).await;
         let guard = guard_for(&["stooq.com"], server.addr());
         let err = guard
-            .send(NetRequest::get(ConnectorId::Stooq, url("https://stooq.com/a"), "/a"))
+            .send(NetRequest::get(
+                ConnectorId::Stooq,
+                url("https://stooq.com/a"),
+                "/a",
+            ))
             .await
             .unwrap_err();
         assert!(matches!(err, IntegrationError::TooManyRedirects));
@@ -820,7 +866,10 @@ mod tests {
                 )
                 .await
                 .unwrap_err();
-            assert!(matches!(err, IntegrationError::TooLarge { cap: 1024 }), "{err:?}");
+            assert!(
+                matches!(err, IntegrationError::TooLarge { cap: 1024 }),
+                "{err:?}"
+            );
         }
     }
 
@@ -829,10 +878,17 @@ mod tests {
         let server = TestServer::start(vec![Reply::new(200, "text/html", "<html>")]).await;
         let guard = guard_for(&["finnhub.io"], server.addr());
         let err = guard
-            .send(NetRequest::get(ConnectorId::Finnhub, url("https://finnhub.io/api/v1/quote"), "/api/v1/quote"))
+            .send(NetRequest::get(
+                ConnectorId::Finnhub,
+                url("https://finnhub.io/api/v1/quote"),
+                "/api/v1/quote",
+            ))
             .await
             .unwrap_err();
-        assert!(matches!(err, IntegrationError::UnexpectedContentType { .. }));
+        assert!(matches!(
+            err,
+            IntegrationError::UnexpectedContentType { .. }
+        ));
     }
 
     #[tokio::test]
@@ -859,10 +915,15 @@ mod tests {
 
     #[tokio::test]
     async fn long_retry_after_is_returned_not_slept() {
-        let server = TestServer::start(vec![Reply::json(429, "{}").header("retry-after", "3600")]).await;
+        let server =
+            TestServer::start(vec![Reply::json(429, "{}").header("retry-after", "3600")]).await;
         let guard = guard_for(&["finnhub.io"], server.addr());
         let resp = guard
-            .send(NetRequest::get(ConnectorId::Finnhub, url("https://finnhub.io/api/v1/quote"), "/q"))
+            .send(NetRequest::get(
+                ConnectorId::Finnhub,
+                url("https://finnhub.io/api/v1/quote"),
+                "/q",
+            ))
             .await
             .unwrap();
         assert_eq!(resp.status, 429);
@@ -894,14 +955,22 @@ mod tests {
         let guard = guard_with(&["stooq.com"], server.addr(), |c| c.max_attempts = 1);
         for _ in 0..5 {
             let r = guard
-                .send(NetRequest::get(ConnectorId::Stooq, url("https://stooq.com/q"), "/q"))
+                .send(NetRequest::get(
+                    ConnectorId::Stooq,
+                    url("https://stooq.com/q"),
+                    "/q",
+                ))
                 .await
                 .unwrap();
             assert_eq!(r.status, 500);
         }
         assert_eq!(guard.health(ConnectorId::Stooq), Health::Down);
         let err = guard
-            .send(NetRequest::get(ConnectorId::Stooq, url("https://stooq.com/q"), "/q"))
+            .send(NetRequest::get(
+                ConnectorId::Stooq,
+                url("https://stooq.com/q"),
+                "/q",
+            ))
             .await
             .unwrap_err();
         assert!(matches!(err, IntegrationError::CircuitOpen { .. }));
@@ -921,20 +990,36 @@ mod tests {
             );
             c.max_rate_wait = Duration::from_millis(10);
         });
-        let mk = || NetRequest::get(ConnectorId::Finnhub, url("https://finnhub.io/api/v1/quote"), "/q");
+        let mk = || {
+            NetRequest::get(
+                ConnectorId::Finnhub,
+                url("https://finnhub.io/api/v1/quote"),
+                "/q",
+            )
+        };
         guard.send(mk()).await.unwrap();
         guard.send(mk()).await.unwrap();
         let err = guard.send(mk()).await.unwrap_err();
-        assert!(matches!(err, IntegrationError::RateLimited { retry_after: Some(_) }));
+        assert!(matches!(
+            err,
+            IntegrationError::RateLimited {
+                retry_after: Some(_)
+            }
+        ));
         assert_eq!(server.requests().len(), 2);
     }
 
     #[tokio::test]
     async fn error_bodies_are_truncated_not_rejected() {
-        let server = TestServer::start(vec![Reply::new(500, "text/plain", "e".repeat(100_000))]).await;
+        let server =
+            TestServer::start(vec![Reply::new(500, "text/plain", "e".repeat(100_000))]).await;
         let guard = guard_with(&["stooq.com"], server.addr(), |c| c.max_attempts = 1);
         let r = guard
-            .send(NetRequest::get(ConnectorId::Stooq, url("https://stooq.com/q"), "/q"))
+            .send(NetRequest::get(
+                ConnectorId::Stooq,
+                url("https://stooq.com/q"),
+                "/q",
+            ))
             .await
             .unwrap();
         assert_eq!(r.status, 500);
@@ -949,7 +1034,11 @@ mod tests {
         drop(l);
         let guard = guard_with(&["stooq.com"], addr, |c| c.max_attempts = 2);
         let err = guard
-            .send(NetRequest::get(ConnectorId::Stooq, url("https://stooq.com/q?k=SECRET"), "/q"))
+            .send(NetRequest::get(
+                ConnectorId::Stooq,
+                url("https://stooq.com/q?k=SECRET"),
+                "/q",
+            ))
             .await
             .unwrap_err();
         assert!(matches!(err, IntegrationError::Network(_)), "{err:?}");

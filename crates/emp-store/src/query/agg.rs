@@ -187,12 +187,7 @@ fn pct(n: usize, total: usize) -> AggOut {
 
 /// Aggregates `values` (one per row; `None` = no value) of property `p`.
 #[must_use]
-pub fn aggregate(
-    func: Func,
-    values: &[Option<&CellValue>],
-    p: &Property,
-    ctx: &DateCtx,
-) -> AggOut {
+pub fn aggregate(func: Func, values: &[Option<&CellValue>], p: &Property, ctx: &DateCtx) -> AggOut {
     let total = values.len();
     let non_empty: Vec<&CellValue> = values
         .iter()
@@ -255,7 +250,10 @@ pub fn aggregate(
             }
         }
         Func::Checked | Func::Unchecked | Func::PctChecked | Func::PctUnchecked => {
-            let checked = values.iter().filter(|v| cells::boolean(v.as_deref())).count();
+            let checked = values
+                .iter()
+                .filter(|v| cells::boolean(v.as_deref()))
+                .count();
             match func {
                 Func::Checked => AggOut::Count(checked),
                 Func::Unchecked => AggOut::Count(total - checked),
@@ -268,12 +266,10 @@ pub fn aggregate(
 
 fn numeric(func: Func, vals: &[&CellValue], p: &Property) -> AggOut {
     let is_money = p.kind == PropType::Money
+        || vals.iter().any(|c| matches!(c, CellValue::Money { .. }))
         || vals
             .iter()
-            .any(|c| matches!(c, CellValue::Money { .. }))
-        || vals.iter().any(|c| {
-            matches!(c, CellValue::Computed { v } if v.kind == ComputedKind::Money)
-        });
+            .any(|c| matches!(c, CellValue::Computed { v } if v.kind == ComputedKind::Money));
     if is_money {
         let ds: Vec<Decimal> = vals.iter().filter_map(|c| money_decimal(c)).collect();
         let cur = vals.iter().find_map(|c| match c {
@@ -379,12 +375,22 @@ mod tests {
 
     #[test]
     fn counts_and_numbers() {
-        let vals = [CellValue::number(1.0), CellValue::number(4.0), CellValue::Number { v: None }];
+        let vals = [
+            CellValue::number(1.0),
+            CellValue::number(4.0),
+            CellValue::Number { v: None },
+        ];
         let refs: Vec<Option<&CellValue>> = vals.iter().map(Some).chain([None]).collect();
         let ctx = DateCtx::utc(0);
         let np = p(PropType::Number);
-        assert_eq!(aggregate(Func::CountAll, &refs, &np, &ctx), AggOut::Count(4));
-        assert_eq!(aggregate(Func::CountEmpty, &refs, &np, &ctx), AggOut::Count(2));
+        assert_eq!(
+            aggregate(Func::CountAll, &refs, &np, &ctx),
+            AggOut::Count(4)
+        );
+        assert_eq!(
+            aggregate(Func::CountEmpty, &refs, &np, &ctx),
+            AggOut::Count(2)
+        );
         assert_eq!(aggregate(Func::Avg, &refs, &np, &ctx), AggOut::Num(2.5));
         assert_eq!(aggregate(Func::Median, &refs, &np, &ctx), AggOut::Num(2.5));
         assert_eq!(aggregate(Func::Range, &refs, &np, &ctx), AggOut::Num(3.0));

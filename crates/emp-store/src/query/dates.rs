@@ -64,10 +64,10 @@ impl DateCtx {
     /// Unix ms of a local wall-clock time (earliest mapping across DST changes).
     #[must_use]
     pub fn to_ms(&self, local: NaiveDateTime) -> i64 {
-        self.tz
-            .from_local_datetime(&local)
-            .earliest()
-            .map_or_else(|| local.and_utc().timestamp_millis(), |d| d.timestamp_millis())
+        self.tz.from_local_datetime(&local).earliest().map_or_else(
+            || local.and_utc().timestamp_millis(),
+            |d| d.timestamp_millis(),
+        )
     }
 
     /// Parses `YYYY-MM-DD` or RFC 3339 (converted to local time).
@@ -135,12 +135,12 @@ impl DateCtx {
             "this_quarter" => {
                 let q0 = (t.month0() / 3) * 3 + 1;
                 let qs = NaiveDate::from_ymd_opt(t.year(), q0, 1)?;
-                (qs, qs.checked_add_months(Months::new(3))? - Duration::days(1))
+                (
+                    qs,
+                    qs.checked_add_months(Months::new(3))? - Duration::days(1),
+                )
             }
-            "this_year" => (
-                year_start,
-                NaiveDate::from_ymd_opt(t.year(), 12, 31)?,
-            ),
+            "this_year" => (year_start, NaiveDate::from_ymd_opt(t.year(), 12, 31)?),
             "past_year" => (t.checked_sub_months(Months::new(12))?, t),
             "next_year" => (t, t.checked_add_months(Months::new(12))?),
             _ => return None,
@@ -152,7 +152,10 @@ impl DateCtx {
     #[must_use]
     pub fn bucket(&self, d: NaiveDate, bucket: DateBucket) -> (String, String) {
         match bucket {
-            DateBucket::Day => (d.format("%Y-%m-%d").to_string(), d.format("%b %-d, %Y").to_string()),
+            DateBucket::Day => (
+                d.format("%Y-%m-%d").to_string(),
+                d.format("%b %-d, %Y").to_string(),
+            ),
             DateBucket::Week => {
                 let s = self.week_start_of(d);
                 (
@@ -201,16 +204,28 @@ mod tests {
         let c = ctx();
         assert_eq!(c.today().to_string(), "2026-11-26");
         let (a, b) = c.within(&json!("this_week")).unwrap();
-        assert_eq!((a.to_string(), b.to_string()), ("2026-11-23".into(), "2026-11-29".into()));
+        assert_eq!(
+            (a.to_string(), b.to_string()),
+            ("2026-11-23".into(), "2026-11-29".into())
+        );
         let (a, b) = c.within(&json!("this_month")).unwrap();
-        assert_eq!((a.to_string(), b.to_string()), ("2026-11-01".into(), "2026-11-30".into()));
+        assert_eq!(
+            (a.to_string(), b.to_string()),
+            ("2026-11-01".into(), "2026-11-30".into())
+        );
         let (a, b) = c.within(&json!({"past_days": 3})).unwrap();
-        assert_eq!((a.to_string(), b.to_string()), ("2026-11-23".into(), "2026-11-26".into()));
+        assert_eq!(
+            (a.to_string(), b.to_string()),
+            ("2026-11-23".into(), "2026-11-26".into())
+        );
         let (a, _) = c.within(&json!("this_quarter")).unwrap();
         assert_eq!(a.to_string(), "2026-10-01");
         assert!(c.within(&json!("bogus")).is_none());
         let sunday = DateCtx::new(c.now_ms, "UTC", 0);
-        assert_eq!(sunday.within(&json!("this_week")).unwrap().0.to_string(), "2026-11-22");
+        assert_eq!(
+            sunday.within(&json!("this_week")).unwrap().0.to_string(),
+            "2026-11-22"
+        );
     }
 
     #[test]

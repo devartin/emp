@@ -2,19 +2,27 @@
 //! day/week/month/quarter/year), Y is `count` or an aggregate of a property, optionally split by a series
 //! property; options for cumulative totals and omitted zero buckets.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashSet};
 
 use serde_json::{Value, json};
 
 use super::agg::{AggOut, Func, aggregate};
 use super::compute::Evaluator;
 use super::group::{GroupRows, group_rows};
-use super::model::{AggFn, CellValue, ChartData, ChartSeriesData, ChartSpec, DateBucket, GroupBy, PropType};
+use super::model::{
+    AggFn, CellValue, ChartData, ChartSeriesData, ChartSpec, DateBucket, GroupBy, PropType,
+};
 
 /// Default maximum number of X points.
 pub const DEFAULT_MAX_POINTS: usize = 500;
 
-fn groups_for(ev: &Evaluator<'_>, db: usize, rows: &[usize], prop: &str, bucket: Option<DateBucket>) -> Vec<GroupRows> {
+fn groups_for(
+    ev: &Evaluator<'_>,
+    db: usize,
+    rows: &[usize],
+    prop: &str,
+    bucket: Option<DateBucket>,
+) -> Vec<GroupRows> {
     let d = ev.world().at(db);
     if prop == "$created" {
         // Bucket by creation day.
@@ -58,7 +66,13 @@ fn groups_for(ev: &Evaluator<'_>, db: usize, rows: &[usize], prop: &str, bucket:
     )
 }
 
-fn measure(ev: &Evaluator<'_>, db: usize, rows: &[usize], agg: AggFn, prop: Option<&str>) -> (Option<f64>, Option<String>) {
+fn measure(
+    ev: &Evaluator<'_>,
+    db: usize,
+    rows: &[usize],
+    agg: AggFn,
+    prop: Option<&str>,
+) -> (Option<f64>, Option<String>) {
     let d = ev.world().at(db);
     let Some(p) = prop.and_then(|p| d.prop(p)) else {
         return (Some(rows.len() as f64), None);
@@ -76,7 +90,13 @@ fn measure(ev: &Evaluator<'_>, db: usize, rows: &[usize], agg: AggFn, prop: Opti
 
 /// Computes chart data over `rows` (already filtered).
 #[must_use]
-pub fn chart_data(ev: &Evaluator<'_>, db: usize, rows: &[usize], spec: &ChartSpec, max_points: usize) -> ChartData {
+pub fn chart_data(
+    ev: &Evaluator<'_>,
+    db: usize,
+    rows: &[usize],
+    spec: &ChartSpec,
+    max_points: usize,
+) -> ChartData {
     let mut xs = groups_for(ev, db, rows, &spec.x.prop, spec.x.bucket);
     xs.retain(|g| !g.key.is_empty());
     xs.truncate(max_points.clamp(1, 5_000));
@@ -96,7 +116,7 @@ pub fn chart_data(ev: &Evaluator<'_>, db: usize, rows: &[usize], spec: &ChartSpe
                 .map_or_else(|| p.clone(), |pp| pp.name.clone()),
             None => "Count".into(),
         };
-        let splits: Vec<(String, String, Option<HashMap<usize, ()>>)> = match &series_groups {
+        let splits: Vec<(String, String, Option<HashSet<usize>>)> = match &series_groups {
             Some(sg) => sg
                 .iter()
                 .map(|g| {
@@ -107,7 +127,7 @@ pub fn chart_data(ev: &Evaluator<'_>, db: usize, rows: &[usize], spec: &ChartSpe
                         } else {
                             g.label.clone()
                         },
-                        Some(g.rows.iter().map(|r| (*r, ())).collect()),
+                        Some(g.rows.iter().copied().collect()),
                     )
                 })
                 .collect(),
@@ -121,7 +141,7 @@ pub fn chart_data(ev: &Evaluator<'_>, db: usize, rows: &[usize], spec: &ChartSpe
                     .rows
                     .iter()
                     .copied()
-                    .filter(|r| members.as_ref().is_none_or(|m| m.contains_key(r)))
+                    .filter(|r| members.as_ref().is_none_or(|m| m.contains(r)))
                     .collect();
                 let (v, cur) = if rows_in.is_empty() && y.prop.is_some() && y.agg != AggFn::Sum {
                     (None, None)
@@ -147,10 +167,18 @@ pub fn chart_data(ev: &Evaluator<'_>, db: usize, rows: &[usize], spec: &ChartSpe
             });
         }
     }
-    let mut data = ChartData { x, series, currency };
+    let mut data = ChartData {
+        x,
+        series,
+        currency,
+    };
     if spec.omit_zero == Some(true) {
         let keep: Vec<bool> = (0..data.x.len())
-            .map(|i| data.series.iter().any(|s| s.values[i].is_some_and(|v| v != 0.0)))
+            .map(|i| {
+                data.series
+                    .iter()
+                    .any(|s| s.values[i].is_some_and(|v| v != 0.0))
+            })
             .collect();
         retain_mask(&mut data.x, &keep);
         for s in &mut data.series {
@@ -214,7 +242,11 @@ mod tests {
                 prop("d", "Date", PropType::Date, json!({})),
                 prop("m", "Amount", PropType::Money, json!({"currency":"USD"})),
             ],
-            vec![mk("a", "2026-10-03", "10.10"), mk("b", "2026-10-20", "0.20"), mk("c", "2026-11-01", "5")],
+            vec![
+                mk("a", "2026-10-03", "10.10"),
+                mk("b", "2026-10-20", "0.20"),
+                mk("c", "2026-11-01", "5"),
+            ],
             1,
             1,
         )]);

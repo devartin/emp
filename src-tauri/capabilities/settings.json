@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings",
+  "description": "Reserved for a future settings window (SPEC §9.13). Grants nothing in v1.",
+  "local": true,
+  "windows": [],
+  "permissions": []
+}

@@ -143,7 +143,10 @@ mod tests {
         assert_eq!(snap.len(), 3);
         assert_eq!(snap[0].status, 200);
         assert_eq!(snap.iter().map(|e| e.at).collect::<Vec<_>>(), vec![2, 3, 4]);
-        assert_eq!(log.recent(2).iter().map(|e| e.at).collect::<Vec<_>>(), vec![4, 3]);
+        assert_eq!(
+            log.recent(2).iter().map(|e| e.at).collect::<Vec<_>>(),
+            vec![4, 3]
+        );
     }
 
     #[test]
@@ -159,7 +162,10 @@ mod tests {
     fn restore_respects_capacity_and_serializes_camel_case() {
         let log = NetLog::new(2);
         log.restore((0..4).map(entry).collect());
-        assert_eq!(log.snapshot().iter().map(|e| e.at).collect::<Vec<_>>(), vec![2, 3]);
+        assert_eq!(
+            log.snapshot().iter().map(|e| e.at).collect::<Vec<_>>(),
+            vec![2, 3]
+        );
         let g = log.generation();
         log.clear();
         assert!(log.is_empty());

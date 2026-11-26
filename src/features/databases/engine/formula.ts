@@ -1111,7 +1111,7 @@ export function toComputed(v: FValue, kindHint?: ResultKind): { kind: ResultKind
     return { kind: 'number', value: v, display: formatNumber(v, { maximumFractionDigits: Math.abs(v) < 1 ? 4 : 2 }) };
   }
   if (typeof v === 'boolean') return { kind: 'bool', value: v, display: v ? 'Yes' : 'No' };
-  if (v instanceof FMoney) return { kind: 'money', value: v.v, display: formatCurrency(v.v, v.cur) };
+  if (v instanceof FMoney) return { kind: 'money', value: v.v, display: formatCurrency(v.v, v.cur, Number.isInteger(v.v) ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : {}) };
   if (v instanceof FDate) return { kind: 'date', value: v.ms, display: toText(v) };
   if (v instanceof FRow) return { kind: 'text', value: v.title, display: v.title };
   if (Array.isArray(v)) return { kind: 'list', value: v.map((x) => (x instanceof FRow ? x.title : toText(x))), display: toText(v) };

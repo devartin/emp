@@ -16,9 +16,9 @@ function pct(n: number, d: number): string {
 }
 
 function fmtNum(n: number, p: Property, cells: (CellValue | undefined)[]): string {
-  if (p.type === 'money' || (p.type !== 'number' && cells.some((c) => c?.t === 'money'))) {
+  if (p.type === 'money' || (p.type !== 'number' && cells.some((c) => c?.t === 'money' || (c?.t === 'computed' && c.v?.kind === 'money')))) {
     const cur = moneyCurrency(p, cells.find((c) => c?.t === 'money'));
-    return formatCurrency(n, cur);
+    return formatCurrency(n, cur, Number.isInteger(n) || Math.abs(n) >= 1000 ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : {});
   }
   if (p.type === 'progress') return formatNumber(n * 100, { maximumFractionDigits: 1 }) + '%';
   if (p.type === 'rating') return formatNumber(n, { maximumFractionDigits: 1 });
@@ -98,7 +98,7 @@ export function aggregate(fn: AggFn, cells: (CellValue | undefined)[], p: Proper
         }
       }
     }
-    if (!ds.length) return fn === 'sum' ? formatMoneyValue(0, cur) : '';
+    if (!ds.length) return fn === 'sum' ? formatMoneyValue(0, cur, typeof p.config?.decimals === 'number' ? (p.config.decimals as number) : undefined) : '';
     const sorted = [...ds].sort((a, b) => a.comparedTo(b));
     const sum = ds.reduce((a, b) => a.plus(b), new Decimal(0));
     let out: Decimal;
@@ -123,7 +123,7 @@ export function aggregate(fn: AggFn, cells: (CellValue | undefined)[], p: Proper
         out = sorted.length % 2 ? sorted[m] : sorted[m - 1].plus(sorted[m]).dividedBy(2);
       }
     }
-    return formatMoneyValue(out.toString(), cur);
+    return formatMoneyValue(out.toString(), cur, typeof p.config?.decimals === 'number' ? (p.config.decimals as number) : undefined);
   }
   const ns = cells.map((c) => cellNumber(c)).filter((x): x is number => x !== null);
   if (!ns.length) return fn === 'sum' ? fmtNum(0, p, cells) : '';

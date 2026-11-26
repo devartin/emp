@@ -1,0 +1,792 @@
+{
+  "id": "habits",
+  "version": "1.0.0",
+  "title": "Habits",
+  "tagline": "Build habits that stick — small steps, kind streaks, weekly reflection.",
+  "icon": "heart-pulse",
+  "color": "ruby",
+  "category": "health",
+  "sensitivity": "normal",
+  "estMinutes": 3,
+  "steps": [
+    {
+      "id": "pick",
+      "kind": "list_builder",
+      "title": "Which habits do you want to build?",
+      "quick": true,
+      "skippable": false,
+      "help": "Start with one to three. You can always add more once these feel automatic.",
+      "why": "Starting small is the most reliable predictor of a habit sticking.",
+      "default": [
+        {
+          "name": "Walk 8k steps",
+          "type": "count",
+          "schedule": "daily",
+          "target": 8000,
+          "unit": "steps",
+          "twoMinute": "Walk to the corner and back"
+        }
+      ],
+      "options": [
+        {
+          "value": "Sleep 7–9 h",
+          "label": "Sleep 7–9 h"
+        },
+        {
+          "value": "Walk 8k steps",
+          "label": "Walk 8k steps"
+        },
+        {
+          "value": "Strength train",
+          "label": "Strength train"
+        },
+        {
+          "value": "Water",
+          "label": "Water"
+        },
+        {
+          "value": "Read 20 min",
+          "label": "Read 20 min"
+        },
+        {
+          "value": "Meditate",
+          "label": "Meditate"
+        },
+        {
+          "value": "Journal",
+          "label": "Journal"
+        },
+        {
+          "value": "No phone first hour",
+          "label": "No phone first hour"
+        },
+        {
+          "value": "Inbox zero",
+          "label": "Inbox zero"
+        },
+        {
+          "value": "Language practice",
+          "label": "Language practice"
+        },
+        {
+          "value": "Floss",
+          "label": "Floss"
+        },
+        {
+          "value": "Budget check-in",
+          "label": "Budget check-in"
+        },
+        {
+          "value": "Stretch",
+          "label": "Stretch"
+        }
+      ],
+      "itemSchema": {
+        "name": "text",
+        "type": "enum(yes_no,count,duration,quantity,avoid)",
+        "schedule": "enum(daily,x_per_week,weekdays,every_n_days)",
+        "perWeek": "number",
+        "everyN": "number",
+        "target": "number",
+        "unit": "text",
+        "twoMinute": "text",
+        "cue": "text",
+        "timeOfDay": "enum(morning,afternoon,evening,anytime)",
+        "reminder": "time"
+      }
+    },
+    {
+      "id": "details",
+      "kind": "list_builder",
+      "title": "Make each habit easy",
+      "quick": false,
+      "skippable": true,
+      "help": "Type, schedule, target, a two-minute version and a cue: “After I ___, I will ___”.",
+      "default": []
+    },
+    {
+      "id": "identity",
+      "kind": "text",
+      "title": "I'm becoming someone who…",
+      "quick": false,
+      "skippable": true,
+      "default": ""
+    },
+    {
+      "id": "grace",
+      "kind": "choice_cards",
+      "title": "How strict should streaks be?",
+      "quick": true,
+      "skippable": true,
+      "recommend": "recommend_grace",
+      "default": "never_miss_twice",
+      "options": [
+        {
+          "value": "strict",
+          "label": "Strict",
+          "description": "Any miss resets the streak."
+        },
+        {
+          "value": "never_miss_twice",
+          "label": "Never miss twice",
+          "description": "One miss is forgiven (recommended)."
+        },
+        {
+          "value": "skip_days",
+          "label": "Skip days",
+          "description": "Mark rest days as frozen."
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "kind": "toggle",
+      "title": "Weekly reflection",
+      "quick": false,
+      "skippable": true,
+      "default": true
+    }
+  ],
+  "templates": [
+    {
+      "key": "dashboard",
+      "kind": "dashboard",
+      "optional": false,
+      "spec": {
+        "title": "Habits",
+        "icon": "lucide:heart-pulse",
+        "subtitle": "Small daily actions, tracked kindly.",
+        "tabs": [
+          "Today",
+          "Habits",
+          "Log",
+          "Review"
+        ],
+        "tiles": [
+          {
+            "t": "kpi",
+            "metric": "today_done_pct",
+            "label": "Today",
+            "format": "percent"
+          },
+          {
+            "t": "kpi",
+            "metric": "best_streak",
+            "label": "Best streak",
+            "format": "number"
+          },
+          {
+            "t": "kpi",
+            "metric": "rate_30d_avg",
+            "label": "30-day rate",
+            "format": "percent"
+          },
+          {
+            "t": "kpi",
+            "metric": "active_count",
+            "label": "Active habits",
+            "format": "number"
+          },
+          {
+            "t": "chart",
+            "db": "log",
+            "view": "heatmap",
+            "title": "Check-ins per week"
+          }
+        ],
+        "blocks": [
+          {
+            "t": "callout",
+            "icon": "🌱",
+            "color": "green",
+            "md": "I'm becoming someone who {{if(answers.identity == \"\", \"shows up a little every day\", answers.identity)}}."
+          },
+          {
+            "t": "md",
+            "md": "## Today"
+          },
+          {
+            "t": "database",
+            "db": "habits",
+            "view": "active"
+          },
+          {
+            "t": "md",
+            "md": "## How it works"
+          },
+          {
+            "t": "pageLink",
+            "page": "guide"
+          },
+          {
+            "t": "pageLink",
+            "page": "weekly"
+          }
+        ]
+      }
+    },
+    {
+      "key": "guide",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "How habits stick",
+        "icon": "🧩",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## Make it obvious\nTie each habit to a **cue** you already have: *After I pour my coffee, I will meditate for one minute.* Put the trigger where you will see it.\n\n## Make it easy\nEvery habit has a **two-minute version** — the smallest step that still counts. On a bad day, do that. Showing up matters more than intensity.\n\n## Never miss twice\nMissing once is an accident; missing twice is the start of a new habit. {{if(answers.grace == \"strict\", \"You chose strict streaks: any miss resets the count.\", if(answers.grace == \"skip_days\", \"You chose skip days: mark rest or sick days as frozen and they will not break the streak.\", \"Your streaks forgive a single miss but not two in a row.\"))}}\n\n## Adjust, do not quit\nIf a habit stays under 40% for three weeks, make it smaller. If it stays above 90% for three weeks, consider levelling it up. The advisor will suggest both.\n\n## Fewer, better\nMore than five or six new habits at once is a common reason all of them fail. Add a new one when the last one feels automatic."
+          }
+        ]
+      }
+    },
+    {
+      "key": "weekly",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Weekly habit review",
+        "icon": "🪞",
+        "template": true,
+        "blocks": [
+          {
+            "t": "md",
+            "md": "Five minutes, once a week."
+          },
+          {
+            "t": "checklist",
+            "items": [
+              "Which habit felt easiest this week? Why?",
+              "Which one did I skip most? What got in the way?",
+              "Is any habit too big? Shrink it to the two-minute version.",
+              "Anything to level up?",
+              "One thing to try next week"
+            ]
+          },
+          {
+            "t": "database",
+            "db": "log",
+            "view": "recent"
+          }
+        ]
+      },
+      "when": "answers.review"
+    },
+    {
+      "key": "habits",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Habits",
+        "icon": "🌱",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Name",
+            "type": "title"
+          },
+          {
+            "key": "type",
+            "name": "Type",
+            "type": "select",
+            "options": [
+              {
+                "key": "yes_no",
+                "name": "Yes / no"
+              },
+              {
+                "key": "count",
+                "name": "Count"
+              },
+              {
+                "key": "duration",
+                "name": "Duration"
+              },
+              {
+                "key": "quantity",
+                "name": "Quantity"
+              },
+              {
+                "key": "avoid",
+                "name": "Avoid"
+              }
+            ]
+          },
+          {
+            "key": "schedule",
+            "name": "Schedule",
+            "type": "select",
+            "options": [
+              {
+                "key": "daily",
+                "name": "Daily"
+              },
+              {
+                "key": "x_per_week",
+                "name": "X per week"
+              },
+              {
+                "key": "weekdays",
+                "name": "Weekdays"
+              },
+              {
+                "key": "every_n_days",
+                "name": "Every N days"
+              }
+            ]
+          },
+          {
+            "key": "per_week",
+            "name": "Times per week",
+            "type": "number"
+          },
+          {
+            "key": "every_n",
+            "name": "Every N days",
+            "type": "number"
+          },
+          {
+            "key": "target",
+            "name": "Target",
+            "type": "number"
+          },
+          {
+            "key": "unit",
+            "name": "Unit",
+            "type": "text"
+          },
+          {
+            "key": "two_minute",
+            "name": "Two-minute version",
+            "type": "text"
+          },
+          {
+            "key": "cue",
+            "name": "Cue",
+            "type": "text"
+          },
+          {
+            "key": "time_of_day",
+            "name": "Time of day",
+            "type": "select",
+            "options": [
+              {
+                "key": "morning",
+                "name": "Morning"
+              },
+              {
+                "key": "afternoon",
+                "name": "Afternoon"
+              },
+              {
+                "key": "evening",
+                "name": "Evening"
+              },
+              {
+                "key": "anytime",
+                "name": "Anytime"
+              }
+            ]
+          },
+          {
+            "key": "area",
+            "name": "Area",
+            "type": "text"
+          },
+          {
+            "key": "active",
+            "name": "Active",
+            "type": "checkbox"
+          },
+          {
+            "key": "started",
+            "name": "Started",
+            "type": "date"
+          },
+          {
+            "key": "current_streak",
+            "name": "Current streak",
+            "type": "computed"
+          },
+          {
+            "key": "best_streak",
+            "name": "Best streak",
+            "type": "computed"
+          },
+          {
+            "key": "rate_30d",
+            "name": "30-day rate",
+            "type": "computed"
+          }
+        ],
+        "views": [
+          {
+            "key": "active",
+            "name": "Active",
+            "layout": "gallery",
+            "filter": {
+              "prop": "active",
+              "op": "checked"
+            },
+            "card": {
+              "preview": "none",
+              "size": "m",
+              "fit": false
+            }
+          },
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table"
+          }
+        ],
+        "rows": [
+          {
+            "key": "${item.name}",
+            "forEach": "answers.pick",
+            "values": {
+              "name": "${item.name}",
+              "type": "${item.type}",
+              "schedule": "${item.schedule}",
+              "per_week": "${item.perWeek}",
+              "every_n": "${item.everyN}",
+              "target": "${item.target}",
+              "unit": "${item.unit}",
+              "two_minute": "${item.twoMinute}",
+              "cue": "${item.cue}",
+              "time_of_day": "${item.timeOfDay}",
+              "active": true,
+              "started": "@today"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "log",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Habit log",
+        "icon": "🗓️",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Entry",
+            "type": "title"
+          },
+          {
+            "key": "date",
+            "name": "Date",
+            "type": "date"
+          },
+          {
+            "key": "habit",
+            "name": "Habit",
+            "type": "relation",
+            "relation": {
+              "db": "habits",
+              "limit": "one",
+              "dual": {
+                "key": "log",
+                "name": "Log"
+              }
+            }
+          },
+          {
+            "key": "value",
+            "name": "Value",
+            "type": "number"
+          },
+          {
+            "key": "status",
+            "name": "Status",
+            "type": "select",
+            "options": [
+              {
+                "key": "done",
+                "name": "Done",
+                "color": "green"
+              },
+              {
+                "key": "partial",
+                "name": "Partial",
+                "color": "yellow"
+              },
+              {
+                "key": "skipped",
+                "name": "Skipped",
+                "color": "gray"
+              },
+              {
+                "key": "missed",
+                "name": "Missed",
+                "color": "red"
+              },
+              {
+                "key": "frozen",
+                "name": "Frozen",
+                "color": "blue"
+              }
+            ]
+          },
+          {
+            "key": "note",
+            "name": "Note",
+            "type": "text"
+          },
+          {
+            "key": "mood",
+            "name": "Mood",
+            "type": "rating",
+            "max": 5
+          }
+        ],
+        "views": [
+          {
+            "key": "recent",
+            "name": "Recent",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "desc"
+              }
+            ]
+          },
+          {
+            "key": "calendar",
+            "name": "Calendar",
+            "layout": "calendar",
+            "calendar": {
+              "dateProp": "date"
+            }
+          },
+          {
+            "key": "heatmap",
+            "name": "Check-ins",
+            "layout": "chart",
+            "chart": {
+              "type": "bar",
+              "x": {
+                "prop": "date",
+                "bucket": "week"
+              },
+              "y": [
+                {
+                  "agg": "count"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "habit_reminders",
+      "kind": "reminder",
+      "optional": true,
+      "spec": {
+        "title": "Habit reminders",
+        "text": "${item.name}: ${item.twoMinute}",
+        "target": "dashboard",
+        "forEach": "answers.pick",
+        "when": "\"${item.reminder}\" != \"\"",
+        "rrule": "FREQ=DAILY",
+        "time": "${item.reminder}"
+      }
+    },
+    {
+      "key": "weekly_ritual",
+      "kind": "recurring",
+      "optional": true,
+      "spec": {
+        "title": "Weekly habit review",
+        "text": "Time for your weekly habit reflection",
+        "target": "weekly",
+        "rrule": "FREQ=WEEKLY;BYDAY=SU",
+        "time": "18:00"
+      },
+      "when": "answers.review"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "active_count",
+      "kind": "rust",
+      "fn": "habits.active_count",
+      "deps": [
+        "habits"
+      ]
+    },
+    {
+      "name": "today_done_pct",
+      "kind": "rust",
+      "fn": "habits.today_done_pct",
+      "deps": [
+        "habits",
+        "log"
+      ]
+    },
+    {
+      "name": "best_streak",
+      "kind": "rust",
+      "fn": "habits.best_streak",
+      "deps": [
+        "log"
+      ]
+    },
+    {
+      "name": "rate_30d_avg",
+      "kind": "rust",
+      "fn": "habits.rate_30d_avg",
+      "deps": [
+        "log"
+      ]
+    },
+    {
+      "name": "missed_yesterday_count",
+      "kind": "rust",
+      "fn": "habits.missed_yesterday_count",
+      "deps": [
+        "log"
+      ]
+    },
+    {
+      "name": "low_rate_3w_count",
+      "kind": "rust",
+      "fn": "habits.low_rate_3w_count",
+      "deps": [
+        "log"
+      ]
+    },
+    {
+      "name": "high_rate_21d_count",
+      "kind": "rust",
+      "fn": "habits.high_rate_21d_count",
+      "deps": [
+        "log"
+      ]
+    },
+    {
+      "name": "new_active_14d_count",
+      "kind": "rust",
+      "fn": "habits.new_active_14d_count",
+      "deps": [
+        "habits"
+      ]
+    },
+    {
+      "name": "max_current_streak",
+      "kind": "rust",
+      "fn": "habits.max_current_streak",
+      "deps": [
+        "log"
+      ]
+    },
+    {
+      "name": "log_days",
+      "kind": "rust",
+      "fn": "habits.log_days",
+      "deps": [
+        "log"
+      ]
+    }
+  ],
+  "advisor": [
+    {
+      "id": "dont-miss-twice",
+      "when": "metrics.missed_yesterday_count > 0",
+      "severity": "tip",
+      "title": "Don't miss twice",
+      "body": "{{metrics.missed_yesterday_count}} habit(s) were missed yesterday. Today, even the two-minute version keeps the streak alive.",
+      "mathMetrics": [
+        "missed_yesterday_count"
+      ],
+      "actions": [
+        {
+          "label": "Check in",
+          "route": "app:Today"
+        }
+      ]
+    },
+    {
+      "id": "make-smaller",
+      "when": "metrics.low_rate_3w_count > 0",
+      "severity": "tip",
+      "title": "Make it smaller",
+      "body": "{{metrics.low_rate_3w_count}} habit(s) have been under 40% for three weeks. Consider shrinking the target or changing the cue.",
+      "mathMetrics": [
+        "low_rate_3w_count"
+      ],
+      "actions": [
+        {
+          "label": "Habits",
+          "route": "db:habits:all"
+        }
+      ]
+    },
+    {
+      "id": "level-up",
+      "when": "metrics.high_rate_21d_count > 0",
+      "severity": "info",
+      "title": "Ready to level up?",
+      "body": "{{metrics.high_rate_21d_count}} habit(s) have been at 90% or more for 21 days. Consider raising the target a little.",
+      "mathMetrics": [
+        "high_rate_21d_count"
+      ],
+      "actions": [
+        {
+          "label": "Habits",
+          "route": "db:habits:all"
+        }
+      ]
+    },
+    {
+      "id": "too-many",
+      "when": "metrics.new_active_14d_count > 6",
+      "severity": "tip",
+      "title": "That's a lot of new habits",
+      "body": "{{metrics.new_active_14d_count}} habits started in the last two weeks. Consider pausing a few until the first ones feel automatic.",
+      "mathMetrics": [
+        "new_active_14d_count"
+      ],
+      "actions": [
+        {
+          "label": "Habits",
+          "route": "db:habits:all"
+        }
+      ]
+    }
+  ],
+  "checklist": [
+    {
+      "id": "today",
+      "label": "Check in today",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.today_done_pct > 0"
+      }
+    },
+    {
+      "id": "streak3",
+      "label": "Hit a 3-day streak",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.max_current_streak >= 3"
+      }
+    },
+    {
+      "id": "reflect",
+      "label": "Do a weekly reflection",
+      "autoTick": {
+        "event": "habits.reflection_done"
+      }
+    }
+  ],
+  "migrations": [],
+  "sample": {
+    "generator": "habits",
+    "seed": 20261201
+  }
+}

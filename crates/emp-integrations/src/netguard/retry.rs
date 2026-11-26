@@ -76,7 +76,10 @@ mod tests {
     #[test]
     fn retry_after_seconds_and_dates() {
         let now = Utc.with_ymd_and_hms(2015, 10, 21, 7, 27, 0).unwrap();
-        assert_eq!(parse_retry_after("120", now), Some(Duration::from_secs(120)));
+        assert_eq!(
+            parse_retry_after("120", now),
+            Some(Duration::from_secs(120))
+        );
         assert_eq!(
             parse_retry_after("Wed, 21 Oct 2015 07:28:00 GMT", now),
             Some(Duration::from_secs(60))

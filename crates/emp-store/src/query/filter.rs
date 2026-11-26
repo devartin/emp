@@ -78,7 +78,16 @@ pub fn ops_for(c: Class) -> &'static [FilterOp] {
             O::Empty,
             O::NotEmpty,
         ],
-        Class::Number => &[O::Eq, O::Neq, O::Gt, O::Gte, O::Lt, O::Lte, O::Empty, O::NotEmpty],
+        Class::Number => &[
+            O::Eq,
+            O::Neq,
+            O::Gt,
+            O::Gte,
+            O::Lt,
+            O::Lte,
+            O::Empty,
+            O::NotEmpty,
+        ],
         Class::Select => &[
             O::Eq,
             O::Neq,
@@ -88,7 +97,14 @@ pub fn ops_for(c: Class) -> &'static [FilterOp] {
             O::NotEmpty,
             O::GroupEq,
         ],
-        Class::Multi => &[O::AnyOf, O::AllOf, O::NoneOf, O::Empty, O::NotEmpty, O::Contains],
+        Class::Multi => &[
+            O::AnyOf,
+            O::AllOf,
+            O::NoneOf,
+            O::Empty,
+            O::NotEmpty,
+            O::Contains,
+        ],
         Class::Date => &[
             O::Eq,
             O::Before,
@@ -332,9 +348,8 @@ fn test(
                     .map(|n| fold(&n))
             };
             let is = |want: &str| {
-                id.as_deref().is_some_and(|i| {
-                    i == want || name(i).is_some_and(|n| n == fold(want))
-                })
+                id.as_deref()
+                    .is_some_and(|i| i == want || name(i).is_some_and(|n| n == fold(want)))
             };
             match op {
                 O::Eq => value.and_then(Value::as_str).is_some_and(is),
@@ -343,7 +358,9 @@ fn test(
                 O::NoneOf => !str_list(value).iter().any(|w| is(w)),
                 O::GroupEq => {
                     let want = value.and_then(Value::as_str).unwrap_or_default();
-                    let opts = p.map(super::config::HasConfig::select_options).unwrap_or_default();
+                    let opts = p
+                        .map(super::config::HasConfig::select_options)
+                        .unwrap_or_default();
                     id.as_deref()
                         .and_then(|i| opts.iter().find(|o| o.id == i))
                         .and_then(|o| o.group)
@@ -355,9 +372,9 @@ fn test(
         Class::Multi | Class::Relation => {
             let have = cells::ids(cell);
             let names: Vec<String> = match (cell, p) {
-                (Some(c @ CellValue::Multi { .. }), Some(p)) => cells::split_list(&cells::display(c, p))
-                    .map(fold)
-                    .collect(),
+                (Some(c @ CellValue::Multi { .. }), Some(p)) => {
+                    cells::split_list(&cells::display(c, p)).map(fold).collect()
+                }
                 _ => have.iter().map(|s| fold(s)).collect(),
             };
             let has = |w: &str| have.iter().any(|h| h == w) || names.contains(&fold(w));

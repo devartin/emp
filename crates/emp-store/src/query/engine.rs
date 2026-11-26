@@ -170,7 +170,15 @@ mod tests {
             mk("r3", "Éclair", None, "doing", "", false),
             mk("r4", "apple", Some(8.0), "todo", "2026-12-24", false),
         ];
-        World::new(vec![DbData::new("db".into(), "Tasks".into(), info("t"), props, rows, 1, 1)])
+        World::new(vec![DbData::new(
+            "db".into(),
+            "Tasks".into(),
+            info("t"),
+            props,
+            rows,
+            1,
+            1,
+        )])
     }
 
     fn titles(w: &World, rows: &[usize]) -> Vec<String> {
@@ -182,15 +190,30 @@ mod tests {
         let w = world();
         let ev = Evaluator::new(&w, DateCtx::utc(1_795_694_400_000));
         let mut spec = QuerySpec {
-            sorts: vec![Sort { prop: "t".into(), dir: SortDir::Asc }],
+            sorts: vec![Sort {
+                prop: "t".into(),
+                dir: SortDir::Asc,
+            }],
             ..Default::default()
         };
         let out = run(&ev, 0, &spec);
-        assert_eq!(titles(&w, &out.rows), vec!["apple", "Éclair", "item 2", "Item 10"]);
-        spec.sorts = vec![Sort { prop: "n".into(), dir: SortDir::Desc }];
+        assert_eq!(
+            titles(&w, &out.rows),
+            vec!["apple", "Éclair", "item 2", "Item 10"]
+        );
+        spec.sorts = vec![Sort {
+            prop: "n".into(),
+            dir: SortDir::Desc,
+        }];
         let out = run(&ev, 0, &spec);
-        assert_eq!(titles(&w, &out.rows), vec!["apple", "Item 10", "item 2", "Éclair"]);
-        spec.sorts = vec![Sort { prop: "s".into(), dir: SortDir::Asc }];
+        assert_eq!(
+            titles(&w, &out.rows),
+            vec!["apple", "Item 10", "item 2", "Éclair"]
+        );
+        spec.sorts = vec![Sort {
+            prop: "s".into(),
+            dir: SortDir::Asc,
+        }];
         let out = run(&ev, 0, &spec);
         assert_eq!(titles(&w, &out.rows)[3], "item 2");
     }
@@ -216,13 +239,34 @@ mod tests {
         let out = run(&ev, 0, &spec);
         assert_eq!(titles(&w, &out.rows), vec!["Item 10", "apple"]);
         let f = Filter::cond("s", FilterOp::GroupEq, Some(json!("complete")));
-        let out = run(&ev, 0, &QuerySpec { filter: Some(f), ..Default::default() });
+        let out = run(
+            &ev,
+            0,
+            &QuerySpec {
+                filter: Some(f),
+                ..Default::default()
+            },
+        );
         assert_eq!(titles(&w, &out.rows), vec!["item 2"]);
         let f = Filter::cond("t", FilterOp::Contains, Some(json!("ECLA")));
-        let out = run(&ev, 0, &QuerySpec { filter: Some(f), ..Default::default() });
+        let out = run(
+            &ev,
+            0,
+            &QuerySpec {
+                filter: Some(f),
+                ..Default::default()
+            },
+        );
         assert_eq!(out.rows.len(), 1);
         let f = Filter::cond("d", FilterOp::Before, Some(json!("2026-11-26")));
-        let out = run(&ev, 0, &QuerySpec { filter: Some(f), ..Default::default() });
+        let out = run(
+            &ev,
+            0,
+            &QuerySpec {
+                filter: Some(f),
+                ..Default::default()
+            },
+        );
         assert_eq!(titles(&w, &out.rows), vec!["item 2"]);
         let out = run(
             &ev,

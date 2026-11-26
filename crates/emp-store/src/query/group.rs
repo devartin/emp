@@ -51,9 +51,15 @@ pub fn keys_of(
     }
     let opts = p.select_options();
     match (p.kind, v.as_ref()) {
-        (PropType::Status, Some(CellValue::Status { v: Some(id) })) if gb.by_status_group == Some(true) => {
+        (PropType::Status, Some(CellValue::Status { v: Some(id) }))
+            if gb.by_status_group == Some(true) =>
+        {
             match opts.iter().find(|o| &o.id == id).and_then(|o| o.group) {
-                Some(g) => vec![(g.as_str().to_owned(), status_group_label(g).to_owned(), None)],
+                Some(g) => vec![(
+                    g.as_str().to_owned(),
+                    status_group_label(g).to_owned(),
+                    None,
+                )],
                 None => none(),
             }
         }
@@ -122,33 +128,53 @@ pub fn group_rows(ev: &Evaluator<'_>, db: usize, rows: &[usize], gb: &GroupBy) -
     let p = d.prop(&gb.prop);
     let mut groups: Vec<GroupRows> = Vec::new();
     let mut at: HashMap<String, usize> = HashMap::new();
-    let mut push = |groups: &mut Vec<GroupRows>, key: String, label: String, color, row: Option<usize>| {
-        let i = *at.entry(key.clone()).or_insert_with(|| {
-            groups.push(GroupRows {
-                key,
-                label,
-                color,
-                rows: Vec::new(),
+    let mut push =
+        |groups: &mut Vec<GroupRows>, key: String, label: String, color, row: Option<usize>| {
+            let i = *at.entry(key.clone()).or_insert_with(|| {
+                groups.push(GroupRows {
+                    key,
+                    label,
+                    color,
+                    rows: Vec::new(),
+                });
+                groups.len() - 1
             });
-            groups.len() - 1
-        });
-        if let Some(r) = row {
-            groups[i].rows.push(r);
-        }
-    };
+            if let Some(r) = row {
+                groups[i].rows.push(r);
+            }
+        };
     // Option-based groups exist even when empty (unless hidden).
     let mut option_order: Vec<String> = Vec::new();
     if let Some(p) = p {
         let by_group = p.kind == PropType::Status && gb.by_status_group == Some(true);
         if by_group {
-            for g in [StatusGroup::Todo, StatusGroup::InProgress, StatusGroup::Complete] {
+            for g in [
+                StatusGroup::Todo,
+                StatusGroup::InProgress,
+                StatusGroup::Complete,
+            ] {
                 option_order.push(g.as_str().to_owned());
-                push(&mut groups, g.as_str().into(), status_group_label(g).into(), None, None);
+                push(
+                    &mut groups,
+                    g.as_str().into(),
+                    status_group_label(g).into(),
+                    None,
+                    None,
+                );
             }
-        } else if matches!(p.kind, PropType::Select | PropType::Status | PropType::MultiSelect) {
+        } else if matches!(
+            p.kind,
+            PropType::Select | PropType::Status | PropType::MultiSelect
+        ) {
             for o in p.select_options() {
                 option_order.push(o.id.clone());
-                push(&mut groups, o.id.clone(), o.name.clone(), Some(o.color), None);
+                push(
+                    &mut groups,
+                    o.id.clone(),
+                    o.name.clone(),
+                    Some(o.color),
+                    None,
+                );
             }
         } else if p.kind == PropType::Checkbox {
             for (k, l) in [("false", "Unchecked"), ("true", "Checked")] {
@@ -182,7 +208,13 @@ pub fn group_rows(ev: &Evaluator<'_>, db: usize, rows: &[usize], gb: &GroupBy) -
                 return (0, i);
             }
             if ordered_by_options {
-                return (1, option_order.iter().position(|k| k == &g.key).unwrap_or(usize::MAX - 1));
+                return (
+                    1,
+                    option_order
+                        .iter()
+                        .position(|k| k == &g.key)
+                        .unwrap_or(usize::MAX - 1),
+                );
             }
             (1, 0)
         };

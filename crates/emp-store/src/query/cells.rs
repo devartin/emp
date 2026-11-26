@@ -96,7 +96,9 @@ pub fn is_empty(c: Option<&CellValue>) -> bool {
     let Some(c) = c else { return true };
     match c {
         CellValue::Text { v } => rich_plain(v).trim().is_empty(),
-        CellValue::Number { v } | CellValue::Rating { v } | CellValue::Progress { v } => v.is_none(),
+        CellValue::Number { v } | CellValue::Rating { v } | CellValue::Progress { v } => {
+            v.is_none()
+        }
         CellValue::Money { v, .. } => v.is_none(),
         CellValue::Select { v } | CellValue::Status { v } => v.is_none(),
         CellValue::Multi { v } | CellValue::Relation { v } => v.is_empty(),
@@ -125,7 +127,9 @@ pub fn number(c: Option<&CellValue>) -> Option<f64> {
     match c? {
         CellValue::Number { v } | CellValue::Rating { v } | CellValue::Progress { v } => *v,
         CellValue::Money { v, .. } => v.as_deref().and_then(|s| s.parse::<f64>().ok()),
-        CellValue::Computed { v } if matches!(v.kind, ComputedKind::Number | ComputedKind::Money) => {
+        CellValue::Computed { v }
+            if matches!(v.kind, ComputedKind::Number | ComputedKind::Money) =>
+        {
             match &v.value {
                 Value::Number(n) => n.as_f64(),
                 Value::String(s) => s.parse().ok(),
@@ -180,7 +184,9 @@ pub fn date(c: Option<&CellValue>, ctx: &DateCtx) -> Option<NaiveDate> {
 #[must_use]
 pub fn ids(c: Option<&CellValue>) -> Vec<String> {
     match c {
-        Some(CellValue::Select { v: Some(i) } | CellValue::Status { v: Some(i) }) => vec![i.clone()],
+        Some(CellValue::Select { v: Some(i) } | CellValue::Status { v: Some(i) }) => {
+            vec![i.clone()]
+        }
         Some(CellValue::Multi { v } | CellValue::Relation { v }) => v.clone(),
         Some(CellValue::Computed { v }) => match &v.value {
             Value::Array(a) => a
@@ -269,7 +275,10 @@ pub fn validate(p: &Property, v: CellValue) -> Result<Option<CellValue>> {
             } else {
                 cur
             };
-            if !(cur.len() >= 3 && cur.len() <= 10 && cur.chars().all(|c| c.is_ascii_alphanumeric())) {
+            if !(cur.len() >= 3
+                && cur.len() <= 10
+                && cur.chars().all(|c| c.is_ascii_alphanumeric()))
+            {
                 return Err(bad("invalid currency code"));
             }
             let v = v.map(|s| check_money(&s)).transpose()?;
@@ -333,7 +342,9 @@ pub fn validate(p: &Property, v: CellValue) -> Result<Option<CellValue>> {
             if v.len() > MAX_LIST {
                 return Err(StoreError::TooLarge("files"));
             }
-            if v.iter().any(|f| !crate::model::ids::is_asset_id(&f.asset_id)) {
+            if v.iter()
+                .any(|f| !crate::model::ids::is_asset_id(&f.asset_id))
+            {
                 return Err(bad("invalid asset id"));
             }
             C::Files { v }
@@ -352,7 +363,12 @@ pub fn validate(p: &Property, v: CellValue) -> Result<Option<CellValue>> {
             C::Relation { v }
         }
         (T::Rating, C::Rating { v }) => {
-            let max = f64::from(read::<RatingConfig>(&p.config).max.unwrap_or(5).clamp(1, 10));
+            let max = f64::from(
+                read::<RatingConfig>(&p.config)
+                    .max
+                    .unwrap_or(5)
+                    .clamp(1, 10),
+            );
             if let Some(n) = v
                 && (!n.is_finite() || n.fract() != 0.0 || n < 1.0 || n > max)
             {
@@ -371,9 +387,9 @@ pub fn validate(p: &Property, v: CellValue) -> Result<Option<CellValue>> {
         (T::Ticker, C::Ticker { v }) => {
             if v.as_deref().is_some_and(|s| {
                 s.len() > 32
-                    || !s
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '.' | '-' | '^' | '='))
+                    || !s.chars().all(|c| {
+                        c.is_ascii_alphanumeric() || matches!(c, ':' | '.' | '-' | '^' | '=')
+                    })
             }) {
                 return Err(bad("invalid symbol"));
             }
@@ -463,7 +479,14 @@ pub fn parse_date_text(s: &str) -> Option<DateValue> {
             ..a
         });
     }
-    for f in ["%Y-%m-%d", "%m/%d/%Y", "%B %d, %Y", "%b %d, %Y", "%d.%m.%Y", "%Y/%m/%d"] {
+    for f in [
+        "%Y-%m-%d",
+        "%m/%d/%Y",
+        "%B %d, %Y",
+        "%b %d, %Y",
+        "%d.%m.%Y",
+        "%Y/%m/%d",
+    ] {
         if let Ok(d) = NaiveDate::parse_from_str(s, f) {
             return Some(DateValue {
                 start: d.format("%Y-%m-%d").to_string(),
@@ -536,7 +559,11 @@ pub fn from_text(p: &Property, s: &str) -> Option<CellValue> {
         }
         PropType::Select | PropType::Status => {
             let opts = p.select_options();
-            let id = opts.iter().find(|o| o.name.eq_ignore_ascii_case(t))?.id.clone();
+            let id = opts
+                .iter()
+                .find(|o| o.name.eq_ignore_ascii_case(t))?
+                .id
+                .clone();
             if p.kind == PropType::Select {
                 CellValue::Select { v: Some(id) }
             } else {
@@ -610,7 +637,9 @@ pub fn to_row_value(c: Option<&CellValue>, p: &Property, ctx: &DateCtx) -> RowVa
     let Some(c) = c else {
         return match p.kind {
             PropType::Checkbox => RowValue::Bool(false),
-            PropType::MultiSelect | PropType::Relation | PropType::Files => RowValue::List(Vec::new()),
+            PropType::MultiSelect | PropType::Relation | PropType::Files => {
+                RowValue::List(Vec::new())
+            }
             _ => RowValue::Empty,
         };
     };
@@ -625,7 +654,11 @@ pub fn to_row_value(c: Option<&CellValue>, p: &Property, ctx: &DateCtx) -> RowVa
             .map_or(RowValue::Empty, RowValue::Number),
         CellValue::Select { .. } | CellValue::Status { .. } => {
             let d = display(c, p);
-            if d.is_empty() { RowValue::Empty } else { RowValue::Text(d) }
+            if d.is_empty() {
+                RowValue::Empty
+            } else {
+                RowValue::Text(d)
+            }
         }
         CellValue::Multi { v } => {
             let opts = p.select_options();
@@ -642,11 +675,16 @@ pub fn to_row_value(c: Option<&CellValue>, p: &Property, ctx: &DateCtx) -> RowVa
         },
         CellValue::Date { v: None } => RowValue::Empty,
         CellValue::Check { v } => RowValue::Bool(*v),
-        CellValue::Url { v } | CellValue::Email { v } | CellValue::Phone { v } | CellValue::Ticker { v } => {
-            v.clone().map_or(RowValue::Empty, RowValue::Text)
+        CellValue::Url { v }
+        | CellValue::Email { v }
+        | CellValue::Phone { v }
+        | CellValue::Ticker { v } => v.clone().map_or(RowValue::Empty, RowValue::Text),
+        CellValue::Files { v } => {
+            RowValue::List(v.iter().map(|f| RowValue::Text(f.name.clone())).collect())
         }
-        CellValue::Files { v } => RowValue::List(v.iter().map(|f| RowValue::Text(f.name.clone())).collect()),
-        CellValue::Relation { v } => RowValue::List(v.iter().map(|i| RowValue::Row(i.clone())).collect()),
+        CellValue::Relation { v } => {
+            RowValue::List(v.iter().map(|i| RowValue::Row(i.clone())).collect())
+        }
         CellValue::Uid { v } => RowValue::Text(v.clone()),
         CellValue::Recurrence { v } => v
             .as_ref()
@@ -791,18 +829,47 @@ mod tests {
             PropType::Select,
             json!({"options":[SelectOption{id:"o1".into(),name:"Red".into(),color:crate::model::BlockColor::Red,group:None}]}),
         );
-        assert!(validate(&sel, CellValue::Select { v: Some("o1".into()) }).is_ok());
-        assert!(validate(&sel, CellValue::Select { v: Some("zz".into()) }).is_err());
+        assert!(
+            validate(
+                &sel,
+                CellValue::Select {
+                    v: Some("o1".into())
+                }
+            )
+            .is_ok()
+        );
+        assert!(
+            validate(
+                &sel,
+                CellValue::Select {
+                    v: Some("zz".into())
+                }
+            )
+            .is_err()
+        );
         assert_eq!(
             from_text(&sel, " red "),
-            Some(CellValue::Select { v: Some("o1".into()) })
+            Some(CellValue::Select {
+                v: Some("o1".into())
+            })
         );
         let rating = prop(PropType::Rating, json!({}));
         assert!(validate(&rating, CellValue::Rating { v: Some(6.0) }).is_err());
-        let rel = prop(PropType::Relation, json!({"limit":"one","targetDatabaseId":"x"}));
+        let rel = prop(
+            PropType::Relation,
+            json!({"limit":"one","targetDatabaseId":"x"}),
+        );
         assert_eq!(
-            validate(&rel, CellValue::Relation { v: vec!["a".into(), "b".into()] }).unwrap(),
-            Some(CellValue::Relation { v: vec!["a".into()] })
+            validate(
+                &rel,
+                CellValue::Relation {
+                    v: vec!["a".into(), "b".into()]
+                }
+            )
+            .unwrap(),
+            Some(CellValue::Relation {
+                v: vec!["a".into()]
+            })
         );
     }
 
@@ -825,7 +892,10 @@ mod tests {
     fn row_bridge() {
         let ctx = DateCtx::utc(0);
         let p = prop(PropType::Number, json!({}));
-        assert_eq!(to_row_value(Some(&CellValue::number(2.0)), &p, &ctx), RowValue::Number(2.0));
+        assert_eq!(
+            to_row_value(Some(&CellValue::number(2.0)), &p, &ctx),
+            RowValue::Number(2.0)
+        );
         let c = computed_from_row(&RowValue::Number(4.0), "4");
         assert_eq!(number(Some(&c)), Some(4.0));
         assert_eq!(plain_text(&c), "4");

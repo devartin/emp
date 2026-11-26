@@ -231,7 +231,7 @@ export function exportCell(c: CellValue | null | undefined, p: Property | undefi
       return c.v ?? '';
     case 'computed': {
       const v = c.v?.value;
-      if (c.v?.kind === 'number' && typeof v === 'number') return String(v);
+      if ((c.v?.kind === 'number' || c.v?.kind === 'money') && typeof v === 'number') return String(Math.round(v * 1e8) / 1e8);
       return c.v?.display ?? '';
     }
     default:

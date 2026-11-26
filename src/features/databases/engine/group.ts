@@ -50,7 +50,7 @@ export function rowGroupKeys(row: RowDTO, g: GroupBy, p: Property, env: GroupEnv
         return [{ key: gid, label: STATUS_GROUPS[gi]?.name ?? gid, color: STATUS_GROUP_COLOR[gid], order: gi }];
       }
       return ids
-        .map((id) => {
+        .map((id): GroupKey | null => {
           const i = opts.findIndex((o) => o.id === id);
           return i < 0 ? null : { key: id, label: opts[i].name, color: opts[i].color, order: i };
         })

@@ -6,7 +6,9 @@ use url::Url;
 
 use super::path_segment;
 use crate::error::{IntegrationError, Result};
-use crate::netguard::{Body, BodyCap, ConnectorId, Credential, Expect, Method, NetRequest, NetResponse};
+use crate::netguard::{
+    Body, BodyCap, ConnectorId, Credential, Expect, Method, NetRequest, NetResponse,
+};
 use crate::secret::SecretString;
 
 /// Google Docs MIME type.
@@ -45,7 +47,8 @@ pub struct DriveFileRef {
 }
 
 fn api_url(path: &str) -> Result<Url> {
-    Url::parse(&format!("https://www.googleapis.com{path}")).map_err(|e| IntegrationError::Internal(e.to_string()))
+    Url::parse(&format!("https://www.googleapis.com{path}"))
+        .map_err(|e| IntegrationError::Internal(e.to_string()))
 }
 
 /// `GET /drive/v3/files/{id}?fields=…`.
@@ -54,17 +57,28 @@ pub fn metadata_request(token: &SecretString, file_id: &str) -> Result<NetReques
     url.query_pairs_mut()
         .append_pair("fields", "id,name,mimeType,modifiedTime,webViewLink")
         .append_pair("supportsAllDrives", "true");
-    Ok(NetRequest::get(ConnectorId::Google, url, "/drive/v3/files/{id}").credential(Credential::bearer(token)))
+    Ok(
+        NetRequest::get(ConnectorId::Google, url, "/drive/v3/files/{id}")
+            .credential(Credential::bearer(token)),
+    )
 }
 
 /// `GET /drive/v3/files/{id}/export?mimeType=…` with the given cap.
-pub fn export_request(token: &SecretString, file_id: &str, mime: &str, expect: Expect, cap: BodyCap) -> Result<NetRequest> {
+pub fn export_request(
+    token: &SecretString,
+    file_id: &str,
+    mime: &str,
+    expect: Expect,
+    cap: BodyCap,
+) -> Result<NetRequest> {
     let mut url = api_url(&format!("/drive/v3/files/{}/export", path_segment(file_id)))?;
     url.query_pairs_mut().append_pair("mimeType", mime);
-    Ok(NetRequest::get(ConnectorId::Google, url, "/drive/v3/files/{id}/export")
-        .credential(Credential::bearer(token))
-        .expect(expect)
-        .cap(cap))
+    Ok(
+        NetRequest::get(ConnectorId::Google, url, "/drive/v3/files/{id}/export")
+            .credential(Credential::bearer(token))
+            .expect(expect)
+            .cap(cap),
+    )
 }
 
 /// Build a `multipart/related` body (metadata JSON + media). The boundary is random and
@@ -74,7 +88,10 @@ pub fn multipart_related(metadata: &serde_json::Value, media_type: &str, media: 
     let boundary = loop {
         let mut b = [0u8; 16];
         OsRng.fill_bytes(&mut b);
-        let candidate = format!("emp-{}", b.iter().map(|x| format!("{x:02x}")).collect::<String>());
+        let candidate = format!(
+            "emp-{}",
+            b.iter().map(|x| format!("{x:02x}")).collect::<String>()
+        );
         let needle = candidate.as_bytes();
         let clash = meta.contains(&candidate) || media.windows(needle.len()).any(|w| w == needle);
         if !clash {
@@ -82,9 +99,13 @@ pub fn multipart_related(metadata: &serde_json::Value, media_type: &str, media: 
         }
     };
     let mut bytes = Vec::with_capacity(meta.len() + media.len() + 256);
-    bytes.extend_from_slice(format!("--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n").as_bytes());
+    bytes.extend_from_slice(
+        format!("--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n").as_bytes(),
+    );
     bytes.extend_from_slice(meta.as_bytes());
-    bytes.extend_from_slice(format!("\r\n--{boundary}\r\nContent-Type: {media_type}\r\n\r\n").as_bytes());
+    bytes.extend_from_slice(
+        format!("\r\n--{boundary}\r\nContent-Type: {media_type}\r\n\r\n").as_bytes(),
+    );
     bytes.extend_from_slice(media);
     bytes.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
     Body {
@@ -118,7 +139,13 @@ pub fn create_request(
 }
 
 /// `PATCH /upload/drive/v3/files/{id}?uploadType=multipart` replacing content ("Export again").
-pub fn update_request(token: &SecretString, file_id: &str, name: &str, media_type: &str, media: &[u8]) -> Result<NetRequest> {
+pub fn update_request(
+    token: &SecretString,
+    file_id: &str,
+    name: &str,
+    media_type: &str,
+    media: &[u8],
+) -> Result<NetRequest> {
     let mut url = api_url(&format!("/upload/drive/v3/files/{}", path_segment(file_id)))?;
     url.query_pairs_mut()
         .append_pair("uploadType", "multipart")
@@ -144,9 +171,12 @@ struct UploadResponse {
 /// Parse a create/update response.
 pub fn parse_upload_response(resp: &NetResponse, fallback_link_kind: &str) -> Result<DriveFileRef> {
     let r: UploadResponse = resp.json()?;
-    let link = r
-        .web_view_link
-        .unwrap_or_else(|| format!("https://docs.google.com/{fallback_link_kind}/d/{}/edit", r.id));
+    let link = r.web_view_link.unwrap_or_else(|| {
+        format!(
+            "https://docs.google.com/{fallback_link_kind}/d/{}/edit",
+            r.id
+        )
+    });
     Ok(DriveFileRef {
         file_id: r.id,
         web_view_link: link,
@@ -164,8 +194,15 @@ mod tests {
 
     #[test]
     fn multipart_body_is_well_formed() {
-        let body = multipart_related(&serde_json::json!({"name":"T"}), "text/html; charset=UTF-8", b"<p>x</p>");
-        let boundary = body.content_type.strip_prefix("multipart/related; boundary=").unwrap();
+        let body = multipart_related(
+            &serde_json::json!({"name":"T"}),
+            "text/html; charset=UTF-8",
+            b"<p>x</p>",
+        );
+        let boundary = body
+            .content_type
+            .strip_prefix("multipart/related; boundary=")
+            .unwrap();
         let text = String::from_utf8(body.bytes).unwrap();
         assert!(text.starts_with(&format!("--{boundary}\r\nContent-Type: application/json")));
         assert!(text.contains("{\"name\":\"T\"}"));
@@ -190,7 +227,10 @@ mod tests {
         assert_eq!(r.path_template, "/upload/drive/v3/files/{id}");
 
         let r = export_request(&tok, "id1", "text/html", Expect::Html, BodyCap::Bytes(10)).unwrap();
-        assert_eq!(r.url.as_str(), "https://www.googleapis.com/drive/v3/files/id1/export?mimeType=text%2Fhtml");
+        assert_eq!(
+            r.url.as_str(),
+            "https://www.googleapis.com/drive/v3/files/id1/export?mimeType=text%2Fhtml"
+        );
     }
 
     #[test]
@@ -209,7 +249,9 @@ mod tests {
             ..resp
         };
         assert_eq!(
-            parse_upload_response(&resp, "spreadsheets").unwrap().web_view_link,
+            parse_upload_response(&resp, "spreadsheets")
+                .unwrap()
+                .web_view_link,
             "https://docs.google.com/spreadsheets/d/f2/edit"
         );
         let resp = NetResponse {

@@ -145,9 +145,10 @@ pub fn sort_val(ev: &Evaluator<'_>, db: usize, row: usize, prop: &str) -> SortVa
             ComputedKind::Number | ComputedKind::Money | ComputedKind::Bool => {
                 cells::number(Some(&v)).map_or(SortVal::Empty, SortVal::Num)
             }
-            ComputedKind::Date => cells::date_range(Some(&v), ev.ctx()).map_or(SortVal::Empty, |(s, _)| {
-                SortVal::Num(s.and_utc().timestamp_millis() as f64)
-            }),
+            ComputedKind::Date => cells::date_range(Some(&v), ev.ctx())
+                .map_or(SortVal::Empty, |(s, _)| {
+                    SortVal::Num(s.and_utc().timestamp_millis() as f64)
+                }),
             _ => SortVal::Text(fold(&c.display)),
         },
         _ => match cells::number(Some(&v)) {
@@ -165,10 +166,7 @@ pub fn sort_rows(ev: &Evaluator<'_>, db: usize, rows: &mut [usize], sorts: &[Sor
         .map(|&r| {
             (
                 r,
-                sorts
-                    .iter()
-                    .map(|s| sort_val(ev, db, r, &s.prop))
-                    .collect(),
+                sorts.iter().map(|s| sort_val(ev, db, r, &s.prop)).collect(),
             )
         })
         .collect();

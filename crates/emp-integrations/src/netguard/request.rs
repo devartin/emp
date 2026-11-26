@@ -223,7 +223,11 @@ pub struct NetRequest {
 
 impl NetRequest {
     /// A GET request expecting JSON with the default cap.
-    pub fn get(connector: ConnectorId, url: Url, path_template: impl Into<Cow<'static, str>>) -> Self {
+    pub fn get(
+        connector: ConnectorId,
+        url: Url,
+        path_template: impl Into<Cow<'static, str>>,
+    ) -> Self {
         NetRequest {
             connector,
             method: Method::Get,
@@ -328,7 +332,11 @@ impl NetResponse {
         if self.is_success() {
             return Ok(self);
         }
-        Err(generic_status_error(self.status, &self.body, self.retry_after.as_deref()))
+        Err(generic_status_error(
+            self.status,
+            &self.body,
+            self.retry_after.as_deref(),
+        ))
     }
 }
 
@@ -339,7 +347,11 @@ pub fn decode_json<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 
 /// Map a non-success status to an error, extracting a short message from common JSON error
 /// shapes (`{"error":{"message":…}}`, `{"error":"…"}`, `{"message":…}`).
-pub fn generic_status_error(status: u16, body: &[u8], retry_after: Option<&str>) -> IntegrationError {
+pub fn generic_status_error(
+    status: u16,
+    body: &[u8],
+    retry_after: Option<&str>,
+) -> IntegrationError {
     let message = extract_error_message(body).unwrap_or_else(|| {
         reqwest::StatusCode::from_u16(status)
             .ok()
@@ -352,7 +364,8 @@ pub fn generic_status_error(status: u16, body: &[u8], retry_after: Option<&str>)
         404 => IntegrationError::NotFound(message),
         410 => IntegrationError::Http { status, message },
         429 => IntegrationError::RateLimited {
-            retry_after: retry_after.and_then(|v| super::retry::parse_retry_after(v, chrono::Utc::now())),
+            retry_after: retry_after
+                .and_then(|v| super::retry::parse_retry_after(v, chrono::Utc::now())),
         },
         _ => IntegrationError::Http { status, message },
     }

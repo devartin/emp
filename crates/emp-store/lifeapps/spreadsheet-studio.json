@@ -1,0 +1,3173 @@
+{
+  "id": "spreadsheet-studio",
+  "version": "1.0.0",
+  "title": "Spreadsheet Studio",
+  "tagline": "Calculators and trackers with best-practice structure, checks and charts.",
+  "icon": "sheet",
+  "color": "iris",
+  "category": "sheets",
+  "sensitivity": "normal",
+  "estMinutes": 2,
+  "steps": [
+    {
+      "id": "intent",
+      "kind": "choice_cards",
+      "title": "What do you want to build?",
+      "quick": true,
+      "skippable": false,
+      "default": "blank",
+      "options": [
+        {
+          "value": "loan",
+          "label": "Loan / mortgage calculator"
+        },
+        {
+          "value": "budget",
+          "label": "Budget sheet"
+        },
+        {
+          "value": "decision",
+          "label": "Decision matrix"
+        },
+        {
+          "value": "project",
+          "label": "Project budget"
+        },
+        {
+          "value": "timesheet",
+          "label": "Timesheet"
+        },
+        {
+          "value": "inventory",
+          "label": "Inventory"
+        },
+        {
+          "value": "split",
+          "label": "Split expenses"
+        },
+        {
+          "value": "compound",
+          "label": "Savings / compound interest"
+        },
+        {
+          "value": "blank",
+          "label": "Blank with best-practice structure"
+        },
+        {
+          "value": "import",
+          "label": "Import a file"
+        }
+      ]
+    },
+    {
+      "id": "excel_compat",
+      "kind": "toggle",
+      "title": "Will you share this with Excel users?",
+      "quick": false,
+      "skippable": true,
+      "default": false,
+      "help": "When on, EMP warns about EMP-only functions such as STOCK and FX."
+    },
+    {
+      "id": "structure",
+      "kind": "multi_chips",
+      "title": "Workbook structure",
+      "quick": false,
+      "skippable": true,
+      "default": [
+        "inputs",
+        "calculations",
+        "output",
+        "checks",
+        "changelog"
+      ],
+      "why": "Separating inputs, calculations and outputs is a spreadsheet best practice: it makes models easier to check and reuse.",
+      "options": [
+        {
+          "value": "inputs",
+          "label": "Inputs"
+        },
+        {
+          "value": "calculations",
+          "label": "Calculations"
+        },
+        {
+          "value": "output",
+          "label": "Output"
+        },
+        {
+          "value": "checks",
+          "label": "Checks"
+        },
+        {
+          "value": "changelog",
+          "label": "Changelog"
+        }
+      ]
+    },
+    {
+      "id": "chart",
+      "kind": "choice_cards",
+      "title": "Add a chart?",
+      "quick": false,
+      "skippable": true,
+      "default": "none",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "line",
+          "label": "Line"
+        },
+        {
+          "value": "bar",
+          "label": "Bar"
+        },
+        {
+          "value": "area",
+          "label": "Area"
+        },
+        {
+          "value": "donut",
+          "label": "Donut"
+        }
+      ]
+    },
+    {
+      "id": "import_opts",
+      "kind": "review",
+      "title": "Import options",
+      "quick": false,
+      "skippable": true,
+      "when": "answers.intent == \"import\"",
+      "default": {
+        "headerRow": "auto",
+        "mode": "sheet",
+        "runChecks": true
+      },
+      "options": [
+        {
+          "value": "sheet",
+          "label": "Keep as spreadsheet"
+        },
+        {
+          "value": "database",
+          "label": "Convert to database"
+        },
+        {
+          "value": "both",
+          "label": "Both (linked)"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "key": "studio",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Spreadsheet Studio",
+        "icon": "lucide:sheet",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "Workbooks built with best-practice structure:\n\n- **Inputs** hold every assumption in blue cells, named so formulas read like sentences (`=PMT(Rate/PPY, Years*PPY, -Principal)`).\n- **Calculations** reference inputs by name — no hard-coded constants.\n- **Output** summarises results in bold for readers.\n- **Checks** turn the tab green when everything adds up, red when something is off.\n- **Changelog** records what changed and why.\n\nHeader rows are frozen and dates are ISO (YYYY-MM-DD). The advisor runs sheet checks and points out `#REF!`, `#DIV/0!`, circular references, numbers stored as text and other common mistakes."
+          },
+          {
+            "t": "checklist",
+            "items": [
+              "Fill the inputs",
+              "Review the checks sheet",
+              "Export to Excel"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "wb_loan",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Loan calculator",
+        "names": {
+          "Principal": "Inputs!$B$4",
+          "Rate": "Inputs!$B$5",
+          "Years": "Inputs!$B$6",
+          "PPY": "Inputs!$B$7",
+          "Extra": "Inputs!$B$8",
+          "Start": "Inputs!$B$9"
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Loan / mortgage calculator"
+                  ],
+                  [
+                    "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
+                  ],
+                  [],
+                  [
+                    "Principal",
+                    "250000"
+                  ],
+                  [
+                    "Annual interest rate",
+                    "6.5%"
+                  ],
+                  [
+                    "Years",
+                    "30"
+                  ],
+                  [
+                    "Payments per year",
+                    "12"
+                  ],
+                  [
+                    "Extra payment per period",
+                    "0"
+                  ],
+                  [
+                    "First payment date",
+                    "2027-01-01"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "italic": true
+              },
+              {
+                "range": "B4:B9",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "B4",
+                "numFmt": "#,##0.00"
+              },
+              {
+                "range": "B8",
+                "numFmt": "#,##0.00"
+              },
+              {
+                "range": "B9",
+                "numFmt": "yyyy-mm-dd"
+              }
+            ],
+            "colWidths": {
+              "A": 220,
+              "B": 140
+            }
+          },
+          {
+            "name": "Calculations",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Summary",
+                    ""
+                  ],
+                  [
+                    "Payment per period",
+                    "=PMT(Rate/PPY, Years*PPY, -Principal)"
+                  ],
+                  [
+                    "Total interest",
+                    "=B2*Years*PPY-Principal"
+                  ],
+                  [
+                    "Periods with extra payment",
+                    "=MATCH(TRUE, G8:G2000<=0.005, 0)"
+                  ],
+                  [
+                    "Payoff date with extra payment",
+                    "=EDATE(Start, ROUNDUP((B4-1)*12/PPY, 0))"
+                  ],
+                  [],
+                  [
+                    "Period",
+                    "Interest",
+                    "Principal",
+                    "Balance",
+                    "",
+                    "",
+                    "Balance with extra"
+                  ]
+                ]
+              },
+              {
+                "at": "A8",
+                "rows": [
+                  [
+                    "=SEQUENCE(Years*PPY)",
+                    "=IPMT(Rate/PPY, SEQUENCE(Years*PPY), Years*PPY, -Principal)",
+                    "=PPMT(Rate/PPY, SEQUENCE(Years*PPY), Years*PPY, -Principal)",
+                    "=Principal+CUMPRINC(Rate/PPY, Years*PPY, Principal, 1, SEQUENCE(Years*PPY), 0)",
+                    "",
+                    "",
+                    "=MAX(0, Principal*(1+Rate/PPY)^SEQUENCE(Years*PPY)-(B2+Extra)*((1+Rate/PPY)^SEQUENCE(Years*PPY)-1)/(Rate/PPY))"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "B2:B5",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "B2:B3",
+                "numFmt": "#,##0.00"
+              },
+              {
+                "range": "B5",
+                "numFmt": "yyyy-mm-dd"
+              },
+              {
+                "range": "A7:G7",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B8:D2000",
+                "numFmt": "#,##0.00"
+              },
+              {
+                "range": "G8:G2000",
+                "numFmt": "#,##0.00"
+              }
+            ],
+            "freeze": [
+              7,
+              0
+            ],
+            "colWidths": {
+              "A": 220,
+              "B": 130,
+              "C": 130,
+              "D": 130,
+              "G": 150
+            },
+            "charts": [
+              {
+                "type": "area",
+                "title": "Balance",
+                "range": "Calculations!D7:D2000"
+              },
+              {
+                "type": "bar",
+                "title": "Interest vs principal",
+                "range": "Calculations!B7:C2000",
+                "stacked": true
+              }
+            ]
+          },
+          {
+            "name": "Output",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Results"
+                  ],
+                  [
+                    "Payment per period",
+                    "=Calculations!B2"
+                  ],
+                  [
+                    "Total interest",
+                    "=Calculations!B3"
+                  ],
+                  [
+                    "Total paid",
+                    "=Calculations!B2*Years*PPY"
+                  ],
+                  [
+                    "Payoff date with extra payment",
+                    "=Calculations!B5"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "B2:B5",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "B2:B4",
+                "numFmt": "#,##0.00"
+              },
+              {
+                "range": "B5",
+                "numFmt": "yyyy-mm-dd"
+              }
+            ],
+            "colWidths": {
+              "A": 240,
+              "B": 140
+            },
+            "when": "answers.structure_output or not answers.structure_count"
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Inputs are positive",
+                    "=AND(Principal>0, Rate>=0, Years>0, PPY>0)"
+                  ],
+                  [
+                    "Schedule ends at zero",
+                    "=ABS(INDEX(Calculations!D8:D2000, Years*PPY))<0.01"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B3)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B4",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B4",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B4",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"loan\""
+    },
+    {
+      "key": "wb_budget",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Budget sheet",
+        "names": {
+          "Income": "Inputs!$B$4"
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Monthly budget"
+                  ],
+                  [
+                    "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
+                  ],
+                  [],
+                  [
+                    "Monthly take-home income",
+                    "4200"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "italic": true
+              },
+              {
+                "range": "B4",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "B4",
+                "numFmt": "#,##0.00"
+              }
+            ],
+            "colWidths": {
+              "A": 240
+            }
+          },
+          {
+            "name": "Calculations",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Category",
+                    "Group",
+                    "Planned",
+                    "Actual",
+                    "Difference"
+                  ],
+                  [
+                    "Rent",
+                    "Needs",
+                    "1500",
+                    "1500",
+                    "=C2-D2"
+                  ],
+                  [
+                    "Groceries",
+                    "Needs",
+                    "450",
+                    "480",
+                    "=C3-D3"
+                  ],
+                  [
+                    "Utilities",
+                    "Needs",
+                    "160",
+                    "142",
+                    "=C4-D4"
+                  ],
+                  [
+                    "Transport",
+                    "Needs",
+                    "120",
+                    "95",
+                    "=C5-D5"
+                  ],
+                  [
+                    "Dining out",
+                    "Wants",
+                    "200",
+                    "240",
+                    "=C6-D6"
+                  ],
+                  [
+                    "Fun",
+                    "Wants",
+                    "150",
+                    "110",
+                    "=C7-D7"
+                  ],
+                  [
+                    "Emergency fund",
+                    "Savings",
+                    "400",
+                    "400",
+                    "=C8-D8"
+                  ],
+                  [
+                    "Retirement",
+                    "Savings",
+                    "420",
+                    "420",
+                    "=C9-D9"
+                  ],
+                  [
+                    "Total",
+                    "",
+                    "=SUM(C2:C9)",
+                    "=SUM(D2:D9)",
+                    "=SUM(E2:E9)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:E1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "A2:D9",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "A10:E10",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "C2:E10",
+                "numFmt": "#,##0.00"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 180
+            },
+            "charts": [
+              {
+                "type": "bar",
+                "title": "Planned vs actual",
+                "range": "Calculations!A1:D9"
+              }
+            ]
+          },
+          {
+            "name": "Output",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Summary"
+                  ],
+                  [
+                    "Left to assign",
+                    "=Income-Calculations!C10"
+                  ],
+                  [
+                    "Needs share",
+                    "=SUMIFS(Calculations!C2:C9, Calculations!B2:B9, \"Needs\")/Income"
+                  ],
+                  [
+                    "Wants share",
+                    "=SUMIFS(Calculations!C2:C9, Calculations!B2:B9, \"Wants\")/Income"
+                  ],
+                  [
+                    "Savings share",
+                    "=SUMIFS(Calculations!C2:C9, Calculations!B2:B9, \"Savings\")/Income"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "B2:B5",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "B2",
+                "numFmt": "#,##0.00"
+              },
+              {
+                "range": "B3:B5",
+                "numFmt": "0%"
+              }
+            ],
+            "colWidths": {
+              "A": 200
+            },
+            "when": "answers.structure_output or not answers.structure_count"
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Plan does not exceed income",
+                    "=Calculations!C10<=Income"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B2)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B3",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"budget\""
+    },
+    {
+      "key": "wb_decision",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Decision matrix",
+        "names": {
+          "Weights": "Inputs!$B$4:$E$4"
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Decision matrix"
+                  ],
+                  [
+                    "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
+                  ],
+                  [
+                    "Criteria",
+                    "Cost",
+                    "Quality",
+                    "Speed",
+                    "Risk"
+                  ],
+                  [
+                    "Weight (sum = 1)",
+                    "0.4",
+                    "0.3",
+                    "0.2",
+                    "0.1"
+                  ],
+                  [],
+                  [
+                    "Option",
+                    "Score 1–10"
+                  ],
+                  [
+                    "Option A",
+                    "7",
+                    "8",
+                    "6",
+                    "5"
+                  ],
+                  [
+                    "Option B",
+                    "9",
+                    "6",
+                    "7",
+                    "6"
+                  ],
+                  [
+                    "Option C",
+                    "6",
+                    "9",
+                    "8",
+                    "7"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "italic": true
+              },
+              {
+                "range": "A3:E3",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B4:E4",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "A7:E9",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "A6:B6",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "colWidths": {
+              "A": 180
+            }
+          },
+          {
+            "name": "Calculations",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Option",
+                    "Score",
+                    "Rank",
+                    "Score if first weight +10%",
+                    "Score if first weight −10%"
+                  ],
+                  [
+                    "=Inputs!A7",
+                    "=SUMPRODUCT(Weights, Inputs!B7:E7)",
+                    "=RANK.EQ(B2, $B$2:$B$4)",
+                    "=(SUMPRODUCT(Weights, Inputs!B7:E7)+0.1*Inputs!$B$4*Inputs!B7)/(1+0.1*Inputs!$B$4)",
+                    "=(SUMPRODUCT(Weights, Inputs!B7:E7)-0.1*Inputs!$B$4*Inputs!B7)/(1-0.1*Inputs!$B$4)"
+                  ],
+                  [
+                    "=Inputs!A8",
+                    "=SUMPRODUCT(Weights, Inputs!B8:E8)",
+                    "=RANK.EQ(B3, $B$2:$B$4)",
+                    "=(SUMPRODUCT(Weights, Inputs!B8:E8)+0.1*Inputs!$B$4*Inputs!B8)/(1+0.1*Inputs!$B$4)",
+                    "=(SUMPRODUCT(Weights, Inputs!B8:E8)-0.1*Inputs!$B$4*Inputs!B8)/(1-0.1*Inputs!$B$4)"
+                  ],
+                  [
+                    "=Inputs!A9",
+                    "=SUMPRODUCT(Weights, Inputs!B9:E9)",
+                    "=RANK.EQ(B4, $B$2:$B$4)",
+                    "=(SUMPRODUCT(Weights, Inputs!B9:E9)+0.1*Inputs!$B$4*Inputs!B9)/(1+0.1*Inputs!$B$4)",
+                    "=(SUMPRODUCT(Weights, Inputs!B9:E9)-0.1*Inputs!$B$4*Inputs!B9)/(1-0.1*Inputs!$B$4)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:E1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:C4",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "B2:B4",
+                "numFmt": "0.00"
+              },
+              {
+                "range": "D2:E4",
+                "numFmt": "0.00"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 160,
+              "D": 200,
+              "E": 200
+            }
+          },
+          {
+            "name": "Output",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Best option"
+                  ],
+                  [
+                    "=INDEX(Calculations!A2:A4, MATCH(1, Calculations!C2:C4, 0))"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "role": "output",
+                "bold": true
+              }
+            ],
+            "when": "answers.structure_output or not answers.structure_count"
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Weights sum to 1",
+                    "=ROUND(SUM(Weights), 6)=1"
+                  ],
+                  [
+                    "Scores are between 1 and 10",
+                    "=AND(MIN(Inputs!B7:E9)>=1, MAX(Inputs!B7:E9)<=10)"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B3)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B4",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B4",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B4",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"decision\""
+    },
+    {
+      "key": "wb_project",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Project budget",
+        "names": {
+          "Contingency": "Inputs!$B$4"
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Project budget"
+                  ],
+                  [
+                    "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
+                  ],
+                  [],
+                  [
+                    "Contingency",
+                    "10%"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "italic": true
+              },
+              {
+                "range": "B4",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              }
+            ],
+            "colWidths": {
+              "A": 200
+            }
+          },
+          {
+            "name": "Calculations",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Item",
+                    "Estimate",
+                    "Actual",
+                    "Variance",
+                    "% used"
+                  ],
+                  [
+                    "Design",
+                    "2000",
+                    "1800",
+                    "=B2-C2",
+                    "=IF(B2=0, 0, C2/B2)"
+                  ],
+                  [
+                    "Materials",
+                    "5000",
+                    "5600",
+                    "=B3-C3",
+                    "=IF(B3=0, 0, C3/B3)"
+                  ],
+                  [
+                    "Labour",
+                    "8000",
+                    "4000",
+                    "=B4-C4",
+                    "=IF(B4=0, 0, C4/B4)"
+                  ],
+                  [
+                    "Permits",
+                    "600",
+                    "600",
+                    "=B5-C5",
+                    "=IF(B5=0, 0, C5/B5)"
+                  ],
+                  [
+                    "Subtotal",
+                    "=SUM(B2:B5)",
+                    "=SUM(C2:C5)",
+                    "=SUM(D2:D5)",
+                    "=IF(B6=0, 0, C6/B6)"
+                  ],
+                  [
+                    "Contingency",
+                    "=B6*Contingency",
+                    "",
+                    "",
+                    ""
+                  ],
+                  [
+                    "Total budget",
+                    "=B6+B7",
+                    "",
+                    "",
+                    ""
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:E1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "A2:C5",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "A6:E8",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "B2:D8",
+                "numFmt": "#,##0.00"
+              },
+              {
+                "range": "E2:E6",
+                "numFmt": "0%"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 180
+            },
+            "condFormats": [
+              {
+                "range": "E2:E5",
+                "kind": "cell",
+                "op": "gt",
+                "values": [
+                  "1"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              }
+            ]
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Actual within total budget",
+                    "=Calculations!C6<=Calculations!B8"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B2)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B3",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"project\""
+    },
+    {
+      "key": "wb_timesheet",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Timesheet",
+        "names": {
+          "OvertimeThreshold": "Inputs!$B$4",
+          "HourlyRate": "Inputs!$B$5"
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Timesheet"
+                  ],
+                  [
+                    "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
+                  ],
+                  [],
+                  [
+                    "Overtime threshold (hours per week)",
+                    "40"
+                  ],
+                  [
+                    "Hourly rate",
+                    "25"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "italic": true
+              },
+              {
+                "range": "B4:B5",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              }
+            ],
+            "colWidths": {
+              "A": 260
+            }
+          },
+          {
+            "name": "Log",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Start",
+                    "End",
+                    "Break (min)",
+                    "Hours",
+                    "Week"
+                  ],
+                  [
+                    "2026-11-23",
+                    "09:00",
+                    "17:30",
+                    "30",
+                    "=MOD(C2-B2,1)*24-D2/60",
+                    "=WEEKNUM(A2)"
+                  ],
+                  [
+                    "2026-11-24",
+                    "09:00",
+                    "17:30",
+                    "30",
+                    "=MOD(C3-B3,1)*24-D3/60",
+                    "=WEEKNUM(A3)"
+                  ],
+                  [
+                    "2026-11-25",
+                    "09:00",
+                    "17:30",
+                    "30",
+                    "=MOD(C4-B4,1)*24-D4/60",
+                    "=WEEKNUM(A4)"
+                  ],
+                  [
+                    "2026-11-26",
+                    "09:00",
+                    "17:30",
+                    "30",
+                    "=MOD(C5-B5,1)*24-D5/60",
+                    "=WEEKNUM(A5)"
+                  ],
+                  [
+                    "2026-11-27",
+                    "09:00",
+                    "17:30",
+                    "30",
+                    "=MOD(C6-B6,1)*24-D6/60",
+                    "=WEEKNUM(A6)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:F1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "A2:D200",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "A2:A200",
+                "numFmt": "yyyy-mm-dd"
+              },
+              {
+                "range": "B2:C200",
+                "numFmt": "hh:mm"
+              },
+              {
+                "range": "E2:E200",
+                "numFmt": "0.00"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110
+            }
+          },
+          {
+            "name": "Calculations",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Week",
+                    "Hours",
+                    "Overtime",
+                    "Pay"
+                  ],
+                  [
+                    "=Log!F2",
+                    "=SUMIFS(Log!E2:E200, Log!F2:F200, A2)",
+                    "=MAX(0, B2-OvertimeThreshold)",
+                    "=(B2-C2)*HourlyRate+C2*HourlyRate*1.5"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:D1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:D2",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "D2",
+                "numFmt": "#,##0.00"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ]
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Hours are positive",
+                    "=MIN(Log!E2:E6)>0"
+                  ],
+                  [
+                    "No shift over 16 hours",
+                    "=MAX(Log!E2:E200)<=16"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B3)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B4",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B4",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B4",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"timesheet\""
+    },
+    {
+      "key": "wb_inventory",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Inventory",
+        "names": {},
+        "sheets": [
+          {
+            "name": "Items",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Item",
+                    "Qty",
+                    "Unit cost",
+                    "Reorder point",
+                    "Value"
+                  ],
+                  [
+                    "Printer paper (box)",
+                    "4",
+                    "32",
+                    "5",
+                    "=B2*C2"
+                  ],
+                  [
+                    "Ink cartridges",
+                    "12",
+                    "18",
+                    "4",
+                    "=B3*C3"
+                  ],
+                  [
+                    "Shipping boxes",
+                    "40",
+                    "1.2",
+                    "25",
+                    "=B4*C4"
+                  ],
+                  [
+                    "Labels (roll)",
+                    "2",
+                    "9",
+                    "3",
+                    "=B5*C5"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:E1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "A2:D200",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "E2:E200",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "C2:C200",
+                "numFmt": "#,##0.00"
+              },
+              {
+                "range": "E2:E200",
+                "numFmt": "#,##0.00"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 200
+            },
+            "condFormats": [
+              {
+                "range": "B2:B200",
+                "kind": "formula",
+                "formula": "=AND(A2<>\"\", B2<=D2)",
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              }
+            ]
+          },
+          {
+            "name": "Calculations",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Reorder now"
+                  ],
+                  [
+                    "=FILTER(Items!A2:A200, (Items!B2:B200<=Items!D2:D200)*(Items!A2:A200<>\"\"), \"Nothing to reorder\")"
+                  ],
+                  [],
+                  [
+                    "Inventory value",
+                    "=SUM(Items!E2:E200)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "B4",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "B4",
+                "numFmt": "#,##0.00"
+              }
+            ],
+            "colWidths": {
+              "A": 200
+            }
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Quantities are not negative",
+                    "=MIN(Items!B2:B200)>=0"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B2)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B3",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"inventory\""
+    },
+    {
+      "key": "wb_split",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Split expenses",
+        "post": "settle",
+        "names": {
+          "People": "Inputs!$A$4:$A$6"
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Split expenses — people"
+                  ],
+                  [
+                    "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
+                  ],
+                  [
+                    "Person"
+                  ],
+                  [
+                    "Ana"
+                  ],
+                  [
+                    "Ben"
+                  ],
+                  [
+                    "Cy"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "italic": true
+              },
+              {
+                "range": "A3",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "A4:A6",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              }
+            ],
+            "colWidths": {
+              "A": 200
+            }
+          },
+          {
+            "name": "Expenses",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Description",
+                    "Paid by",
+                    "Amount"
+                  ],
+                  [
+                    "2026-11-20",
+                    "Groceries",
+                    "Ana",
+                    "90"
+                  ],
+                  [
+                    "2026-11-21",
+                    "Train tickets",
+                    "Ben",
+                    "45"
+                  ],
+                  [
+                    "2026-11-22",
+                    "Dinner",
+                    "Ana",
+                    "60"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:D1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "A2:D200",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "A2:A200",
+                "numFmt": "yyyy-mm-dd"
+              },
+              {
+                "range": "D2:D200",
+                "numFmt": "#,##0.00"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "B": 220
+            }
+          },
+          {
+            "name": "Balances",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Person",
+                    "Net",
+                    "Paid",
+                    "",
+                    "",
+                    ""
+                  ],
+                  [
+                    "=Inputs!A4",
+                    "=C2-SUM(Expenses!$D$2:$D$200)/COUNTA(People)",
+                    "=SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A2)"
+                  ],
+                  [
+                    "=Inputs!A5",
+                    "=C3-SUM(Expenses!$D$2:$D$200)/COUNTA(People)",
+                    "=SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A3)"
+                  ],
+                  [
+                    "=Inputs!A6",
+                    "=C4-SUM(Expenses!$D$2:$D$200)/COUNTA(People)",
+                    "=SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A4)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:F1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:C4",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "B2:C4",
+                "numFmt": "#,##0.00"
+              },
+              {
+                "range": "F2:F50",
+                "numFmt": "#,##0.00",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "D": 120,
+              "E": 120
+            }
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Balances net to zero",
+                    "=ABS(SUM(Balances!B2:B4))<0.01"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B2)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B3",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"split\""
+    },
+    {
+      "key": "wb_compound",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Savings & compound interest",
+        "names": {
+          "StartBalance": "Inputs!$B$4",
+          "Monthly": "Inputs!$B$5",
+          "Rate": "Inputs!$B$6",
+          "Years": "Inputs!$B$7",
+          "Inflation": "Inputs!$B$8"
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Savings & compound interest"
+                  ],
+                  [
+                    "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
+                  ],
+                  [],
+                  [
+                    "Starting balance",
+                    "10000"
+                  ],
+                  [
+                    "Monthly contribution",
+                    "500"
+                  ],
+                  [
+                    "Annual return (estimate)",
+                    "6%"
+                  ],
+                  [
+                    "Years",
+                    "20"
+                  ],
+                  [
+                    "Inflation (estimate)",
+                    "2.5%"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "italic": true
+              },
+              {
+                "range": "B4:B8",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              },
+              {
+                "range": "B4:B5",
+                "numFmt": "#,##0.00"
+              }
+            ],
+            "colWidths": {
+              "A": 220
+            }
+          },
+          {
+            "name": "Calculations",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Year",
+                    "Balance",
+                    "In today's money"
+                  ],
+                  [
+                    "=SEQUENCE(Years)",
+                    "=FV(Rate/12, SEQUENCE(Years)*12, -Monthly, -StartBalance)",
+                    "=FV(Rate/12, SEQUENCE(Years)*12, -Monthly, -StartBalance)/(1+Inflation)^SEQUENCE(Years)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:C200",
+                "numFmt": "#,##0"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "charts": [
+              {
+                "type": "line",
+                "title": "Balance over time",
+                "range": "Calculations!A1:C200"
+              }
+            ]
+          },
+          {
+            "name": "Output",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Results"
+                  ],
+                  [
+                    "Future value",
+                    "=FV(Rate/12, Years*12, -Monthly, -StartBalance)"
+                  ],
+                  [
+                    "Total contributed",
+                    "=StartBalance+Monthly*12*Years"
+                  ],
+                  [
+                    "Growth",
+                    "=B2-B3"
+                  ],
+                  [
+                    "Future value in today's money",
+                    "=B2/(1+Inflation)^Years"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "B2:B5",
+                "role": "output",
+                "bold": true
+              },
+              {
+                "range": "B2:B5",
+                "numFmt": "#,##0"
+              }
+            ],
+            "colWidths": {
+              "A": 240
+            },
+            "when": "answers.structure_output or not answers.structure_count"
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Years is a whole number",
+                    "=Years=INT(Years)"
+                  ],
+                  [
+                    "Return is a percentage",
+                    "=AND(Rate>-1, Rate<1)"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B3)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B4",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B4",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B4",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"compound\""
+    },
+    {
+      "key": "wb_blank",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Workbook",
+        "names": {
+          "ExampleRate": "Inputs!$B$5"
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Inputs"
+                  ],
+                  [
+                    "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
+                  ],
+                  [],
+                  [
+                    "Put assumptions and constants here, one per row, and name them (Formulas → Define name)."
+                  ],
+                  [
+                    "Example rate",
+                    "5%"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "italic": true
+              },
+              {
+                "range": "B5",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              }
+            ],
+            "colWidths": {
+              "A": 320
+            }
+          },
+          {
+            "name": "Calculations",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Calculations"
+                  ],
+                  [
+                    "Reference inputs by name — never type a constant into a formula."
+                  ],
+                  [
+                    "Example",
+                    "=ExampleRate*100"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "B3",
+                "role": "output",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ]
+          },
+          {
+            "name": "Output",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Output"
+                  ],
+                  [
+                    "Summaries and charts for readers."
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              }
+            ],
+            "when": "answers.structure_output or not answers.structure_count"
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Example input is a percentage",
+                    "=AND(ExampleRate>=0, ExampleRate<=1)"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B2)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B3",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"blank\""
+    },
+    {
+      "key": "wb_import",
+      "kind": "workbook",
+      "optional": false,
+      "spec": {
+        "title": "Imported workbook",
+        "names": {
+          "ExampleRate": "Inputs!$B$5"
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Inputs"
+                  ],
+                  [
+                    "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
+                  ],
+                  [],
+                  [
+                    "Put assumptions and constants here, one per row, and name them (Formulas → Define name)."
+                  ],
+                  [
+                    "Example rate",
+                    "5%"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "A2",
+                "italic": true
+              },
+              {
+                "range": "B5",
+                "role": "input",
+                "fill": "#E8F0FE",
+                "color": "#1A56DB"
+              }
+            ],
+            "colWidths": {
+              "A": 320
+            }
+          },
+          {
+            "name": "Calculations",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Calculations"
+                  ],
+                  [
+                    "Reference inputs by name — never type a constant into a formula."
+                  ],
+                  [
+                    "Example",
+                    "=ExampleRate*100"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              },
+              {
+                "range": "B3",
+                "role": "output",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ]
+          },
+          {
+            "name": "Output",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Output"
+                  ],
+                  [
+                    "Summaries and charts for readers."
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1",
+                "bold": true
+              }
+            ],
+            "when": "answers.structure_output or not answers.structure_count"
+          },
+          {
+            "name": "Checks",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Check",
+                    "Result"
+                  ],
+                  [
+                    "Example input is a percentage",
+                    "=AND(ExampleRate>=0, ExampleRate<=1)"
+                  ],
+                  [
+                    "All checks pass",
+                    "=AND(B2:B2)"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:B1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              },
+              {
+                "range": "B2:B3",
+                "role": "check",
+                "bold": true
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 260
+            },
+            "condFormats": [
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "FALSE"
+                ],
+                "fill": "#FDE2E1",
+                "color": "#B91C1C"
+              },
+              {
+                "range": "B2:B3",
+                "kind": "cell",
+                "op": "eq",
+                "values": [
+                  "TRUE"
+                ],
+                "fill": "#DCFCE7",
+                "color": "#166534"
+              }
+            ],
+            "color": "#16A34A",
+            "when": "answers.structure_checks or not answers.structure_count"
+          },
+          {
+            "name": "Changelog",
+            "grid": [
+              {
+                "at": "A1",
+                "rows": [
+                  [
+                    "Date",
+                    "Change",
+                    "By"
+                  ],
+                  [
+                    "{{today}}",
+                    "Created by Spreadsheet Studio",
+                    "EMP"
+                  ]
+                ]
+              }
+            ],
+            "styles": [
+              {
+                "range": "A1:C1",
+                "bold": true,
+                "fill": "#F3F4F6"
+              }
+            ],
+            "freeze": [
+              1,
+              0
+            ],
+            "colWidths": {
+              "A": 110,
+              "B": 320
+            },
+            "when": "answers.structure_changelog or not answers.structure_count"
+          }
+        ]
+      },
+      "when": "answers.intent == \"import\""
+    }
+  ],
+  "metrics": [
+    {
+      "name": "lint_total",
+      "kind": "rust",
+      "fn": "sheets.lint",
+      "deps": []
+    },
+    {
+      "name": "lint_ref_error",
+      "kind": "rust",
+      "fn": "sheets.lint:ref_error",
+      "deps": []
+    },
+    {
+      "name": "lint_div0",
+      "kind": "rust",
+      "fn": "sheets.lint:div0",
+      "deps": []
+    },
+    {
+      "name": "lint_circular",
+      "kind": "rust",
+      "fn": "sheets.lint:circular",
+      "deps": []
+    },
+    {
+      "name": "lint_hardcoded_constant",
+      "kind": "rust",
+      "fn": "sheets.lint:hardcoded_constant",
+      "deps": []
+    },
+    {
+      "name": "lint_inconsistent_formula",
+      "kind": "rust",
+      "fn": "sheets.lint:inconsistent_formula",
+      "deps": []
+    },
+    {
+      "name": "lint_number_as_text",
+      "kind": "rust",
+      "fn": "sheets.lint:number_as_text",
+      "deps": []
+    },
+    {
+      "name": "lint_merged_in_data",
+      "kind": "rust",
+      "fn": "sheets.lint:merged_in_data",
+      "deps": []
+    }
+  ],
+  "advisor": [
+    {
+      "id": "lint-ref",
+      "when": "metrics.lint_ref_error > 0",
+      "severity": "warn",
+      "title": "{{metrics.lint_ref_error}} × #REF! errors",
+      "body": "A formula refers to a cell that was deleted. Fix the reference or undo the deletion.",
+      "mathMetrics": [
+        "lint_ref_error"
+      ],
+      "actions": [
+        {
+          "label": "Open Spreadsheet Studio",
+          "route": "page:studio"
+        }
+      ]
+    },
+    {
+      "id": "lint-div0",
+      "when": "metrics.lint_div0 > 0",
+      "severity": "warn",
+      "title": "{{metrics.lint_div0}} × Division by zero",
+      "body": "A formula divides by zero or an empty cell. Consider IFERROR or a check that the divisor is not 0.",
+      "mathMetrics": [
+        "lint_div0"
+      ],
+      "actions": [
+        {
+          "label": "Open Spreadsheet Studio",
+          "route": "page:studio"
+        }
+      ]
+    },
+    {
+      "id": "lint-circular",
+      "when": "metrics.lint_circular > 0",
+      "severity": "warn",
+      "title": "{{metrics.lint_circular}} × Circular references",
+      "body": "A formula depends on itself. Break the loop, or turn on iterative calculation if it is intended.",
+      "mathMetrics": [
+        "lint_circular"
+      ],
+      "actions": [
+        {
+          "label": "Open Spreadsheet Studio",
+          "route": "page:studio"
+        }
+      ]
+    },
+    {
+      "id": "lint-hardcoded",
+      "when": "metrics.lint_hardcoded_constant > 0",
+      "severity": "tip",
+      "title": "{{metrics.lint_hardcoded_constant}} × Hard-coded constants",
+      "body": "A number typed into a formula is easy to miss when assumptions change. Consider moving it to a named input cell.",
+      "mathMetrics": [
+        "lint_hardcoded_constant"
+      ],
+      "actions": [
+        {
+          "label": "Open Spreadsheet Studio",
+          "route": "page:studio"
+        }
+      ]
+    },
+    {
+      "id": "lint-inconsistent",
+      "when": "metrics.lint_inconsistent_formula > 0",
+      "severity": "tip",
+      "title": "{{metrics.lint_inconsistent_formula}} × Inconsistent column formulas",
+      "body": "One cell in a column uses a different formula than its neighbours — often a copy-paste slip.",
+      "mathMetrics": [
+        "lint_inconsistent_formula"
+      ],
+      "actions": [
+        {
+          "label": "Open Spreadsheet Studio",
+          "route": "page:studio"
+        }
+      ]
+    },
+    {
+      "id": "lint-number-text",
+      "when": "metrics.lint_number_as_text > 0",
+      "severity": "tip",
+      "title": "{{metrics.lint_number_as_text}} × Numbers stored as text",
+      "body": "Numbers stored as text are ignored by SUM and comparisons. Convert them to numbers.",
+      "mathMetrics": [
+        "lint_number_as_text"
+      ],
+      "actions": [
+        {
+          "label": "Open Spreadsheet Studio",
+          "route": "page:studio"
+        }
+      ]
+    },
+    {
+      "id": "lint-merged",
+      "when": "metrics.lint_merged_in_data > 0",
+      "severity": "info",
+      "title": "{{metrics.lint_merged_in_data}} × Merged cells in data",
+      "body": "Merged cells inside a data range break sorting and filtering. Consider Center Across Selection instead.",
+      "mathMetrics": [
+        "lint_merged_in_data"
+      ],
+      "actions": [
+        {
+          "label": "Open Spreadsheet Studio",
+          "route": "page:studio"
+        }
+      ]
+    }
+  ],
+  "checklist": [
+    {
+      "id": "inputs",
+      "label": "Fill the inputs",
+      "autoTick": {
+        "event": "sheet.inputs_filled"
+      }
+    },
+    {
+      "id": "checks",
+      "label": "Review the checks sheet",
+      "autoTick": {
+        "event": "sheet.checks_reviewed"
+      }
+    },
+    {
+      "id": "export",
+      "label": "Export to Excel",
+      "autoTick": {
+        "event": "sheet.exported"
+      }
+    }
+  ],
+  "migrations": [],
+  "sample": {
+    "generator": "spreadsheet_studio",
+    "seed": 20261129
+  }
+}

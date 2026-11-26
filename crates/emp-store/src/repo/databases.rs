@@ -101,7 +101,12 @@ pub(crate) fn load_db(conn: &Connection, codec: &Codec, id: &str) -> Result<DbRo
 }
 
 /// Rewrites a database payload with `rev + 1`.
-pub(crate) fn save_db(tx: &Connection, codec: &Codec, row: &DbRow, p: &DatabasePayload) -> Result<()> {
+pub(crate) fn save_db(
+    tx: &Connection,
+    codec: &Codec,
+    row: &DbRow,
+    p: &DatabasePayload,
+) -> Result<()> {
     let rev = row.rev + 1;
     let e = codec.encode(&db_loc(&row.id, rev), p)?;
     tx.prepare_cached("UPDATE databases SET rev = ?2, enc = ?3, payload = ?4 WHERE id = ?1")?
@@ -162,7 +167,9 @@ fn prop_row(codec: &Codec, r: &rusqlite::Row<'_>) -> Result<PropRow> {
 }
 
 pub(crate) fn load_prop(conn: &Connection, codec: &Codec, id: &str) -> Result<Option<PropRow>> {
-    let mut st = conn.prepare_cached(&format!("SELECT {PROP_COLS} FROM db_properties WHERE id = ?1"))?;
+    let mut st = conn.prepare_cached(&format!(
+        "SELECT {PROP_COLS} FROM db_properties WHERE id = ?1"
+    ))?;
     let mut rows = st.query([id])?;
     match rows.next()? {
         Some(r) => Ok(Some(prop_row(codec, r)?)),
@@ -171,7 +178,12 @@ pub(crate) fn load_prop(conn: &Connection, codec: &Codec, id: &str) -> Result<Op
 }
 
 /// Properties of a database in column order (live only unless `deleted`).
-pub(crate) fn load_props(conn: &Connection, codec: &Codec, db_id: &str, deleted: bool) -> Result<Vec<PropRow>> {
+pub(crate) fn load_props(
+    conn: &Connection,
+    codec: &Codec,
+    db_id: &str,
+    deleted: bool,
+) -> Result<Vec<PropRow>> {
     let mut st = conn.prepare_cached(&format!(
         "SELECT {PROP_COLS} FROM db_properties WHERE database_id = ?1 ORDER BY sort_key, id"
     ))?;
@@ -187,7 +199,11 @@ pub(crate) fn load_props(conn: &Connection, codec: &Codec, db_id: &str, deleted:
 }
 
 /// Live properties as DTOs (storage-form formulas).
-pub(crate) fn live_properties(conn: &Connection, codec: &Codec, db_id: &str) -> Result<Vec<Property>> {
+pub(crate) fn live_properties(
+    conn: &Connection,
+    codec: &Codec,
+    db_id: &str,
+) -> Result<Vec<Property>> {
     Ok(load_props(conn, codec, db_id, false)?
         .iter()
         .map(PropRow::to_property)
@@ -210,7 +226,12 @@ pub(crate) fn insert_prop(
     Ok(())
 }
 
-pub(crate) fn save_prop(tx: &Connection, codec: &Codec, row: &PropRow, p: &PropertyPayload) -> Result<()> {
+pub(crate) fn save_prop(
+    tx: &Connection,
+    codec: &Codec,
+    row: &PropRow,
+    p: &PropertyPayload,
+) -> Result<()> {
     let rev = row.rev + 1;
     let e = codec.encode(&prop_loc(&row.id, rev), p)?;
     tx.prepare_cached("UPDATE db_properties SET rev = ?2, enc = ?3, payload = ?4 WHERE id = ?1")?
@@ -225,19 +246,28 @@ pub(crate) fn key_among(
     before: Option<&str>,
     exclude: Option<&str>,
 ) -> Result<String> {
-    let sibs: Vec<&(String, String)> = sibs.iter().filter(|(id, _)| Some(id.as_str()) != exclude).collect();
+    let sibs: Vec<&(String, String)> = sibs
+        .iter()
+        .filter(|(id, _)| Some(id.as_str()) != exclude)
+        .collect();
     let (lo, hi) = if let Some(a) = after {
         let i = sibs
             .iter()
             .position(|(id, _)| id == a)
             .ok_or_else(|| StoreError::invalid_field("afterId", "not a sibling"))?;
-        (Some(sibs[i].1.clone()), sibs.get(i + 1).map(|s| s.1.clone()))
+        (
+            Some(sibs[i].1.clone()),
+            sibs.get(i + 1).map(|s| s.1.clone()),
+        )
     } else if let Some(b) = before {
         let i = sibs
             .iter()
             .position(|(id, _)| id == b)
             .ok_or_else(|| StoreError::invalid_field("beforeId", "not a sibling"))?;
-        (i.checked_sub(1).map(|j| sibs[j].1.clone()), Some(sibs[i].1.clone()))
+        (
+            i.checked_sub(1).map(|j| sibs[j].1.clone()),
+            Some(sibs[i].1.clone()),
+        )
     } else {
         (sibs.last().map(|s| s.1.clone()), None)
     };
@@ -248,7 +278,11 @@ pub(crate) fn key_among(
 }
 
 /// Page title / icon / app instance of a database page.
-pub(crate) fn page_info(conn: &Connection, codec: &Codec, id: &str) -> Result<(PagePayload, String)> {
+pub(crate) fn page_info(
+    conn: &Connection,
+    codec: &Codec,
+    id: &str,
+) -> Result<(PagePayload, String)> {
     let row = load_page(conn, id)?.ok_or(StoreError::NotFound("database"))?;
     if row.kind != PageKind::Database.as_str() {
         return Err(StoreError::invalid("the page is not a database"));
@@ -258,13 +292,18 @@ pub(crate) fn page_info(conn: &Connection, codec: &Codec, id: &str) -> Result<(P
 
 /// Formula expressions → display form (current names).
 pub(crate) fn present(props: Vec<Property>) -> Vec<Property> {
-    let names: BTreeMap<String, String> = props.iter().map(|p| (p.id.clone(), p.name.clone())).collect();
+    let names: BTreeMap<String, String> = props
+        .iter()
+        .map(|p| (p.id.clone(), p.name.clone()))
+        .collect();
     props
         .into_iter()
         .map(|mut p| {
             if p.kind == PropType::Formula {
                 let e = p.formula();
-                if let Ok(d) = emp_sheets::dialect::row::to_display(&e, &|id| names.get(id).cloned()) {
+                if let Ok(d) =
+                    emp_sheets::dialect::row::to_display(&e, &|id| names.get(id).cloned())
+                {
                     p.config.insert("expression".into(), json!(d));
                 }
             }
@@ -356,7 +395,11 @@ pub(crate) fn load_world(conn: &Connection, codec: &Codec, db_id: &str) -> Resul
 }
 
 fn unique_name(existing: &[String], wanted: &str) -> String {
-    let base = if wanted.trim().is_empty() { "Property" } else { wanted.trim() };
+    let base = if wanted.trim().is_empty() {
+        "Property"
+    } else {
+        wanted.trim()
+    };
     let taken = |n: &str| existing.iter().any(|e| e.eq_ignore_ascii_case(n));
     if !taken(base) {
         return base.to_owned();
@@ -392,16 +435,27 @@ fn default_status_options() -> Result<Vec<SelectOption>> {
 
 /// Normalises select options: ids assigned, names bounded, duplicates removed.
 fn normalize_options(config: &mut Map<String, Value>, status: bool) -> Result<()> {
-    let raw = config.get("options").cloned().unwrap_or(Value::Array(Vec::new()));
+    let raw = config
+        .get("options")
+        .cloned()
+        .unwrap_or(Value::Array(Vec::new()));
     let Value::Array(items) = raw else {
-        return Err(StoreError::invalid_field("config", "options must be a list"));
+        return Err(StoreError::invalid_field(
+            "config",
+            "options must be a list",
+        ));
     };
     if items.len() > MAX_OPTIONS {
         return Err(StoreError::TooLarge("options"));
     }
     let mut out: Vec<SelectOption> = Vec::new();
     for (i, it) in items.into_iter().enumerate() {
-        let name = it.get("name").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+        let name = it
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_owned();
         if name.is_empty() || out.iter().any(|o| o.name.eq_ignore_ascii_case(&name)) {
             continue;
         }
@@ -421,7 +475,12 @@ fn normalize_options(config: &mut Map<String, Value>, status: bool) -> Result<()
             .and_then(Value::as_str)
             .filter(|s| crate::model::ids::is_record_id(s))
             .map_or_else(new_id, str::to_owned);
-        out.push(SelectOption { id, name, color, group });
+        out.push(SelectOption {
+            id,
+            name,
+            color,
+            group,
+        });
     }
     if status && out.is_empty() {
         out = default_status_options()?;
@@ -451,11 +510,17 @@ fn create_prop_tx(tx: &Connection, codec: &Codec, np: NewProp<'_>) -> Result<Vec
         return Err(StoreError::TooLarge("properties"));
     }
     if np.kind == PropType::Title && existing.iter().any(|p| p.payload.kind == PropType::Title) {
-        return Err(StoreError::invalid_field("type", "a database has exactly one title property"));
+        return Err(StoreError::invalid_field(
+            "type",
+            "a database has exactly one title property",
+        ));
     }
     let names: Vec<String> = existing.iter().map(|p| p.payload.name.clone()).collect();
     let name = unique_name(&names, np.name);
-    let sibs: Vec<(String, String)> = existing.iter().map(|p| (p.id.clone(), p.sort_key.clone())).collect();
+    let sibs: Vec<(String, String)> = existing
+        .iter()
+        .map(|p| (p.id.clone(), p.sort_key.clone()))
+        .collect();
     let sort_key = key_among(&sibs, np.after_id, None, None)?;
     let id = new_id();
     let mut config = np.config;
@@ -468,7 +533,10 @@ fn create_prop_tx(tx: &Connection, codec: &Codec, np: NewProp<'_>) -> Result<Vec
         PropType::Relation => {
             let mut rc: RelationConfig = config::read(&config);
             if rc.target_database_id.is_empty() {
-                return Err(StoreError::invalid_field("config", "relations need targetDatabaseId"));
+                return Err(StoreError::invalid_field(
+                    "config",
+                    "relations need targetDatabaseId",
+                ));
             }
             if rc.target_database_id != np.db_id {
                 load_db(tx, codec, &rc.target_database_id)?;
@@ -490,16 +558,21 @@ fn create_prop_tx(tx: &Connection, codec: &Codec, np: NewProp<'_>) -> Result<Vec
                     .map(|p| p.payload.name.clone())
                     .chain((target == np.db_id).then(|| name.clone()))
                     .collect();
-                let dual_name = unique_name(&tnames, rc.dual_name.as_deref().unwrap_or(np.db_title));
-                let tsibs: Vec<(String, String)> =
-                    tprops.iter().map(|p| (p.id.clone(), p.sort_key.clone())).collect();
+                let dual_name =
+                    unique_name(&tnames, rc.dual_name.as_deref().unwrap_or(np.db_title));
+                let tsibs: Vec<(String, String)> = tprops
+                    .iter()
+                    .map(|p| (p.id.clone(), p.sort_key.clone()))
+                    .collect();
                 let mut tkey = key_among(&tsibs, None, None, None)?;
                 if target == np.db_id {
                     tkey = key_between(Some(&sort_key), None)?;
                 }
                 let dual_cfg = RelationConfig {
                     target_database_id: np.db_id.to_owned(),
-                    dual: Some(DualRef { property_id: Some(id.clone()) }),
+                    dual: Some(DualRef {
+                        property_id: Some(id.clone()),
+                    }),
                     limit: Some("many".into()),
                     dual_name: None,
                 };
@@ -517,7 +590,9 @@ fn create_prop_tx(tx: &Connection, codec: &Codec, np: NewProp<'_>) -> Result<Vec
                 };
                 insert_prop(tx, codec, &target, &dual_id, &tkey, &payload)?;
                 bump(tx, &target, true, false)?;
-                rc.dual = Some(DualRef { property_id: Some(dual_id.clone()) });
+                rc.dual = Some(DualRef {
+                    property_id: Some(dual_id.clone()),
+                });
                 created_dual = Some(Property {
                     id: dual_id,
                     name: payload.name,
@@ -532,35 +607,60 @@ fn create_prop_tx(tx: &Connection, codec: &Codec, np: NewProp<'_>) -> Result<Vec
                 rc.dual = None;
             }
             rc.dual_name = None;
-            for (k, v) in serde_json::to_value(&rc)?.as_object().cloned().unwrap_or_default() {
+            for (k, v) in serde_json::to_value(&rc)?
+                .as_object()
+                .cloned()
+                .unwrap_or_default()
+            {
                 config.insert(k, v);
             }
         }
         PropType::Rollup => {
-            let rel_id = config.get("relationPropId").and_then(Value::as_str).unwrap_or_default();
+            let rel_id = config
+                .get("relationPropId")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             if !rel_id.is_empty()
                 && !existing
                     .iter()
                     .any(|p| p.id == rel_id && p.payload.kind == PropType::Relation)
             {
-                return Err(StoreError::invalid_field("config", "relationPropId is not a relation of this database"));
+                return Err(StoreError::invalid_field(
+                    "config",
+                    "relationPropId is not a relation of this database",
+                ));
             }
             if config.get("fn").is_some()
-                && serde_json::from_value::<crate::query::model::RollupFn>(config["fn"].clone()).is_err()
+                && serde_json::from_value::<crate::query::model::RollupFn>(config["fn"].clone())
+                    .is_err()
             {
-                return Err(StoreError::invalid_field("config", "unknown rollup function"));
+                return Err(StoreError::invalid_field(
+                    "config",
+                    "unknown rollup function",
+                ));
             }
         }
         PropType::Formula => {
             let all: Vec<Property> = existing.iter().map(PropRow::to_property).collect();
-            let expr = config.get("expression").and_then(Value::as_str).unwrap_or_default().to_owned();
+            let expr = config
+                .get("expression")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
             config.insert("expression".into(), json!(to_storage(&expr, &all)?));
         }
         PropType::UniqueId => {
             if let Some(prefix) = config.get("prefix").and_then(Value::as_str) {
                 let prefix = prefix.trim().to_owned();
-                if prefix.len() > 16 || !prefix.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                    return Err(StoreError::invalid_field("config", "prefixes are up to 16 letters and digits"));
+                if prefix.len() > 16
+                    || !prefix
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+                {
+                    return Err(StoreError::invalid_field(
+                        "config",
+                        "prefixes are up to 16 letters and digits",
+                    ));
                 }
                 db_row.payload.uid_prefix = (!prefix.is_empty()).then_some(prefix);
                 db_dirty = true;
@@ -585,7 +685,10 @@ fn create_prop_tx(tx: &Connection, codec: &Codec, np: NewProp<'_>) -> Result<Vec
         for r in rows {
             db_row.payload.uid_seq += 1;
             let mut p = r.payload.clone();
-            p.values.insert(id.clone(), uid_value(prefix.as_deref(), db_row.payload.uid_seq));
+            p.values.insert(
+                id.clone(),
+                uid_value(prefix.as_deref(), db_row.payload.uid_seq),
+            );
             save_row_payload(tx, codec, &r.id, r.rev, &p, r.updated_at)?;
         }
         db_dirty = true;
@@ -647,7 +750,11 @@ fn convert_value(from: &Property, to: &Property, v: &CellValue) -> Option<CellVa
     use PropType as T;
     let text = cells::display(v, from);
     match (from.kind, to.kind) {
-        (T::Checkbox, T::Text) => Some(CellValue::text(if cells::boolean(Some(v)) { "Yes" } else { "No" })),
+        (T::Checkbox, T::Text) => Some(CellValue::text(if cells::boolean(Some(v)) {
+            "Yes"
+        } else {
+            "No"
+        })),
         (T::Number, T::Money) => cells::number(Some(v)).and_then(|n| {
             let s = cells::fmt_num(n);
             cells::check_money(&s).ok().map(|m| CellValue::Money {
@@ -657,7 +764,9 @@ fn convert_value(from: &Property, to: &Property, v: &CellValue) -> Option<CellVa
         }),
         (T::Money, T::Number) => cells::number(Some(v)).map(CellValue::number),
         (T::Select, T::MultiSelect) => match v {
-            CellValue::Select { v: Some(id) } => Some(CellValue::Multi { v: vec![id.clone()] }),
+            CellValue::Select { v: Some(id) } => Some(CellValue::Multi {
+                v: vec![id.clone()],
+            }),
             _ => None,
         },
         _ => from_text(to, &text),
@@ -815,7 +924,10 @@ impl Store {
                 if let Some(d) = &d
                     && !p.templates.iter().any(|t| &t.id == d)
                 {
-                    return Err(StoreError::invalid_field("defaultTemplateId", "unknown template"));
+                    return Err(StoreError::invalid_field(
+                        "defaultTemplateId",
+                        "unknown template",
+                    ));
                 }
                 p.default_template_id = d;
             }
@@ -825,7 +937,10 @@ impl Store {
             if let Some(i) = patch.inline {
                 p.inline = i;
             }
-            if p.default_template_id.as_ref().is_some_and(|d| !p.templates.iter().any(|t| &t.id == d)) {
+            if p.default_template_id
+                .as_ref()
+                .is_some_and(|d| !p.templates.iter().any(|t| &t.id == d))
+            {
                 p.default_template_id = None;
             }
             save_db(tx, codec, &row, &p)?;
@@ -871,7 +986,11 @@ impl Store {
         let s = self.session()?;
         let now = self.now();
         let sess = Arc::clone(&s);
-        let (db, name, after) = (database_id.to_owned(), name.to_owned(), after_id.map(str::to_owned));
+        let (db, name, after) = (
+            database_id.to_owned(),
+            name.to_owned(),
+            after_id.map(str::to_owned),
+        );
         let created = self.write(move |tx| {
             let codec = &sess.codec;
             let (page, _) = page_info(tx, codec, &db)?;
@@ -889,16 +1008,21 @@ impl Store {
                 },
             )?;
             let all = live_properties(tx, codec, &db)?;
-            let dual_db = out.get(1).map(|_| {
-                RelationConfig::clone(&out[0].relation()).target_database_id
-            });
-            Ok((present(all).into_iter().find(|p| p.id == out[0].id), dual_db))
+            let dual_db = out
+                .get(1)
+                .map(|_| RelationConfig::clone(&out[0].relation()).target_database_id);
+            Ok((
+                present(all).into_iter().find(|p| p.id == out[0].id),
+                dual_db,
+            ))
         })?;
         self.db_changed(database_id);
         if let Some(d) = created.1 {
             self.db_changed(&d);
         }
-        created.0.ok_or(StoreError::Internal("created property vanished".into()))
+        created
+            .0
+            .ok_or(StoreError::Internal("created property vanished".into()))
     }
 
     /// `db_property_update` (configuration keys are merged; select options are re-normalised; formula expressions
@@ -918,26 +1042,37 @@ impl Store {
                 if n.is_empty() {
                     return Err(StoreError::invalid_field("name", "names cannot be empty"));
                 }
-                if others.iter().any(|o| o.id != row.id && o.payload.name.eq_ignore_ascii_case(&n)) {
-                    return Err(StoreError::invalid_field("name", "another property has this name"));
+                if others
+                    .iter()
+                    .any(|o| o.id != row.id && o.payload.name.eq_ignore_ascii_case(&n))
+                {
+                    return Err(StoreError::invalid_field(
+                        "name",
+                        "another property has this name",
+                    ));
                 }
                 p.name = n;
             }
             if let Some(cfg) = patch.config {
                 for (k, v) in cfg {
-                    if p.kind == PropType::Relation && matches!(k.as_str(), "targetDatabaseId" | "dual") {
+                    if p.kind == PropType::Relation
+                        && matches!(k.as_str(), "targetDatabaseId" | "dual")
+                    {
                         // Retargeting and pairing are structural; they go through convert / delete.
                         continue;
                     }
                     p.config.insert(k, v);
                 }
                 match p.kind {
-                    PropType::Select | PropType::MultiSelect => normalize_options(&mut p.config, false)?,
+                    PropType::Select | PropType::MultiSelect => {
+                        normalize_options(&mut p.config, false)?
+                    }
                     PropType::Status => normalize_options(&mut p.config, true)?,
                     PropType::Formula => {
                         let all: Vec<Property> = others.iter().map(PropRow::to_property).collect();
                         let e = p.formula();
-                        p.config.insert("expression".into(), json!(to_storage(&e, &all)?));
+                        p.config
+                            .insert("expression".into(), json!(to_storage(&e, &all)?));
                     }
                     _ => {}
                 }
@@ -955,7 +1090,9 @@ impl Store {
             bump(tx, &row.database_id, true, false)?;
             let all = present(live_properties(tx, codec, &row.database_id)?);
             Ok((
-                all.into_iter().find(|x| x.id == row.id).ok_or(StoreError::NotFound("property"))?,
+                all.into_iter()
+                    .find(|x| x.id == row.id)
+                    .ok_or(StoreError::NotFound("property"))?,
                 row.database_id,
             ))
         })?;
@@ -1003,13 +1140,20 @@ impl Store {
                 return Ok((from, row.database_id));
             }
             if !conversion_supported(from.kind, to) {
-                return Err(StoreError::Unsupported("this type conversion is not supported"));
+                return Err(StoreError::Unsupported(
+                    "this type conversion is not supported",
+                ));
             }
             let rows = load_rows(tx, codec, &row.database_id)?;
             // pre_bulk version: the property and every old value.
             let old: BTreeMap<String, CellValue> = rows
                 .iter()
-                .filter_map(|r| r.payload.values.get(&row.id).map(|v| (r.id.clone(), v.clone())))
+                .filter_map(|r| {
+                    r.payload
+                        .values
+                        .get(&row.id)
+                        .map(|v| (r.id.clone(), v.clone()))
+                })
                 .collect();
             crate::repo::versions::insert_version(
                 tx,
@@ -1017,7 +1161,11 @@ impl Store {
                 &row.database_id,
                 VersionTargetKind::DbSchema,
                 VersionReason::PreBulk,
-                Some(format!("Before converting {} to {}", from.name, to.as_str())),
+                Some(format!(
+                    "Before converting {} to {}",
+                    from.name,
+                    to.as_str()
+                )),
                 &json!({ "property": from, "values": old }),
                 now,
             )?;
@@ -1030,7 +1178,10 @@ impl Store {
                     for r in &rows {
                         if let Some(v) = r.payload.values.get(&row.id) {
                             let t = cells::display(v, &from).trim().to_owned();
-                            if !t.is_empty() && !seen.iter().any(|x| x.eq_ignore_ascii_case(&t)) && seen.len() < CONVERT_MAX_OPTIONS {
+                            if !t.is_empty()
+                                && !seen.iter().any(|x| x.eq_ignore_ascii_case(&t))
+                                && seen.len() < CONVERT_MAX_OPTIONS
+                            {
                                 seen.push(t);
                             }
                         }
@@ -1057,7 +1208,9 @@ impl Store {
                 ..from.clone()
             };
             for r in &rows {
-                let Some(v) = r.payload.values.get(&row.id) else { continue };
+                let Some(v) = r.payload.values.get(&row.id) else {
+                    continue;
+                };
                 let mut p = r.payload.clone();
                 match convert_value(&from, &target, v) {
                     Some(nv) => p.values.insert(row.id.clone(), nv),
@@ -1072,7 +1225,9 @@ impl Store {
             bump(tx, &row.database_id, true, true)?;
             let all = present(live_properties(tx, codec, &row.database_id)?);
             Ok((
-                all.into_iter().find(|x| x.id == row.id).ok_or(StoreError::NotFound("property"))?,
+                all.into_iter()
+                    .find(|x| x.id == row.id)
+                    .ok_or(StoreError::NotFound("property"))?,
                 row.database_id,
             ))
         })?;
@@ -1136,7 +1291,9 @@ impl Store {
             bump(tx, &row.database_id, true, false)?;
             let all = present(live_properties(tx, codec, &row.database_id)?);
             Ok((
-                all.into_iter().find(|x| x.id == row.id).ok_or(StoreError::NotFound("property"))?,
+                all.into_iter()
+                    .find(|x| x.id == row.id)
+                    .ok_or(StoreError::NotFound("property"))?,
                 row.database_id,
             ))
         })?;
@@ -1157,10 +1314,19 @@ impl Store {
     }
 
     /// `db_property_reorder`.
-    pub fn db_property_reorder(&self, id: &str, before_id: Option<&str>, after_id: Option<&str>) -> Result<Property> {
+    pub fn db_property_reorder(
+        &self,
+        id: &str,
+        before_id: Option<&str>,
+        after_id: Option<&str>,
+    ) -> Result<Property> {
         let s = self.session()?;
         let sess = Arc::clone(&s);
-        let (id_owned, before, after) = (id.to_owned(), before_id.map(str::to_owned), after_id.map(str::to_owned));
+        let (id_owned, before, after) = (
+            id.to_owned(),
+            before_id.map(str::to_owned),
+            after_id.map(str::to_owned),
+        );
         let (p, db) = self.write(move |tx| {
             let codec = &sess.codec;
             let row = load_prop(tx, codec, &id_owned)?.ok_or(StoreError::NotFound("property"))?;
@@ -1174,7 +1340,9 @@ impl Store {
             bump(tx, &row.database_id, true, false)?;
             let all = present(live_properties(tx, codec, &row.database_id)?);
             Ok((
-                all.into_iter().find(|x| x.id == row.id).ok_or(StoreError::NotFound("property"))?,
+                all.into_iter()
+                    .find(|x| x.id == row.id)
+                    .ok_or(StoreError::NotFound("property"))?,
                 row.database_id,
             ))
         })?;
@@ -1183,10 +1351,17 @@ impl Store {
     }
 
     /// `db_select_option_upsert`.
-    pub fn db_select_option_upsert(&self, property_id: &str, option: SelectOptionInput) -> Result<Property> {
+    pub fn db_select_option_upsert(
+        &self,
+        property_id: &str,
+        option: SelectOptionInput,
+    ) -> Result<Property> {
         validate_title(&option.name)?;
         if option.name.trim().is_empty() {
-            return Err(StoreError::invalid_field("name", "option names cannot be empty"));
+            return Err(StoreError::invalid_field(
+                "name",
+                "option names cannot be empty",
+            ));
         }
         let s = self.session()?;
         let sess = Arc::clone(&s);
@@ -1194,15 +1369,25 @@ impl Store {
         let (p, db) = self.write(move |tx| {
             let codec = &sess.codec;
             let row = load_prop(tx, codec, &pid)?.ok_or(StoreError::NotFound("property"))?;
-            if !matches!(row.payload.kind, PropType::Select | PropType::MultiSelect | PropType::Status) {
+            if !matches!(
+                row.payload.kind,
+                PropType::Select | PropType::MultiSelect | PropType::Status
+            ) {
                 return Err(StoreError::invalid("the property has no options"));
             }
             let mut cfg: SelectConfig = config::read(&row.payload.config);
             let name = option.name.trim().to_owned();
             match &option.id {
                 Some(id) => {
-                    if cfg.options.iter().any(|o| &o.id != id && o.name.eq_ignore_ascii_case(&name)) {
-                        return Err(StoreError::invalid_field("name", "an option with this name exists"));
+                    if cfg
+                        .options
+                        .iter()
+                        .any(|o| &o.id != id && o.name.eq_ignore_ascii_case(&name))
+                    {
+                        return Err(StoreError::invalid_field(
+                            "name",
+                            "an option with this name exists",
+                        ));
                     }
                     let o = cfg
                         .options
@@ -1216,8 +1401,15 @@ impl Store {
                     }
                 }
                 None => {
-                    if cfg.options.iter().any(|o| o.name.eq_ignore_ascii_case(&name)) {
-                        return Err(StoreError::invalid_field("name", "an option with this name exists"));
+                    if cfg
+                        .options
+                        .iter()
+                        .any(|o| o.name.eq_ignore_ascii_case(&name))
+                    {
+                        return Err(StoreError::invalid_field(
+                            "name",
+                            "an option with this name exists",
+                        ));
                     }
                     if cfg.options.len() >= MAX_OPTIONS {
                         return Err(StoreError::TooLarge("options"));
@@ -1238,7 +1430,12 @@ impl Store {
             config::set(&mut p.config, "options", &cfg.options);
             save_prop(tx, codec, &row, &p)?;
             bump(tx, &row.database_id, true, false)?;
-            Ok((load_prop(tx, codec, &pid)?.ok_or(StoreError::NotFound("property"))?.to_property(), row.database_id))
+            Ok((
+                load_prop(tx, codec, &pid)?
+                    .ok_or(StoreError::NotFound("property"))?
+                    .to_property(),
+                row.database_id,
+            ))
         })?;
         self.db_changed(&db);
         Ok(p)
@@ -1264,12 +1461,18 @@ impl Store {
             save_prop(tx, codec, &row, &p)?;
             let mut changed = false;
             for r in load_rows(tx, codec, &row.database_id)? {
-                let Some(v) = r.payload.values.get(&row.id) else { continue };
+                let Some(v) = r.payload.values.get(&row.id) else {
+                    continue;
+                };
                 let nv = match v {
-                    CellValue::Select { v: Some(x) } | CellValue::Status { v: Some(x) } if x == &oid => None,
-                    CellValue::Multi { v } if v.contains(&oid) => {
-                        Some(CellValue::Multi { v: v.iter().filter(|x| *x != &oid).cloned().collect() })
+                    CellValue::Select { v: Some(x) } | CellValue::Status { v: Some(x) }
+                        if x == &oid =>
+                    {
+                        None
                     }
+                    CellValue::Multi { v } if v.contains(&oid) => Some(CellValue::Multi {
+                        v: v.iter().filter(|x| *x != &oid).cloned().collect(),
+                    }),
                     _ => continue,
                 };
                 let mut rp = r.payload.clone();
@@ -1281,7 +1484,12 @@ impl Store {
                 changed = true;
             }
             bump(tx, &row.database_id, true, changed)?;
-            Ok((load_prop(tx, codec, &pid)?.ok_or(StoreError::NotFound("property"))?.to_property(), row.database_id))
+            Ok((
+                load_prop(tx, codec, &pid)?
+                    .ok_or(StoreError::NotFound("property"))?
+                    .to_property(),
+                row.database_id,
+            ))
         })?;
         self.db_changed(&db);
         Ok(p)
@@ -1304,7 +1512,9 @@ impl Store {
             use emp_sheets::dialect::typecheck::Ty;
             let p = db.resolve(key)?;
             Some(match p.kind {
-                PropType::Number | PropType::Money | PropType::Rating | PropType::Progress => Ty::Number,
+                PropType::Number | PropType::Money | PropType::Rating | PropType::Progress => {
+                    Ty::Number
+                }
                 PropType::Checkbox => Ty::Bool,
                 PropType::Date | PropType::CreatedTime | PropType::UpdatedTime => Ty::Date,
                 PropType::MultiSelect | PropType::Files => Ty::List(Box::new(Ty::Text)),
@@ -1326,7 +1536,8 @@ impl Store {
         };
         if out.ok {
             let stored = to_storage(expression, &db.props)?;
-            let compiled = emp_sheets::dialect::row::compile(&stored).map_err(|e| StoreError::invalid(e.message))?;
+            let compiled = emp_sheets::dialect::row::compile(&stored)
+                .map_err(|e| StoreError::invalid(e.message))?;
             // Evaluate against a temporary formula property.
             let mut tmp = db.clone();
             let pid = "$check".to_owned();
@@ -1334,7 +1545,10 @@ impl Store {
                 id: pid.clone(),
                 name: "$check".into(),
                 kind: PropType::Formula,
-                config: json!({ "expression": stored }).as_object().cloned().unwrap_or_default(),
+                config: json!({ "expression": stored })
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default(),
                 role: None,
                 hidden: true,
                 sort_key: "~".into(),
@@ -1348,7 +1562,11 @@ impl Store {
             let p = w2.at(ord).prop(&pid).cloned();
             if let Some(p) = p {
                 for r in 0..w2.at(ord).rows.len().min(5) {
-                    out.preview.push(ev.value(ord, r, &p).map(|v| cells::plain_text(&v)).unwrap_or_default());
+                    out.preview.push(
+                        ev.value(ord, r, &p)
+                            .map(|v| cells::plain_text(&v))
+                            .unwrap_or_default(),
+                    );
                 }
             }
         }
@@ -1356,7 +1574,12 @@ impl Store {
     }
 
     /// `db_relation_options`: rows of the relation's target database whose title contains `search`.
-    pub fn db_relation_options(&self, property_id: &str, search: &str, limit: usize) -> Result<Vec<RelationOption>> {
+    pub fn db_relation_options(
+        &self,
+        property_id: &str,
+        search: &str,
+        limit: usize,
+    ) -> Result<Vec<RelationOption>> {
         if search.chars().count() > 512 {
             return Err(StoreError::TooLarge("search"));
         }
@@ -1401,7 +1624,12 @@ impl Store {
 
     /// `db_duplicate` (job): copies the database page, its schema and views, and optionally its rows (relations
     /// inside the database are remapped; two-way relations to other databases become one-way in the copy).
-    pub fn db_duplicate(&self, id: &str, with_rows: bool, progress: &dyn Progress) -> Result<PageMeta> {
+    pub fn db_duplicate(
+        &self,
+        id: &str,
+        with_rows: bool,
+        progress: &dyn Progress,
+    ) -> Result<PageMeta> {
         let s = self.session()?;
         let now = self.now();
         let sess = Arc::clone(&s);

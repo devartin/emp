@@ -1,0 +1,15 @@
+{
+  "country": "US",
+  "name": "United States",
+  "longTermHoldingDays": 365,
+  "types": [
+    { "id": "401k", "label": "401(k)", "taxTreatment": "deferred", "note": "Employer plan; contributions usually pre-tax. Check for an employer match." },
+    { "id": "403b", "label": "403(b)", "taxTreatment": "deferred", "note": "Employer plan for non-profits and schools." },
+    { "id": "ira", "label": "Traditional IRA", "taxTreatment": "deferred", "note": "Contributions may be deductible; withdrawals are taxed." },
+    { "id": "roth_ira", "label": "Roth IRA", "taxTreatment": "free", "note": "After-tax contributions; qualified withdrawals are tax-free." },
+    { "id": "hsa", "label": "HSA", "taxTreatment": "free", "note": "Health savings account; qualified medical withdrawals are tax-free." },
+    { "id": "taxable", "label": "Taxable brokerage", "taxTreatment": "taxable", "note": "Dividends and realised gains are taxed each year." },
+    { "id": "529", "label": "529 plan", "taxTreatment": "free", "note": "Education savings; qualified withdrawals are tax-free." },
+    { "id": "crypto", "label": "Crypto wallet / exchange", "taxTreatment": "taxable", "note": "Disposals are taxable events." }
+  ]
+}

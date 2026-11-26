@@ -211,6 +211,7 @@ pub fn relation_targets(props: &[Property]) -> Vec<Id> {
 }
 
 type Key = (usize, usize, usize);
+type Compiled = Result<Rc<RowFormula>, String>;
 
 /// Lazy, memoised evaluator of derived values.
 pub struct Evaluator<'w> {
@@ -218,7 +219,7 @@ pub struct Evaluator<'w> {
     ctx: DateCtx,
     memo: RefCell<HashMap<Key, Option<CellValue>>>,
     stack: RefCell<HashSet<Key>>,
-    compiled: RefCell<HashMap<(usize, usize), Result<Rc<RowFormula>, String>>>,
+    compiled: RefCell<HashMap<(usize, usize), Compiled>>,
 }
 
 impl<'w> Evaluator<'w> {
@@ -402,7 +403,9 @@ impl Ctx<'_, '_> {
         if let Some(CellValue::Computed { v: c }) = &v
             && c.kind == super::model::ComputedKind::Error
         {
-            self.err.borrow_mut().get_or_insert_with(|| c.display.clone());
+            self.err
+                .borrow_mut()
+                .get_or_insert_with(|| c.display.clone());
             return Some(RowValue::Empty);
         }
         Some(to_row_value(v.as_ref(), &p, &self.ev.ctx))
@@ -452,10 +455,7 @@ pub(crate) mod tests {
             updated_at: 2_000,
             payload: RowPayload {
                 v: 1,
-                values: values
-                    .into_iter()
-                    .map(|(k, v)| (k.to_owned(), v))
-                    .collect(),
+                values: values.into_iter().map(|(k, v)| (k.to_owned(), v)).collect(),
                 ..RowPayload::default()
             },
             has_body: false,
@@ -487,8 +487,20 @@ pub(crate) mod tests {
                 prop("amt", "Amount", PropType::Number, json!({})),
             ],
             vec![
-                row("i1", vec![("it", CellValue::text("A")), ("amt", CellValue::number(10.0))]),
-                row("i2", vec![("it", CellValue::text("B")), ("amt", CellValue::number(5.5))]),
+                row(
+                    "i1",
+                    vec![
+                        ("it", CellValue::text("A")),
+                        ("amt", CellValue::number(10.0)),
+                    ],
+                ),
+                row(
+                    "i2",
+                    vec![
+                        ("it", CellValue::text("B")),
+                        ("amt", CellValue::number(5.5)),
+                    ],
+                ),
             ],
             1,
             1,
@@ -499,28 +511,53 @@ pub(crate) mod tests {
             info("ot"),
             vec![
                 prop("ot", "Order", PropType::Title, json!({})),
-                prop("rel", "Items", PropType::Relation, json!({"targetDatabaseId":"items"})),
+                prop(
+                    "rel",
+                    "Items",
+                    PropType::Relation,
+                    json!({"targetDatabaseId":"items"}),
+                ),
                 prop(
                     "sum",
                     "Total",
                     PropType::Rollup,
                     json!({"relationPropId":"rel","targetPropId":"amt","fn":"sum"}),
                 ),
-                prop("f", "Double", PropType::Formula, json!({"expression":"prop(\"#sum\") * 2"})),
+                prop(
+                    "f",
+                    "Double",
+                    PropType::Formula,
+                    json!({"expression":"prop(\"#sum\") * 2"}),
+                ),
                 prop(
                     "f2",
                     "Mapped",
                     PropType::Formula,
                     json!({"expression":"prop(\"Items\").map(current.prop(\"Amount\")).sum()"}),
                 ),
-                prop("c1", "Loop A", PropType::Formula, json!({"expression":"prop(\"#c2\") + 1"})),
-                prop("c2", "Loop B", PropType::Formula, json!({"expression":"prop(\"#c1\") + 1"})),
+                prop(
+                    "c1",
+                    "Loop A",
+                    PropType::Formula,
+                    json!({"expression":"prop(\"#c2\") + 1"}),
+                ),
+                prop(
+                    "c2",
+                    "Loop B",
+                    PropType::Formula,
+                    json!({"expression":"prop(\"#c1\") + 1"}),
+                ),
             ],
             vec![row(
                 "o1",
                 vec![
                     ("ot", CellValue::Text { v: rich("Order 1") }),
-                    ("rel", CellValue::Relation { v: vec!["i1".into(), "i2".into()] }),
+                    (
+                        "rel",
+                        CellValue::Relation {
+                            v: vec!["i1".into(), "i2".into()],
+                        },
+                    ),
                 ],
             )],
             1,
@@ -538,7 +575,10 @@ pub(crate) mod tests {
         assert_eq!(cells::number(ev.value_of(o, 0, "f").as_ref()), Some(31.0));
         assert_eq!(cells::number(ev.value_of(o, 0, "f2").as_ref()), Some(15.5));
         let loop_v = ev.value_of(o, 0, "c1").unwrap();
-        assert!(cells::plain_text(&loop_v).contains("Circular"), "{loop_v:?}");
+        assert!(
+            cells::plain_text(&loop_v).contains("Circular"),
+            "{loop_v:?}"
+        );
         let dto = ev.row_dto(o, 0, None).unwrap();
         assert!(dto.values.contains_key("sum"));
         let _ = RollupFn::Sum;

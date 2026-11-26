@@ -66,8 +66,8 @@ pub enum GoogleFeature {
 impl GoogleFeature {
     /// Scopes to request for the feature, always including `openid email` for the label.
     ///
-    /// `DocsImport` also requests `drive.readonly`: Drive `files.export` (the import path)
-    /// does not accept `documents.readonly`.
+    /// `DocsImport` also requests `drive.readonly`: the Drive `files.export` fallback (and
+    /// direct HTML/Markdown export) does not accept `documents.readonly`.
     pub fn scopes(self) -> Vec<&'static str> {
         let mut v = match self {
             GoogleFeature::Calendar => vec![scopes::CALENDAR_READONLY],
@@ -110,8 +110,9 @@ pub struct AuthorizationRequest<'a> {
 
 impl AuthorizationRequest<'_> {
     /// The URL to open in the system browser.
-    pub fn url(&self) -> Url {
-        let mut url = Url::parse(AUTH_ENDPOINT).unwrap_or_else(|_| unreachable_url());
+    pub fn url(&self) -> Result<Url> {
+        let mut url =
+            Url::parse(AUTH_ENDPOINT).map_err(|e| IntegrationError::Internal(e.to_string()))?;
         {
             let mut q = url.query_pairs_mut();
             q.append_pair("client_id", self.client_id)
@@ -130,14 +131,8 @@ impl AuthorizationRequest<'_> {
                 q.append_pair("login_hint", hint);
             }
         }
-        url
+        Ok(url)
     }
-}
-
-#[cold]
-fn unreachable_url() -> Url {
-    // AUTH_ENDPOINT is a valid constant; this path cannot be reached.
-    Url::parse("https://accounts.google.com/").expect("static URL")
 }
 
 /// Account identity from the ID token.
@@ -216,7 +211,10 @@ pub fn exchange_request(
 }
 
 /// Refresh request.
-pub fn refresh_request(client: &ClientCredentials, refresh_token: &SecretString) -> Result<NetRequest> {
+pub fn refresh_request(
+    client: &ClientCredentials,
+    refresh_token: &SecretString,
+) -> Result<NetRequest> {
     let mut pairs = vec![
         ("grant_type", "refresh_token"),
         ("refresh_token", refresh_token.expose()),
@@ -233,9 +231,19 @@ pub fn revoke_request(token: &SecretString) -> Result<NetRequest> {
     Ok(token_post(REVOKE_ENDPOINT, "/revoke", &[("token", token.expose())])?.expect(Expect::Any))
 }
 
-fn token_post(endpoint: &str, template: &'static str, pairs: &[(&str, &str)]) -> Result<NetRequest> {
+fn token_post(
+    endpoint: &str,
+    template: &'static str,
+    pairs: &[(&str, &str)],
+) -> Result<NetRequest> {
     let url = Url::parse(endpoint).map_err(|e| IntegrationError::Internal(e.to_string()))?;
-    Ok(NetRequest::with_body(ConnectorId::Google, Method::Post, url, template, Body::form(pairs)))
+    Ok(NetRequest::with_body(
+        ConnectorId::Google,
+        Method::Post,
+        url,
+        template,
+        Body::form(pairs),
+    ))
 }
 
 /// Parse a token endpoint response. `invalid_grant` → [`IntegrationError::ReauthRequired`].
@@ -244,10 +252,13 @@ pub fn parse_token_response(resp: &NetResponse, now: DateTime<Utc>) -> Result<To
         return Err(token_error(resp));
     }
     let t: TokenResponse = resp.json()?;
-    if let Some(tt) = &t.token_type {
-        if !tt.eq_ignore_ascii_case("bearer") {
-            return Err(IntegrationError::OAuth(format!("unexpected token type {}", short_message(tt))));
-        }
+    if let Some(tt) = &t.token_type
+        && !tt.eq_ignore_ascii_case("bearer")
+    {
+        return Err(IntegrationError::OAuth(format!(
+            "unexpected token type {}",
+            short_message(tt)
+        )));
     }
     if t.access_token.is_empty() {
         return Err(IntegrationError::OAuth("empty access token".into()));
@@ -257,7 +268,10 @@ pub fn parse_token_response(resp: &NetResponse, now: DateTime<Utc>) -> Result<To
     Ok(TokenSet {
         access_token: SecretString::new(t.access_token),
         expires_at: now + chrono::Duration::seconds(expires_in),
-        refresh_token: t.refresh_token.filter(|r| !r.is_empty()).map(SecretString::new),
+        refresh_token: t
+            .refresh_token
+            .filter(|r| !r.is_empty())
+            .map(SecretString::new),
         scopes: t
             .scope
             .unwrap_or_default()
@@ -272,14 +286,22 @@ fn token_error(resp: &NetResponse) -> IntegrationError {
     match resp.json::<TokenErrorResponse>() {
         Ok(e) if e.error == "invalid_grant" => IntegrationError::ReauthRequired,
         Ok(e) => {
-            let desc = e.error_description.as_deref().map(short_message).unwrap_or_default();
+            let desc = e
+                .error_description
+                .as_deref()
+                .map(short_message)
+                .unwrap_or_default();
             IntegrationError::OAuth(if desc.is_empty() {
                 short_message(&e.error)
             } else {
                 format!("{}: {desc}", short_message(&e.error))
             })
         }
-        Err(_) => crate::netguard::generic_status_error(resp.status, &resp.body, resp.retry_after.as_deref()),
+        Err(_) => crate::netguard::generic_status_error(
+            resp.status,
+            &resp.body,
+            resp.retry_after.as_deref(),
+        ),
     }
 }
 
@@ -350,7 +372,9 @@ impl GoogleOAuth {
             return Err(IntegrationError::Offline);
         }
         if self.client.client_id.trim().is_empty() {
-            return Err(IntegrationError::Invalid("Google client ID is not configured".into()));
+            return Err(IntegrationError::Invalid(
+                "Google client ID is not configured".into(),
+            ));
         }
         let listener = LoopbackListener::bind().await?;
         let redirect_uri = listener.redirect_uri();
@@ -366,10 +390,11 @@ impl GoogleOAuth {
             prompt_consent: options.first_connect,
             login_hint: options.login_hint.as_deref(),
         }
-        .url();
+        .url()?;
         open_browser(&url)?;
         let code = listener.wait_for_code(&state, options.timeout).await?;
-        self.exchange_code(&code, pkce.verifier(), &redirect_uri).await
+        self.exchange_code(&code, pkce.verifier(), &redirect_uri)
+            .await
     }
 
     /// Exchange an authorization code.
@@ -381,7 +406,12 @@ impl GoogleOAuth {
     ) -> Result<TokenSet> {
         let resp = self
             .guard
-            .send(exchange_request(&self.client, code, verifier, redirect_uri)?)
+            .send(exchange_request(
+                &self.client,
+                code,
+                verifier,
+                redirect_uri,
+            )?)
             .await?;
         parse_token_response(&resp, Utc::now())
     }
@@ -389,7 +419,10 @@ impl GoogleOAuth {
     /// Refresh the access token. On `invalid_grant` returns
     /// [`IntegrationError::ReauthRequired`]: set the account to `reauth_required`.
     pub async fn refresh(&self, refresh_token: &SecretString) -> Result<TokenSet> {
-        let resp = self.guard.send(refresh_request(&self.client, refresh_token)?).await?;
+        let resp = self
+            .guard
+            .send(refresh_request(&self.client, refresh_token)?)
+            .await?;
         parse_token_response(&resp, Utc::now())
     }
 
@@ -424,7 +457,10 @@ mod tests {
     }
 
     fn id_token(claims: &str) -> String {
-        format!("eyJhbGciOiJSUzI1NiJ9.{}.sig", URL_SAFE_NO_PAD.encode(claims))
+        format!(
+            "eyJhbGciOiJSUzI1NiJ9.{}.sig",
+            URL_SAFE_NO_PAD.encode(claims)
+        )
     }
 
     #[test]
@@ -440,7 +476,8 @@ mod tests {
             prompt_consent: true,
             login_hint: Some("me@example.com"),
         }
-        .url();
+        .url()
+        .unwrap();
         assert_eq!(url.host_str(), Some("accounts.google.com"));
         let q: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
         assert_eq!(q["response_type"], "code");
@@ -468,7 +505,8 @@ mod tests {
             state: &state,
             pkce: &pkce,
         }
-        .url();
+        .url()
+        .unwrap();
         assert!(!url.query().unwrap().contains("prompt="));
     }
 
@@ -497,8 +535,9 @@ mod tests {
         assert_eq!(req.url.as_str(), TOKEN_ENDPOINT);
         assert!(!req.idempotent);
         let body = String::from_utf8(req.body.unwrap().bytes).unwrap();
-        let pairs: std::collections::HashMap<_, _> =
-            url::form_urlencoded::parse(body.as_bytes()).into_owned().collect();
+        let pairs: std::collections::HashMap<_, _> = url::form_urlencoded::parse(body.as_bytes())
+            .into_owned()
+            .collect();
         assert_eq!(pairs["grant_type"], "authorization_code");
         assert_eq!(pairs["code"], "code/1");
         assert_eq!(pairs["code_verifier"], "verif");
@@ -511,7 +550,10 @@ mod tests {
 
         let req = revoke_request(&SecretString::new("rt")).unwrap();
         assert_eq!(req.url.as_str(), REVOKE_ENDPOINT);
-        assert_eq!(String::from_utf8(req.body.unwrap().bytes).unwrap(), "token=rt");
+        assert_eq!(
+            String::from_utf8(req.body.unwrap().bytes).unwrap(),
+            "token=rt"
+        );
     }
 
     #[test]
@@ -526,7 +568,10 @@ mod tests {
         assert_eq!(t.refresh_token.as_ref().unwrap().expose(), "1//r");
         assert_eq!(t.scopes.len(), 3);
         assert_eq!(t.expires_at, now + chrono::Duration::seconds(3599));
-        assert_eq!(t.identity.as_ref().unwrap().email.as_deref(), Some("me@example.com"));
+        assert_eq!(
+            t.identity.as_ref().unwrap().email.as_deref(),
+            Some("me@example.com")
+        );
         assert!(t.expires_within_check(now));
     }
 
@@ -566,7 +611,10 @@ mod tests {
     #[tokio::test]
     async fn refresh_and_revoke_through_netguard() {
         let server = TestServer::start(vec![
-            Reply::json(200, r#"{"access_token":"new","expires_in":3600,"token_type":"Bearer","scope":"email"}"#),
+            Reply::json(
+                200,
+                r#"{"access_token":"new","expires_in":3600,"token_type":"Bearer","scope":"email"}"#,
+            ),
             Reply::json(400, r#"{"error":"invalid_grant"}"#),
             Reply::new(200, "text/html", ""),
             Reply::json(400, r#"{"error":"invalid_token"}"#),
@@ -584,13 +632,19 @@ mod tests {
         let t = oauth.refresh(&rt).await.unwrap();
         assert_eq!(t.access_token.expose(), "new");
         assert!(t.refresh_token.is_none());
-        assert!(matches!(oauth.refresh(&rt).await.unwrap_err(), IntegrationError::ReauthRequired));
+        assert!(matches!(
+            oauth.refresh(&rt).await.unwrap_err(),
+            IntegrationError::ReauthRequired
+        ));
         oauth.revoke(&rt).await.unwrap();
         oauth.revoke(&rt).await.unwrap();
         let reqs = server.requests();
         assert_eq!(reqs[2].path, "/revoke");
         assert_eq!(reqs[2].body_str(), "token=refresh-1");
-        assert_eq!(reqs[0].header("content-type"), Some("application/x-www-form-urlencoded"));
+        assert_eq!(
+            reqs[0].header("content-type"),
+            Some("application/x-www-form-urlencoded")
+        );
     }
 
     #[tokio::test]
@@ -634,8 +688,9 @@ mod tests {
         assert_eq!(tokens.access_token.expose(), "at");
         assert_eq!(tokens.refresh_token.unwrap().expose(), "rt");
         let body = server.requests()[0].body_str();
-        let pairs: std::collections::HashMap<_, _> =
-            url::form_urlencoded::parse(body.as_bytes()).into_owned().collect();
+        let pairs: std::collections::HashMap<_, _> = url::form_urlencoded::parse(body.as_bytes())
+            .into_owned()
+            .collect();
         assert_eq!(pairs["code"], "the-code");
         assert_eq!(pairs["code_verifier"].len(), 43);
         assert!(pairs["redirect_uri"].starts_with("http://127.0.0.1:"));

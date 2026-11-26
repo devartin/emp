@@ -1,0 +1,1607 @@
+{
+  "id": "tax-organizer",
+  "version": "1.0.0",
+  "title": "Tax Organizer",
+  "tagline": "Documents, deadlines and deductions in one place — and an estimate of what you owe.",
+  "icon": "receipt-text",
+  "color": "amber",
+  "category": "tax",
+  "sensitivity": "high",
+  "estMinutes": 5,
+  "disclaimer": "Estimates for planning only — not tax advice, and EMP never files returns or makes payments. Confirm figures with official forms or a tax professional.",
+  "steps": [
+    {
+      "id": "jurisdiction",
+      "kind": "jurisdiction",
+      "title": "Where and for which year?",
+      "quick": true,
+      "skippable": false,
+      "help": "The v1 estimator covers US federal tax; other countries use the Generic organizer. State is used for the checklist only.",
+      "recommend": "recommend_tax_year",
+      "default": {
+        "country": "US",
+        "state": "",
+        "year": 2026,
+        "residency": "resident"
+      }
+    },
+    {
+      "id": "household",
+      "kind": "choice_cards",
+      "title": "Filing status and household",
+      "quick": true,
+      "skippable": false,
+      "default": {
+        "filingStatus": "single",
+        "dependents": 0,
+        "seniorOrBlind": 0
+      },
+      "options": [
+        {
+          "value": "single",
+          "label": "Single"
+        },
+        {
+          "value": "mfj",
+          "label": "Married filing jointly"
+        },
+        {
+          "value": "mfs",
+          "label": "Married filing separately"
+        },
+        {
+          "value": "hoh",
+          "label": "Head of household"
+        },
+        {
+          "value": "qss",
+          "label": "Qualifying surviving spouse"
+        }
+      ],
+      "itemSchema": {
+        "filingStatus": "enum",
+        "dependents": "number",
+        "seniorOrBlind": "number"
+      }
+    },
+    {
+      "id": "income",
+      "kind": "multi_chips",
+      "title": "What kinds of income did you have?",
+      "quick": true,
+      "skippable": false,
+      "help": "We use this to list the documents to expect.",
+      "default": [
+        "employment"
+      ],
+      "options": [
+        {
+          "value": "employment",
+          "label": "Employment (W-2)"
+        },
+        {
+          "value": "self_employment",
+          "label": "Self-employment"
+        },
+        {
+          "value": "interest",
+          "label": "Interest"
+        },
+        {
+          "value": "dividends",
+          "label": "Dividends"
+        },
+        {
+          "value": "brokerage",
+          "label": "Brokerage sales"
+        },
+        {
+          "value": "crypto",
+          "label": "Crypto"
+        },
+        {
+          "value": "rental",
+          "label": "Rental"
+        },
+        {
+          "value": "retirement",
+          "label": "Retirement distributions"
+        },
+        {
+          "value": "social_security",
+          "label": "Social Security"
+        },
+        {
+          "value": "unemployment",
+          "label": "Unemployment"
+        },
+        {
+          "value": "k1",
+          "label": "K-1 (partnership / trust)"
+        },
+        {
+          "value": "foreign",
+          "label": "Foreign income"
+        },
+        {
+          "value": "other",
+          "label": "Other"
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "kind": "multi_chips",
+      "title": "Did anything big happen this year?",
+      "quick": false,
+      "skippable": true,
+      "default": [],
+      "options": [
+        {
+          "value": "married",
+          "label": "Married"
+        },
+        {
+          "value": "divorced",
+          "label": "Divorced"
+        },
+        {
+          "value": "baby",
+          "label": "Baby or adoption"
+        },
+        {
+          "value": "moved",
+          "label": "Moved"
+        },
+        {
+          "value": "bought_home",
+          "label": "Bought a home"
+        },
+        {
+          "value": "sold_home",
+          "label": "Sold a home"
+        },
+        {
+          "value": "started_business",
+          "label": "Started a business"
+        },
+        {
+          "value": "retired",
+          "label": "Retired"
+        },
+        {
+          "value": "education",
+          "label": "Education"
+        },
+        {
+          "value": "inheritance",
+          "label": "Inheritance"
+        },
+        {
+          "value": "medical",
+          "label": "Large medical bills"
+        },
+        {
+          "value": "landlord",
+          "label": "Became a landlord"
+        },
+        {
+          "value": "job_loss",
+          "label": "Job loss"
+        },
+        {
+          "value": "equity_comp",
+          "label": "Equity compensation"
+        }
+      ]
+    },
+    {
+      "id": "deductions",
+      "kind": "choice_cards",
+      "title": "Standard or itemized deductions?",
+      "quick": false,
+      "skippable": true,
+      "default": "not_sure",
+      "why": "Most people take the standard deduction; itemizing helps when mortgage interest, state taxes and gifts add up to more.",
+      "options": [
+        {
+          "value": "not_sure",
+          "label": "Not sure",
+          "description": "We compare as you log deductions."
+        },
+        {
+          "value": "standard",
+          "label": "Standard"
+        },
+        {
+          "value": "itemized",
+          "label": "Itemized"
+        }
+      ]
+    },
+    {
+      "id": "payments",
+      "kind": "money",
+      "title": "Payments so far",
+      "quick": false,
+      "skippable": true,
+      "help": "Withholding to date, expected remaining withholding, estimated payments made, and last year's total tax and AGI.",
+      "default": {
+        "withholdingYtd": 0,
+        "withholdingRemaining": 0,
+        "estimatesPaid": 0,
+        "priorTax": 0,
+        "priorAgi": 0,
+        "expectEstimated": false
+      },
+      "itemSchema": {
+        "withholdingYtd": "money",
+        "withholdingRemaining": "money",
+        "estimatesPaid": "money",
+        "priorTax": "money",
+        "priorAgi": "money",
+        "expectEstimated": "bool"
+      }
+    },
+    {
+      "id": "preparer",
+      "kind": "choice_cards",
+      "title": "Who will prepare the return?",
+      "quick": false,
+      "skippable": true,
+      "default": "self",
+      "options": [
+        {
+          "value": "self",
+          "label": "Me, with software"
+        },
+        {
+          "value": "professional",
+          "label": "A professional",
+          "description": "We create a preparer packet."
+        },
+        {
+          "value": "not_sure",
+          "label": "Not sure"
+        }
+      ]
+    },
+    {
+      "id": "documents",
+      "kind": "toggle",
+      "title": "Documents",
+      "quick": false,
+      "skippable": true,
+      "default": {
+        "storeOriginals": true
+      },
+      "help": "Store originals encrypted in EMP (recommended) or track status only."
+    },
+    {
+      "id": "reminders",
+      "kind": "number",
+      "title": "Deadline reminders",
+      "quick": false,
+      "skippable": true,
+      "default": {
+        "first": 14,
+        "second": 3
+      },
+      "help": "Remind me this many days before each deadline.",
+      "min": 1,
+      "max": 60,
+      "step": 1
+    }
+  ],
+  "templates": [
+    {
+      "key": "hub",
+      "kind": "dashboard",
+      "optional": false,
+      "spec": {
+        "title": "Tax Year {{answers.jurisdiction_year}}",
+        "icon": "lucide:receipt-text",
+        "subtitle": "Documents, deadlines, deductions and an estimate of what you owe.",
+        "tabs": [
+          "Overview",
+          "Documents",
+          "Deductions",
+          "Payments",
+          "Estimator",
+          "Deadlines"
+        ],
+        "tiles": [
+          {
+            "t": "disclaimer"
+          },
+          {
+            "t": "kpi",
+            "metric": "docs_received_pct",
+            "label": "Documents received",
+            "format": "percent"
+          },
+          {
+            "t": "kpi",
+            "metric": "next_deadline",
+            "label": "Next deadline",
+            "format": "date"
+          },
+          {
+            "t": "kpi",
+            "metric": "est_balance",
+            "label": "Estimated balance due (− = refund)",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "est_effective_rate",
+            "label": "Effective rate (estimate)",
+            "format": "percent"
+          },
+          {
+            "t": "kpi",
+            "metric": "deductions_total",
+            "label": "Deductions logged",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "quarterly_next",
+            "label": "Next quarterly payment",
+            "format": "money"
+          },
+          {
+            "t": "chart",
+            "db": "deductions",
+            "view": "by_category",
+            "title": "Deductions by category"
+          }
+        ],
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## Documents"
+          },
+          {
+            "t": "database",
+            "db": "documents",
+            "view": "board"
+          },
+          {
+            "t": "md",
+            "md": "## Coming up"
+          },
+          {
+            "t": "database",
+            "db": "deadlines",
+            "view": "upcoming"
+          },
+          {
+            "t": "md",
+            "md": "## Guides"
+          },
+          {
+            "t": "pageLink",
+            "page": "estimator"
+          },
+          {
+            "t": "pageLink",
+            "page": "quarterly"
+          },
+          {
+            "t": "pageLink",
+            "page": "packet"
+          },
+          {
+            "t": "pageLink",
+            "page": "year_end"
+          },
+          {
+            "t": "pageLink",
+            "page": "retention"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "estimator",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Estimator",
+        "icon": "🧾",
+        "blocks": [
+          {
+            "t": "callout",
+            "icon": "⚠️",
+            "color": "yellow",
+            "md": "Every number here is an estimate. Figures pulled from Money HQ or Portfolio need your confirmation and show a source chip."
+          },
+          {
+            "t": "kpi",
+            "metric": "est_balance",
+            "label": "Estimated balance due",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "est_effective_rate",
+            "label": "Effective rate",
+            "format": "percent"
+          },
+          {
+            "t": "kpi",
+            "metric": "standard_deduction",
+            "label": "Standard deduction",
+            "format": "money"
+          },
+          {
+            "t": "kpi",
+            "metric": "deductions_total",
+            "label": "Itemizable deductions logged",
+            "format": "money"
+          },
+          {
+            "t": "md",
+            "md": "## How the estimate works\n1. **Total tax** starts from last year's total tax as a baseline (safe-harbor style) until income for this year is entered.\n2. **Minus** withholding so far and expected remaining withholding.\n3. **Minus** estimated payments recorded on the Estimated payments page.\n4. A positive result is an estimated balance due; a negative one an estimated refund.\n\nUse **Show math** on each tile to see every line.\n\n## Scenarios\n- *+$5,000 self-employment income:* adds income tax at your marginal rate plus about 14.1% self-employment tax (15.3% × 92.35%).\n- *+$X retirement contribution:* a traditional (pre-tax) contribution lowers taxable income by X; a Roth contribution does not.\n\n## Standard vs itemized\nItemizing helps only when mortgage interest, state and local taxes (capped), charitable gifts and large medical costs add up to more than the standard deduction. The advisor tells you when you get within 10%."
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "quarterly",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Quarterly payments",
+        "icon": "📆",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "## Who pays estimated tax\nIf tax is not withheld from some income — self-employment, rentals, large investment gains — consider quarterly estimated payments. In the US the penalty generally applies when you owe **$1,000 or more** at filing.\n\n## Deadlines (US federal)\n| Period | Income earned | Due |\n|---|---|---|\n| Q1 | Jan 1 – Mar 31 | April 15 |\n| Q2 | Apr 1 – May 31 | June 15 |\n| Q3 | Jun 1 – Aug 31 | September 15 |\n| Q4 | Sep 1 – Dec 31 | January 15 (next year) |\n\nDeadlines that fall on a weekend or holiday move to the next business day.\n\n## Safe harbor (common guideline)\nYou generally avoid the underpayment penalty if withholding plus estimates cover at least:\n- **100% of last year's total tax** (110% if last year's AGI was over $150,000), or\n- **90% of this year's tax**.\n\nThe suggested amounts below split the prior-year safe harbor, minus withholding, into four payments."
+          },
+          {
+            "t": "database",
+            "db": "estimates",
+            "view": "all"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "packet",
+      "kind": "page",
+      "optional": true,
+      "spec": {
+        "title": "Preparer packet",
+        "icon": "📦",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "Everything your preparer usually asks for. Export this page to PDF from the print menu.\n\n## Contact and household\n- Filing status: **{{answers.household_filingstatus}}**, dependents: **{{answers.household_dependents}}**\n- Life events this year: see the list you chose in setup.\n\n## Documents"
+          },
+          {
+            "t": "database",
+            "db": "documents",
+            "view": "all"
+          },
+          {
+            "t": "md",
+            "md": "## Deductions and credits"
+          },
+          {
+            "t": "database",
+            "db": "deductions",
+            "view": "all"
+          },
+          {
+            "t": "md",
+            "md": "## Estimated payments"
+          },
+          {
+            "t": "database",
+            "db": "estimates",
+            "view": "all"
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "year_end",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Year-end planning checklist",
+        "icon": "✅",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "Before December 31, consider:"
+          },
+          {
+            "t": "checklist",
+            "items": [
+              "Max out workplace retirement contributions (401(k)/403(b) deadline is Dec 31)",
+              "Check HSA and IRA room (those can wait until the April deadline)",
+              "Harvest investment losses to offset gains (watch the wash-sale rule)",
+              "Bunch charitable gifts into one year if you are close to itemizing",
+              "Take required minimum distributions if they apply to you",
+              "Use flexible spending account balances before they expire",
+              "Review withholding and the Q4 estimated payment"
+            ]
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "retention",
+      "kind": "page",
+      "optional": false,
+      "spec": {
+        "title": "Record retention guide",
+        "icon": "🗄️",
+        "blocks": [
+          {
+            "t": "md",
+            "md": "How long to keep tax records — a common guideline based on how long the tax authority can review a return (US):\n\n| Record | Keep for |\n|---|---|\n| Returns and supporting documents | **3 years** from filing (or the due date, if later) |\n| Employment tax records | **4 years** after the tax is due or paid |\n| If income was under-reported by more than 25% | **6 years** |\n| Bad debt or worthless securities | **7 years** |\n| Property and investment basis records | Until **3 years after you sell** |\n| Returns themselves | Many people keep them indefinitely |\n\nThe *Keep until* column of the document checklist applies the 3-year rule to each document. Store originals encrypted in EMP and keep the paper only when you must."
+          },
+          {
+            "t": "disclaimer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "documents",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Document checklist",
+        "icon": "📂",
+        "description": "Every form you expect, when it should arrive, and where it is.",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Document",
+            "type": "title"
+          },
+          {
+            "key": "issuer",
+            "name": "Issuer",
+            "type": "text"
+          },
+          {
+            "key": "for",
+            "name": "For",
+            "type": "text"
+          },
+          {
+            "key": "expected_by",
+            "name": "Expected by",
+            "type": "date"
+          },
+          {
+            "key": "status",
+            "name": "Status",
+            "type": "status",
+            "options": [
+              {
+                "key": "expected",
+                "name": "Expected",
+                "color": "gray",
+                "group": "todo"
+              },
+              {
+                "key": "received",
+                "name": "Received",
+                "color": "blue",
+                "group": "in_progress"
+              },
+              {
+                "key": "reviewed",
+                "name": "Reviewed",
+                "color": "purple",
+                "group": "in_progress"
+              },
+              {
+                "key": "sent_to_preparer",
+                "name": "Sent to preparer",
+                "color": "green",
+                "group": "complete"
+              },
+              {
+                "key": "n_a",
+                "name": "N/A",
+                "color": "brown",
+                "group": "complete"
+              }
+            ]
+          },
+          {
+            "key": "file",
+            "name": "File",
+            "type": "files"
+          },
+          {
+            "key": "amount_summary",
+            "name": "Amount summary",
+            "type": "text"
+          },
+          {
+            "key": "notes",
+            "name": "Notes",
+            "type": "text"
+          },
+          {
+            "key": "keep_until",
+            "name": "Keep until",
+            "type": "formula",
+            "formula": "dateAdd(prop(\"Expected by\"), 3, \"years\")"
+          }
+        ],
+        "views": [
+          {
+            "key": "board",
+            "name": "By status",
+            "layout": "board",
+            "groupBy": {
+              "prop": "status"
+            }
+          },
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "expected_by",
+                "dir": "asc"
+              }
+            ]
+          },
+          {
+            "key": "missing",
+            "name": "Still expected",
+            "layout": "table",
+            "filter": {
+              "prop": "status",
+              "op": "eq",
+              "value": "opt:expected"
+            },
+            "sorts": [
+              {
+                "prop": "expected_by",
+                "dir": "asc"
+              }
+            ]
+          }
+        ],
+        "rows": [
+          {
+            "key": "${item.key}",
+            "forEach": "pack.selectedDocuments",
+            "values": {
+              "name": "${item.name}",
+              "expected_by": "${item.expectedBy}",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:W-2",
+            "when": "not pack.id and answers.income_employment",
+            "values": {
+              "name": "W-2",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:1099-INT",
+            "when": "not pack.id and answers.income_interest",
+            "values": {
+              "name": "1099-INT",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:1099-DIV",
+            "when": "not pack.id and answers.income_dividends",
+            "values": {
+              "name": "1099-DIV",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:1099-B",
+            "when": "not pack.id and (answers.income_brokerage or answers.income_crypto)",
+            "values": {
+              "name": "1099-B",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-02-15",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:1099-NEC",
+            "when": "not pack.id and answers.income_self_employment",
+            "values": {
+              "name": "1099-NEC",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:1099-K",
+            "when": "not pack.id and answers.income_self_employment",
+            "values": {
+              "name": "1099-K",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:1098",
+            "when": "not pack.id and answers.events_bought_home",
+            "values": {
+              "name": "1098",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:1098-T",
+            "when": "not pack.id and answers.events_education",
+            "values": {
+              "name": "1098-T",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:1099-R",
+            "when": "not pack.id and answers.income_retirement",
+            "values": {
+              "name": "1099-R",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:SSA-1099",
+            "when": "not pack.id and answers.income_social_security",
+            "values": {
+              "name": "SSA-1099",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:1099-G",
+            "when": "not pack.id and (answers.income_unemployment or answers.events_job_loss)",
+            "values": {
+              "name": "1099-G",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-01-31",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "generic:Schedule K-1",
+            "when": "not pack.id and answers.income_k1",
+            "values": {
+              "name": "Schedule K-1",
+              "expected_by": "{{answers.jurisdiction_year + 1}}-03-15",
+              "status": "expected",
+              "for": "self"
+            }
+          },
+          {
+            "key": "prior-return",
+            "values": {
+              "name": "Last year's tax return",
+              "status": "expected",
+              "for": "self",
+              "notes": "Needed for safe-harbor and carryovers."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "deductions",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Deductions & credits",
+        "icon": "🧮",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Description",
+            "type": "title"
+          },
+          {
+            "key": "date",
+            "name": "Date",
+            "type": "date"
+          },
+          {
+            "key": "category",
+            "name": "Category",
+            "type": "select",
+            "options": [
+              {
+                "key": "medical",
+                "name": "Medical"
+              },
+              {
+                "key": "charitable",
+                "name": "Charitable"
+              },
+              {
+                "key": "mortgage_interest",
+                "name": "Mortgage interest"
+              },
+              {
+                "key": "salt",
+                "name": "State & local taxes"
+              },
+              {
+                "key": "business_expense",
+                "name": "Business expense"
+              },
+              {
+                "key": "education",
+                "name": "Education"
+              },
+              {
+                "key": "childcare",
+                "name": "Childcare"
+              },
+              {
+                "key": "retirement",
+                "name": "Retirement contribution"
+              },
+              {
+                "key": "hsa",
+                "name": "HSA contribution"
+              },
+              {
+                "key": "home_office",
+                "name": "Home office"
+              },
+              {
+                "key": "other",
+                "name": "Other"
+              }
+            ]
+          },
+          {
+            "key": "amount",
+            "name": "Amount",
+            "type": "money"
+          },
+          {
+            "key": "pct",
+            "name": "Deductible %",
+            "type": "number",
+            "description": "Share that is deductible, in percent."
+          },
+          {
+            "key": "receipt",
+            "name": "Receipt",
+            "type": "files"
+          },
+          {
+            "key": "payee",
+            "name": "Payee",
+            "type": "text"
+          },
+          {
+            "key": "tax_year",
+            "name": "Tax year",
+            "type": "number"
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "desc"
+              }
+            ],
+            "footer": {
+              "amount": "sum"
+            }
+          },
+          {
+            "key": "by_category",
+            "name": "By category",
+            "layout": "chart",
+            "chart": {
+              "type": "bar",
+              "x": {
+                "prop": "category"
+              },
+              "y": [
+                {
+                  "agg": "sum",
+                  "prop": "amount"
+                }
+              ]
+            }
+          }
+        ],
+        "rowTemplates": [
+          {
+            "key": "deduction",
+            "name": "Deduction",
+            "default": true,
+            "values": {
+              "date": "@today",
+              "pct": 100,
+              "tax_year": "${answers.jurisdiction.year}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "estimates",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Estimated payments",
+        "icon": "🗓️",
+        "description": "Quarterly estimated tax. Suggested amounts use the prior-year safe harbor as a starting estimate.",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Period",
+            "type": "title"
+          },
+          {
+            "key": "due",
+            "name": "Due date",
+            "type": "date"
+          },
+          {
+            "key": "suggested",
+            "name": "Suggested",
+            "type": "money"
+          },
+          {
+            "key": "paid",
+            "name": "Paid amount",
+            "type": "money"
+          },
+          {
+            "key": "paid_date",
+            "name": "Paid date",
+            "type": "date"
+          },
+          {
+            "key": "method",
+            "name": "Method",
+            "type": "select",
+            "options": [
+              {
+                "key": "online",
+                "name": "Online"
+              },
+              {
+                "key": "check",
+                "name": "Check"
+              },
+              {
+                "key": "withholding",
+                "name": "Extra withholding"
+              }
+            ]
+          },
+          {
+            "key": "confirmation",
+            "name": "Confirmation #",
+            "type": "secret"
+          },
+          {
+            "key": "status",
+            "name": "Status",
+            "type": "formula",
+            "formula": "if(prop(\"Paid amount\") > 0, \"Paid\", \"Due\")"
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "due",
+                "dir": "asc"
+              }
+            ],
+            "footer": {
+              "suggested": "sum",
+              "paid": "sum"
+            }
+          }
+        ],
+        "rows": [
+          {
+            "key": "${item.id}",
+            "forEach": "pack.estimatedPeriods",
+            "when": "answers.income_self_employment or answers.payments_expectestimated",
+            "values": {
+              "name": "${item.id}",
+              "due": "${item.due}",
+              "suggested": "{{round(max(0, coalesce(answers.payments_priortax, 0) - coalesce(answers.payments_withholdingytd, 0) - coalesce(answers.payments_withholdingremaining, 0)) / 4, 0)}}"
+            }
+          },
+          {
+            "key": "generic:Q1",
+            "when": "not pack.id and (answers.income_self_employment or answers.payments_expectestimated)",
+            "values": {
+              "name": "Q1",
+              "due": "${answers.jurisdiction.year}-04-15",
+              "suggested": "{{round(max(0, coalesce(answers.payments_priortax, 0) - coalesce(answers.payments_withholdingytd, 0) - coalesce(answers.payments_withholdingremaining, 0)) / 4, 0)}}"
+            }
+          },
+          {
+            "key": "generic:Q2",
+            "when": "not pack.id and (answers.income_self_employment or answers.payments_expectestimated)",
+            "values": {
+              "name": "Q2",
+              "due": "${answers.jurisdiction.year}-06-15",
+              "suggested": "{{round(max(0, coalesce(answers.payments_priortax, 0) - coalesce(answers.payments_withholdingytd, 0) - coalesce(answers.payments_withholdingremaining, 0)) / 4, 0)}}"
+            }
+          },
+          {
+            "key": "generic:Q3",
+            "when": "not pack.id and (answers.income_self_employment or answers.payments_expectestimated)",
+            "values": {
+              "name": "Q3",
+              "due": "${answers.jurisdiction.year}-09-15",
+              "suggested": "{{round(max(0, coalesce(answers.payments_priortax, 0) - coalesce(answers.payments_withholdingytd, 0) - coalesce(answers.payments_withholdingremaining, 0)) / 4, 0)}}"
+            }
+          },
+          {
+            "key": "generic:Q4",
+            "when": "not pack.id and (answers.income_self_employment or answers.payments_expectestimated)",
+            "values": {
+              "name": "Q4",
+              "due": "{{answers.jurisdiction_year + 1}}-01-15",
+              "suggested": "{{round(max(0, coalesce(answers.payments_priortax, 0) - coalesce(answers.payments_withholdingytd, 0) - coalesce(answers.payments_withholdingremaining, 0)) / 4, 0)}}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "deadlines",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Deadlines",
+        "icon": "⏰",
+        "properties": [
+          {
+            "key": "name",
+            "name": "Deadline",
+            "type": "title"
+          },
+          {
+            "key": "date",
+            "name": "Date",
+            "type": "date"
+          },
+          {
+            "key": "kind",
+            "name": "Kind",
+            "type": "select",
+            "options": [
+              {
+                "key": "federal",
+                "name": "Federal"
+              },
+              {
+                "key": "state",
+                "name": "State"
+              },
+              {
+                "key": "local",
+                "name": "Local"
+              },
+              {
+                "key": "estimated",
+                "name": "Estimated"
+              },
+              {
+                "key": "personal",
+                "name": "Personal"
+              }
+            ]
+          },
+          {
+            "key": "done",
+            "name": "Done",
+            "type": "checkbox"
+          },
+          {
+            "key": "notes",
+            "name": "Notes",
+            "type": "text"
+          }
+        ],
+        "views": [
+          {
+            "key": "upcoming",
+            "name": "Upcoming",
+            "layout": "table",
+            "filter": {
+              "prop": "done",
+              "op": "unchecked"
+            },
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "asc"
+              }
+            ]
+          },
+          {
+            "key": "calendar",
+            "name": "Calendar",
+            "layout": "calendar",
+            "calendar": {
+              "dateProp": "date"
+            }
+          }
+        ],
+        "rows": [
+          {
+            "key": "${item.name}",
+            "forEach": "pack.deadlines",
+            "values": {
+              "name": "${item.name}",
+              "date": "${item.date}",
+              "kind": "federal"
+            }
+          },
+          {
+            "key": "generic:return",
+            "when": "not pack.id",
+            "values": {
+              "name": "Return due",
+              "date": "{{answers.jurisdiction_year + 1}}-04-15",
+              "kind": "federal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "mileage",
+      "kind": "database",
+      "optional": false,
+      "spec": {
+        "title": "Mileage log",
+        "icon": "🚗",
+        "properties": [
+          {
+            "key": "purpose",
+            "name": "Purpose",
+            "type": "title"
+          },
+          {
+            "key": "date",
+            "name": "Date",
+            "type": "date"
+          },
+          {
+            "key": "from",
+            "name": "From",
+            "type": "text"
+          },
+          {
+            "key": "to",
+            "name": "To",
+            "type": "text"
+          },
+          {
+            "key": "miles",
+            "name": "Miles",
+            "type": "number"
+          },
+          {
+            "key": "rate",
+            "name": "Rate per mile",
+            "type": "number"
+          },
+          {
+            "key": "deduction",
+            "name": "Deduction",
+            "type": "formula",
+            "formula": "prop(\"Miles\") * prop(\"Rate per mile\")"
+          }
+        ],
+        "views": [
+          {
+            "key": "all",
+            "name": "All",
+            "layout": "table",
+            "sorts": [
+              {
+                "prop": "date",
+                "dir": "desc"
+              }
+            ],
+            "footer": {
+              "miles": "sum",
+              "deduction": "sum"
+            }
+          }
+        ]
+      },
+      "when": "answers.income_self_employment"
+    },
+    {
+      "key": "deadline_first",
+      "kind": "reminder",
+      "optional": true,
+      "spec": {
+        "title": "Deadline reminders",
+        "text": "${item.name} in ${answers.reminders.first} days",
+        "target": "deadlines",
+        "forEach": "pack.deadlines",
+        "at": "${item.date}",
+        "daysBefore": "${answers.reminders.first}",
+        "time": "09:00"
+      }
+    },
+    {
+      "key": "deadline_second",
+      "kind": "reminder",
+      "optional": true,
+      "spec": {
+        "title": "Final deadline reminders",
+        "text": "${item.name} in ${answers.reminders.second} days",
+        "target": "deadlines",
+        "forEach": "pack.deadlines",
+        "at": "${item.date}",
+        "daysBefore": "${answers.reminders.second}",
+        "time": "09:00"
+      }
+    },
+    {
+      "key": "estimate_reminders",
+      "kind": "reminder",
+      "optional": true,
+      "spec": {
+        "title": "Estimated payment reminders",
+        "text": "Estimated tax payment ${item.id} is due in ${answers.reminders.first} days",
+        "target": "estimates",
+        "forEach": "pack.estimatedPeriods",
+        "when": "answers.income_self_employment or answers.payments_expectestimated",
+        "at": "${item.due}",
+        "daysBefore": "${answers.reminders.first}",
+        "time": "09:00"
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "name": "docs_received_pct",
+      "kind": "rust",
+      "fn": "tax.docs_received_pct",
+      "deps": [
+        "documents"
+      ]
+    },
+    {
+      "name": "docs_expected_count",
+      "kind": "rust",
+      "fn": "tax.docs_expected_count",
+      "deps": [
+        "documents"
+      ]
+    },
+    {
+      "name": "doc_late_count",
+      "kind": "rust",
+      "fn": "tax.doc_late_count",
+      "deps": [
+        "documents"
+      ]
+    },
+    {
+      "name": "next_deadline",
+      "kind": "rust",
+      "fn": "tax.next_deadline",
+      "deps": [
+        "deadlines",
+        "estimates"
+      ]
+    },
+    {
+      "name": "days_to_next_deadline",
+      "kind": "rust",
+      "fn": "tax.days_to_next_deadline",
+      "deps": [
+        "deadlines",
+        "estimates"
+      ]
+    },
+    {
+      "name": "est_balance",
+      "kind": "rust",
+      "fn": "tax.est_balance",
+      "deps": [
+        "estimates"
+      ]
+    },
+    {
+      "name": "est_effective_rate",
+      "kind": "rust",
+      "fn": "tax.est_effective_rate",
+      "deps": []
+    },
+    {
+      "name": "deductions_total",
+      "kind": "rust",
+      "fn": "tax.deductions_total",
+      "deps": [
+        "deductions"
+      ]
+    },
+    {
+      "name": "standard_deduction",
+      "kind": "rust",
+      "fn": "tax.standard_deduction",
+      "deps": []
+    },
+    {
+      "name": "quarterly_next",
+      "kind": "rust",
+      "fn": "tax.quarterly_next",
+      "deps": [
+        "estimates"
+      ]
+    },
+    {
+      "name": "estimates_paid_count",
+      "kind": "rust",
+      "fn": "tax.estimates_paid_count",
+      "deps": [
+        "estimates"
+      ]
+    },
+    {
+      "name": "receipt_missing_count",
+      "kind": "rust",
+      "fn": "tax.receipt_missing_count",
+      "deps": [
+        "deductions"
+      ]
+    },
+    {
+      "name": "pack_stale",
+      "kind": "rust",
+      "fn": "tax.pack_stale",
+      "deps": []
+    },
+    {
+      "name": "taxes_fund",
+      "kind": "rust",
+      "fn": "tax.taxes_fund",
+      "deps": []
+    }
+  ],
+  "advisor": [
+    {
+      "id": "deadline-3",
+      "when": "metrics.days_to_next_deadline <= 3",
+      "severity": "warn",
+      "title": "A tax deadline is in {{metrics.days_to_next_deadline}} days",
+      "body": "Next up: check the Deadlines page and finish what is left.",
+      "mathMetrics": [
+        "days_to_next_deadline"
+      ],
+      "actions": [
+        {
+          "label": "Deadlines",
+          "route": "db:deadlines:upcoming"
+        }
+      ]
+    },
+    {
+      "id": "deadline-14",
+      "when": "metrics.days_to_next_deadline <= 14 and metrics.days_to_next_deadline > 3",
+      "severity": "tip",
+      "title": "A tax deadline is in {{metrics.days_to_next_deadline}} days",
+      "body": "Plenty of time if you start now. Check which documents are still expected.",
+      "mathMetrics": [
+        "days_to_next_deadline"
+      ],
+      "actions": [
+        {
+          "label": "Deadlines",
+          "route": "db:deadlines:upcoming"
+        }
+      ]
+    },
+    {
+      "id": "doc-late",
+      "when": "metrics.doc_late_count > 0",
+      "severity": "tip",
+      "title": "{{metrics.doc_late_count}} document(s) are late",
+      "body": "Issuers usually send forms by their deadline; two weeks late is a good time to download them from the issuer's site or ask for a copy.",
+      "mathMetrics": [
+        "doc_late_count"
+      ],
+      "actions": [
+        {
+          "label": "Still expected",
+          "route": "db:documents:missing"
+        }
+      ]
+    },
+    {
+      "id": "se-no-estimates",
+      "when": "answers.income_self_employment and metrics.quarterly_next > 1000 and metrics.estimates_paid_count == 0",
+      "severity": "warn",
+      "title": "Consider a quarterly estimated payment",
+      "body": "Self-employment income suggests about {{fmt_money(metrics.quarterly_next)}} per quarter and no payment is recorded yet. Paying on time can avoid an underpayment penalty.",
+      "mathMetrics": [
+        "quarterly_next",
+        "estimates_paid_count"
+      ],
+      "actions": [
+        {
+          "label": "Quarterly payments",
+          "route": "page:quarterly"
+        }
+      ]
+    },
+    {
+      "id": "itemize-close",
+      "when": "metrics.standard_deduction > 0 and metrics.deductions_total >= 0.9 * metrics.standard_deduction",
+      "severity": "info",
+      "title": "Itemizing may beat the standard deduction",
+      "body": "Deductions logged ({{fmt_money(metrics.deductions_total)}}) are within 10% of the standard deduction ({{fmt_money(metrics.standard_deduction)}}).",
+      "mathMetrics": [
+        "deductions_total",
+        "standard_deduction"
+      ],
+      "actions": [
+        {
+          "label": "Estimator",
+          "route": "page:estimator"
+        }
+      ]
+    },
+    {
+      "id": "pack-stale",
+      "when": "metrics.pack_stale",
+      "severity": "warn",
+      "title": "Tax rules may be out of date",
+      "body": "The tax pack was verified a while ago or is for an earlier year. Estimates may be off until it is updated.",
+      "mathMetrics": [],
+      "actions": [
+        {
+          "label": "Settings",
+          "route": "settings:updates"
+        }
+      ]
+    },
+    {
+      "id": "receipt-missing",
+      "when": "metrics.receipt_missing_count > 0",
+      "severity": "tip",
+      "title": "{{metrics.receipt_missing_count}} deduction(s) over $250 have no receipt",
+      "body": "Gifts of $250 or more need a written acknowledgment; keep receipts for large business expenses too.",
+      "mathMetrics": [
+        "receipt_missing_count"
+      ],
+      "actions": [
+        {
+          "label": "Deductions",
+          "route": "db:deductions:all"
+        }
+      ]
+    },
+    {
+      "id": "setaside-short",
+      "when": "coalesce(metrics.taxes_fund, -1) >= 0 and metrics.taxes_fund < metrics.est_balance",
+      "severity": "info",
+      "title": "Your Taxes fund is below the estimated balance due",
+      "body": "Money HQ's Taxes fund holds {{fmt_money(metrics.taxes_fund)}}; the estimate is {{fmt_money(metrics.est_balance)}}. Consider topping it up.",
+      "mathMetrics": [
+        "taxes_fund",
+        "est_balance"
+      ],
+      "actions": [
+        {
+          "label": "Estimator",
+          "route": "page:estimator"
+        }
+      ]
+    }
+  ],
+  "checklist": [
+    {
+      "id": "status",
+      "label": "Confirm filing status",
+      "autoTick": {
+        "event": "tax.status_confirmed"
+      }
+    },
+    {
+      "id": "documents",
+      "label": "Add expected documents",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.docs_expected_count > 0"
+      }
+    },
+    {
+      "id": "deduction",
+      "label": "Log your first deduction",
+      "autoTick": {
+        "event": "metrics",
+        "where": "metrics.deductions_total > 0"
+      }
+    },
+    {
+      "id": "quarterly",
+      "label": "Review quarterly plan",
+      "autoTick": {
+        "event": "tax.quarterly_reviewed"
+      }
+    },
+    {
+      "id": "preparer",
+      "label": "Choose a preparer path",
+      "autoTick": {
+        "event": "tax.preparer_chosen"
+      }
+    }
+  ],
+  "migrations": [],
+  "sample": {
+    "generator": "tax_organizer",
+    "seed": 20261128
+  }
+}

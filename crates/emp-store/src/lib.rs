@@ -82,3 +82,21 @@ pub trait Progress: Send + Sync {
         false
     }
 }
+
+// ── Data layer (databases, sheets, imports, reminders): convenience re-exports. The commands themselves are
+//    `Store` methods in `repo::{databases, rows, views, workbooks, sheets, reminders, outbox, sync_links}`, the
+//    importers' in `import::*`.
+pub use import::zipfs::ZipLimits;
+pub use life::scheduler::Scheduler;
+pub use query::model as dbmodel;
+
+// ── Life apps (SPEC §16): the `lifeapp_*` commands are `Store` methods in `repo::lifeapps`; manifests, plans,
+//    metrics and insights live in `lifeapps::*`.
+pub use lifeapps::advisor::Insight;
+pub use lifeapps::answers::Mode as LifeAppMode;
+pub use lifeapps::metrics::{MetricProvider, MetricValue};
+pub use lifeapps::plan::{GenerationPlan, PlanDiff};
+pub use lifeapps::{LifeAppManifest, LifeAppSummary};
+pub use repo::lifeapps::{
+    InstallResult, LifeAppInstance, LifeappInstall, LifeappPreview, SampleResult, TuneupResult,
+};
