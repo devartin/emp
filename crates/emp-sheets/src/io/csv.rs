@@ -142,6 +142,40 @@ pub fn read_rows(
     ))
 }
 
+/// Digits, separators, signs, percent, parentheses, scientific `E` and currency symbols only: a
+/// display that cannot name a function or a DDE target.
+fn looks_numeric(s: &str) -> bool {
+    s.chars().any(|c| c.is_ascii_digit())
+        && s.chars().all(|c| {
+            c.is_ascii_digit()
+                || matches!(
+                    c,
+                    ' ' | '\u{a0}'
+                        | '\u{202f}'
+                        | '.'
+                        | ','
+                        | '+'
+                        | '-'
+                        | '%'
+                        | '('
+                        | ')'
+                        | 'E'
+                        | 'e'
+                        | '$'
+                        | '€'
+                        | '£'
+                        | '¥'
+                        | '₹'
+                        | '₩'
+                        | '₽'
+                        | '₺'
+                        | '₪'
+                        | '฿'
+                        | '₫'
+                )
+        })
+}
+
 fn dangerous(s: &str) -> bool {
     matches!(s.chars().next(), Some('=' | '+' | '-' | '@' | '\t' | '\r'))
 }
@@ -262,7 +296,12 @@ pub fn export_csv(wb: &Workbook, sheet: SheetId, protect: bool) -> Result<Vec<u8
         for c in 0..cols {
             let v = s.value_at(r, c);
             let mut text = wb.display(sheet, r, c);
-            if protect && matches!(v, Value::Text(_)) && dangerous(&text) {
+            // Text values are protected whenever they start with a dangerous character. Numbers
+            // are displayed through their number format, whose literal sections can render any
+            // text (`"=cmd|' /C calc'!A0"`), so they are left alone only when the display is a
+            // plain number such as `-1,234.50` or `-$5.00`.
+            let plain_number = matches!(v, Value::Number(_)) && looks_numeric(&text);
+            if protect && dangerous(&text) && !plain_number {
                 text.insert(0, '\'');
             }
             rec.push(text);

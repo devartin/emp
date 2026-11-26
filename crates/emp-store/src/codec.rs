@@ -9,6 +9,11 @@
 //!   version.
 //!
 //! A row that fails to open is reported as [`StoreError::Damaged`]; it is never treated as plaintext.
+//!
+//! **Plaintext rows in an encrypted vault.** `enc = 0` rows carry no authentication, so once a vault is encrypted
+//! (and no authenticated encryption-on job is still converting rows, see `vault_meta.encryption_job`) the codec
+//! refuses them as damaged instead of reading them: otherwise anyone able to edit `vault.db` could inject plaintext
+//! records that the integrity manifest (which covers `enc = 1` rows) never sees.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -124,6 +129,7 @@ pub struct Encoded {
 pub struct Codec {
     keys: Arc<VaultKeys>,
     encrypt: AtomicBool,
+    accept_plain: AtomicBool,
 }
 
 impl std::fmt::Debug for Codec {
@@ -135,13 +141,27 @@ impl std::fmt::Debug for Codec {
 }
 
 impl Codec {
-    /// A codec over `keys`; new writes are sealed when `encrypt` is set.
+    /// A codec over `keys`; new writes are sealed when `encrypt` is set. Plaintext (`enc = 0`) rows are readable
+    /// only when `encrypt` is off (see [`set_accept_plaintext`](Self::set_accept_plaintext)).
     #[must_use]
     pub fn new(keys: Arc<VaultKeys>, encrypt: bool) -> Self {
         Self {
             keys,
             encrypt: AtomicBool::new(encrypt),
+            accept_plain: AtomicBool::new(!encrypt),
         }
+    }
+
+    /// Whether `enc = 0` rows are read (plaintext vaults, and encrypted vaults while an authenticated
+    /// encryption-on job is still converting rows). Otherwise they are reported as damaged.
+    #[must_use]
+    pub fn accepts_plaintext(&self) -> bool {
+        self.accept_plain.load(Ordering::SeqCst)
+    }
+
+    /// Allows or refuses reading `enc = 0` rows (encryption on/off jobs).
+    pub fn set_accept_plaintext(&self, on: bool) {
+        self.accept_plain.store(on, Ordering::SeqCst);
     }
 
     /// Whether new writes are sealed.
@@ -210,7 +230,7 @@ impl Codec {
     ) -> Result<Zeroizing<Vec<u8>>> {
         match enc {
             0 => {
-                if loc.table == TableTag::Secrets {
+                if loc.table == TableTag::Secrets || !self.accepts_plaintext() {
                     return Err(loc.damaged());
                 }
                 Ok(Zeroizing::new(payload.to_vec()))
@@ -263,10 +283,10 @@ pub fn to_body(table: TableTag, json: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
 /// Stored body → JSON.
 pub fn from_body(table: TableTag, body: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
     if table == TableTag::Versions {
-        Ok(Zeroizing::new(
-            zstd::bulk::decompress(body, MAX_BODY)
-                .map_err(|_| StoreError::Integrity("version payload does not decompress".into()))?,
-        ))
+        // Exact-size, bounded decompression: `zstd::bulk::decompress(body, MAX_BODY)` reserved (and, through
+        // `Zeroizing`, wiped) 64 MiB for every version read.
+        emp_crypto::envelope::decompress_bounded(body, MAX_BODY)
+            .map_err(|_| StoreError::Integrity("version payload does not decompress".into()))
     } else {
         Ok(Zeroizing::new(body.to_vec()))
     }
@@ -408,6 +428,43 @@ mod tests {
             .unwrap();
         assert!(c.decode::<P>(&b, 1, &e.payload).is_err());
         assert!(c.decode::<P>(&a, 1, &e.payload).is_ok());
+    }
+
+    #[test]
+    fn plaintext_rows_are_refused_once_encrypted() {
+        let c = codec(true);
+        let loc = RecordLoc::new(TableTag::Pages, "id1", "doc", 1);
+        let plain = br#"{"v":1,"title":"Injected"}"#;
+        // Regression: an `enc = 0` row planted in an encrypted vault was read as if EMP had written it.
+        assert!(matches!(
+            c.decode::<P>(&loc, 0, plain),
+            Err(StoreError::Damaged { .. })
+        ));
+        // While an authenticated encryption-on job converts rows, they stay readable.
+        c.set_accept_plaintext(true);
+        assert_eq!(c.decode::<P>(&loc, 0, plain).unwrap().title, "Injected");
+        c.set_accept_plaintext(false);
+        assert!(c.decode::<P>(&loc, 0, plain).is_err());
+        // Plaintext vaults read plaintext rows.
+        assert!(codec(false).decode::<P>(&loc, 0, plain).is_ok());
+    }
+
+    #[test]
+    fn version_bodies_decompress_to_exact_size() {
+        let c = codec(false);
+        let loc = RecordLoc::row(TableTag::Versions, "v1", 0);
+        let e = c
+            .encode(
+                &loc,
+                &P {
+                    v: 1,
+                    title: "y".repeat(3000),
+                },
+            )
+            .unwrap();
+        let json = from_body(TableTag::Versions, &e.payload).unwrap();
+        assert_eq!(json.capacity(), json.len());
+        assert!(from_body(TableTag::Versions, b"not zstd").is_err());
     }
 
     #[test]

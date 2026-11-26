@@ -11,7 +11,7 @@ const TOGGLE_LABEL: Record<string, [string, string]> = {
 };
 
 export function TextStep({ step, value, onChange }: StepProps) {
-  return <Textarea value={typeof value === "string" ? value : ""} onChange={(e) => onChange(e.currentTarget.value)} placeholder={step.help ?? ""} minRows={2} maxRows={5} maxLength={500} aria-label={step.title} />;
+  return <Textarea value={typeof value === "string" ? value : ""} onChange={(e) => onChange(e.currentTarget.value)} placeholder="Write a line or two…" minRows={2} maxRows={5} maxLength={500} aria-label={step.title} />;
 }
 
 export function ToggleStep({ step, value, onChange }: StepProps) {

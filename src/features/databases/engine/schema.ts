@@ -169,9 +169,9 @@ export const AGG_SHORT: Record<AggFn, string> = {
   range: 'Range',
   earliest: 'Earliest',
   latest: 'Latest',
-  checked: 'Checked',
-  unchecked: 'Unchecked',
-  pct_checked: 'Checked',
+  checked: 'Done',
+  unchecked: 'Left',
+  pct_checked: 'Done',
 };
 
 const BASE_AGGS: AggFn[] = ['count', 'count_values', 'count_unique', 'empty', 'not_empty', 'pct_empty', 'pct_not_empty'];

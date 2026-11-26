@@ -1,0 +1,13 @@
+# Release hardening flags (SPEC §19.3 "Release profile", §9.11). Each block is gated to the target it is valid for,
+# so builds on the other operating systems are unaffected. `RUSTFLAGS` in the environment overrides these.
+
+# Windows (MSVC): Control Flow Guard and a statically linked C runtime. `/DYNAMICBASE`, `/NXCOMPAT` and
+# `/HIGHENTROPYVA` are already the linker defaults; the release `verify` job checks all four PE flags.
+[target.'cfg(all(target_os = "windows", target_env = "msvc"))']
+rustflags = ["-C", "control-flow-guard", "-C", "target-feature=+crt-static"]
+
+# Linux: full RELRO (GOT read-only after relocation, eager binding) and a non-executable stack.
+[target.'cfg(target_os = "linux")']
+rustflags = ["-C", "link-arg=-Wl,-z,relro,-z,now", "-C", "link-arg=-Wl,-z,noexecstack"]
+
+# macOS: no extra flags; the hardened runtime is applied at signing time (§9.11).

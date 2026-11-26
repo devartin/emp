@@ -1,6 +1,8 @@
 //! Vault and security commands (SPEC §11.3 "Vault and security", §9.9–§9.10).
 
-use emp_crypto::password::PolicyViolation;
+use std::sync::LazyLock;
+
+use emp_crypto::password::{CommonPasswords, PolicyViolation};
 use emp_crypto::{ExposeSecret, KdfParams, SecretString};
 use emp_store::model::{AutoLock, VaultProfile, VaultStatus};
 use emp_store::{CreateOptions, Store};
@@ -36,10 +38,38 @@ pub fn violation_message(v: &PolicyViolation) -> String {
     }
 }
 
+/// The embedded common-password Bloom filter (SPEC §9.10, `resources/common-passwords.bloom`).
+///
+/// Built from the NCSC "100k most used passwords" list (Have I Been Pwned top 100,000; SecLists
+/// `Passwords/Common-Credentials/100k-most-used-passwords-NCSC.txt`) with
+/// `cargo run -p emp-crypto --example build_common_passwords_bloom -- <list> src-tauri/resources/common-passwords.bloom 1e-6`
+/// (99,839 entries, k = 20, false-positive rate 1e-6, about 350 KiB). It is compiled into the binary, so it cannot
+/// be swapped or go missing next to an installed app.
+static COMMON_PASSWORDS_BLOOM: &[u8] = include_bytes!("../../resources/common-passwords.bloom");
+
+static COMMON_PASSWORDS: LazyLock<Option<CommonPasswords>> =
+    LazyLock::new(
+        || match CommonPasswords::from_bytes(COMMON_PASSWORDS_BLOOM) {
+            Ok(f) => Some(f),
+            Err(_) => {
+                tracing::error!(
+                    "the common-password filter is unreadable; relying on zxcvbn's list"
+                );
+                None
+            }
+        },
+    );
+
+/// The common-password filter used by `password_strength` and the new-password policy.
+#[must_use]
+pub fn common_passwords() -> Option<&'static CommonPasswords> {
+    COMMON_PASSWORDS.as_ref()
+}
+
 /// Enforces the §9.10 password policy on a new password.
 pub fn check_new_password(field: &str, pw: &SecretString) -> ApiResult<()> {
     check_password_len(field, pw)?;
-    let report = emp_crypto::password::check_new_password(pw, &[], None);
+    let report = emp_crypto::password::check_new_password(pw, &[], common_passwords());
     match report.violations.first() {
         None => Ok(()),
         Some(v) => Err(ApiError::invalid(field, violation_message(v))),
@@ -127,7 +157,12 @@ pub async fn vault_create(app: AppHandle, req: VaultCreateReq) -> ApiResult<Vaul
                 auto_lock: req.auto_lock,
                 workspace_name: Some(FIRST_WORKSPACE.to_owned()),
             },
-            state.store_options(),
+            {
+                // A new vault starts with the Getting Started tour (§6.2), as the mock's vault_create does.
+                let mut o = state.store_options();
+                o.starter_tour = true;
+                o
+            },
         )?;
         let store = created.store;
         state.install_store(store.clone())?;
@@ -582,13 +617,15 @@ pub async fn password_strength(
 ) -> ApiResult<emp_crypto::password::PasswordStrength> {
     check_password_len("password", &req.password)?;
     blocking(move || {
-        emp_crypto::password::password_strength(&req.password, &[], None).map_err(|e| {
-            let mut err = ApiError::from(e);
-            if err.code == ErrorCode::TooLarge {
-                err = err.with_field("password");
-            }
-            err
-        })
+        emp_crypto::password::password_strength(&req.password, &[], common_passwords()).map_err(
+            |e| {
+                let mut err = ApiError::from(e);
+                if err.code == ErrorCode::TooLarge {
+                    err = err.with_field("password");
+                }
+                err
+            },
+        )
     })
     .await
 }
@@ -625,6 +662,22 @@ mod tests {
         assert!(check_new_password("password", &strong).is_ok());
         let empty: SecretString = String::new().into();
         assert!(check_password_len("password", &empty).is_err());
+    }
+
+    #[test]
+    fn common_password_filter_is_embedded() {
+        let f = common_passwords().expect("bloom filter parses");
+        for pw in ["123456", "password", "qwerty", "iloveyou", "Password1"] {
+            assert!(f.contains(pw), "{pw}");
+        }
+        assert!(!f.contains("plinth-ocelot-marzipan-quaver-87"));
+        // A list entry of 10+ characters is reported as common and rejected by the policy.
+        let listed: SecretString = "1q2w3e4r5t6y".to_owned().into();
+        assert!(f.contains("1q2w3e4r5t6y"));
+        let e = check_new_password("password", &listed).unwrap_err();
+        assert_eq!(e.code, ErrorCode::Invalid);
+        let s = emp_crypto::password::password_strength(&listed, &[], common_passwords()).unwrap();
+        assert!(s.common);
     }
 
     #[test]

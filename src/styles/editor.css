@@ -495,7 +495,7 @@
 
 /* To-do (§4.2): box scale .85→1 (bouncy), strike sweeps from the left over 220ms, text → tertiary over 220ms */
 .emp-todo { display: flex; align-items: flex-start; gap: 8px; }
-.emp-check {
+.emp-todo .emp-check {
   flex: none;
   position: relative;
   width: 16px;
@@ -513,12 +513,12 @@
   cursor: pointer;
   transition: background 100ms var(--ease-out), border-color 100ms var(--ease-out);
 }
-.emp-check::after { content: ""; position: absolute; inset: -4px; }
-.emp-check:hover { border-color: color-mix(in oklab, var(--text-primary) 45%, transparent); background: var(--state-hover); }
-.emp-check svg { opacity: 0; transform: scale(0.6); transition: opacity 100ms var(--ease-out), transform 180ms var(--ease-out); stroke-dasharray: 24; stroke-dashoffset: 24; }
+.emp-todo .emp-check::after { content: ""; position: absolute; inset: -4px; }
+.emp-todo .emp-check:hover { border-color: color-mix(in oklab, var(--text-primary) 45%, transparent); background: var(--state-hover); }
+.emp-todo .emp-check svg { opacity: 0; transform: scale(0.6); transition: opacity 100ms var(--ease-out), transform 180ms var(--ease-out); stroke-dasharray: 24; stroke-dashoffset: 24; }
 .emp-todo[data-checked="true"] .emp-check { background: var(--accent-solid); border-color: var(--accent-solid); }
 .emp-todo[data-checked="true"] .emp-check svg { opacity: 1; transform: none; stroke-dashoffset: 0; transition: opacity 100ms var(--ease-out), transform 180ms var(--ease-out), stroke-dashoffset 180ms var(--ease-out); }
-.emp-check.is-popping { animation: emp-check-pop 420ms linear(0, 0.36 9%, 0.84 22%, 1.06 33%, 1.1 40%, 1.04 52%, 0.99 64%, 1) both; }
+.emp-todo .emp-check.is-popping { animation: emp-check-pop 420ms linear(0, 0.36 9%, 0.84 22%, 1.06 33%, 1.1 40%, 1.04 52%, 0.99 64%, 1) both; }
 @keyframes emp-check-pop { from { transform: scale(0.85); } to { transform: scale(1); } }
 .emp-todo-text { flex: 1; min-width: 0; }
 .emp-todo-inline {
@@ -532,8 +532,8 @@
 }
 .emp-todo[data-checked="true"] .emp-todo-inline { color: var(--text-tertiary); background-size: 100% 1px; }
 :root[data-motion="reduced"] .emp-todo-inline,
-:root[data-motion="reduced"] .emp-check svg { transition: none; }
-:root[data-motion="reduced"] .emp-check.is-popping { animation: none; }
+:root[data-motion="reduced"] .emp-todo .emp-check svg { transition: none; }
+:root[data-motion="reduced"] .emp-todo .emp-check.is-popping { animation: none; }
 
 /* Toggles (§4.2): chevron 0→90° over 160ms; children height+opacity (animated in the node view) */
 .emp-toggle-row { display: flex; align-items: flex-start; gap: 2px; }

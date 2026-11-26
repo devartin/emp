@@ -122,7 +122,7 @@ export default function Transactions() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <Input size="sm" icon={Search} placeholder="Search payee, memo, category or amount" value={q} onChange={(e) => setQ(e.target.value)} clearable onClear={() => setQ("")} wrapperClassName="w-[230px]" aria-label="Search transactions" />
+        <Input size="sm" icon={Search} placeholder="Search payee, memo, category or amount" value={q} onChange={(e) => setQ(e.target.value)} clearable onClear={() => setQ("")} wrapperClassName="w-[200px]" aria-label="Search transactions" />
         <Segmented
           size="sm"
           value={filter}
@@ -130,12 +130,12 @@ export default function Transactions() {
           aria-label="Filter"
           options={[
             { value: "all", label: "All" },
-            { value: "uncategorized", label: uncategorizedCount ? `Uncategorised · ${uncategorizedCount}` : "Uncategorised" },
+            { value: "uncategorized", label: uncategorizedCount ? `To categorise · ${uncategorizedCount}` : "To categorise" },
             { value: "income", label: "Income" },
             { value: "transfers", label: "Transfers" },
           ]}
         />
-        <Select size="sm" value={account} onValueChange={setAccount} options={[{ value: "all", label: "All accounts" }, ...l.accounts.map((a) => ({ value: a.id, label: a.name }))]} className="w-[170px]" aria-label="Account" />
+        <Select size="sm" value={account} onValueChange={setAccount} options={[{ value: "all", label: "All accounts" }, ...l.accounts.map((a) => ({ value: a.id, label: a.name }))]} className="w-[150px]" aria-label="Account" />
         <div className="ml-auto flex items-center gap-1.5">
           <Button size="sm" variant="ghost" icon={Wand2} onClick={applyRules} disabled={!uncategorizedCount}>
             Apply rules

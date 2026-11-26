@@ -7,7 +7,7 @@
 //! property and view changes, `data_rev` counts row changes; both feed the query rev of `db_query`. Formula
 //! expressions are stored with property ids (`prop("#<id>")`) and presented with current names.
 
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::sync::Arc;
 
 use emp_crypto::TableTag;
@@ -773,16 +773,134 @@ fn convert_value(from: &Property, to: &Property, v: &CellValue) -> Option<CellVa
     }
 }
 
+/// Target database id → databases with a live relation property pointing at it.
+fn relation_dependents(
+    conn: &Connection,
+    codec: &Codec,
+) -> Result<BTreeMap<String, BTreeSet<String>>> {
+    let mut st = conn.prepare_cached(&format!(
+        "SELECT {PROP_COLS} FROM db_properties WHERE deleted_at IS NULL"
+    ))?;
+    let mut rows = st.query([])?;
+    let mut out: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    while let Some(r) = rows.next()? {
+        let p = match prop_row(codec, r) {
+            Ok(p) => p,
+            // Damaged records are reported by the integrity check; they cannot hold a usable relation.
+            Err(StoreError::Damaged { .. }) => continue,
+            Err(e) => return Err(e),
+        };
+        if p.payload.kind != PropType::Relation {
+            continue;
+        }
+        let target = p.to_property().relation().target_database_id;
+        if !target.is_empty() && target != p.database_id {
+            out.entry(target).or_default().insert(p.database_id);
+        }
+    }
+    Ok(out)
+}
+
 // ───────────────────────────────────────────────────────────────────────────── Store API
 
 impl Store {
     pub(crate) fn db_changed(&self, database_id: &str) {
-        // `db:changed` is forwarded by the app through `PageChanged` until a dedicated event exists.
-        self.emit(StoreEvent::PageChanged {
-            id: database_id.to_owned(),
-            meta_rev: None,
-            doc_rev: None,
+        self.db_changes(vec![(database_id.to_owned(), None)]);
+    }
+
+    /// [`Self::db_changed`] naming the rows whose values changed (see [`Self::db_changes`]).
+    pub(crate) fn db_changed_rows(&self, database_id: &str, row_ids: Option<Vec<String>>) {
+        self.db_changes(vec![(database_id.to_owned(), row_ids)]);
+    }
+
+    /// Emits, for each changed database, `PageChanged` for the database page (kept for listeners that predate
+    /// `db:changed`) and `DbChanged {databaseId, dataRev, schemaRev, rowIds?}` with the committed revisions.
+    /// `rowIds` is set only when the change touched exactly those rows' values (no inserts, deletes or schema
+    /// changes). Databases that read the changed ones through a relation (relation titles, rollups, formulas,
+    /// transitively) get a `DbChanged` without `rowIds` as well, so their open views re-query.
+    pub(crate) fn db_changes(&self, changed: Vec<(String, Option<Vec<String>>)>) {
+        if changed.is_empty() {
+            return;
+        }
+        for (id, _) in &changed {
+            self.emit(StoreEvent::PageChanged {
+                id: id.clone(),
+                meta_rev: None,
+                doc_rev: None,
+            });
+        }
+        let primary: BTreeSet<String> = changed.iter().map(|(id, _)| id.clone()).collect();
+        let dependents = self.db_dependents_of(&primary).unwrap_or_default();
+        let all: Vec<(String, Option<Vec<String>>)> = changed
+            .into_iter()
+            .chain(dependents.into_iter().map(|d| (d, None)))
+            .collect();
+        let ids: Vec<String> = all.iter().map(|(id, _)| id.clone()).collect();
+        let revs = self.read(|c| {
+            let mut st =
+                c.prepare_cached("SELECT data_rev, schema_rev FROM databases WHERE id = ?1")?;
+            let mut out = BTreeMap::new();
+            for id in &ids {
+                if let Some(r) = st
+                    .query_row([id], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))
+                    .optional()?
+                {
+                    out.insert(id.clone(), r);
+                }
+            }
+            Ok(out)
         });
+        // A database purged in the same call (or a vault locked meanwhile) has nothing left to invalidate.
+        let Ok(revs) = revs else {
+            return;
+        };
+        for (database_id, row_ids) in all {
+            if let Some(&(data_rev, schema_rev)) = revs.get(&database_id) {
+                self.emit(StoreEvent::DbChanged {
+                    database_id,
+                    data_rev,
+                    schema_rev,
+                    row_ids,
+                });
+            }
+        }
+    }
+
+    /// Databases (other than `changed`) that hold a relation to one of `changed`, transitively.
+    fn db_dependents_of(&self, changed: &BTreeSet<String>) -> Result<BTreeSet<String>> {
+        let s = self.session()?;
+        let key: (i64, i64) = self.read(|c| {
+            Ok(c.query_row(
+                "SELECT coalesce(sum(schema_rev), 0), count(*) FROM databases",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?)
+        })?;
+        let map = {
+            let cached = s.db_dependents.lock();
+            match &*cached {
+                Some((k, m)) if *k == key => Some(Arc::clone(m)),
+                _ => None,
+            }
+        };
+        let map = match map {
+            Some(m) => m,
+            None => {
+                let m = Arc::new(self.read(|c| relation_dependents(c, &s.codec))?);
+                *s.db_dependents.lock() = Some((key, Arc::clone(&m)));
+                m
+            }
+        };
+        let mut out = BTreeSet::new();
+        let mut queue: VecDeque<&String> = changed.iter().collect();
+        while let Some(d) = queue.pop_front() {
+            for dep in map.get(d).into_iter().flatten() {
+                if !changed.contains(dep) && out.len() < MAX_WORLD_DBS && out.insert(dep.clone()) {
+                    queue.push_back(dep);
+                }
+            }
+        }
+        Ok(out)
     }
 
     fn with_session<R>(&self, f: impl FnOnce(&Arc<Session>) -> Result<R>) -> Result<R> {
@@ -1234,6 +1352,94 @@ impl Store {
         progress.progress(1, 1, "convert");
         self.db_changed(&db);
         Ok(prop)
+    }
+
+    /// `version_restore` of a `db_schema` version (the `pre_bulk` version a type conversion takes): the property
+    /// gets its old type and configuration back and every row its old value; values written since are kept when
+    /// they are valid for the old type. The current state is kept as a `pre_restore` version first. Returns the
+    /// new schema rev.
+    pub(crate) fn db_schema_version_restore(&self, db_id: &str, snapshot: Value) -> Result<i64> {
+        #[derive(serde::Deserialize)]
+        struct Snap {
+            property: Property,
+            #[serde(default)]
+            values: BTreeMap<String, CellValue>,
+        }
+        let snap: Snap = serde_json::from_value(snapshot)
+            .map_err(|_| StoreError::Integrity("unreadable schema version".into()))?;
+        let s = self.session()?;
+        let now = self.now();
+        let sess = Arc::clone(&s);
+        let db = db_id.to_owned();
+        let rev = self.write(move |tx| {
+            let codec = &sess.codec;
+            let row = load_prop(tx, codec, &snap.property.id)?
+                .filter(|r| r.database_id == db)
+                .ok_or(StoreError::NotFound("property"))?;
+            if row.deleted_at.is_some() {
+                return Err(StoreError::invalid(
+                    "restore the property from the trash first",
+                ));
+            }
+            let current = row.to_property();
+            let rows = load_rows(tx, codec, &db)?;
+            let cur_values: BTreeMap<String, CellValue> = rows
+                .iter()
+                .filter_map(|r| {
+                    r.payload
+                        .values
+                        .get(&row.id)
+                        .map(|v| (r.id.clone(), v.clone()))
+                })
+                .collect();
+            crate::repo::versions::insert_version(
+                tx,
+                codec,
+                &db,
+                VersionTargetKind::DbSchema,
+                VersionReason::PreRestore,
+                None,
+                &json!({ "property": current, "values": cur_values }),
+                now,
+            )?;
+            let restored = Property {
+                kind: snap.property.kind,
+                config: snap.property.config.clone(),
+                ..current
+            };
+            for r in &rows {
+                let old = snap.values.get(&r.id).cloned();
+                let now_v = r.payload.values.get(&row.id);
+                let next = match old {
+                    Some(v) => Some(v),
+                    None => match now_v {
+                        Some(v) => cells::validate(&restored, v.clone()).ok().flatten(),
+                        None => None,
+                    },
+                };
+                if next.as_ref() == now_v {
+                    continue;
+                }
+                let mut p = r.payload.clone();
+                match next {
+                    Some(v) => p.values.insert(row.id.clone(), v),
+                    None => p.values.remove(&row.id),
+                };
+                save_row_payload(tx, codec, &r.id, r.rev, &p, now)?;
+            }
+            let mut payload = row.payload.clone();
+            payload.kind = restored.kind;
+            payload.config = restored.config;
+            save_prop(tx, codec, &row, &payload)?;
+            bump(tx, &db, true, true)?;
+            Ok(tx.query_row(
+                "SELECT schema_rev FROM databases WHERE id = ?1",
+                [&db],
+                |r| r.get::<_, i64>(0),
+            )?)
+        })?;
+        self.db_changed(db_id);
+        Ok(rev)
     }
 
     /// `db_property_delete` (soft; restorable). With `also_dual`, the paired relation goes too; otherwise the

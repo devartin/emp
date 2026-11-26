@@ -1,4 +1,5 @@
 /** Shared axis/format helpers for Recharts wrappers (§13.5). */
+import { createElement } from "react";
 import { formatCompact, formatNumber, formatPercent, niceTicks } from "@/lib/format";
 import type { ChartTheme } from "./theme";
 
@@ -68,4 +69,31 @@ export function withAlpha(color: string, a: number): string {
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   }
   return c;
+}
+
+/**
+ * X-axis tick that keeps edge labels inside the SVG: a centred label that would spill past the left/right edge is
+ * anchored to that edge instead (otherwise "Nov '23" at x=0 is clipped to "ov '23").
+ */
+export function edgeAwareTick(t: ChartTheme, format: (v: unknown) => string, width: number) {
+  const style = tickStyle(t);
+  return function EdgeTick(p: { x?: number | string; y?: number | string; payload?: { value?: unknown }; visibleTicksCount?: number }) {
+    const label = format(p.payload?.value);
+    const half = (label.length * style.fontSize * 0.56) / 2;
+    const spacing = width / Math.max(1, p.visibleTicksCount ?? 1);
+    // Room to slide the label inward before it would collide with its neighbour.
+    const room = spacing - 2 * half - 6;
+    let x = Number(p.x ?? 0);
+    let anchor: "start" | "middle" | "end" = "middle";
+    if (x - half < 0) {
+      if (half - x > room) return createElement("g");
+      anchor = "start";
+      x = 0;
+    } else if (x + half > width) {
+      if (x + half - width > room) return createElement("g");
+      anchor = "end";
+      x = width;
+    }
+    return createElement("text", { x, y: Number(p.y ?? 0), dy: "0.71em", textAnchor: anchor, ...style }, label);
+  };
 }

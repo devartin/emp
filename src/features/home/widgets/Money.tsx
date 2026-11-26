@@ -93,7 +93,7 @@ export function MoneyWidget() {
             <ul className="flex flex-col gap-1">
               {bills.map((b) => (
                 <li key={b.rowId} className="flex items-center gap-2 text-body-sm">
-                  <span className="w-[46px] flex-none text-caption tabular text-tertiary">{b.due === today ? "Today" : new Date(`${b.due}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}</span>
+                  <span className="w-[46px] flex-none text-caption tabular text-tertiary">{b.due === today ? "Today" : `${new Date(`${b.due}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" })} ${Number(b.due.slice(8, 10))}`}</span>
                   <span className="min-w-0 flex-1 truncate text-primary">{b.name}</span>
                   <Amount value={{ amount: String(Math.abs(n(b.amount))), currency: b.amount.currency }} noCents className="text-secondary" />
                 </li>

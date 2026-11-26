@@ -127,6 +127,7 @@ pub async fn app_quit(app: AppHandle, req: Empty) -> ApiResult<()> {
     blocking(move || {
         let state = handle.state::<AppState>();
         if let Some(store) = state.store_opt() {
+            crate::background::snapshot_on_quit(&state);
             state.persist_net_log(&store);
             let _ = store.close();
         }

@@ -9,6 +9,7 @@
 //! * [`commands`] — one module per §11.3 group; [`commands::ALL_COMMANDS`] is the normative allowlist.
 //! * [`jobs`], [`grants`], [`events`], [`autolock`], [`navigation`], [`protocol`], [`keychain`], [`clipboard`],
 //!   [`logging`], [`validate`], [`error`] — the building blocks commands use.
+//! * [`background`] (ticker) and [`system_events`] (native sleep / screen-lock signals) drive automatic work.
 //!
 //! ## Adding domain commands
 //! Write the command in its `commands/<group>.rs` module, then add its path to the marked block in
@@ -31,10 +32,11 @@ pub mod navigation;
 pub mod platform;
 pub mod protocol;
 pub mod state;
+pub mod system_events;
 pub mod validate;
 
 use tauri::utils::config::{Csp, CspDirectiveSources};
-use tauri::webview::NewWindowResponse;
+use tauri::webview::{NewWindowResponse, PermissionResponse};
 use tauri::{AppHandle, Manager, RunEvent, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_window_state::StateFlags;
 
@@ -119,7 +121,13 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
             false
         })
         .on_new_window(|_url, _features| NewWindowResponse::Deny)
-        .on_download(|_webview, _event| false);
+        .on_download(|_webview, _event| false)
+        // §9.13: every webview permission request (camera, microphone, geolocation, notifications, clipboard-read,
+        // display capture, …) is denied on every platform; OS features are driven from Rust only.
+        .on_permission_request(|_webview, kind| {
+            tracing::debug!(kind = ?kind, "webview permission request denied");
+            PermissionResponse::Deny
+        });
     #[cfg(windows)]
     let builder = builder.decorations(false);
     builder.build()?;
@@ -139,7 +147,9 @@ fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
                 state
                     .activity
                     .focus_changed(focused, std::time::Instant::now());
-                if !focused {
+                if focused {
+                    background::on_focus_regained(&app);
+                } else {
                     state.check_auto_lock(false);
                 }
             });
@@ -197,6 +207,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(state);
     create_main_window(app)?;
     background::start(app.handle().clone());
+    system_events::start(app.handle());
     // The window starts hidden and is shown by `app_ready`; show it anyway if the frontend never reports ready.
     let handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
@@ -214,6 +225,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 fn on_exit(app: &AppHandle) {
     let state = app.state::<AppState>();
     if let Some(store) = state.store_opt() {
+        background::snapshot_on_quit(&state);
         state.persist_net_log(&store);
         if let Err(e) = store.close() {
             tracing::warn!(code = e.code(), "closing the vault failed");
@@ -261,6 +273,8 @@ pub fn run() {
                 responder.respond(protocol::serve(store.as_ref(), &request));
             });
         })
+        // Defence in depth for any webview created later: deny every web permission request (§9.13).
+        .on_permission_request(|_webview, _kind| PermissionResponse::Deny)
         .setup(setup)
         .on_window_event(on_window_event)
         .invoke_handler(tauri::generate_handler![

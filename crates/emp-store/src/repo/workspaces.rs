@@ -198,10 +198,12 @@ impl Store {
             .filter(|r| live.contains(r.as_str()))
             .cloned()
             .collect();
+        let lifeapps = self.lifeapp_instances(id)?;
         Ok(WorkspaceOpen {
             workspace: to_dto(&row),
             pages,
             recents,
+            lifeapps,
         })
     }
 }

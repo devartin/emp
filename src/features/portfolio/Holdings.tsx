@@ -23,7 +23,8 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
   const totalCost = s.holdings.reduce((a, h) => a + num(h.costBasis.amount), 0);
   return (
     <Section title="All holdings" subtitle={<>Cost basis <Sensitive>{fmtMoney(totalCost, "USD", { noCents: true })}</Sensitive> · lots matched first-in, first-out</>} pad={false}>
-      <table className="fh-table">
+      <div className="overflow-x-auto">
+        <table className="fh-table" style={{ minWidth: 760 }}>
         <thead>
           <tr>
             <th>Holding</th>
@@ -128,7 +129,8 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
             );
           })}
         </tbody>
-      </table>
+        </table>
+      </div>
     </Section>
   );
 }

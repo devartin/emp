@@ -68,6 +68,15 @@ pub fn export_dir(path: &Path) -> ApiResult<PathBuf> {
     Ok(dir)
 }
 
+/// SPEC §9.10 "export unencrypted data": a plaintext export out of an **encrypted** vault (`export_pages`,
+/// `db_export`, `sheet_export`) needs the 5-minute re-auth window. Unencrypted vaults have nothing to protect.
+pub fn require_export_reauth(store: &Store) -> ApiResult<()> {
+    if store.is_encrypted()? {
+        store.require_reauth()?;
+    }
+    Ok(())
+}
+
 /// Total size of the regular files under `dir` (no symlinks followed).
 #[must_use]
 pub fn dir_size(dir: &Path) -> u64 {
@@ -111,9 +120,7 @@ pub async fn export_pages(
         }
     };
     let store = state.session()?;
-    if store.is_encrypted()? {
-        state.require_reauth()?;
-    }
+    require_export_reauth(&store)?;
     let target = take_export_target(&state, &req.grant_id)?;
     let sink = job_sink(&webview, &req.on_event);
     Ok(state
@@ -140,9 +147,34 @@ pub struct ExportEverythingReq {
     on_event: tauri::ipc::JavaScriptChannelId,
 }
 
+/// Windows device names: a file called `CON.csv` or `nul.xlsx` opens the device instead of a file.
+const WINDOWS_RESERVED: &[&str] = &[
+    "con", "prn", "aux", "nul", "com0", "com1", "com2", "com3", "com4", "com5", "com6", "com7",
+    "com8", "com9", "lpt0", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+    "conin$", "conout$",
+];
+
+/// `safe_file_name`, plus a suffix for names Windows reserves for devices (checked on every platform, since an
+/// export folder may be copied to Windows later).
+#[must_use]
+pub fn portable_file_name(title: &str) -> String {
+    let base = safe_file_name(title);
+    let stem = base
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_end()
+        .to_ascii_lowercase();
+    if WINDOWS_RESERVED.contains(&stem.as_str()) {
+        format!("{base}_")
+    } else {
+        base
+    }
+}
+
 /// A file name unique within `used`.
 pub fn unique_name(used: &mut HashSet<String>, title: &str, ext: &str) -> String {
-    let base = safe_file_name(title);
+    let base = portable_file_name(title);
     let mut name = format!("{base}.{ext}");
     let mut n = 2;
     while !used.insert(name.to_lowercase()) {
@@ -263,6 +295,19 @@ mod tests {
     }
 
     #[test]
+    fn windows_device_names_are_never_used() {
+        let mut used = HashSet::new();
+        assert_eq!(unique_name(&mut used, "CON", "csv"), "CON_.csv");
+        assert_eq!(unique_name(&mut used, "nul", "xlsx"), "nul_.xlsx");
+        assert_eq!(
+            unique_name(&mut used, "Com1.backup", "csv"),
+            "Com1.backup_.csv"
+        );
+        assert_eq!(unique_name(&mut used, "Console", "csv"), "Console.csv");
+        assert_eq!(unique_name(&mut used, "aux ", "d"), "aux_.d");
+    }
+
+    #[test]
     fn export_dirs_must_be_new() {
         let tmp = tempfile::tempdir().unwrap();
         let d = export_dir(&tmp.path().join("Export.zip")).unwrap();
@@ -270,6 +315,43 @@ mod tests {
         std::fs::write(d.join("x"), b"1").unwrap();
         assert!(export_dir(&tmp.path().join("Export")).is_err());
         assert_eq!(dir_size(&d), 1);
+    }
+
+    fn temp_store(password: Option<&str>) -> (tempfile::TempDir, Store) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut opts = emp_store::StoreOptions::new(dir.path().join("device.key"));
+        opts.background_indexing = false;
+        let created = Store::create(
+            dir.path(),
+            emp_store::CreateOptions {
+                password: password.map(|p| emp_crypto::SecretString::from(p.to_owned())),
+                kdf: emp_crypto::KdfParams::INSECURE_TEST,
+                auto_lock: emp_store::model::AutoLock::default(),
+                workspace_name: Some("Test".into()),
+            },
+            opts,
+        )
+        .unwrap();
+        (dir, created.store)
+    }
+
+    #[test]
+    fn plaintext_exports_of_encrypted_vaults_need_reauth() {
+        let pw = "plinth-ocelot-marzipan-quaver-87";
+        let (_d, store) = temp_store(Some(pw));
+        assert_eq!(
+            require_export_reauth(&store).unwrap_err().code,
+            crate::error::ErrorCode::ReauthRequired
+        );
+        store
+            .reauth(&emp_crypto::SecretString::from(pw.to_owned()))
+            .unwrap();
+        assert!(require_export_reauth(&store).is_ok());
+        store.close().unwrap();
+
+        let (_d, plain) = temp_store(None);
+        assert!(require_export_reauth(&plain).is_ok());
+        plain.close().unwrap();
     }
 
     #[test]

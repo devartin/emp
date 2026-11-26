@@ -4,7 +4,7 @@
  * database. Create events, import / export .ics, choose which sources to show, and connect Google.
  * Month cells ≥ 112px; today is a 22px accent circle; event chips are 20px at radius 4 (§5.11).
  */
-import { CalendarPlus, ChevronLeft, ChevronRight, Download, Ellipsis, Link2, MapPin, RefreshCw, Trash2, Upload } from "lucide-react";
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, Download, Ellipsis, Link2, MapPin, RefreshCw, Trash2, Upload } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage, listen } from "@/backend";
@@ -17,7 +17,6 @@ import { useTree } from "@/stores/tree";
 import { useWorkspace } from "@/stores/workspace";
 import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
-import { Checkbox } from "@/ui/Checkbox";
 import { Calendar as MiniCalendar } from "@/ui/DatePicker";
 import { Dialog } from "@/ui/Dialog";
 import { IconButton } from "@/ui/IconButton";
@@ -330,7 +329,7 @@ export default function CalendarPage() {
     if (e.source === "google") return google.cals.find((c) => c.id === e.calendarId)?.summary ?? "Google";
     if (e.source === "ics") return e.calendarId.replace(/^ics:/, "") || "Imported";
     if (e.calendarId === prefs.eventsDb) return "Events";
-    return e.description === "Due" ? "Tasks · due" : "Life OS";
+    return e.color === "yellow" ? "Tax deadlines" : "Life OS tasks";
   };
 
   const step = (n: number) => {
@@ -526,11 +525,19 @@ export default function CalendarPage() {
           <div className="mt-5 flex flex-col gap-1">
             <span className="cal-rail-label">Calendars</span>
             {sources.map((s) => (
-              <label key={s.key} className="cal-src">
-                <Checkbox checked={!hidden.has(s.key)} onCheckedChange={(v) => savePrefs({ ...prefs, hidden: v ? (prefs.hidden ?? []).filter((k) => k !== s.key) : [...(prefs.hidden ?? []), s.key] })} aria-label={s.label} />
-                <span className="cal-src-dot" style={{ background: `var(--block-${s.color}-text, var(--accent-solid))` }} />
+              <button
+                key={s.key}
+                type="button"
+                role="checkbox"
+                aria-checked={!hidden.has(s.key)}
+                className="cal-src w-full text-left"
+                onClick={() => savePrefs({ ...prefs, hidden: hidden.has(s.key) ? (prefs.hidden ?? []).filter((k) => k !== s.key) : [...(prefs.hidden ?? []), s.key] })}
+              >
+                <span className={cn("cal-src-box", hidden.has(s.key) && "is-off")} style={{ ["--c" as string]: `var(--block-${s.color}-text, var(--accent-solid))` }}>
+                  {!hidden.has(s.key) ? <Check size={11} strokeWidth={3.2} aria-hidden /> : null}
+                </span>
                 <span className="min-w-0 flex-1 truncate">{s.label}</span>
-              </label>
+              </button>
             ))}
             {!sources.length ? <p className="text-caption text-tertiary">No calendars yet.</p> : null}
           </div>
@@ -566,11 +573,22 @@ export default function CalendarPage() {
 
 // ───────────────────────────────────────────────────────────────────────────── views
 
+/** "9:30", "14" / "2p" — compact enough for 96px cells. */
+function shortTime(iso: string): string {
+  const d = new Date(iso);
+  const h = d.getHours();
+  const mm = d.getMinutes();
+  const twelve = new Intl.DateTimeFormat(undefined, { hour: "numeric" }).resolvedOptions().hour12 !== false;
+  if (!twelve) return `${h}${mm ? `:${String(mm).padStart(2, "0")}` : ""}`;
+  const hh = ((h + 11) % 12) + 1;
+  return `${hh}${mm ? `:${String(mm).padStart(2, "0")}` : ""}${h < 12 ? "a" : "p"}`;
+}
+
 function Chip({ e, onOpen, continued }: { e: CalendarEvent; onOpen: (e: CalendarEvent, el: HTMLElement) => void; continued?: boolean }) {
   return (
     <button type="button" className={cn("cal-chip", e.allDay ? "is-allday" : "is-timed", continued && "is-cont")} style={chipStyle(e.color)} onClick={(ev) => (ev.stopPropagation(), onOpen(e, ev.currentTarget))} title={e.title}>
       {!e.allDay ? <span className="cal-chip-dot" /> : null}
-      {!e.allDay ? <span className="cal-chip-time tabular">{formatTime(e.start).replace(/:00(?=\s|$)/, "").replace(" ", "").toLowerCase()}</span> : null}
+      {!e.allDay ? <span className="cal-chip-time tabular">{shortTime(e.start)}</span> : null}
       <span className="truncate">{e.title}</span>
     </button>
   );

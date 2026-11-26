@@ -36,6 +36,38 @@ pub fn is_provider_id(p: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
 }
 
+/// Providers whose secrets only dedicated commands may write: the Google OAuth client and account token sets
+/// (`google_set_client` / `google_connect`, both re-auth gated, SPEC §9.19).
+pub const APP_MANAGED_PROVIDERS: &[&str] = &[
+    super::google::CLIENT_PROVIDER,
+    super::google::ACCOUNT_PROVIDER,
+];
+
+/// `true` when `secret_set` may write secrets of `provider`.
+#[must_use]
+pub fn is_user_settable_provider(provider: &str) -> bool {
+    is_provider_id(provider) && !APP_MANAGED_PROVIDERS.contains(&provider)
+}
+
+/// Checks that `id` names a secret the UI may overwrite (`secret_set`) or delete (`secret_delete`): a listed (not
+/// `emp:`-internal) secret, and for overwrites one of the same provider and not app-managed. Internal secrets (row
+/// secret fields, the backup password) and OAuth token sets are reachable only through their own commands.
+pub fn check_user_secret(listed: &[SecretInfo], id: &str, provider: Option<&str>) -> ApiResult<()> {
+    let info = listed
+        .iter()
+        .find(|s| s.id == id)
+        .ok_or_else(|| ApiError::not_found("secret"))?;
+    if let Some(p) = provider {
+        if info.provider != p || APP_MANAGED_PROVIDERS.contains(&info.provider.as_str()) {
+            return Err(ApiError::invalid(
+                "id",
+                "this secret belongs to another provider",
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// `secret_list({}) → SecretInfo[]` (never values).
 #[tauri::command]
 pub async fn secret_list(app: AppHandle, req: Empty) -> ApiResult<Vec<SecretInfo>> {
@@ -75,6 +107,12 @@ pub async fn secret_set(app: AppHandle, req: SecretSetReq) -> ApiResult<SecretIn
     if !is_provider_id(&req.provider) {
         return Err(ApiError::invalid("provider", "invalid provider"));
     }
+    if !is_user_settable_provider(&req.provider) {
+        return Err(ApiError::invalid(
+            "provider",
+            "this provider's credentials are set from its own settings",
+        ));
+    }
     validate::title("label", &req.label)?;
     let v = req.value.expose_secret();
     if v.trim().is_empty() {
@@ -88,6 +126,9 @@ pub async fn secret_set(app: AppHandle, req: SecretSetReq) -> ApiResult<SecretIn
     let allowed_hosts = allowed_hosts_for(&req.provider);
     blocking(move || {
         let store = app.state::<AppState>().session()?;
+        if let Some(id) = &req.id {
+            check_user_secret(&store.secret_list()?, id, Some(&req.provider))?;
+        }
         Ok(store.secret_set(SecretSet {
             id: req.id,
             provider: req.provider,
@@ -112,7 +153,12 @@ pub struct SecretDeleteReq {
 #[tauri::command]
 pub async fn secret_delete(app: AppHandle, req: SecretDeleteReq) -> ApiResult<()> {
     validate::id("id", &req.id)?;
-    blocking(move || Ok(app.state::<AppState>().session()?.secret_delete(&req.id)?)).await
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        check_user_secret(&store.secret_list()?, &req.id, None)?;
+        Ok(store.secret_delete(&req.id)?)
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -138,6 +184,41 @@ mod tests {
         assert!(!is_provider_id("emp:backup"));
         assert!(!is_provider_id(""));
         assert!(!is_provider_id("Upper"));
+    }
+
+    fn info(id: &str, provider: &str) -> SecretInfo {
+        SecretInfo {
+            id: id.into(),
+            provider: provider.into(),
+            label: "x".into(),
+            kind: SecretKind::ApiKey,
+            last4: None,
+            created_at: 0,
+            last_used_at: None,
+        }
+    }
+
+    #[test]
+    fn app_managed_and_internal_secrets_are_not_writable() {
+        assert!(is_user_settable_provider("finnhub"));
+        assert!(!is_user_settable_provider("google"));
+        assert!(!is_user_settable_provider("google-client"));
+        assert!(!is_user_settable_provider("emp:backup-password"));
+        // `secret_list` never returns `emp:` secrets, so their ids are unknown here.
+        let listed = vec![info("s1", "finnhub"), info("s2", "google")];
+        assert!(check_user_secret(&listed, "s1", Some("finnhub")).is_ok());
+        assert_eq!(
+            check_user_secret(&listed, "internal", Some("finnhub"))
+                .unwrap_err()
+                .code,
+            crate::error::ErrorCode::NotFound
+        );
+        assert!(check_user_secret(&listed, "internal", None).is_err());
+        // Overwrites keep the provider, and never touch OAuth token sets.
+        assert!(check_user_secret(&listed, "s1", Some("tiingo")).is_err());
+        assert!(check_user_secret(&listed, "s2", Some("google")).is_err());
+        // Listed secrets (including a Google account) can be deleted.
+        assert!(check_user_secret(&listed, "s2", None).is_ok());
     }
 
     #[test]

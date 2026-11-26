@@ -73,6 +73,7 @@ pub fn classify_external(raw: &str) -> ApiResult<ExternalUrl> {
             })
         }
         "mailto" => {
+            let url = sanitize_mailto(url);
             let addr = url.path();
             let domain = addr
                 .split(',')
@@ -100,6 +101,35 @@ pub fn classify_external(raw: &str) -> ApiResult<ExternalUrl> {
 
 fn percent_decode(s: &str) -> String {
     crate::protocol::percent_decode(s)
+}
+
+/// `mailto:` header fields passed on to the mail client (RFC 6068). Everything else is dropped: some clients honour
+/// non-standard fields such as `attach=` / `attachment=` and would silently attach a local file to the draft.
+pub const MAILTO_FIELDS: &[&str] = &["to", "cc", "bcc", "subject", "body", "in-reply-to"];
+
+/// Removes every `mailto:` query field not in [`MAILTO_FIELDS`] (and the fragment). Kept fields are passed on
+/// byte for byte: `mailto:` is not form-encoded, so `+` must stay a plus (`cc=a+b@example.org`).
+fn sanitize_mailto(mut url: Url) -> Url {
+    url.set_fragment(None);
+    let Some(query) = url.query().map(str::to_owned) else {
+        return url;
+    };
+    let kept: Vec<&str> = query
+        .split('&')
+        // A raw `;` is not a separator in RFC 6068, but some clients split on it; such a pair is dropped whole.
+        .filter(|pair| !pair.contains(';'))
+        .filter(|pair| {
+            let key = pair.split('=').next().unwrap_or("");
+            let key = percent_decode(key).to_ascii_lowercase();
+            MAILTO_FIELDS.contains(&key.trim())
+        })
+        .collect();
+    if kept.is_empty() {
+        url.set_query(None);
+    } else {
+        url.set_query(Some(&kept.join("&")));
+    }
+    url
 }
 
 struct Pending {
@@ -255,6 +285,29 @@ mod tests {
             assert!(classify_external(bad).is_err(), "{bad}");
         }
         assert!(classify_external(&format!("https://e.com/{}", "a".repeat(5000))).is_err());
+    }
+
+    #[test]
+    fn mailto_drops_attachment_and_unknown_fields() {
+        let e = classify_external(
+            "mailto:a@example.org?subject=Hi%20there&attach=/home/u/.ssh/id_rsa&ATTACHMENT=C:%5Cx&body=x+y#frag",
+        )
+        .unwrap();
+        assert_eq!(e.punycode, "example.org");
+        assert!(!e.url.to_ascii_lowercase().contains("attach"), "{}", e.url);
+        assert!(!e.url.contains("ssh"), "{}", e.url);
+        assert!(!e.url.contains('#'), "{}", e.url);
+        assert!(e.url.contains("subject=Hi%20there"), "{}", e.url);
+        assert!(e.url.contains("body=x+y"), "{}", e.url);
+        let e = classify_external(
+            "mailto:a@example.org?subject=x;attach=/etc/passwd&cc=b+c@example.org",
+        )
+        .unwrap();
+        assert_eq!(e.url, "mailto:a@example.org?cc=b+c@example.org");
+        let e = classify_external("mailto:a@example.org?x-evil=1").unwrap();
+        assert_eq!(e.url, "mailto:a@example.org");
+        let e = classify_external("mailto:a@example.org").unwrap();
+        assert_eq!(e.url, "mailto:a@example.org");
     }
 
     #[test]

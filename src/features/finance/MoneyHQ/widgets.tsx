@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { moneyParts } from "@/lib/money";
 import { Amount } from "@/ui/Amount";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Sensitive } from "@/ui/Sensitive";
 import { Tooltip } from "@/ui/Tooltip";
 import { formatNumber } from "@/lib/format";
@@ -23,6 +24,7 @@ export function budgetTone(ratio: number): string {
  * pathLength on mount; reduced motion shows the final state.
  */
 export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children }: { ratio: number; pace?: number | null; size?: number; stroke?: number; color?: string; children?: ReactNode }) {
+  const reduced = useReducedMotionPref();
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const first = Math.max(0, Math.min(1, ratio));
@@ -44,12 +46,12 @@ export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children
           strokeLinecap="round"
           style={{ stroke: tone }}
           strokeDasharray={c}
-          initial={{ strokeDashoffset: c }}
+          initial={reduced ? false : { strokeDashoffset: c }}
           animate={{ strokeDashoffset: c * (1 - first) }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         />
         {lap > 0 ? (
-          <m.circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" style={{ stroke: tone, opacity: 0.5 }} strokeDasharray={c} initial={{ strokeDashoffset: c }} animate={{ strokeDashoffset: c * (1 - lap) }} transition={{ duration: 0.7, delay: 0.5, ease: [0.16, 1, 0.3, 1] }} />
+          <m.circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" style={{ stroke: tone, opacity: 0.5 }} strokeDasharray={c} initial={reduced ? false : { strokeDashoffset: c }} animate={{ strokeDashoffset: c * (1 - lap) }} transition={{ duration: 0.7, delay: 0.5, ease: [0.16, 1, 0.3, 1] }} />
         ) : null}
         {theta !== null ? (
           <line x1={size / 2 + ri * Math.cos(theta)} y1={size / 2 + ri * Math.sin(theta)} x2={size / 2 + ro * Math.cos(theta)} y2={size / 2 + ro * Math.sin(theta)} strokeWidth={2} strokeLinecap="round" style={{ stroke: "var(--text-secondary)" }} />
@@ -80,7 +82,7 @@ export function Envelope({ e, onClick }: { e: EnvelopeData; onClick?: () => void
         <span className="block truncate text-body-sm font-medium text-primary">{e.category.name}</span>
         <span className={cn("block text-caption tabular", over ? "text-loss-text" : "text-tertiary")} style={{ fontWeight: 500 }}>
           <Sensitive>{over ? `${fmtMoney(-e.available, "USD", { noCents: true })} over` : `${fmtMoney(e.available, "USD", { noCents: true })} left`}</Sensitive>
-          <span className="text-tertiary"> · of {fmtMoney(e.assigned, "USD", { noCents: true })}</span>
+          <span className="text-tertiary"> · of <Sensitive>{fmtMoney(e.assigned, "USD", { noCents: true })}</Sensitive></span>
         </span>
       </span>
     </button>

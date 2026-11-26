@@ -316,6 +316,7 @@
 .emp-sheet-embed td[data-k="3"], .emp-sheet-embed td[data-k="4"] { text-align: center; }
 .emp-sheet-embed td[data-k="4"] { color: var(--loss-text); }
 .emp-sheet-embed td[data-input] { background: color-mix(in oklab, var(--accent-solid) 8%, var(--bg-canvas)); color: var(--accent-text); }
+:root[data-accent="graphite"] .emp-sheet-embed td[data-input], :root:not([data-accent]) .emp-sheet-embed td[data-input] { background: color-mix(in oklab, var(--info) 10%, var(--bg-canvas)); color: var(--info-text); }
 .emp-sheet-embed .emp-embed-bar { position: absolute; left: 3px; top: 4px; bottom: 5px; border-radius: 3px; opacity: 0.24; pointer-events: none; }
 .emp-sheet-embed .emp-embed-text { position: relative; }
 .emp-sheet-embed-foot { display: flex; justify-content: space-between; padding: 6px 12px; border-top: 1px solid var(--border-subtle); font: 500 11.5px/16px var(--font-ui); color: var(--text-tertiary); }

@@ -4,9 +4,10 @@
 //! vault is locked and stamps user activity; *(reauth)* commands additionally call [`AppState::require_reauth`]
 //! (the 5-minute sudo window lives in the store session and is zeroized with it).
 
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use emp_store::model::{AutoLock, DeviceSettings, VaultStatus};
@@ -29,6 +30,58 @@ pub static PANICKED: AtomicBool = AtomicBool::new(false);
 
 /// How long the UI gets to flush pending saves after `vault:will-lock` (automatic locks only).
 pub const WILL_LOCK_GRACE: Duration = Duration::from_millis(1_500);
+/// How long in-flight commands get to finish once the vault is marked locked (SPEC §9.9 step 2).
+pub const IN_FLIGHT_GRACE: Duration = Duration::from_secs(2);
+
+/// Command bodies currently running through [`blocking`].
+static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+
+thread_local! {
+    /// Set while this thread runs a command body counted in [`IN_FLIGHT`].
+    static IN_COMMAND: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Counts one command body as in flight for its lifetime.
+struct InFlight {
+    outer: bool,
+}
+
+impl InFlight {
+    fn enter() -> Self {
+        IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
+        Self {
+            outer: IN_COMMAND.with(|c| c.replace(true)),
+        }
+    }
+}
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        IN_COMMAND.with(|c| c.set(self.outer));
+        IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Number of command bodies running right now, not counting the calling thread's own.
+#[must_use]
+pub fn in_flight_others() -> usize {
+    let own = usize::from(IN_COMMAND.with(Cell::get));
+    IN_FLIGHT.load(Ordering::SeqCst).saturating_sub(own)
+}
+
+/// Waits until no other command body is in flight, at most `limit`. Returns `true` when they all finished.
+pub fn wait_in_flight(limit: Duration) -> bool {
+    let deadline = Instant::now() + limit;
+    loop {
+        if in_flight_others() == 0 {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
 
 /// Internal kv namespace of the persisted network log (SPEC §9.18).
 pub const NET_LOG_NS: &str = "net.log";
@@ -171,6 +224,9 @@ pub struct AppState {
     auto_lock: Mutex<AutoLock>,
     calibration: Mutex<Option<emp_crypto::kdf::Calibration>>,
     unlock_busy: AtomicBool,
+    /// A lock sequence is running (re-entrancy guard).
+    lock_running: AtomicBool,
+    /// The vault is being locked: data commands already get `LOCKED` (SPEC §9.9 step 2).
     locking: AtomicBool,
     started: Instant,
     ready_marks: Mutex<Option<Value>>,
@@ -209,6 +265,7 @@ impl AppState {
             auto_lock: Mutex::new(AutoLock::default()),
             calibration: Mutex::new(None),
             unlock_busy: AtomicBool::new(false),
+            lock_running: AtomicBool::new(false),
             locking: AtomicBool::new(false),
             started: Instant::now(),
             ready_marks: Mutex::new(None),
@@ -314,6 +371,16 @@ impl AppState {
         Ok(store)
     }
 
+    /// The unlocked vault for background work (ticker, sync, quote pushes): like [`AppState::session`] but it does
+    /// **not** count as user activity, so background work never defers the idle lock.
+    pub fn session_quiet(&self) -> ApiResult<Store> {
+        let store = self.store()?;
+        if !store.is_unlocked() || self.locking.load(Ordering::SeqCst) {
+            return Err(ApiError::locked());
+        }
+        Ok(store)
+    }
+
     /// `REAUTH_REQUIRED` unless `vault_reauth` succeeded in the last 5 minutes.
     pub fn require_reauth(&self) -> ApiResult<Store> {
         let store = self.session()?;
@@ -406,6 +473,7 @@ impl AppState {
             self.net.set_offline(vs.offline);
         }
         self.emit_status();
+        crate::background::on_unlock(self.events.app());
     }
 
     /// Persists the network log ring buffer into the (encrypted) kv store.
@@ -477,8 +545,17 @@ impl AppState {
         let _ = std::fs::remove_file(self.paths.pending_device_settings_file());
     }
 
-    /// The lock sequence (SPEC §9.9). Blocking: call from the blocking pool. `grace` gives the UI
-    /// [`WILL_LOCK_GRACE`] to flush saves after `vault:will-lock` (automatic locks).
+    /// The lock sequence (SPEC §9.9). Blocking: call from the blocking pool.
+    ///
+    /// 1. With `grace` (automatic locks) the UI receives `vault:will-lock` and gets [`WILL_LOCK_GRACE`] to flush
+    ///    pending saves; data commands still work during that window.
+    /// 2. The vault is marked locked: every data command now gets `LOCKED`, live quote subscriptions stop at once and
+    ///    commands already running get [`IN_FLIGHT_GRACE`] to finish. Stragglers see the store session cancelled
+    ///    and its keys gone when it is dropped in step 3.
+    /// 3. Jobs are cancelled; in-memory secrets and caches outside the store (market API keys, Google access tokens,
+    ///    staged statement imports, workbook engines, file grants, link confirmations) are dropped; the clipboard is
+    ///    cleared if it still holds an EMP secret; the store session is dropped (zeroizing the keys, wiping `tmp/`).
+    /// 4. `vault:locked {reason}` is emitted and the webview reloads at the lock route.
     pub fn lock_now(&self, reason: LockReason, grace: bool) -> ApiResult<()> {
         let Some(store) = self.store_opt() else {
             return Ok(());
@@ -486,29 +563,37 @@ impl AppState {
         if !store.is_unlocked() {
             return Ok(());
         }
-        if self.locking.swap(true, Ordering::SeqCst) {
+        if self.lock_running.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
+        if grace {
+            self.events
+                .emit(events::VAULT_WILL_LOCK, LockPayload { reason });
+            std::thread::sleep(WILL_LOCK_GRACE);
+        }
+        self.locking.store(true, Ordering::SeqCst);
+        crate::commands::market::stop_subscriptions();
+        if !wait_in_flight(IN_FLIGHT_GRACE) {
+            tracing::warn!(
+                commands = in_flight_others(),
+                "commands still running at lock; their session is cancelled"
+            );
+        }
         let result = (|| {
-            if grace {
-                self.events
-                    .emit(events::VAULT_WILL_LOCK, LockPayload { reason });
-                std::thread::sleep(WILL_LOCK_GRACE);
-            }
             self.persist_net_log(&store);
             self.persist_remembered_hosts(&store);
             let cancelled = self.jobs.cancel_all();
             if cancelled > 0 {
                 tracing::info!(jobs = cancelled, "jobs cancelled by lock");
             }
+            self.drop_volatile_state(&store);
             self.clipboard.clear_if_ours(self.events.app());
-            self.grants.clear();
-            self.links.clear();
             store.lock()?;
             self.activity.session_ended();
             Ok::<(), ApiError>(())
         })();
         self.locking.store(false, Ordering::SeqCst);
+        self.lock_running.store(false, Ordering::SeqCst);
         result?;
         tracing::info!(reason = reason.as_str(), "vault locked");
         self.events
@@ -516,6 +601,18 @@ impl AppState {
         self.emit_status();
         self.reload_webview();
         Ok(())
+    }
+
+    /// Drops every piece of decrypted or secret state held outside the store session (lock hygiene, §9.9 step 3).
+    pub fn drop_volatile_state(&self, store: &Store) {
+        crate::commands::market::stop_subscriptions();
+        crate::commands::market::drop_router();
+        crate::commands::google::drop_sessions();
+        crate::commands::finance::clear_staged_imports();
+        crate::commands::sheet::clear_pending_refresh();
+        store.sheets_drop_cache();
+        self.grants.clear();
+        self.links.clear();
     }
 
     /// Reloads the main webview at the lock route so no decrypted data survives in the JS heap.
@@ -561,14 +658,18 @@ impl AppState {
     }
 }
 
-/// Runs a blocking closure on the blocking pool. A panic is reported as `INTERNAL` and, being outside a
+/// Runs a blocking closure on the blocking pool, counted as an in-flight command for the lock sequence. A panic is reported as `INTERNAL` and, being outside a
 /// `catch_unwind` boundary, makes the ticker lock the vault (D-15).
 pub async fn blocking<T, F>(f: F) -> ApiResult<T>
 where
     T: Send + 'static,
     F: FnOnce() -> ApiResult<T> + Send + 'static,
 {
-    match tauri::async_runtime::spawn_blocking(f).await {
+    let body = move || {
+        let _in_flight = InFlight::enter();
+        f()
+    };
+    match tauri::async_runtime::spawn_blocking(body).await {
         Ok(r) => r,
         Err(_) => {
             PANICKED.store(true, Ordering::SeqCst);
@@ -595,6 +696,38 @@ mod tests {
         assert_eq!(choose_vault(&avail, Some("zz")), Some("aa".into()));
         assert_eq!(choose_vault(&avail, None), Some("aa".into()));
         assert_eq!(choose_vault(&[], Some("aa")), None);
+    }
+
+    #[test]
+    fn lock_waits_for_other_in_flight_commands_only() {
+        // Inside a command body, the caller itself is not waited for.
+        let own = InFlight::enter();
+        let other = std::thread::spawn(|| {
+            let _g = InFlight::enter();
+            std::thread::sleep(Duration::from_millis(150));
+        });
+        std::thread::sleep(Duration::from_millis(20));
+        let t0 = Instant::now();
+        assert!(wait_in_flight(Duration::from_secs(10)));
+        assert!(t0.elapsed() >= Duration::from_millis(50));
+        other.join().unwrap();
+        drop(own);
+        assert!(!IN_COMMAND.with(Cell::get));
+    }
+
+    #[test]
+    fn in_flight_wait_is_bounded() {
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let holder = std::thread::spawn(move || {
+            let _g = InFlight::enter();
+            let _ = rx.recv();
+        });
+        std::thread::sleep(Duration::from_millis(20));
+        let t0 = Instant::now();
+        assert!(!wait_in_flight(Duration::from_millis(100)));
+        assert!(t0.elapsed() >= Duration::from_millis(100));
+        tx.send(()).unwrap();
+        holder.join().unwrap();
     }
 
     #[test]

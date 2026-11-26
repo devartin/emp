@@ -476,7 +476,16 @@ fn substitute(ctx: &mut EvalCtx, a: &[Ev]) -> R {
         return ok(s);
     }
     match a.get(3) {
-        None | Some(Ev::Missing) => checked(s.replace(&old, &new)),
+        None | Some(Ev::Missing) => {
+            // Bound the result before building it: 32,767 replacements of a 32,767-character
+            // text would otherwise allocate gigabytes only to be rejected afterwards.
+            let hits = s.matches(old.as_str()).count();
+            let len = s.chars().count() - hits * old.chars().count() + hits * new.chars().count();
+            if len > MAX_TEXT_LEN {
+                return Err(ErrorKind::Value);
+            }
+            checked(s.replace(&old, &new))
+        }
         Some(ev) => {
             let n = ctx.num(ev)?.trunc();
             if n < 1.0 {

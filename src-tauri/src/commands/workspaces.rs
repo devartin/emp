@@ -1,5 +1,6 @@
 //! Workspace commands (SPEC §11.3 "Workspaces").
 
+use emp_store::LifeAppInstance;
 use emp_store::model::{Icon, PageMeta, Workspace, WorkspacePatch};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -106,13 +107,11 @@ pub struct WorkspaceOpened {
     recents: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     last_route: Option<Value>,
-    lifeapps: Vec<Value>,
+    lifeapps: Vec<LifeAppInstance>,
 }
 
-/// `workspace_open({ id }) → { workspace, pages, recents, lastRoute?, lifeapps }`.
-///
-/// `lifeapps` comes from the life-apps workstream (`commands::lifeapp`); until it provides an instance listing for
-/// a workspace the list is empty.
+/// `workspace_open({ id }) → { workspace, pages, recents, lastRoute?, lifeapps }` (`lifeapps`: the life-app
+/// instances installed in the workspace, as `lifeapp_instances` lists them).
 #[tauri::command]
 pub async fn workspace_open(app: AppHandle, req: IdReq) -> ApiResult<WorkspaceOpened> {
     validate::id("id", &req.id)?;
@@ -129,7 +128,7 @@ pub async fn workspace_open(app: AppHandle, req: IdReq) -> ApiResult<WorkspaceOp
             pages: opened.pages,
             recents: opened.recents,
             last_route,
-            lifeapps: Vec::new(),
+            lifeapps: opened.lifeapps,
         })
     })
     .await

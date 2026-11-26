@@ -213,7 +213,7 @@ export function WizardSheet() {
     const onEvent = (e: { kind: string; done?: number; total?: number; label?: string }) => {
       if (e.kind !== "progress" || !e.total) return;
       setProgress(e.done! / e.total);
-      if (e.label)
+      if (e.label && e.done !== e.total)
         setBuild((rows) => {
           if (rows.some((r) => r.label === e.label)) return rows;
           return [...rows.map((r) => ({ ...r, done: true })), { label: e.label!, done: e.done === e.total }];

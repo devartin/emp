@@ -35,6 +35,13 @@ pub const MAX_SELECT_DISTINCT: usize = 50;
 pub const MAX_COLUMNS: usize = 200;
 /// Rows written per transaction.
 pub const CHUNK: usize = 1_000;
+/// One exported row: `(rowId, display cells)`.
+pub type ExportRow = (String, Vec<String>);
+
+/// Largest CSV accepted (§9.16; the app asks for confirmation above [`CSV_CONFIRM_BYTES`]).
+pub const MAX_CSV_BYTES: usize = 1 << 30;
+/// CSV size above which the app asks the user to confirm the import (§9.16).
+pub const CSV_CONFIRM_BYTES: usize = 100 << 20;
 
 /// One previewed column.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -128,17 +135,22 @@ fn sheet_err(e: emp_sheets::SheetError) -> StoreError {
 }
 
 /// Rows of a workbook sheet as display strings.
+///
+/// At most `max_rows` rows are materialised, and the materialised area is capped at
+/// [`MAX_TABLE_CELLS`]: a sheet whose used area spans the grid (two corner cells are enough)
+/// would otherwise build hundreds of millions of display strings up front.
 pub(crate) fn sheet_table(
     wb: &Workbook,
     sheet: emp_sheets::SheetId,
     rect: Option<Rect>,
-) -> Vec<Vec<String>> {
+    max_rows: usize,
+) -> Result<Vec<Vec<String>>> {
     let Some(s) = wb.sheet(sheet) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let (rows, cols) = s.extent();
     if rows == 0 || cols == 0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let rect = rect.unwrap_or(Rect {
         r0: 0,
@@ -146,15 +158,31 @@ pub(crate) fn sheet_table(
         r1: rows - 1,
         c1: cols - 1,
     });
-    let r1 = rect.r1.min(rows.saturating_sub(1));
+    let limit = u32::try_from(max_rows.saturating_sub(1)).unwrap_or(u32::MAX);
+    let r1 = rect
+        .r1
+        .min(rows.saturating_sub(1))
+        .min(rect.r0.saturating_add(limit));
     let c1 = rect
         .c1
         .min(cols.saturating_sub(1))
-        .min(rect.c0 + MAX_COLUMNS as u32);
-    (rect.r0..=r1)
+        .min(rect.c0.saturating_add(MAX_COLUMNS as u32));
+    if max_rows == 0 || rect.r0 > r1 || rect.c0 > c1 {
+        return Ok(Vec::new());
+    }
+    let area = u64::from(r1 - rect.r0 + 1) * u64::from(c1 - rect.c0 + 1);
+    if area > MAX_TABLE_CELLS {
+        return Err(StoreError::TooLarge(
+            "the sheet range is larger than 5,000,000 cells",
+        ));
+    }
+    Ok((rect.r0..=r1)
         .map(|r| (rect.c0..=c1).map(|c| wb.display(sheet, r, c)).collect())
-        .collect()
+        .collect())
 }
+
+/// Largest sheet area (rows × columns, empty cells included) turned into a table (§9.16).
+pub const MAX_TABLE_CELLS: u64 = 5_000_000;
 
 /// Parses CSV or XLSX bytes into a table (first row = header). `sheet` picks an XLSX sheet by name.
 pub fn read_table(name: &str, bytes: &[u8], sheet: Option<&str>, max_rows: usize) -> Result<Table> {
@@ -179,8 +207,7 @@ pub fn read_table(name: &str, bytes: &[u8], sheet: Option<&str>, max_rows: usize
                     .map(|s| s.id)
                     .ok_or(StoreError::NotFound("sheet"))?,
             };
-            let mut rows = sheet_table(&wb, sid, None);
-            rows.truncate(max_rows.saturating_add(1));
+            let mut rows = sheet_table(&wb, sid, None, max_rows.saturating_add(1))?;
             let header = if rows.is_empty() {
                 Vec::new()
             } else {
@@ -193,6 +220,9 @@ pub fn read_table(name: &str, bytes: &[u8], sheet: Option<&str>, max_rows: usize
                 encoding: "xlsx".into(),
                 sheets: Some(names),
             });
+        }
+        if bytes.len() > MAX_CSV_BYTES {
+            return Err(StoreError::TooLarge("CSV file (1 GiB at most)"));
         }
         let (sniff, mut rows) =
             emp_sheets::io::csv::read_rows(bytes, max_rows.saturating_add(1)).map_err(sheet_err)?;
@@ -575,6 +605,19 @@ impl Store {
         database_id: &str,
         view_id: Option<&str>,
     ) -> Result<Vec<Vec<String>>> {
+        let (header, rows) = self.db_export_rows(database_id, view_id)?;
+        let mut table = Vec::with_capacity(rows.len() + 1);
+        table.push(header);
+        table.extend(rows.into_iter().map(|(_, r)| r));
+        Ok(table)
+    }
+
+    /// [`Self::db_export_table`] with each row's id: `(header, [(rowId, cells)])`.
+    pub fn db_export_rows(
+        &self,
+        database_id: &str,
+        view_id: Option<&str>,
+    ) -> Result<(Vec<String>, Vec<ExportRow>)> {
         let s = self.session()?;
         let ctx = self.date_ctx()?;
         let world = self.read(|c| load_world(c, &s.codec, database_id))?;
@@ -614,16 +657,18 @@ impl Store {
         };
         let ev = Evaluator::new(&world, ctx);
         let out = engine::run(&ev, ord, &spec);
-        let mut table = vec![props.iter().map(|p| p.name.clone()).collect::<Vec<_>>()];
+        let header = props.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+        let mut rows = Vec::with_capacity(out.rows.len());
         for r in out.rows {
-            table.push(
+            rows.push((
+                d.rows[r].id.clone(),
                 props
                     .iter()
                     .map(|p| export_text(&ev, p, ev.value(ord, r, p).as_ref()))
                     .collect(),
-            );
+            ));
         }
-        Ok(table)
+        Ok((header, rows))
     }
 
     /// `db_export` (job): CSV or XLSX bytes and the number of rows.
@@ -724,7 +769,12 @@ impl Store {
     ) -> Result<PageMeta> {
         let wb = self.workbook_of(sheet_id)?;
         let mut rows = self.sheet_read(&wb, |e| {
-            Ok(sheet_table(&e.wb, e.engine_id(sheet_id)?, Some(rect)))
+            sheet_table(
+                &e.wb,
+                e.engine_id(sheet_id)?,
+                Some(rect),
+                crate::repo::rows::MAX_ROWS.saturating_add(1),
+            )
         })?;
         let meta = self.sheet_meta(sheet_id)?;
         let header: Vec<String> = if has_header && !rows.is_empty() {
@@ -853,5 +903,33 @@ mod tests {
         assert_eq!(p.columns[0].inferred, PropType::Title);
         assert_eq!(p.columns[1].inferred, PropType::Number);
         assert_eq!(p.columns[2].inferred, PropType::Select);
+    }
+
+    #[test]
+    fn sparse_xlsx_sheets_are_bounded() {
+        // Two corner cells make the used area the whole grid: materialising it as a table
+        // (a million rows of 201 display strings) used to exhaust memory.
+        let mut wb = Workbook::empty(Arc::new(CacheHost::new()));
+        let s = wb.add_sheet(Some("S"), None).unwrap();
+        wb.set_input(s, 0, 0, "Name").unwrap();
+        wb.set_input(s, 1_048_575, 16_383, "far").unwrap();
+        let bytes = emp_sheets::io::xlsx_export::export_xlsx(&wb).unwrap();
+        let r = read_table("x.xlsx", &bytes, None, crate::repo::rows::MAX_ROWS);
+        assert!(matches!(r, Err(StoreError::TooLarge(_))), "{r:?}");
+        // A small sheet still reads, and `max_rows` bounds what is materialised.
+        let mut wb = Workbook::empty(Arc::new(CacheHost::new()));
+        let s = wb.add_sheet(Some("S"), None).unwrap();
+        for r in 0..50 {
+            wb.set_input(s, r, 0, &format!("v{r}")).unwrap();
+        }
+        let rows = sheet_table(&wb, s, None, 10).unwrap();
+        assert_eq!(rows.len(), 10);
+        let far = Rect {
+            r0: 0,
+            c0: u32::MAX - 1,
+            r1: 5,
+            c1: u32::MAX,
+        };
+        assert!(sheet_table(&wb, s, Some(far), 10).unwrap().is_empty());
     }
 }

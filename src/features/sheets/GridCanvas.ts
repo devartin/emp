@@ -75,6 +75,7 @@ function readTheme(): Theme {
   const dark = t === 'dark' || t === 'midnight';
   const fontSize = parseFloat(cs.fontSize) || 14;
   const accent = v('--accent-solid', '#5E5CE6');
+  const mono = (root.getAttribute('data-accent') ?? 'graphite') === 'graphite';
   return {
     dark,
     bg: v('--bg-canvas', dark ? '#111114' : '#FFFFFF'),
@@ -91,8 +92,10 @@ function readTheme(): Theme {
     accent,
     accentText: v('--accent-text', '#4B49C8'),
     accentSoft: v('--accent-soft', 'rgba(94,92,230,.10)'),
-    inputBg: mixColor(accent, v('--bg-canvas', '#FFFFFF'), dark ? 0.18 : 0.08),
-    inputText: v('--accent-text', '#4B49C8'),
+    // Input cells keep the spreadsheet convention of "blue inputs"; with the monochrome (graphite) accent the accent
+    // is grey, so fall back to the info blue to stay distinguishable from formula cells.
+    inputBg: mixColor(mono ? v('--info', '#3B82F6') : accent, v('--bg-canvas', '#FFFFFF'), dark ? 0.18 : 0.08),
+    inputText: mono ? v('--info-text', '#1F6FD1') : v('--accent-text', '#4B49C8'),
     loss: v('--loss', '#E5484D'),
     lossText: v('--loss-text', '#C9302C'),
     gainText: v('--gain-text', '#0B7F45'),

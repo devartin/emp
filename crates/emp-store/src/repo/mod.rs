@@ -8,10 +8,11 @@ pub mod pages;
 pub mod secrets;
 pub mod security_log;
 pub mod settings;
+pub mod tour;
 pub mod versions;
 pub mod workspaces;
 
-// Owned by the databases / sheets / integrations / life-apps workstreams; placeholders until they land.
+// Data layer (databases, sheets, life apps, reminders, sync).
 pub mod databases;
 pub mod lifeapps;
 pub mod outbox;

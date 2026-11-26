@@ -102,6 +102,22 @@ pub fn prescan_zip<R: Read + Seek>(reader: R) -> Result<(), SheetError> {
             ));
         }
     }
+    // The checks above trust the sizes declared in the central directory, but the decompressor
+    // does not stop at the declared size, and calamine reads entries itself. Inflate every entry
+    // once (into a sink) and refuse any that produces more than it declared, so a lying header
+    // cannot smuggle a deflate bomb past the size and ratio limits.
+    for i in 0..z.len() {
+        let f = z.by_index(i).map_err(|e| SheetError::Io(e.to_string()))?;
+        let declared = f.size();
+        let mut limited = f.take(declared.saturating_add(1));
+        let actual = std::io::copy(&mut limited, &mut std::io::sink())
+            .map_err(|e| SheetError::Io(format!("damaged archive entry: {e}")))?;
+        if actual > declared {
+            return Err(SheetError::TooLarge(
+                "an archive entry is larger than its declared size".into(),
+            ));
+        }
+    }
     Ok(())
 }
 

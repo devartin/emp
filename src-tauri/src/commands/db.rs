@@ -1,13 +1,12 @@
 //! Database commands (SPEC §8, §11.3 "Databases").
 //!
 //! Thin, validated wrappers over the `emp-store` database repositories (`repo::{databases, rows, views}`,
-//! `import::table`). Every mutation emits `db:changed { databaseId, dataRev, schemaRev, rowIds? }` (§11.4) so open
-//! views refresh. Property, view and row commands address records by their own id; the owning database is resolved
-//! through a bounded owner cache filled whenever schemas and rows pass through these commands, with a store lookup
-//! as fallback for rows.
+//! `import::table`). `db:changed { databaseId, dataRev, schemaRev, rowIds? }` (§11.4) is not emitted here: the store
+//! raises `StoreEvent::DbChanged` after every committed database write (including the databases that read the
+//! changed one through relations), and `events.rs` forwards it, so every writer (these commands, finance, portfolio,
+//! imports, background jobs) is covered once.
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::LazyLock;
+use std::collections::BTreeMap;
 
 use emp_crypto::ExposeSecret;
 use emp_store::Store;
@@ -18,12 +17,13 @@ use emp_store::dbmodel::{
 };
 use emp_store::import::table::{ImportPreview, TableTarget};
 use emp_store::model::PageMeta;
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use tauri::{AppHandle, Manager, State, Webview};
 
-use super::import::{InputFile, cancelled_or, caps, import_cell, remember_job, stage, take_file};
+use super::import::{
+    InputFile, cancelled_or, caps, import_cell, peek_file, remember_job, take_file,
+};
 use super::job_sink;
 use super::workspaces::IdReq;
 use crate::error::{ApiError, ApiResult};
@@ -34,12 +34,10 @@ use crate::validate;
 
 /// Rows per `db_rows_*` call (§11.3: ≤ 1,000).
 pub const MAX_BATCH: usize = 1_000;
-/// Entries kept in the owner cache before it is reset.
-pub const OWNER_CACHE_MAX: usize = 200_000;
 
-// ───────────────────────────────────────────────────────────────────────────── db:changed and owners
+// ───────────────────────────────────────────────────────────────────────────── db:changed
 
-/// `db:changed` payload (§11.4).
+/// `db:changed` payload (§11.4), built from `StoreEvent::DbChanged` in `events.rs`.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DbChanged {
@@ -52,81 +50,6 @@ pub struct DbChanged {
     /// Changed rows, when known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub row_ids: Option<Vec<String>>,
-}
-
-static OWNERS: LazyLock<Mutex<HashMap<String, String>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-fn note_owner(id: &str, db: &str) {
-    let mut m = OWNERS.lock();
-    if m.len() >= OWNER_CACHE_MAX {
-        m.clear();
-    }
-    m.insert(id.to_owned(), db.to_owned());
-}
-
-/// Records the properties and views of `schema` as owned by its database.
-pub fn note_schema(schema: &DbSchema) {
-    let db = &schema.database.id;
-    for p in &schema.properties {
-        note_owner(&p.id, db);
-    }
-    for v in &schema.views {
-        note_owner(&v.id, db);
-    }
-}
-
-/// Records `rows` as owned by `db`.
-pub fn note_rows(db: &str, rows: &[RowDto]) {
-    for r in rows {
-        note_owner(&r.id, db);
-    }
-}
-
-/// The cached owning database of a property, view or row id.
-#[must_use]
-pub fn cached_owner(id: &str) -> Option<String> {
-    OWNERS.lock().get(id).cloned()
-}
-
-/// The database of a row (cache, then the store).
-pub fn row_owner(store: &Store, row_id: &str) -> ApiResult<String> {
-    if let Some(db) = cached_owner(row_id) {
-        return Ok(db);
-    }
-    let got = store.db_row_get(row_id)?;
-    note_owner(row_id, &got.database_id);
-    Ok(got.database_id)
-}
-
-/// Emits `db:changed` for `database_id` with its current revisions (best effort).
-pub fn emit_db_changed(
-    state: &AppState,
-    store: &Store,
-    database_id: &str,
-    row_ids: Option<Vec<String>>,
-) {
-    match store.db_get_schema(database_id) {
-        Ok(schema) => {
-            note_schema(&schema);
-            state.events.emit(
-                crate::events::DB_CHANGED,
-                DbChanged {
-                    database_id: database_id.to_owned(),
-                    data_rev: schema.database.data_rev,
-                    schema_rev: schema.database.schema_rev,
-                    row_ids,
-                },
-            );
-        }
-        Err(e) => tracing::debug!(code = e.code(), "db:changed not emitted"),
-    }
-}
-
-fn emit_for_owner(state: &AppState, store: &Store, id: &str) {
-    if let Some(db) = cached_owner(id) {
-        emit_db_changed(state, store, &db, None);
-    }
 }
 
 /// Every row of `database_id` in the order of `view_id` (or manual order), through query windows.
@@ -243,7 +166,6 @@ pub async fn db_create(app: AppHandle, req: DbCreate) -> ApiResult<DbCreated> {
     blocking(move || {
         let state = app.state::<AppState>();
         let created = state.session()?.db_create(req)?;
-        note_schema(&created.schema);
         Ok(created)
     })
     .await
@@ -255,7 +177,6 @@ pub async fn db_get_schema(app: AppHandle, req: IdReq) -> ApiResult<DbSchema> {
     validate::id("id", &req.id)?;
     blocking(move || {
         let schema = app.state::<AppState>().session()?.db_get_schema(&req.id)?;
-        note_schema(&schema);
         Ok(schema)
     })
     .await
@@ -286,7 +207,6 @@ pub async fn db_update(app: AppHandle, req: DbUpdateReq) -> ApiResult<DbSchema> 
         let state = app.state::<AppState>();
         let store = state.session()?;
         let schema = store.db_update(&req.id, req.patch)?;
-        emit_db_changed(&state, &store, &req.id, None);
         Ok(schema)
     })
     .await
@@ -363,8 +283,6 @@ pub async fn db_property_create(app: AppHandle, req: PropertyCreateReq) -> ApiRe
             req.config,
             req.after_id.as_deref(),
         )?;
-        note_owner(&p.id, &req.database_id);
-        emit_db_changed(&state, &store, &req.database_id, None);
         Ok(p)
     })
     .await
@@ -394,7 +312,6 @@ pub async fn db_property_update(app: AppHandle, req: PropertyUpdateReq) -> ApiRe
         let state = app.state::<AppState>();
         let store = state.session()?;
         let p = store.db_property_update(&req.id, req.patch)?;
-        emit_for_owner(&state, &store, &req.id);
         Ok(p)
     })
     .await
@@ -423,17 +340,12 @@ pub async fn db_property_convert(
     check_config("config", req.config.as_ref())?;
     let store = state.session()?;
     let sink = job_sink(&webview, &req.on_event);
-    let app = webview.app_handle().clone();
     Ok(state.jobs.spawn(
         "db_property_convert",
         false,
         store.now(),
         sink,
-        move |ctx| {
-            let p = store.db_property_convert(&req.id, req.to, req.config, ctx)?;
-            emit_for_owner(&app.state::<AppState>(), &store, &req.id);
-            Ok(p)
-        },
+        move |ctx| Ok(store.db_property_convert(&req.id, req.to, req.config, ctx)?),
     ))
 }
 
@@ -454,7 +366,6 @@ pub async fn db_property_delete(app: AppHandle, req: PropertyDeleteReq) -> ApiRe
         let state = app.state::<AppState>();
         let store = state.session()?;
         store.db_property_delete(&req.id, req.also_dual.unwrap_or(false))?;
-        emit_for_owner(&state, &store, &req.id);
         Ok(())
     })
     .await
@@ -491,7 +402,6 @@ pub async fn db_property_reorder(app: AppHandle, req: ReorderReq) -> ApiResult<P
             req.before_id.as_deref(),
             req.after_id.as_deref(),
         )?;
-        emit_for_owner(&state, &store, &req.id);
         Ok(p)
     })
     .await
@@ -517,7 +427,6 @@ pub async fn db_select_option_upsert(app: AppHandle, req: OptionUpsertReq) -> Ap
         let state = app.state::<AppState>();
         let store = state.session()?;
         let p = store.db_select_option_upsert(&req.property_id, req.option)?;
-        emit_for_owner(&state, &store, &req.property_id);
         Ok(p)
     })
     .await
@@ -540,7 +449,6 @@ pub async fn db_select_option_delete(app: AppHandle, req: OptionDeleteReq) -> Ap
         let state = app.state::<AppState>();
         let store = state.session()?;
         let p = store.db_select_option_delete(&req.property_id, &req.option_id)?;
-        emit_for_owner(&state, &store, &req.property_id);
         Ok(p)
     })
     .await
@@ -604,15 +512,7 @@ pub async fn db_query(app: AppHandle, req: QueryRequest) -> ApiResult<QueryRespo
     if let Some(k) = &req.known_query_rev {
         validate::bounded("knownQueryRev", k, 128)?;
     }
-    blocking(move || {
-        let db = req.database_id.clone();
-        let r = app.state::<AppState>().session()?.db_query(req)?;
-        if let QueryResponse::Rows(q) = &r {
-            note_rows(&db, &q.rows);
-        }
-        Ok(r)
-    })
-    .await
+    blocking(move || Ok(app.state::<AppState>().session()?.db_query(req)?)).await
 }
 
 /// `db_query_range` request.
@@ -648,7 +548,6 @@ pub async fn db_query_range(app: AppHandle, req: QueryRangeReq) -> ApiResult<Vec
             &req.from,
             &req.to,
         )?;
-        note_rows(&req.database_id, &rows);
         Ok(rows)
     })
     .await
@@ -699,7 +598,6 @@ pub async fn db_row_get(app: AppHandle, req: IdReq) -> ApiResult<RowGet> {
     validate::id("id", &req.id)?;
     blocking(move || {
         let got = app.state::<AppState>().session()?.db_row_get(&req.id)?;
-        note_owner(&got.row.id, &got.database_id);
         Ok(got)
     })
     .await
@@ -722,11 +620,7 @@ pub async fn db_row_create(app: AppHandle, req: RowCreate) -> ApiResult<RowDto> 
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
-        let db = req.database_id.clone();
-        let row = store.db_row_create(req)?;
-        note_owner(&row.id, &db);
-        emit_db_changed(&state, &store, &db, Some(vec![row.id.clone()]));
-        Ok(row)
+        Ok(store.db_row_create(req)?)
     })
     .await
 }
@@ -736,18 +630,6 @@ pub async fn db_row_create(app: AppHandle, req: RowCreate) -> ApiResult<RowDto> 
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RowsUpdateReq {
     updates: Vec<RowUpdate>,
-}
-
-fn emit_rows(state: &AppState, store: &Store, rows: &[String]) {
-    let mut by_db: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for id in rows {
-        if let Ok(db) = row_owner(store, id) {
-            by_db.entry(db).or_default().push(id.clone());
-        }
-    }
-    for (db, ids) in by_db {
-        emit_db_changed(state, store, &db, Some(ids));
-    }
 }
 
 /// `db_rows_update({ updates: { id, values, baseRev? }[] }) → RowDTO[]` (≤ 1,000 per call; `CONFLICT` on a stale
@@ -768,13 +650,7 @@ pub async fn db_rows_update(app: AppHandle, req: RowsUpdateReq) -> ApiResult<Vec
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
-        let ids: Vec<String> = req.updates.iter().map(|u| u.id.clone()).collect();
-        // Resolve owners before the write so rows are attributed even if the cache was cold.
-        for id in &ids {
-            let _ = row_owner(&store, id);
-        }
         let rows = store.db_rows_update(req.updates)?;
-        emit_rows(&state, &store, &ids);
         Ok(rows)
     })
     .await
@@ -788,11 +664,7 @@ pub async fn db_rows_delete(app: AppHandle, req: IdsReq) -> ApiResult<()> {
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
-        for id in &ids {
-            let _ = row_owner(&store, id);
-        }
         store.db_rows_delete(&ids)?;
-        emit_rows(&state, &store, &ids);
         Ok(())
     })
     .await
@@ -807,7 +679,6 @@ pub async fn db_rows_restore(app: AppHandle, req: IdsReq) -> ApiResult<Vec<RowDt
         let state = app.state::<AppState>();
         let store = state.session()?;
         let rows = store.db_rows_restore(&ids)?;
-        emit_rows(&state, &store, &ids);
         Ok(rows)
     })
     .await
@@ -846,7 +717,6 @@ pub async fn db_rows_move(app: AppHandle, req: RowsMoveReq) -> ApiResult<Vec<Row
             req.after_id.as_deref(),
             req.group_value,
         )?;
-        emit_rows(&state, &store, &req.ids);
         Ok(rows)
     })
     .await
@@ -860,18 +730,7 @@ pub async fn db_rows_duplicate(app: AppHandle, req: IdsReq) -> ApiResult<Vec<Row
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
-        let db = row_owner(&store, &ids[0]).ok();
-        let rows = store.db_rows_duplicate(&ids)?;
-        if let Some(db) = db {
-            note_rows(&db, &rows);
-            emit_db_changed(
-                &state,
-                &store,
-                &db,
-                Some(rows.iter().map(|r| r.id.clone()).collect()),
-            );
-        }
-        Ok(rows)
+        Ok(store.db_rows_duplicate(&ids)?)
     })
     .await
 }
@@ -904,8 +763,6 @@ pub async fn db_view_create(app: AppHandle, req: ViewCreateReq) -> ApiResult<Vie
             req.layout,
             req.from_view_id.as_deref(),
         )?;
-        note_owner(&v.id, &req.database_id);
-        emit_db_changed(&state, &store, &req.database_id, None);
         Ok(v)
     })
     .await
@@ -949,7 +806,6 @@ pub async fn db_view_update(app: AppHandle, req: ViewUpdateReq) -> ApiResult<Vie
         let state = app.state::<AppState>();
         let store = state.session()?;
         let v = store.db_view_update(&req.id, req.patch)?;
-        emit_for_owner(&state, &store, &req.id);
         Ok(v)
     })
     .await
@@ -963,7 +819,6 @@ pub async fn db_view_delete(app: AppHandle, req: IdReq) -> ApiResult<()> {
         let state = app.state::<AppState>();
         let store = state.session()?;
         store.db_view_delete(&req.id)?;
-        emit_for_owner(&state, &store, &req.id);
         Ok(())
     })
     .await
@@ -978,7 +833,6 @@ pub async fn db_view_reorder(app: AppHandle, req: ReorderReq) -> ApiResult<View>
         let store = state.session()?;
         let v =
             store.db_view_reorder(&req.id, req.before_id.as_deref(), req.after_id.as_deref())?;
-        emit_for_owner(&state, &store, &req.id);
         Ok(v)
     })
     .await
@@ -1038,8 +892,8 @@ pub async fn db_formula_check(app: AppHandle, req: FormulaCheckReq) -> ApiResult
 
 // ───────────────────────────────────────────────────────────────────────────── import / export
 
-/// `db_import_preview({ grantId }) → { columns, rows, delimiter, encoding, sheets? }`. The file stays staged for the
-/// `db_import_csv` that follows.
+/// `db_import_preview({ grantId }) → { columns, rows, delimiter, encoding, sheets? }`. The grant is only peeked: the
+/// `db_import_csv` that follows redeems the same `grantId`.
 #[tauri::command]
 pub async fn db_import_preview(
     app: AppHandle,
@@ -1049,10 +903,9 @@ pub async fn db_import_preview(
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
-        let f: InputFile = take_file(&state, &req.grant_id, &[GrantPurpose::Import], caps::TABLE)?;
+        let f: InputFile = peek_file(&state, &req.grant_id, &[GrantPurpose::Import], caps::TABLE)?;
         let preview = crate::jobs::catch_panics(|| store.db_import_preview(&f.name, &f.bytes))
             .map_err(|_| ApiError::invalid("grantId", "This file could not be read"))??;
-        stage(&req.grant_id, &f);
         Ok(preview)
     })
     .await
@@ -1119,7 +972,6 @@ pub async fn db_import_csv(
                 .db_import_table(&f.name, &f.bytes, req.target, req.sheet.as_deref(), ctx)
                 .map_err(|e| cancelled_or(ctx, e.into()))?;
             *out.lock() = Some(r.import_id.clone());
-            emit_db_changed(&state, &store, &r.database_id, None);
             Ok(r)
         });
     remember_job(&job, cell);
@@ -1159,6 +1011,8 @@ pub async fn db_export(
     validate::opt_id("viewId", req.view_id.as_deref())?;
     validate::grant_id("grantId", &req.grant_id)?;
     let store = state.session()?;
+    // SPEC §9.10: exporting unencrypted data out of an encrypted vault needs re-auth (as `export_pages` does).
+    super::export::require_export_reauth(&store)?;
     let target = super::import::take_export_target(&state, &req.grant_id)?;
     let sink = job_sink(&webview, &req.on_event);
     Ok(state
@@ -1232,13 +1086,6 @@ mod tests {
             v,
             json!({ "databaseId": "d", "dataRev": 3, "schemaRev": 2 })
         );
-    }
-
-    #[test]
-    fn owner_cache_records_and_resets() {
-        note_owner("row-a", "db-1");
-        assert_eq!(cached_owner("row-a").as_deref(), Some("db-1"));
-        assert!(cached_owner("row-missing").is_none());
     }
 
     #[test]

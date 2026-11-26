@@ -4,7 +4,7 @@ import {
 } from "recharts";
 import { lttb } from "@/lib/lttb";
 import { summarizeSeries } from "./a11y";
-import { MARGIN, X_AXIS_HEIGHT, niceDomain, tickFormatter, tickStyle, valueFormatter, type ValueFormat } from "./axis";
+import { MARGIN, X_AXIS_HEIGHT, edgeAwareTick, niceDomain, tickFormatter, tickStyle, valueFormatter, type ValueFormat } from "./axis";
 import { ChartFrame, type ChartTable } from "./ChartFrame";
 import { resolveColor, useChartTheme, seriesColor, type ChartTheme } from "./theme";
 import { ChartTooltip } from "./Tooltip";
@@ -197,7 +197,7 @@ export function LineChart<T extends Datum>({
           dataKey={x as string as never}
           tickLine={false}
           axisLine={false}
-          tick={tickStyle(t)}
+          tick={edgeAwareTick(t, xFormat, size.width)}
           tickFormatter={(v) => xFormat(v)}
           height={X_AXIS_HEIGHT}
           tickMargin={8}

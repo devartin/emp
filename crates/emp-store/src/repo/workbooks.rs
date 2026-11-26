@@ -1087,3 +1087,116 @@ impl Store {
         })
     }
 }
+
+// ───────────────────────────────────────────────────────────────────────────── versions
+
+/// Snapshot stored in `workbook` versions: the whole engine file plus the sheet uuids, so a restore keeps the
+/// ids of sheets that still exist and gives deleted ones their old ids back.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkbookSnapshot {
+    v: u32,
+    workbook: WorkbookFile,
+    #[serde(default)]
+    sheets: Vec<SnapshotSheet>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SnapshotSheet {
+    id: String,
+    engine_id: SheetId,
+}
+
+fn snapshot_of(e: &Engine) -> Result<serde_json::Value> {
+    let workbook = e.wb.to_file();
+    let sheets = workbook
+        .sheets
+        .iter()
+        .filter_map(|sf| {
+            e.uuid(sf.id).map(|u| SnapshotSheet {
+                id: u.to_owned(),
+                engine_id: sf.id,
+            })
+        })
+        .collect();
+    Ok(serde_json::to_value(WorkbookSnapshot {
+        v: 1,
+        workbook,
+        sheets,
+    })?)
+}
+
+impl Store {
+    fn live_workbook(&self, wb_id: &str) -> Result<()> {
+        let page = self
+            .read(|c| load_page(c, wb_id))?
+            .ok_or(StoreError::NotFound("workbook"))?;
+        if page.kind != PageKind::Sheet.as_str() {
+            return Err(StoreError::NotFound("workbook"));
+        }
+        if page.deleted_at.is_some() {
+            return Err(StoreError::invalid("the workbook is in the trash"));
+        }
+        Ok(())
+    }
+
+    /// `version_create({targetKind:'workbook'})`: a manual, labelled version of the whole workbook (every sheet,
+    /// style, name and setting).
+    pub(crate) fn workbook_version_create(
+        &self,
+        wb_id: &str,
+        label: &str,
+    ) -> Result<crate::model::VersionMeta> {
+        self.live_workbook(wb_id)?;
+        let snapshot = self.sheet_read(wb_id, snapshot_of)?;
+        self.version_insert(
+            wb_id,
+            crate::model::VersionTargetKind::Workbook,
+            crate::model::VersionReason::Manual,
+            Some(label.to_owned()).filter(|l| !l.trim().is_empty()),
+            snapshot,
+        )
+    }
+
+    /// `version_restore` of a workbook version: the current state is kept as a `pre_restore` version, then the
+    /// snapshot replaces the workbook (only the bands and sheets that differ are rewritten). The undo history of
+    /// the workbook starts afresh. Returns the new workbook rev.
+    pub(crate) fn workbook_version_restore(
+        &self,
+        wb_id: &str,
+        snapshot: serde_json::Value,
+    ) -> Result<i64> {
+        self.live_workbook(wb_id)?;
+        let snap: WorkbookSnapshot = serde_json::from_value(snapshot)
+            .map_err(|_| StoreError::Integrity("unreadable workbook version".into()))?;
+        let current = self.sheet_read(wb_id, snapshot_of)?;
+        self.version_insert(
+            wb_id,
+            crate::model::VersionTargetKind::Workbook,
+            crate::model::VersionReason::PreRestore,
+            None,
+            current,
+        )?;
+        let host = current_host();
+        let ((), rev) = self.sheet_mutate(wb_id, move |e| {
+            let mut file = snap.workbook;
+            // Engine sheet ids are never reused: keep allocating after the highest id ever handed out.
+            file.next_sheet_id = file.next_sheet_id.max(e.wb.to_file().next_sheet_id);
+            let wb = Workbook::from_file(file, host).map_err(sheet_err)?;
+            for s in snap.sheets {
+                if e.uuid(s.engine_id).is_none() && !e.sheets.iter().any(|(u, _)| *u == s.id) {
+                    e.sheets.push((s.id, s.engine_id));
+                }
+            }
+            e.wb = wb;
+            Ok(())
+        })?;
+        self.emit(StoreEvent::PageChanged {
+            id: wb_id.to_owned(),
+            meta_rev: None,
+            doc_rev: None,
+        });
+        Ok(rev)
+    }
+}

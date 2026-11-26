@@ -100,6 +100,67 @@ fn front_matter(meta: &PageMeta) -> String {
 }
 
 impl Store {
+    /// Writes `<Title>.csv` beside a database page's `.md` file and one `.md` per row (front matter with the
+    /// row's display values, then its body) into the `<Title>/` folder. Returns the number of files written.
+    fn export_database_rows(
+        &self,
+        m: &PageMeta,
+        md_path: &Path,
+        r: &Resolver<'_>,
+        used: &mut HashMap<PathBuf, HashSet<String>>,
+        rel: &Path,
+    ) -> Result<usize> {
+        let (csv, _) = self.db_export(&m.id, None, "csv", &crate::NoProgress)?;
+        if let Some(p) = md_path.parent() {
+            std::fs::create_dir_all(p)?;
+        }
+        std::fs::write(md_path.with_extension("csv"), csv)?;
+        let mut files = 1;
+        let (header, rows) = self.db_export_rows(&m.id, None)?;
+        if rows.is_empty() {
+            return Ok(files);
+        }
+        let rows_rel = rel.with_extension("");
+        let rows_dir = md_path.with_extension("");
+        std::fs::create_dir_all(&rows_dir)?;
+        let names = used.entry(rows_rel).or_default();
+        // Rows sit one folder deeper than the database page: relative links climb one more level.
+        let r = Resolver {
+            depth: r.depth + 1,
+            ..*r
+        };
+        for (row_id, cells) in rows {
+            let title = cells.first().cloned().unwrap_or_default();
+            let base = safe_file_name(&title);
+            let mut name = base.clone();
+            let mut n = 2;
+            while names.contains(&name.to_lowercase()) {
+                name = format!("{base} ({n})");
+                n += 1;
+            }
+            names.insert(name.to_lowercase());
+            let mut out = String::from("---\n");
+            for (h, v) in header.iter().zip(&cells) {
+                if !v.is_empty() {
+                    out.push_str(&format!(
+                        "{}: {}\n",
+                        serde_json::to_string(h).unwrap_or_default(),
+                        serde_json::to_string(v).unwrap_or_default()
+                    ));
+                }
+            }
+            out.push_str(&format!("id: {row_id}\n---\n\n"));
+            out.push_str(&format!("# {}\n\n", crate::doc::markdown::escape(&title)));
+            if let Some((d, _)) = self.doc_get(&row_id)? {
+                out.push_str(&to_markdown(&d, &r));
+                out.push('\n');
+            }
+            std::fs::write(rows_dir.join(format!("{name}.md")), out)?;
+            files += 1;
+        }
+        Ok(files)
+    }
+
     /// Exports pages into `dir`. Returns the number of files written.
     pub fn export_pages(
         &self,
@@ -201,7 +262,29 @@ impl Store {
                 depth,
             };
             let doc = docs.get(&m.id);
+            let path = dir.join(&rel);
             let body = match opts.format {
+                ExportFormat::Markdown if m.kind == PageKind::Database => {
+                    // §17.5: a database exports as CSV plus a folder of row `.md` files.
+                    files += self.export_database_rows(m, &path, &r, &mut used, &rel)?;
+                    let csv_name = path
+                        .with_extension("csv")
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let mut out = front_matter(m);
+                    out.push_str(&format!("# {}\n\n", crate::doc::markdown::escape(&m.title)));
+                    if let Some(d) = doc {
+                        out.push_str(&to_markdown(d, &r));
+                        out.push('\n');
+                    }
+                    out.push_str(&format!(
+                        "Rows: [{}](<{}>)\n",
+                        crate::doc::markdown::escape(&csv_name),
+                        csv_name
+                    ));
+                    out
+                }
                 ExportFormat::Markdown => {
                     let mut out = front_matter(m);
                     out.push_str(&format!("# {}\n\n", crate::doc::markdown::escape(&m.title)));
@@ -225,7 +308,6 @@ impl Store {
                     serde_json::to_string_pretty(&serde_json::json!({ "meta": m, "doc": doc }))?
                 }
             };
-            let path = dir.join(&rel);
             if let Some(p) = path.parent() {
                 std::fs::create_dir_all(p)?;
             }

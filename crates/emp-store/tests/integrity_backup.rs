@@ -322,18 +322,31 @@ fn snapshots_list_verify_and_prune() {
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, id);
         assert!(e.store.snapshot_verify(&id, &NoProgress).unwrap());
-        // Snapshots keep blobs beside the file.
         let path = e.store.snapshot_path(&id).unwrap();
         let blobs = emp_store::backup::snapshot::blobs_dir(&path);
-        assert_eq!(std::fs::read_dir(&blobs).unwrap().count(), 1);
-        // A corrupted blob fails verification.
-        let blob = std::fs::read_dir(&blobs)
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap()
-            .path();
-        std::fs::write(&blob, b"garbage").unwrap();
+        if encrypted {
+            // Snapshots of encrypted vaults keep the (already encrypted) blobs beside the file.
+            assert_eq!(std::fs::read_dir(&blobs).unwrap().count(), 1);
+            // A corrupted blob fails verification.
+            let blob = std::fs::read_dir(&blobs)
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .path();
+            std::fs::write(&blob, b"garbage").unwrap();
+        } else {
+            // Regression: a plaintext vault's blobs are raw, so they are packed inside the backup-password
+            // container instead of being copied beside it in the clear.
+            assert!(!blobs.exists());
+            let file = std::fs::read(&path).unwrap();
+            assert!(!file.windows(10).any(|w| w == b"blob bytes"));
+            // A corrupted container fails verification.
+            let mut bad = file.clone();
+            let mid = bad.len() / 2;
+            bad[mid] ^= 0x01;
+            std::fs::write(&path, bad).unwrap();
+        }
         assert!(!e.store.snapshot_verify(&id, &NoProgress).unwrap());
         // Retention: 10 daily snapshots → 7 kept.
         for _ in 0..9 {

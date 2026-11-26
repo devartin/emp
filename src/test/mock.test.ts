@@ -288,7 +288,9 @@ describe('search', () => {
     expect(res.hits[0].blockId).toBeTruthy();
 
     const prefix = await api.search.query({ q: 'kitch', limit: 5, reqId: 1 });
-    expect(prefix.hits[0].title).toBe('Kitchen renovation');
+    // Both the "Kitchen renovation" page and the Life OS "Kitchen refresh" project match the prefix.
+    expect(prefix.hits[0].title.startsWith('Kitchen')).toBe(true);
+    expect(prefix.hits.map((h) => h.title)).toContain('Kitchen renovation');
 
     const scoped = await api.search.query({ q: 'in:"Getting Started" shortcuts', limit: 10, reqId: 2 });
     expect(scoped.hits.every((h) => h.path[0] === 'Getting Started' || h.title === 'Getting Started')).toBe(true);

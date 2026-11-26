@@ -211,8 +211,8 @@ impl Store {
         })
     }
 
-    /// `version_create`: a manual, labelled version of the current page document.
-    /// (Workbook versions are created by the sheets repository through [`Store::version_insert`].)
+    /// `version_create`: a manual, labelled version of the current page document or workbook (SPEC §11.3:
+    /// `targetKind: 'page_doc'|'workbook'`).
     pub fn version_create(
         &self,
         target_id: &str,
@@ -220,9 +220,12 @@ impl Store {
         label: &str,
     ) -> Result<VersionMeta> {
         crate::model::validate_title(label)?;
+        if kind == VersionTargetKind::Workbook {
+            return self.workbook_version_create(target_id, label);
+        }
         if kind != VersionTargetKind::PageDoc {
             return Err(StoreError::Unsupported(
-                "only page documents are versioned by this call",
+                "only page documents and workbooks are versioned by this call",
             ));
         }
         let s = self.session()?;
@@ -244,14 +247,24 @@ impl Store {
         })
     }
 
-    /// `version_restore` for page documents: saves the current doc as a `pre_restore` version, then writes the
-    /// snapshot as a new revision. Returns the new doc rev.
+    /// `version_restore`: saves the current state as a `pre_restore` version, then writes the snapshot as a new
+    /// revision. Page documents return the new doc rev, workbooks the new workbook rev and database schemas
+    /// (`pre_bulk` versions taken before a type conversion) the new schema rev.
     pub fn version_restore(&self, id: &str) -> Result<i64> {
         let (target, kind, payload) = self.version_row(id)?;
-        if kind != VersionTargetKind::PageDoc {
-            return Err(StoreError::Unsupported(
-                "restore of this version kind is handled by its repository",
-            ));
+        match kind {
+            VersionTargetKind::PageDoc => {}
+            VersionTargetKind::Workbook => {
+                return self.workbook_version_restore(&target, payload.snapshot);
+            }
+            VersionTargetKind::DbSchema => {
+                return self.db_schema_version_restore(&target, payload.snapshot);
+            }
+            _ => {
+                return Err(StoreError::Unsupported(
+                    "versions of this kind cannot be restored",
+                ));
+            }
         }
         let mut doc: TipTapDoc = crate::doc::migrate::migrate(payload.snapshot)?;
         crate::doc::schema::normalize(&mut doc)?;

@@ -264,13 +264,17 @@
     (isStr(v, 64) && v.indexOf('__CHANNEL__:') === 0) || (typeof v === 'object' && v !== null && typeof v.toJSON === 'function');
   const optChannel = (v) => v === undefined || isChannel(v);
 
+  // Size of the payload as Rust receives it (UTF-8 JSON, or the raw bytes).
   function payloadSize(p) {
     if (p instanceof ArrayBuffer) return p.byteLength;
     if (ArrayBuffer.isView(p)) return p.byteLength;
     try {
       const s = JSON.stringify(p === undefined ? null : p);
-      // UTF-16 code units: an upper bound for ASCII, a safe estimate otherwise.
-      return s ? s.length : 0;
+      if (!s) return 0;
+      // A UTF-16 code unit is 1-3 UTF-8 bytes: count exactly only when the cheap bound is not conclusive.
+      if (s.length * 3 <= MAX_PAYLOAD_BYTES) return s.length;
+      if (s.length > MAX_PAYLOAD_BYTES) return s.length;
+      return new TextEncoder().encode(s).length;
     } catch (_) {
       return Infinity;
     }
@@ -335,9 +339,11 @@
   window.__TAURI_ISOLATION_HOOK__ = (message) => {
     const cmd = message && message.cmd;
     if (typeof cmd !== 'string') return reject(message || {});
+    // The size cap applies to every message, plugin calls included: `cmd` travels unencrypted next to the encrypted
+    // payload, so a payload approved under one name can be replayed under another.
+    if (payloadSize(message.payload) > MAX_PAYLOAD_BYTES) return reject(message);
     if (PLUGIN_PREFIXES.some((p) => cmd.indexOf(p) === 0)) return message;
     if (!ALLOWED.has(cmd)) return reject(message);
-    if (payloadSize(message.payload) > MAX_PAYLOAD_BYTES) return reject(message);
     const req = cmd === 'asset_import_bytes' ? message.payload : message.payload && message.payload.req;
     if (!shapeOk(cmd, req)) return reject(message);
     if (cmd === 'vault_unlock') {

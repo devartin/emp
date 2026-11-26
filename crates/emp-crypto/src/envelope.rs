@@ -503,12 +503,34 @@ pub(crate) fn open_inner(
 
     // 4. Body.
     if compressed {
-        let out =
-            zstd::bulk::decompress(body, MAX_RECORD_BODY).map_err(|_| CryptoError::Compression)?;
-        Ok(Zeroizing::new(out))
+        decompress_bounded(body, MAX_RECORD_BODY)
     } else {
         Ok(Zeroizing::new(body.to_vec()))
     }
+}
+
+/// Decompresses one zstd frame into a zeroizing buffer of exactly its declared content size.
+///
+/// The frame must declare its content size (every frame written by `zstd::bulk::compress` does) and that size must
+/// be at most `max`; the output buffer is allocated once at that exact size, so decompression never reallocates
+/// (no stray plaintext copies on the heap) and never reserves `max` bytes up front. Trailing data, extra frames or a
+/// size mismatch, and a declared size above `max` (a decompression bomb), are all [`CryptoError::Compression`].
+pub fn decompress_bounded(data: &[u8], max: usize) -> Result<Zeroizing<Vec<u8>>> {
+    let declared = zstd::zstd_safe::get_frame_content_size(data)
+        .map_err(|_| CryptoError::Compression)?
+        .ok_or(CryptoError::Compression)?;
+    let size = usize::try_from(declared)
+        .ok()
+        .filter(|n| *n <= max)
+        .ok_or(CryptoError::Compression)?;
+    let mut out = Zeroizing::new(Vec::with_capacity(size));
+    let n = zstd::bulk::Decompressor::new()
+        .and_then(|mut d| d.decompress_to_buffer(data, &mut *out))
+        .map_err(|_| CryptoError::Compression)?;
+    if n != size || out.len() != size {
+        return Err(CryptoError::Compression);
+    }
+    Ok(out)
 }
 
 impl VaultKeys {
@@ -925,6 +947,53 @@ mod tests {
             k.seal_record(&loc(), &huge),
             Err(CryptoError::TooLarge("record body"))
         );
+    }
+
+    #[test]
+    fn decompression_allocates_exactly_the_declared_size() {
+        // Regression: `zstd::bulk::decompress(body, 64 MiB)` reserved (and, through `Zeroizing`, wiped) 64 MiB for
+        // every compressed record. The buffer must now be exactly the frame's content size.
+        let body = vec![b'q'; 5000];
+        let z = zstd::bulk::compress(&body, 3).unwrap();
+        let out = decompress_bounded(&z, MAX_RECORD_BODY).unwrap();
+        assert_eq!(out.as_slice(), body.as_slice());
+        assert_eq!(out.capacity(), body.len());
+        let k = fixed_keys(1);
+        let env = k.seal_record(&loc(), &body).unwrap();
+        assert_eq!(
+            EnvelopeHeader::peek(&env).unwrap().flags & FLAG_ZSTD,
+            FLAG_ZSTD
+        );
+        assert_eq!(k.open_record(&loc(), &env).unwrap().capacity(), body.len());
+    }
+
+    #[test]
+    fn decompression_rejects_unsized_trailing_and_truncated_frames() {
+        let body = vec![7u8; 4000];
+        let z = zstd::bulk::compress(&body, 3).unwrap();
+        // Declared size above the bound.
+        assert_eq!(decompress_bounded(&z, 3999), Err(CryptoError::Compression));
+        // Two concatenated frames: the second would overflow the exact-size buffer.
+        let mut two = z.clone();
+        two.extend_from_slice(&z);
+        assert_eq!(
+            decompress_bounded(&two, MAX_RECORD_BODY),
+            Err(CryptoError::Compression)
+        );
+        // A frame without a content size (streaming encoder with the flag off).
+        let mut enc = zstd::stream::Encoder::new(Vec::new(), 3).unwrap();
+        enc.include_contentsize(false).unwrap();
+        std::io::Write::write_all(&mut enc, &body).unwrap();
+        let unsized_frame = enc.finish().unwrap();
+        assert_eq!(
+            decompress_bounded(&unsized_frame, MAX_RECORD_BODY),
+            Err(CryptoError::Compression)
+        );
+        // Truncated frames (the header still declares the full size) are rejected, never returned short.
+        for cut in [1usize, 2, 3, z.len() / 2] {
+            assert!(decompress_bounded(&z[..z.len() - cut], MAX_RECORD_BODY).is_err());
+        }
+        assert!(decompress_bounded(&[], MAX_RECORD_BODY).is_err());
     }
 
     #[test]

@@ -5,16 +5,21 @@
 //! installed, so `STOCK`, `FX` and `CRYPTO` read the quote / FX caches and queue fetches for misses. Evaluation runs
 //! inside `catch_panics` so a formula bug cannot take the session down.
 
+use std::collections::BTreeSet;
+use std::sync::LazyLock;
+use std::time::Duration;
+
 use emp_sheets::workbook::sheet::CondFormatRule;
 use emp_sheets::{
-    Axis, CellEdit, CellInfo, ClearWhat, CopyResult, FillMode, FunctionInfo, PasteMode, Rect,
-    StylePatch,
+    Axis, CellEdit, CellInfo, ClearWhat, CopyResult, ExternalKey, FillMode, FunctionInfo,
+    PasteMode, Rect, StylePatch,
 };
 use emp_store::Store;
 use emp_store::repo::sheets::{EditResult, RangeResult, SheetPatch, SortSpec, StyleResult};
 use emp_store::repo::workbooks::{
     EvalResult, FindHit, LintItem, SheetMeta, WorkbookCreated, WorkbookInfo,
 };
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, State, Webview};
@@ -96,6 +101,125 @@ fn color(field: &str, s: &str) -> ApiResult<()> {
     } else {
         Err(ApiError::invalid(field, "invalid colour"))
     }
+}
+
+// ───────────────────────────────────────────────────────────────────────────── external data refresh
+
+/// Market / FX arrivals are coalesced for this long before workbooks are refreshed.
+pub const EXTERNAL_REFRESH_DEBOUNCE: Duration = Duration::from_millis(750);
+/// Bound on formula keys waiting for a refresh.
+pub const MAX_PENDING_KEYS: usize = 4_096;
+
+#[derive(Default)]
+struct PendingRefresh {
+    keys: BTreeSet<ExternalKey>,
+    scheduled: bool,
+}
+
+static PENDING_REFRESH: LazyLock<Mutex<PendingRefresh>> =
+    LazyLock::new(|| Mutex::new(PendingRefresh::default()));
+
+/// `sheet:changed` payload (SPEC §11.4).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SheetChanged {
+    /// Workbook page id.
+    pub workbook_id: String,
+    /// Sheet id.
+    pub sheet_id: String,
+    /// Changed rectangles.
+    pub rects: Vec<Rect>,
+}
+
+/// Groups `(workbook, sheet, rect)` changes into one payload per sheet (rects deduplicated, order kept).
+#[must_use]
+pub fn group_changes(
+    changes: impl IntoIterator<Item = (String, String, Rect)>,
+) -> Vec<SheetChanged> {
+    let mut out: Vec<SheetChanged> = Vec::new();
+    for (workbook_id, sheet_id, rect) in changes {
+        match out
+            .iter_mut()
+            .find(|c| c.workbook_id == workbook_id && c.sheet_id == sheet_id)
+        {
+            Some(c) => {
+                if !c.rects.contains(&rect) {
+                    c.rects.push(rect);
+                }
+            }
+            None => out.push(SheetChanged {
+                workbook_id,
+                sheet_id,
+                rects: vec![rect],
+            }),
+        }
+    }
+    out
+}
+
+/// Recomputes the formulas reading `keys` in the workbook engines cached for this session, persists the new values
+/// and reports the changed cells.
+///
+/// **Wiring point.** The engines and their persistence are private to `emp-store`, which does not expose an
+/// "external data changed" entry point yet (requested: `Store::sheet_external_data_changed(&[ExternalKey]) ->
+/// Result<Vec<(workbook_id, sheet_id, Rect)>>`, running `Workbook::external_data_changed` on each cached engine of the
+/// session and writing the changed bands without an undo step). Until it exists no cached engine is touched and no
+/// change is reported, so no `sheet:changed` is sent: an event would only make the grid refetch the same values.
+/// Workbooks loaded after the data arrived already evaluate it on load.
+pub fn refresh_external(store: &Store, keys: &[ExternalKey]) -> ApiResult<Vec<SheetChanged>> {
+    let _ = (store, keys);
+    Ok(group_changes(std::iter::empty()))
+}
+
+/// Queues a refresh of the workbooks whose formulas read `keys` (market or FX data arrived). Arrivals within
+/// [`EXTERNAL_REFRESH_DEBOUNCE`] are coalesced into one refresh, which emits one `sheet:changed` per changed sheet.
+pub fn queue_external_refresh(app: &AppHandle, keys: Vec<ExternalKey>) {
+    let schedule = {
+        let mut p = PENDING_REFRESH.lock();
+        for k in keys {
+            if p.keys.len() >= MAX_PENDING_KEYS {
+                break;
+            }
+            p.keys.insert(k);
+        }
+        !std::mem::replace(&mut p.scheduled, true)
+    };
+    if !schedule {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(EXTERNAL_REFRESH_DEBOUNCE).await;
+        let keys: Vec<ExternalKey> = {
+            let mut p = PENDING_REFRESH.lock();
+            p.scheduled = false;
+            std::mem::take(&mut p.keys).into_iter().collect()
+        };
+        if keys.is_empty() {
+            return;
+        }
+        let app2 = app.clone();
+        let changes = blocking(move || {
+            let store = app2.state::<AppState>().session_quiet()?;
+            crate::jobs::catch_panics(|| refresh_external(&store, &keys))
+                .map_err(|_| ApiError::internal("sheet refresh panicked"))?
+        })
+        .await;
+        match changes {
+            Ok(changes) => {
+                let state = app.state::<AppState>();
+                for c in changes {
+                    state.events.emit(crate::events::SHEET_CHANGED, c);
+                }
+            }
+            Err(e) => tracing::debug!(code = e.code.as_str(), "external sheet refresh skipped"),
+        }
+    });
+}
+
+/// Forgets queued refreshes (on lock).
+pub fn clear_pending_refresh() {
+    PENDING_REFRESH.lock().keys.clear();
 }
 
 // ───────────────────────────────────────────────────────────────────────────── workbooks
@@ -1074,6 +1198,8 @@ pub async fn sheet_export(
     validate::opt_id("sheetId", req.sheet_id.as_deref())?;
     validate::grant_id("grantId", &req.grant_id)?;
     let store = state.session()?;
+    // SPEC §9.10: exporting unencrypted data out of an encrypted vault needs re-auth (as `export_pages` does).
+    super::export::require_export_reauth(&store)?;
     let target = super::import::take_export_target(&state, &req.grant_id)?;
     let sink = job_sink(&webview, &req.on_event);
     Ok(state
@@ -1139,6 +1265,28 @@ pub async fn sheet_to_database(app: AppHandle, req: ToDatabaseReq) -> ApiResult<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn changes_group_per_sheet() {
+        let r = |r0| Rect {
+            r0,
+            c0: 0,
+            r1: r0,
+            c1: 0,
+        };
+        let g = group_changes(vec![
+            ("w".into(), "s1".into(), r(1)),
+            ("w".into(), "s2".into(), r(2)),
+            ("w".into(), "s1".into(), r(3)),
+            ("w".into(), "s1".into(), r(1)),
+        ]);
+        assert_eq!(g.len(), 2);
+        assert_eq!(g[0].rects, vec![r(1), r(3)]);
+        assert_eq!(g[1].sheet_id, "s2");
+        let v = serde_json::to_value(&g[1]).unwrap();
+        assert_eq!(v["workbookId"], "w");
+        assert_eq!(v["rects"][0]["r0"], 2);
+    }
 
     #[test]
     fn rectangles_are_bounded() {

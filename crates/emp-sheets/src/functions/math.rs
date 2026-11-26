@@ -978,8 +978,13 @@ pub fn combinations(n: f64, k: f64) -> Result<f64, ErrorKind> {
     }
     let k = k.min(n - k);
     let mut r = 1.0;
+    // C(n, k) ≥ 2^k for k ≤ n/2, so the product overflows within ~1,030 steps: stop there
+    // instead of looping k times (k can be ~1e300).
     for i in 0..k as u64 {
         r = r * (n - i as f64) / (i as f64 + 1.0);
+        if !r.is_finite() {
+            return Err(ErrorKind::Num);
+        }
     }
     Ok(r.round())
 }
@@ -992,9 +997,18 @@ fn permut(ctx: &mut EvalCtx, a: &[Ev]) -> R {
     if n < 0.0 || k < 0.0 || k > n {
         return Err(ErrorKind::Num);
     }
-    let mut r = 1.0;
+    let mut r: f64 = 1.0;
     for i in 0..k as u64 {
-        r *= n - i as f64;
+        let term = n - i as f64;
+        if term < 1.0 {
+            break; // remaining factors are 1 (n and k are integers, k ≤ n)
+        }
+        r *= term;
+        // Every remaining factor is ≥ 1, so once the product overflows it stays infinite:
+        // stop instead of looping k times (k can be ~1e300).
+        if !r.is_finite() {
+            return Err(ErrorKind::Num);
+        }
     }
     num(r)
 }

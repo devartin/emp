@@ -73,7 +73,7 @@ pub struct WorkspacePatch {
     pub defaults: Option<WorkspaceDefaults>,
 }
 
-/// `workspace_open` result (without `lifeapps` and `lastRoute`, which the app layer adds).
+/// `workspace_open` result (without `lastRoute`, which the app layer adds from kv).
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceOpen {
@@ -83,4 +83,6 @@ pub struct WorkspaceOpen {
     pub pages: Vec<PageMeta>,
     /// Recent page ids.
     pub recents: Vec<Id>,
+    /// Life apps installed in the workspace (`lifeapp_instances`).
+    pub lifeapps: Vec<crate::repo::lifeapps::LifeAppInstance>,
 }

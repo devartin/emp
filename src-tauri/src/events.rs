@@ -239,6 +239,20 @@ impl emp_store::EventSink for StoreEventSink {
                     doc_rev,
                 },
             ),
+            E::DbChanged {
+                database_id,
+                data_rev,
+                schema_rev,
+                row_ids,
+            } => self.events.emit(
+                DB_CHANGED,
+                crate::commands::db::DbChanged {
+                    database_id,
+                    data_rev,
+                    schema_rev,
+                    row_ids,
+                },
+            ),
             E::StatusChanged => {
                 // The sink must not call back into the store synchronously: re-read the status on the pool.
                 let app = self.events.app().clone();

@@ -6,7 +6,8 @@ import { CalendarDays, CandlestickChart, Ellipsis, House, Settings, Sparkles, Tr
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { navigate, routePageId, useRoute, type AppRoute } from "@/app/router";
-import type { PageMeta } from "@/backend/types";
+import { api, listen } from "@/backend";
+import type { Id, PageMeta } from "@/backend/types";
 import { selectAncestors, useTree } from "@/stores/tree";
 import { useWorkspace } from "@/stores/workspace";
 import { Input } from "@/ui/Input";
@@ -14,6 +15,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/ui/Menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
 import { PageIcon } from "./PageIcon";
 import { lifeAppIdentity } from "./Sidebar/lifeAppIdentity";
+import { SECTIONS, resolveSection } from "@/features/settings/meta";
 
 const SETTINGS_TITLES: Record<string, string> = {
   general: "General",
@@ -23,7 +25,7 @@ const SETTINGS_TITLES: Record<string, string> = {
   integrations: "Integrations",
   connections: "Integrations",
   markets: "Market data",
-  backups: "Backups",
+  backups: "Backups & snapshots",
   shortcuts: "Keyboard shortcuts",
   about: "About",
 };
@@ -36,9 +38,37 @@ interface Crumb {
   meta?: PageMeta;
 }
 
+/** Database id + title of the open row page (the route only carries the row id). */
+function useRowInfo(rowId: Id | null): { databaseId: Id; title: string } | null {
+  const [info, setInfo] = useState<{ id: Id; databaseId: Id; title: string } | null>(null);
+  useEffect(() => {
+    if (!rowId) return;
+    let live = true;
+    const load = async () => {
+      try {
+        const r = await api.db.rowGet({ id: rowId });
+        const schema = await api.db.getSchema({ id: r.databaseId });
+        const cell = r.row.values[schema.database.primaryPropId];
+        const title = cell?.t === "text" && Array.isArray(cell.v) ? cell.v.map((x) => x?.text ?? "").join("") : "";
+        if (live) setInfo({ id: rowId, databaseId: r.databaseId, title });
+      } catch {
+        if (live) setInfo(null);
+      }
+    };
+    void load();
+    const off = listen("db:changed", () => void load());
+    return () => {
+      live = false;
+      off();
+    };
+  }, [rowId]);
+  return info && info.id === rowId ? info : null;
+}
+
 function useCrumbs(): Crumb[] {
   const route = useRoute();
-  const pageId = routePageId(route) ?? (route.t === "row" ? null : null);
+  const row = useRowInfo(route.t === "row" ? route.id : null);
+  const pageId = routePageId(route) ?? (route.t === "row" ? (row?.databaseId ?? null) : null);
   const chain = useTree(
     useShallow((s) => {
       if (!pageId) return [] as PageMeta[];
@@ -51,7 +81,8 @@ function useCrumbs(): Crumb[] {
 
   if (pageId) {
     if (!chain.length) return [{ key: "loading", label: "…", icon: null }];
-    return chain.map((m) => ({ key: m.id, label: m.title || "Untitled", icon: <PageIcon icon={m.icon} kind={m.kind} size={16} />, route: { t: "page", id: m.id }, meta: m }));
+    const pages = chain.map((m) => ({ key: m.id, label: m.title || "Untitled", icon: <PageIcon icon={m.icon} kind={m.kind} size={16} />, route: { t: "page", id: m.id } as AppRoute, meta: route.t === "row" ? undefined : m }));
+    return route.t === "row" ? [...pages, { key: "row", label: row?.title || "Untitled", icon: null }] : pages;
   }
   const ic = (I: typeof House) => <I size={15} className="text-tertiary" aria-hidden />;
   switch (route.t) {
@@ -73,7 +104,7 @@ function useCrumbs(): Crumb[] {
     case "settings":
       return [
         { key: "settings", label: "Settings", icon: ic(Settings), route: { t: "settings", section: "general" } },
-        { key: route.section, label: SETTINGS_TITLES[route.section] ?? route.section.replace(/^\w/, (c) => c.toUpperCase()), icon: null },
+        { key: route.section, label: SETTINGS_TITLES[route.section] ?? SECTIONS.find((x) => x.id === resolveSection(route.section))?.title ?? route.section.replace(/^\w/, (c) => c.toUpperCase()), icon: null },
       ];
     case "app": {
       const id = app ? lifeAppIdentity(app.appId) : null;
@@ -89,11 +120,11 @@ function useCrumbs(): Crumb[] {
           ),
           route: { t: "app", instanceId: route.instanceId },
         },
-        ...(route.tab ? [{ key: route.tab, label: route.tab.replace(/[-_]/g, " ").replace(/^\w/, (c) => c.toUpperCase()), icon: null }] : []),
+        ...(route.tab ? [{ key: route.tab, label: tabLabel(route.tab), icon: null }] : []),
       ];
     }
     case "row":
-      return [{ key: "row", label: "Row", icon: null }];
+      return [{ key: "row", label: row?.title || "…", icon: null }];
     default:
       return [];
   }
@@ -191,3 +222,10 @@ function CurrentCrumb({ crumb, meta }: { crumb: Crumb; meta: PageMeta }) {
 }
 
 export default Breadcrumbs;
+
+/** Tab ids that don't title-case cleanly. */
+const TAB_LABELS: Record<string, string> = { networth: "Net worth", ips: "Investment policy" };
+
+function tabLabel(tab: string): string {
+  return TAB_LABELS[tab] ?? tab.replace(/[-_]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}

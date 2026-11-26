@@ -31,7 +31,7 @@ import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { AppHeader } from "../AppHeader";
 import { localDay, optionId, read, write } from "../cells";
 import { useAppDatabases, useMetrics, useRows, useStableNow, type AppDb } from "../data";
-import { identity } from "../identity";
+import { appVars, identity } from "../identity";
 import { InsightsFeed } from "../Insights";
 import { StartHere } from "../StartHere";
 
@@ -292,7 +292,7 @@ function Agenda({ events, now }: { events: CalendarEvent[] | null; now: Date }) 
                     onClick={() => (e.link ? useUi.getState().openPeek(e.link) : navigate({ t: "calendar" } as never))}
                   >
                     <span className="font-semibold">{e.title}</span>
-                    {h > 30 ? <small className="tabular">{formatTime(e.start)} – {formatTime(e.end)}{e.location ? ` · ${e.location}` : ""}</small> : null}
+                    {h > 38 ? <small className="tabular">{formatTime(e.start)} – {formatTime(e.end)}{e.location ? ` · ${e.location}` : ""}</small> : null}
                   </m.button>
                 );
               })}
@@ -386,7 +386,7 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
   const greetingSub = `${now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} · ${open.length} open tasks`;
 
   return (
-    <div className="la-hub">
+    <div className="la-hub" style={appVars("life-os")}>
       <AppHeader<Tab>
         instance={instance}
         title="Life OS"

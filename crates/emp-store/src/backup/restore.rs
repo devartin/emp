@@ -18,8 +18,8 @@ use emp_crypto::{DeviceKey, KeyslotKind, RecoveryKey, SecretString, VaultId, Vau
 use super::SnapManifest;
 use super::snapshot::blobs_dir;
 use crate::db::conn::open_untrusted;
-use crate::db::migrate::{LATEST_VERSION, expected_schema_objects, schema_objects};
-use crate::manifest::{read_keyslots, read_state, verify};
+use crate::db::migrate::{LATEST_VERSION, verify_schema};
+use crate::manifest::{read_keyslots, read_state, verify, verify_header_mac};
 use crate::vault::{DeviceKeyStore, create_private_dir, meta_get};
 use crate::{Progress, Result, StoreError};
 
@@ -66,9 +66,9 @@ fn open_inner(path: &Path, password: Option<&SecretString>, staging: &Path) -> R
     })?;
     f.seek(SeekFrom::Start(0))?;
     let reader = open_password_container(pw, BufReader::new(f))?;
-    std::fs::create_dir_all(staging)?;
+    crate::vault::create_private_dir(staging)?;
     let out_path = staging.join("inner.bin");
-    let mut out = BufWriter::new(File::create(&out_path)?);
+    let mut out = BufWriter::new(crate::vault::create_private_file(&out_path)?);
     reader.copy_to(&mut out)?;
     out.flush()?;
     Ok(out_path)
@@ -76,6 +76,9 @@ fn open_inner(path: &Path, password: Option<&SecretString>, staging: &Path) -> R
 
 struct Header {
     manifest: SnapManifest,
+    /// The exact prefix and manifest bytes that were parsed (fed to the MAC, so what is checked is what was read).
+    /// Zeroizing: a plaintext vault's manifest carries its device key.
+    head: zeroize::Zeroizing<Vec<u8>>,
     sqlite_off: u64,
     inner_len: u64,
 }
@@ -87,11 +90,14 @@ fn parse_header(inner: &Path) -> Result<Header> {
     f.read_exact(&mut prefix)
         .map_err(|_| integrity("the file is too short"))?;
     let p = SnapshotPrefix::parse(&prefix)?;
-    let mut mbytes = vec![0u8; p.manifest_len as usize];
+    let mut mbytes = zeroize::Zeroizing::new(vec![0u8; p.manifest_len as usize]);
     f.read_exact(&mut mbytes)
         .map_err(|_| integrity("the manifest is truncated"))?;
     let manifest: SnapManifest = ciborium::from_reader(mbytes.as_slice())
         .map_err(|_| integrity("the manifest is malformed"))?;
+    let mut head = zeroize::Zeroizing::new(Vec::with_capacity(prefix.len() + mbytes.len()));
+    head.extend_from_slice(&prefix);
+    head.extend_from_slice(&mbytes);
     let sqlite_off = SNAPSHOT_PREFIX_LEN as u64 + u64::from(p.manifest_len);
     let packed: u64 = if manifest.packed {
         manifest
@@ -117,24 +123,54 @@ fn parse_header(inner: &Path) -> Result<Header> {
     }
     Ok(Header {
         manifest,
+        head,
         sqlite_off,
         inner_len,
     })
 }
 
-fn verify_mac(inner: &Path, h: &Header, keys: &VaultKeys) -> Result<()> {
-    let mut f = BufReader::new(File::open(inner)?);
-    let mut mac = keys.backup_mac()?;
-    let mut remaining = h.inner_len - 32;
+fn mac_exact(
+    mac: &mut emp_crypto::backup::BackupMac,
+    r: &mut impl Read,
+    mut len: u64,
+) -> Result<()> {
     let mut buf = vec![0u8; BUF];
-    while remaining > 0 {
-        let want = usize::try_from(remaining.min(BUF as u64)).unwrap_or(BUF);
-        f.read_exact(&mut buf[..want])?;
+    while len > 0 {
+        let want = usize::try_from(len.min(BUF as u64)).unwrap_or(BUF);
+        r.read_exact(&mut buf[..want])
+            .map_err(|_| integrity("the backup is truncated"))?;
         mac.update(&buf[..want]);
-        remaining -= want as u64;
+        len -= want as u64;
     }
+    Ok(())
+}
+
+/// Verifies the backup MAC over the bytes that are actually used: the parsed prefix and manifest (`h.head`), the
+/// **extracted** database copy `sqlite_part`, then the packed blobs and the tag from `inner`.
+///
+/// Reading the database part from `inner` a second time would let a file that changes between reads (a backup on
+/// a network or sync folder) pass the MAC with genuine bytes while a different database had been extracted.
+fn verify_mac(inner: &Path, h: &Header, sqlite_part: &Path, keys: &VaultKeys) -> Result<()> {
+    let mut mac = keys.backup_mac()?;
+    mac.update(&h.head);
+    let mut db = BufReader::new(File::open(sqlite_part)?);
+    mac_exact(&mut mac, &mut db, h.manifest.sqlite_len)?;
+    let mut probe = [0u8; 1];
+    if db.read(&mut probe)? != 0 {
+        return Err(integrity("the database part has the wrong size"));
+    }
+    let mut f = BufReader::new(File::open(inner)?);
+    let blobs_off = h.sqlite_off + h.manifest.sqlite_len;
+    f.seek(SeekFrom::Start(blobs_off))?;
+    let blobs_len = h
+        .inner_len
+        .checked_sub(blobs_off)
+        .and_then(|x| x.checked_sub(32))
+        .ok_or_else(|| integrity("sizes overflow"))?;
+    mac_exact(&mut mac, &mut f, blobs_len)?;
     let mut tag = [0u8; 32];
-    f.read_exact(&mut tag)?;
+    f.read_exact(&mut tag)
+        .map_err(|_| integrity("the backup is truncated"))?;
     if mac.verify(&tag) {
         Ok(())
     } else {
@@ -181,8 +217,10 @@ fn check_blobs(
         let mut out = match extract_to {
             Some(dir) => {
                 let d = dir.join(name.get(..2).unwrap_or("00"));
-                std::fs::create_dir_all(&d)?;
-                Some(BufWriter::new(File::create(d.join(name))?))
+                crate::vault::create_private_dir(&d)?;
+                Some(BufWriter::new(crate::vault::create_private_file(
+                    &d.join(name),
+                )?))
             }
             None => None,
         };
@@ -212,7 +250,7 @@ fn check_blobs(
 fn extract_sqlite(inner: &Path, h: &Header, dest: &Path) -> Result<()> {
     let mut f = BufReader::new(File::open(inner)?);
     f.seek(SeekFrom::Start(h.sqlite_off))?;
-    let mut out = BufWriter::new(File::create(dest)?);
+    let mut out = BufWriter::new(crate::vault::create_private_file(dest)?);
     let n = std::io::copy(&mut f.take(h.manifest.sqlite_len), &mut out)?;
     out.flush()?;
     if n != h.manifest.sqlite_len {
@@ -233,6 +271,11 @@ fn check_against_db(conn: &rusqlite::Connection, h: &Header, keys: &VaultKeys) -
             "the database's integrity manifest does not verify",
         ));
     }
+    // `vault_meta.encryption` and the other header keys are not in the state MAC; an edited flag would otherwise be
+    // carried into the restored vault.
+    if !verify_header_mac(conn, keys)? {
+        return Err(integrity("the backup's vault header does not verify"));
+    }
     Ok(())
 }
 
@@ -250,10 +293,10 @@ pub(crate) fn verify_with_keys(
         if h.manifest.vault_id != keys.vault_id().to_hex() {
             return Err(integrity("the snapshot belongs to another vault"));
         }
-        verify_mac(&inner, &h, keys)?;
         let db = staging.join("check.sqlite");
-        std::fs::create_dir_all(&staging)?;
+        crate::vault::create_private_dir(&staging)?;
         extract_sqlite(&inner, &h, &db)?;
+        verify_mac(&inner, &h, &db, keys)?;
         {
             let c = open_untrusted(&db)?;
             check_against_db(&c, &h, keys)?;
@@ -317,17 +360,14 @@ fn restore_inner(
         });
     }
     // 2. Database part, opened defensively.
-    std::fs::create_dir_all(staging)?;
+    crate::vault::create_private_dir(staging)?;
     let db_stage = staging.join("vault.db");
     extract_sqlite(&inner, &h, &db_stage)?;
-    let (keys, dek_vault, encrypted, pages, device) = {
+    let (keys, dek, dek_vault, encrypted, pages, device) = {
         let conn = open_untrusted(&db_stage)?;
-        // 3. Exactly the expected objects.
-        if schema_objects(&conn)? != expected_schema_objects()? {
-            return Err(integrity(
-                "the backup's database has unexpected schema objects",
-            ));
-        }
+        // 3. Exactly the expected objects (including their `CREATE` text).
+        verify_schema(&conn)
+            .map_err(|_| integrity("the backup's database has unexpected schema objects"))?;
         let raw_id = meta_get(&conn, "vault_id")?.ok_or_else(|| integrity("vault id missing"))?;
         let vault_id = VaultId::from_slice(&raw_id)?;
         if vault_id.to_hex() != h.manifest.vault_id {
@@ -359,8 +399,8 @@ fn restore_inner(
             ));
         };
         let keys = VaultKeys::derive(&dek, &vault_id)?;
-        // 5. MAC, manifest, integrity, blobs.
-        verify_mac(&inner, &h, &keys)?;
+        // 5. MAC (over the extracted copy), manifest, integrity, blobs.
+        verify_mac(&inner, &h, &db_stage, &keys)?;
         check_against_db(&conn, &h, &keys)?;
         let encrypted = meta_get(&conn, "encryption")?.as_deref() == Some(b"on".as_slice());
         let pages: i64 = conn.query_row(
@@ -370,6 +410,7 @@ fn restore_inner(
         )?;
         (
             keys,
+            dek,
             vault_id,
             encrypted,
             u64::try_from(pages).unwrap_or(0),
@@ -378,17 +419,52 @@ fn restore_inner(
     };
     check_blobs(&inner, &h, file, Some(&target_dir.join("assets")), progress)?;
     // 6. Into place.
+    // The restored vault keeps its vault id, and device keys are stored per vault id. If this device already holds a
+    // key for that id (the original vault, whose key may have changed since the backup), saving the backup's key
+    // would overwrite it and lock the original vault out. Re-wrap the restored device slot under the existing key
+    // instead, so both copies open.
+    let device_to_save = match device {
+        Some(dk) => match device_keys.load(&dek_vault)? {
+            Some(existing) => Some((existing, false)),
+            None => Some((dk, true)),
+        },
+        None => None,
+    };
     {
         let c = rusqlite::Connection::open(&db_stage)?;
-        c.execute(
+        crate::db::pragmas::harden(&c)?;
+        let tx = c.unchecked_transaction()?;
+        if let Some((dk, false)) = &device_to_save {
+            let slots = read_keyslots(&tx)?;
+            let old = slots
+                .iter()
+                .find(|s| s.kind() == KeyslotKind::Device)
+                .ok_or_else(|| integrity("device keyslot missing"))?;
+            let slot = emp_crypto::Keyslot::wrap_device(
+                &dek_vault,
+                old.slot_id(),
+                &dek,
+                dk,
+                old.created_at(),
+            )?;
+            let col = slot.to_columns();
+            tx.execute(
+                "UPDATE keyslots SET nonce = ?2, wrapped_dek = ?3 WHERE slot_id = ?1",
+                rusqlite::params![col.slot_id, col.nonce, col.wrapped_dek],
+            )?;
+            crate::manifest::reseal(&tx, &keys)?;
+        }
+        tx.execute(
             "INSERT INTO security_log (at, event) VALUES (?1, 'backup_restore')",
             [now_ms],
         )?;
+        tx.commit()?;
     }
     std::fs::rename(&db_stage, target_dir.join("vault.db"))?;
-    if let Some(dk) = device {
-        device_keys.save(&dek_vault, &dk)?;
+    if let Some((dk, true)) = &device_to_save {
+        device_keys.save(&dek_vault, dk)?;
     }
+    drop(dek);
     drop(keys);
     Ok(Restored {
         vault_id: dek_vault.to_hex(),
@@ -396,4 +472,57 @@ fn restore_inner(
         dir: target_dir.to_owned(),
         encrypted,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use emp_crypto::KdfParams;
+
+    #[test]
+    fn mac_covers_the_extracted_database_copy() {
+        // Regression: the MAC used to be computed over a second read of the backup file, so a file that changed
+        // between extraction and verification (network / sync folder) could smuggle in a different database.
+        let dir = tempfile::tempdir().unwrap();
+        let mut opts = crate::vault::StoreOptions::new(dir.path().join("device.key"));
+        opts.background_indexing = false;
+        let created = crate::Store::create(
+            dir.path(),
+            crate::vault::CreateOptions {
+                password: Some(SecretString::from(
+                    "correct horse battery staple".to_owned(),
+                )),
+                kdf: KdfParams::INSECURE_TEST,
+                auto_lock: crate::model::AutoLock::default(),
+                workspace_name: Some("W".into()),
+            },
+            opts,
+        )
+        .unwrap();
+        let store = created.store;
+        let file = dir.path().join("b.empbackup");
+        store
+            .backup_create(&file, None, KdfParams::INSECURE_TEST, &crate::NoProgress)
+            .unwrap();
+        let session = store.session().unwrap();
+        let h = parse_header(&file).unwrap();
+        let staged = dir.path().join("staged.sqlite");
+        extract_sqlite(&file, &h, &staged).unwrap();
+        verify_mac(&file, &h, &staged, session.keys()).unwrap();
+        // The original file is untouched, but the copy that would be imported differs: the MAC must fail.
+        let mut bytes = std::fs::read(&staged).unwrap();
+        let last = bytes.len() - 1;
+        bytes[last] ^= 0x01;
+        std::fs::write(&staged, &bytes).unwrap();
+        assert!(matches!(
+            verify_mac(&file, &h, &staged, session.keys()),
+            Err(StoreError::Integrity(_))
+        ));
+        // A copy of the wrong length fails too.
+        bytes.push(0);
+        std::fs::write(&staged, &bytes).unwrap();
+        assert!(verify_mac(&file, &h, &staged, session.keys()).is_err());
+        drop(session);
+        store.close().unwrap();
+    }
 }

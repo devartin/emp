@@ -35,9 +35,9 @@ pub fn is_ui_namespace(ns: &str) -> bool {
 fn valid_ns(ns: &str) -> bool {
     !ns.is_empty()
         && ns.len() <= 64
-        && ns.bytes().all(|b| {
-            b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'.' | b'_' | b'-')
-        })
+        && ns
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
 fn stored_key(session: &Session, ns: &str, key: &str) -> Result<String> {
@@ -154,7 +154,8 @@ impl Store {
         self.kv_get_any(ns, key)
     }
 
-    /// `kv_set` (IPC: `ui.*` namespaces only).
+    /// `kv_set` (IPC: `ui.*` namespaces only). A report under `ui.gettingStarted` also ticks that Getting
+    /// Started checklist item.
     pub fn kv_set(&self, ns: &str, key: &str, value: Value) -> Result<()> {
         if !is_ui_namespace(ns) {
             return Err(StoreError::invalid_field(
@@ -162,7 +163,12 @@ impl Store {
                 "only ui.* namespaces are accessible",
             ));
         }
-        self.kv_set_any(ns, key, value, None)
+        let item = crate::repo::tour::ui_item(ns, key, &value).map(str::to_owned);
+        self.kv_set_any(ns, key, value, None)?;
+        if let Some(item) = item {
+            self.tour_tick_quiet(&item);
+        }
+        Ok(())
     }
 
     /// `kv_get_many` (IPC: `ui.*` namespaces only). Missing keys are omitted.

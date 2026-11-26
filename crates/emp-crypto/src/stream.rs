@@ -379,10 +379,13 @@ impl<R: Read> StreamReader<R> {
         if self.pos == self.end && !self.next_chunk()? {
             return Ok(out);
         }
-        out.reserve_exact(
+        // `try_reserve_exact`: an (authenticated) multi-GiB length must surface as `TooLarge`, not abort the process
+        // on allocation failure.
+        out.try_reserve_exact(
             usize::try_from(self.content_len)
                 .map_err(|_| CryptoError::TooLarge("stream content"))?,
-        );
+        )
+        .map_err(|_| CryptoError::TooLarge("stream content"))?;
         let mut tmp = Zeroizing::new([0u8; 8192]);
         loop {
             let n = self.read_checked(tmp.as_mut_slice())?;

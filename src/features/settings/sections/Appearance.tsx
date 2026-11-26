@@ -1,0 +1,286 @@
+/**
+ * Appearance (§3, §4.3): theme cards with live miniature previews (View Transitions reveal from the card), accent
+ * swatches with a live component preview, density, text size, motion (with a demo), visual effects, contrast,
+ * gain/loss colours and accessibility fonts. Every change applies instantly and is mirrored to the boot cache.
+ */
+import { Check, Palette } from "lucide-react";
+import { m } from "motion/react";
+import { useRef, type CSSProperties } from "react";
+import type { Accent, DeviceSettings, ThemeSetting } from "@/backend/types";
+import { cn } from "@/lib/cn";
+import { useSettings } from "@/stores/settings";
+import { Button } from "@/ui/Button";
+import { Checkbox } from "@/ui/Checkbox";
+import { Progress } from "@/ui/Progress";
+import { Ring } from "@/ui/Ring";
+import { Segmented } from "@/ui/Segmented";
+import { Switch } from "@/ui/Switch";
+import { Tag } from "@/ui/Tag";
+import { spring } from "@/ui/motion/tokens";
+import { switchThemeWithReveal } from "@/ui/motion/themeTransition";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
+import { Group, Row, SectionHeader } from "../parts";
+
+const THEMES: { id: ThemeSetting; name: string }[] = [
+  { id: "system", name: "System" },
+  { id: "light", name: "Light" },
+  { id: "dark", name: "Dark" },
+  { id: "midnight", name: "Midnight" },
+];
+
+const PALETTE = {
+  light: { win: "#F7F7F8", canvas: "#FFFFFF", ink: "rgba(24,24,27,.85)", line: "rgba(24,24,27,.12)", faint: "rgba(24,24,27,.07)" },
+  dark: { win: "#0B0B0E", canvas: "#151519", ink: "rgba(237,237,240,.9)", line: "rgba(255,255,255,.14)", faint: "rgba(255,255,255,.08)" },
+  midnight: { win: "#000000", canvas: "#050506", ink: "rgba(237,237,240,.9)", line: "rgba(255,255,255,.14)", faint: "rgba(255,255,255,.08)" },
+} as const;
+
+export const ACCENTS: { id: Accent; name: string; light: string; dark: string }[] = [
+  { id: "graphite", name: "Graphite", light: "#18181B", dark: "#EDEDF0" },
+  { id: "iris", name: "Iris", light: "#5E5CE6", dark: "#5E5CE6" },
+  { id: "ocean", name: "Ocean", light: "#0B6BDF", dark: "#0B6BDF" },
+  { id: "jade", name: "Jade", light: "#0C7D56", dark: "#0C7D56" },
+  { id: "amber", name: "Amber", light: "#F5A524", dark: "#F5A524" },
+  { id: "ruby", name: "Ruby", light: "#CC3344", dark: "#CC3344" },
+  { id: "orchid", name: "Orchid", light: "#A93BBD", dark: "#A93BBD" },
+];
+
+function Mini({ p, accent }: { p: (typeof PALETTE)[keyof typeof PALETTE]; accent: string }) {
+  return (
+    <span className="st-mini" style={{ background: p.win } as CSSProperties} aria-hidden>
+      <span className="st-mini-side">
+        <i style={{ background: p.ink, width: "62%", opacity: 0.8 }} />
+        <i style={{ background: p.faint, width: "80%" }} />
+        <i style={{ background: accent, width: "70%", opacity: 0.9 }} />
+        <i style={{ background: p.faint, width: "56%" }} />
+        <i style={{ background: p.faint, width: "68%" }} />
+      </span>
+      <span className="st-mini-canvas" style={{ background: p.canvas, borderColor: p.line }}>
+        <i style={{ background: p.ink, width: "54%", height: 5 }} />
+        <i style={{ background: p.faint, width: "88%" }} />
+        <i style={{ background: p.faint, width: "76%" }} />
+        <span className="st-mini-cards">
+          <b style={{ borderColor: p.line, background: p.canvas }}>
+            <i style={{ background: accent, width: "40%" }} />
+          </b>
+          <b style={{ borderColor: p.line, background: p.canvas }}>
+            <i style={{ background: p.faint, width: "56%" }} />
+          </b>
+        </span>
+      </span>
+    </span>
+  );
+}
+
+function ThemeCard({ id, name, selected, accent, onPick }: { id: ThemeSetting; name: string; selected: boolean; accent: Accent; onPick: (el: HTMLElement) => void }) {
+  const reduced = useReducedMotionPref();
+  const a = ACCENTS.find((x) => x.id === accent) ?? ACCENTS[0];
+  return (
+    <m.button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      className={cn("st-theme", selected && "is-on")}
+      whileTap={reduced ? undefined : { scale: 0.985 }}
+      transition={spring.snappy}
+      onClick={(e) => onPick(e.currentTarget)}
+    >
+      <span className="st-theme-preview">
+        {id === "system" ? (
+          <span className="st-theme-split">
+            <Mini p={PALETTE.light} accent={a.light} />
+            <span className="st-theme-split-dark">
+              <Mini p={PALETTE.dark} accent={a.dark} />
+            </span>
+          </span>
+        ) : (
+          <Mini p={PALETTE[id]} accent={id === "light" ? a.light : a.dark} />
+        )}
+        {selected ? (
+          <m.span className="st-theme-check" initial={reduced ? { opacity: 0 } : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.bouncy}>
+            <Check size={12} strokeWidth={3} />
+          </m.span>
+        ) : null}
+      </span>
+      <span className="st-theme-name">{name}</span>
+    </m.button>
+  );
+}
+
+const NUMBER_SCHEMES: { id: DeviceSettings["numberColors"]; name: string; gain: string; loss: string; note: string }[] = [
+  { id: "standard", name: "Standard", gain: "#12A150", loss: "#E5484D", note: "Green up, red down" },
+  { id: "cvd", name: "Colour-blind friendly", gain: "#1F77E5", loss: "#E8740C", note: "Blue up, orange down" },
+  { id: "eastasian", name: "East Asian", gain: "#E5484D", loss: "#12A150", note: "Red up, green down" },
+  { id: "mono", name: "Monochrome", gain: "currentColor", loss: "currentColor", note: "Signs and arrows only" },
+];
+
+export function AppearanceSection() {
+  const device = useSettings((s) => s.device);
+  const setDevice = useSettings((s) => s.setDevice);
+  const reduced = useReducedMotionPref();
+  const swatchRow = useRef<HTMLDivElement>(null);
+  if (!device) return null;
+  const set = (patch: Partial<DeviceSettings>) => void setDevice(patch);
+
+  return (
+    <div>
+      <SectionHeader icon={Palette} title="Appearance" description="Make EMP feel like yours. Changes apply instantly on this device." />
+
+      <Group id="theme" title="Theme">
+        <div className="st-block">
+          <div className="st-themes" role="radiogroup" aria-label="Theme">
+            {THEMES.map((t) => (
+              <ThemeCard key={t.id} id={t.id} name={t.name} selected={device.theme === t.id} accent={device.accent} onPick={(el) => device.theme !== t.id && switchThemeWithReveal(() => set({ theme: t.id }), el)} />
+            ))}
+          </div>
+        </div>
+      </Group>
+
+      <Group id="accent" title="Accent colour" description="One colour for buttons, selection and focus. Graphite keeps EMP monochrome.">
+        <div className="st-block st-accent-block">
+          <div className="st-swatches" role="radiogroup" aria-label="Accent colour" ref={swatchRow}>
+            {ACCENTS.map((a) => {
+              const on = device.accent === a.id;
+              return (
+                <button key={a.id} type="button" role="radio" aria-checked={on} aria-label={a.name} title={a.name} className={cn("st-swatch", on && "is-on")} onClick={() => set({ accent: a.id })}>
+                  {on ? <m.span layoutId="st-swatch-ring" className="st-swatch-ring" transition={reduced ? { duration: 0 } : spring.ui} /> : null}
+                  <span className="st-swatch-fill" data-accent-swatch={a.id} style={{ ["--sw-l" as string]: a.light, ["--sw-d" as string]: a.dark }}>
+                    {on ? (
+                      <m.span initial={reduced ? false : { scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.snappy}>
+                        <Check size={13} strokeWidth={3} />
+                      </m.span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+            <span className="st-swatch-name">{ACCENTS.find((a) => a.id === device.accent)?.name}</span>
+          </div>
+          <AccentPreview />
+        </div>
+      </Group>
+
+      <Group title="Layout & text">
+        <Row id="density" label="Density" description="Compact trims 4 px from rows, menus and card padding.">
+          <Segmented size="sm" value={device.density} onValueChange={(v) => set({ density: v })} options={[{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }]} aria-label="Density" />
+        </Row>
+        <div className="st-block st-density-demo" aria-hidden>
+          {["Weekly review", "Kitchen renovation", "Lisbon in March"].map((t, i) => (
+            <m.div key={t} layout={reduced ? false : "position"} transition={spring.layout} className="st-density-row" data-on={i === 1 ? "" : undefined}>
+              <span className="st-density-ico" />
+              {t}
+            </m.div>
+          ))}
+        </div>
+        <Row id="text-size" label="Text size" description={device.textSize === "s" ? "13 px interface · 15 px pages" : device.textSize === "l" ? "15 px interface · 17.5 px pages" : "14 px interface · 16 px pages"}>
+          <Segmented
+            size="sm"
+            value={device.textSize}
+            onValueChange={(v) => set({ textSize: v })}
+            options={[
+              { value: "s", label: <span style={{ fontSize: 11 }}>Aa</span>, "aria-label": "Small" },
+              { value: "m", label: <span style={{ fontSize: 13 }}>Aa</span>, "aria-label": "Default" },
+              { value: "l", label: <span style={{ fontSize: 15 }}>Aa</span>, "aria-label": "Large" },
+            ]}
+            aria-label="Text size"
+          />
+        </Row>
+        <Row id="readable-font" label="Readable font" description="Switch the interface and pages to Atkinson Hyperlegible, designed for low vision.">
+          <Switch checked={device.readableFont} onCheckedChange={(v) => set({ readableFont: v })} aria-label="Readable font" />
+        </Row>
+        <Row label="Wider letter spacing" description="Adds space between letters and words.">
+          <Switch checked={device.letterSpacing} onCheckedChange={(v) => set({ letterSpacing: v })} aria-label="Wider letter spacing" />
+        </Row>
+      </Group>
+
+      <Group title="Motion & effects">
+        <Row id="motion" label="Motion" description={device.motion === "reduced" ? "Crossfades only — nothing slides, scales or bounces." : device.motion === "full" ? "Every transition and celebration, even if your OS asks for less." : "Follows your operating system’s “reduce motion” setting."}>
+          <MotionDemo />
+          <Segmented size="sm" value={device.motion} onValueChange={(v) => set({ motion: v })} options={[{ value: "system", label: "System" }, { value: "reduced", label: "Reduced" }, { value: "full", label: "Full" }]} aria-label="Motion" />
+        </Row>
+        <Row id="effects" label="Visual effects" description={device.effects === "reduced" ? "No glass or blur, softer shadows, no particles. Lighter on older computers." : device.effects === "full" ? "Glass, blur and depth everywhere they’re allowed." : "Full effects, reduced automatically on Linux or when frames drop."}>
+          <Segmented size="sm" value={device.effects} onValueChange={(v) => set({ effects: v })} options={[{ value: "auto", label: "Auto" }, { value: "full", label: "Full" }, { value: "reduced", label: "Reduced" }]} aria-label="Visual effects" />
+        </Row>
+        <Row id="contrast" label="Contrast" description="More contrast strengthens borders and secondary text, and turns off glass.">
+          <Segmented size="sm" value={device.contrast} onValueChange={(v) => set({ contrast: v })} options={[{ value: "system", label: "System" }, { value: "more", label: "More" }]} aria-label="Contrast" />
+        </Row>
+      </Group>
+
+      <Group id="number-colors" title="Gain and loss colours" description="Applies to every amount, chart and delta chip. Signs and arrows are always shown.">
+        <div className="st-block">
+          <div className="st-schemes" role="radiogroup" aria-label="Gain and loss colours">
+            {NUMBER_SCHEMES.map((s) => {
+              const on = device.numberColors === s.id;
+              return (
+                <button key={s.id} type="button" role="radio" aria-checked={on} className={cn("st-scheme", on && "is-on")} onClick={() => set({ numberColors: s.id })}>
+                  <span className="st-scheme-chips">
+                    <span className="st-scheme-chip" style={{ color: s.gain, background: s.id === "mono" ? "var(--bg-surface-2)" : `color-mix(in oklab, ${s.gain} 13%, transparent)` }}>
+                      ↗ +2.4%
+                    </span>
+                    <span className="st-scheme-chip" style={{ color: s.loss, background: s.id === "mono" ? "var(--bg-surface-2)" : `color-mix(in oklab, ${s.loss} 13%, transparent)` }}>
+                      ↘ −1.1%
+                    </span>
+                  </span>
+                  <span className="st-scheme-name">{s.name}</span>
+                  <span className="st-scheme-note">{s.note}</span>
+                  {on ? (
+                    <m.span className="st-scheme-check" initial={reduced ? { opacity: 0 } : { scale: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.bouncy}>
+                      <Check size={11} strokeWidth={3} />
+                    </m.span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Group>
+    </div>
+  );
+}
+
+/** Real kit components rendered with the live accent. */
+function AccentPreview() {
+  return (
+    <div className="st-accent-preview" aria-label="Preview">
+      <div className="st-ap-col">
+        <div className="st-ap-row">
+          <Button size="sm" variant="primary" tabIndex={-1}>
+            Save changes
+          </Button>
+          <Button size="sm" variant="soft" tabIndex={-1}>
+            Share
+          </Button>
+          <Button size="sm" variant="link" tabIndex={-1}>
+            Learn more
+          </Button>
+        </div>
+        <div className="st-ap-row">
+          <Switch checked onCheckedChange={() => undefined} aria-label="Example switch" size="sm" />
+          <Checkbox checked onCheckedChange={() => undefined} aria-label="Example checkbox" />
+          <Tag color="default">Planning</Tag>
+          <span className="st-ap-selected">Selected text</span>
+        </div>
+        <Progress value={0.64} size={4} aria-label="Example progress" />
+      </div>
+      <div className="st-ap-ring">
+        <Ring value={0.64} size={64} color="var(--accent-solid)" aria-label="Example ring">
+          <span className="text-caption text-primary" style={{ fontWeight: 600 }}>
+            64%
+          </span>
+        </Ring>
+      </div>
+    </div>
+  );
+}
+
+function MotionDemo() {
+  const reduced = useReducedMotionPref();
+  return (
+    <span className="st-motion-demo" aria-hidden title={reduced ? "Reduced motion: crossfade only" : "Full motion"}>
+      <m.span
+        className="st-motion-dot"
+        animate={reduced ? { opacity: [1, 0.35, 1] } : { x: [0, 30, 0] }}
+        transition={reduced ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" } : { duration: 1.4, repeat: Infinity, ease: [0.65, 0, 0.35, 1] }}
+      />
+    </span>
+  );
+}

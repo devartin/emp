@@ -4,6 +4,10 @@
 //! with a 128-bit random id, the canonicalised path, a purpose and a mode. Grants expire after 10 minutes and are
 //! single use: commands that take files accept only a `grantId` and redeem it with [`GrantRegistry::take`], which
 //! rejects a mismatched purpose, an expired grant or a reused grant.
+//!
+//! Commands that only *inspect* a file before the real import (`import_detect`, `db_import_preview`,
+//! `finance_import_start`) use [`GrantRegistry::peek`]: the same checks, but the grant stays valid (its lifetime is
+//! not extended) for the command that redeems it.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -226,6 +230,53 @@ impl GrantRegistry {
         Ok(entry.granted)
     }
 
+    /// Checks a grant without redeeming it: the same checks as [`GrantRegistry::take`] (format, unknown, expired,
+    /// purpose, mode), but the grant stays valid for the command that follows. A failed peek does not consume the
+    /// grant either (an expired one is dropped). Peeking never extends a grant's lifetime.
+    pub fn peek(&self, id: &str, purpose: GrantPurpose, mode: GrantMode) -> ApiResult<Granted> {
+        self.peek_any(id, &[purpose], mode)
+    }
+
+    /// Like [`GrantRegistry::peek`], accepting a grant issued for any of `purposes`.
+    pub fn peek_any(
+        &self,
+        id: &str,
+        purposes: &[GrantPurpose],
+        mode: GrantMode,
+    ) -> ApiResult<Granted> {
+        self.peek_at(id, purposes, mode, Instant::now())
+    }
+
+    fn peek_at(
+        &self,
+        id: &str,
+        purposes: &[GrantPurpose],
+        mode: GrantMode,
+        now: Instant,
+    ) -> ApiResult<Granted> {
+        crate::validate::grant_id("grantId", id)?;
+        let mut grants = self.grants.lock();
+        let entry = grants.get(id).ok_or_else(|| {
+            ApiError::invalid("grantId", "this file grant is unknown or was already used")
+        })?;
+        if entry.expires <= now {
+            grants.remove(id);
+            return Err(ApiError::invalid(
+                "grantId",
+                "this file grant expired; choose the file again",
+            ));
+        }
+        if !purposes.iter().any(|p| entry.granted.purpose.satisfies(*p))
+            || entry.granted.mode != mode
+        {
+            return Err(ApiError::invalid(
+                "grantId",
+                "this file was chosen for a different purpose",
+            ));
+        }
+        Ok(entry.granted.clone())
+    }
+
     /// Like [`GrantRegistry::take`], accepting a grant issued for any of `purposes`.
     pub fn take_any(
         &self,
@@ -347,6 +398,70 @@ mod tests {
             )
             .unwrap_err();
         assert!(err.message.contains("expired"));
+    }
+
+    #[test]
+    fn peek_checks_without_consuming() {
+        let (_d, p) = temp_file();
+        let reg = GrantRegistry::default();
+        let g = reg
+            .issue(p.clone(), GrantPurpose::Drop, GrantMode::Read)
+            .unwrap();
+        let peeked = reg
+            .peek(&g.grant_id, GrantPurpose::Import, GrantMode::Read)
+            .unwrap();
+        assert_eq!(peeked.path, p);
+        assert_eq!(peeked.display_name, "notes.md");
+        // Wrong purpose or mode fails but does not burn the grant.
+        assert!(
+            reg.peek(&g.grant_id, GrantPurpose::Restore, GrantMode::Read)
+                .is_err()
+        );
+        assert!(
+            reg.peek(&g.grant_id, GrantPurpose::Import, GrantMode::Write)
+                .is_err()
+        );
+        assert!(
+            reg.peek_any(
+                &g.grant_id,
+                &[GrantPurpose::Restore, GrantPurpose::Attach],
+                GrantMode::Read
+            )
+            .is_ok()
+        );
+        // Still redeemable exactly once.
+        assert!(
+            reg.take(&g.grant_id, GrantPurpose::Import, GrantMode::Read)
+                .is_ok()
+        );
+        assert!(
+            reg.peek(&g.grant_id, GrantPurpose::Import, GrantMode::Read)
+                .is_err()
+        );
+        assert!(
+            reg.peek("../../etc", GrantPurpose::Import, GrantMode::Read)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn peek_honours_expiry() {
+        let (_d, p) = temp_file();
+        let reg = GrantRegistry::default();
+        let t0 = Instant::now();
+        let g = reg
+            .issue_at(p, GrantPurpose::Import, GrantMode::Read, t0)
+            .unwrap();
+        let err = reg
+            .peek_at(
+                &g.grant_id,
+                &[GrantPurpose::Import],
+                GrantMode::Read,
+                t0 + GRANT_TTL,
+            )
+            .unwrap_err();
+        assert!(err.message.contains("expired"));
+        assert!(reg.is_empty());
     }
 
     #[test]

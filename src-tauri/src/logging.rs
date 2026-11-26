@@ -166,6 +166,28 @@ fn redacting_fields()
     )
 }
 
+/// Crates whose events are logged at the build's level; every other target (HTTP, TLS, D-Bus, webview internals)
+/// is limited to warnings, so dependency debug output (request URLs with query strings, message dumps) never reaches
+/// the log file even in debug builds.
+pub const EMP_TARGETS: &[&str] = &[
+    "emp_lib",
+    "emp_app",
+    "emp_store",
+    "emp_crypto",
+    "emp_sheets",
+    "emp_finance",
+    "emp_integrations",
+];
+
+/// The per-target filter used by [`init`].
+#[must_use]
+pub fn log_filter(level: tracing::Level) -> tracing_subscriber::filter::Targets {
+    EMP_TARGETS.iter().fold(
+        tracing_subscriber::filter::Targets::new().with_default(tracing::Level::WARN),
+        |t, name| t.with_target(*name, level),
+    )
+}
+
 /// Installs the global subscriber. Logs go to `logs_dir/emp.log`; debug builds also log to stderr. Failure to open
 /// the file leaves stderr-only logging in debug builds and no logging in release builds.
 pub fn init(logs_dir: &Path) {
@@ -174,7 +196,7 @@ pub fn init(logs_dir: &Path) {
     } else {
         tracing::Level::INFO
     };
-    let filter = tracing_subscriber::filter::LevelFilter::from_level(level);
+    let filter = log_filter(level);
     let file_layer = RotatingFile::open(logs_dir, MAX_LOG_BYTES, LOG_FILES)
         .ok()
         .map(|f| {
@@ -234,6 +256,22 @@ mod tests {
         for f in ["message", "count", "code", "kind", "status"] {
             assert!(!is_redacted_field(f), "{f}");
         }
+    }
+
+    #[test]
+    fn dependency_debug_output_is_filtered() {
+        use tracing::Level;
+        let f = log_filter(Level::DEBUG);
+        let enabled = |target: &str, level: Level| f.would_enable(target, &level);
+        assert!(enabled("emp_lib::commands::app", Level::DEBUG));
+        assert!(enabled("emp_integrations::netguard", Level::INFO));
+        assert!(!enabled("reqwest::connect", Level::DEBUG));
+        assert!(!enabled("hyper_util::client", Level::INFO));
+        assert!(!enabled("zbus::connection", Level::INFO));
+        assert!(enabled("zbus::connection", Level::WARN));
+        let release = log_filter(Level::INFO);
+        assert!(!release.would_enable("emp_store::vault", &Level::DEBUG));
+        assert!(release.would_enable("emp_store::vault", &Level::INFO));
     }
 
     #[test]

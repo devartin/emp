@@ -1014,6 +1014,32 @@ impl Store {
             .collect())
     }
 
+    /// The record key → id map of an installed instance (`"accounts"` → database id, `"accounts:checking"` → row
+    /// id, …), so callers find generated databases, pages and rows exactly instead of matching titles.
+    pub fn lifeapp_key_map(&self, instance_id: &str) -> Result<BTreeMap<String, String>> {
+        let s = self.session()?;
+        Ok(self.instance(&s, instance_id)?.payload.key_map)
+    }
+
+    /// The wizard answers of an installed instance, resolved the way generation saw them: the user's answers,
+    /// then step defaults and recommendations for the steps they skipped (Quick mode).
+    pub fn lifeapp_answers(&self, instance_id: &str) -> Result<Map<String, Value>> {
+        let s = self.session()?;
+        let inst = self.instance(&s, instance_id)?;
+        let m = la::manifest(&inst.app_id).ok_or(StoreError::NotFound("life app"))?;
+        let today = self.local_today()?;
+        Ok(
+            crate::lifeapps::answers::resolve(m, &inst.payload.answers, inst.payload.mode, today)?
+                .answers,
+        )
+    }
+
+    /// The answers exactly as the user gave them (no defaults), as the tune-up wizard pre-fills them.
+    pub fn lifeapp_raw_answers(&self, instance_id: &str) -> Result<Map<String, Value>> {
+        let s = self.session()?;
+        Ok(self.instance(&s, instance_id)?.payload.answers)
+    }
+
     fn instance(&self, s: &Arc<Session>, id: &str) -> Result<InstanceRow> {
         self.read(|c| load_instance(c, &s.codec, id))?
             .ok_or(StoreError::NotFound("life app instance"))

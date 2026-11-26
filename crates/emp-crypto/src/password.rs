@@ -411,9 +411,15 @@ pub fn lockout_until(now_ms: i64, failures: u32) -> i64 {
 }
 
 /// Remaining wait (for `RATE_LIMITED { retryAfterMs }`), zero if `lockout_until_ms` has passed.
+///
+/// Capped at [`BACKOFF_MAX`]: a lockout is never set more than 300 s ahead, so a larger remainder means the wall
+/// clock moved backwards (or `vault_meta` was edited) and must not lock the user out for longer than the policy.
 #[must_use]
 pub fn retry_after_ms(now_ms: i64, lockout_until_ms: i64) -> u64 {
-    u64::try_from(lockout_until_ms.saturating_sub(now_ms)).unwrap_or(0)
+    let max = u64::try_from(BACKOFF_MAX.as_millis()).unwrap_or(u64::MAX);
+    u64::try_from(lockout_until_ms.saturating_sub(now_ms))
+        .unwrap_or(0)
+        .min(max)
 }
 
 #[cfg(test)]
@@ -560,6 +566,10 @@ mod tests {
         assert_eq!(lockout_until(1000, 5), 2000);
         assert_eq!(retry_after_ms(1500, 2000), 500);
         assert_eq!(retry_after_ms(2500, 2000), 0);
+        // Regression: a clock that jumped back a day (or a hand-edited lockout_until) must not lock the vault for a
+        // day; the remainder is capped at the 300 s policy maximum.
+        assert_eq!(retry_after_ms(0, 86_400_000), 300_000);
+        assert_eq!(retry_after_ms(i64::MIN, i64::MAX), 300_000);
     }
 
     #[test]

@@ -540,7 +540,11 @@ export const handlers: MockHandlers = {
         if (p && !p.deletedAt && p.appInstanceId === inst.id && p.kind !== 'app' && p.kind !== 'dashboard') ctx.pages.update(id, { appInstanceId: undefined });
       }
       const root = ctx.pages.get(inst.rootPageId);
-      if (root && !root.deletedAt) ctx.pages.trash([root.id]);
+      if (root && !root.deletedAt) {
+        // Keep the content: lift the hub's children to the top level, then the (now empty) hub goes to Trash.
+        for (const child of ctx.pages.children(root.id)) ctx.pages.move(child.id, null);
+        ctx.pages.trash([root.id]);
+      }
     }
     instancesTable(ctx).delete(inst.id);
   },

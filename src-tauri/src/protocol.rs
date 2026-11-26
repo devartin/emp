@@ -10,8 +10,9 @@ use tauri::http::{Request, Response, StatusCode, header};
 
 /// Largest slice served for one open-ended or suffix range.
 pub const RANGE_CHUNK: u64 = 4 * 1024 * 1024;
-/// Largest body served without a `Range` header.
-pub const MAX_FULL_BODY: u64 = 256 * 1024 * 1024;
+/// Largest body served without a `Range` header (images are capped at 50 MiB on import; anything larger is served
+/// in [`RANGE_CHUNK`] slices so a handful of concurrent requests cannot buffer gigabytes).
+pub const MAX_FULL_BODY: u64 = 64 * 1024 * 1024;
 
 /// The URL prefix of asset URLs on this platform (handed to the store, which builds `AssetDTO.url`).
 #[must_use]
@@ -143,21 +144,44 @@ pub fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// A safe `Content-Type` for an asset: active content (HTML, SVG, XML, JavaScript) is served as an opaque download
-/// type so it can never execute in the app origin.
+/// MIME types served for inline display (SPEC §9.7): raster images, and video/audio for `<video>` / `<audio>`.
+/// SVG is deliberately not on the list (it is served as a download type, stricter than §9.7).
+pub const INLINE_TYPES: &[&str] = &[
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/avif",
+    "video/mp4",
+    "video/webm",
+];
+
+/// `true` for an `audio/<subtype>` type with a plain subtype.
+fn is_inline_audio(m: &str) -> bool {
+    m.strip_prefix("audio/").is_some_and(|sub| {
+        !sub.is_empty()
+            && sub
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'.'))
+    })
+}
+
+/// A safe `Content-Type` for an asset: only the inline allowlist ([`INLINE_TYPES`], `audio/*`) keeps its type;
+/// everything else (HTML, SVG, XML, scripts, PDFs, text, unknown) is served as an opaque download type so it can
+/// never be interpreted in the app origin.
 #[must_use]
 pub fn safe_content_type(mime: &str) -> &str {
-    let m = mime.trim().to_ascii_lowercase();
-    let active = m.contains("html")
-        || m.contains("xml")
-        || m.contains("svg")
-        || m.contains("javascript")
-        || m.contains("ecmascript");
-    if active || mime.is_empty() || !mime.is_ascii() || mime.contains(['\r', '\n']) {
-        "application/octet-stream"
-    } else {
+    if is_inline_type(mime) {
         mime
+    } else {
+        "application/octet-stream"
     }
+}
+
+/// `true` when `mime` (exactly, lowercase, no parameters) may be displayed inline.
+#[must_use]
+pub fn is_inline_type(mime: &str) -> bool {
+    INLINE_TYPES.contains(&mime) || is_inline_audio(mime)
 }
 
 fn empty(status: StatusCode) -> Response<Vec<u8>> {
@@ -191,6 +215,12 @@ fn with_common(mut r: Response<Vec<u8>>, mime: &str) -> Response<Vec<u8>> {
         header::CONTENT_SECURITY_POLICY,
         header::HeaderValue::from_static("default-src 'none'; sandbox"),
     );
+    if !is_inline_type(mime) {
+        h.insert(
+            header::CONTENT_DISPOSITION,
+            header::HeaderValue::from_static("attachment"),
+        );
+    }
     r
 }
 
@@ -377,6 +407,36 @@ mod tests {
     }
 
     #[test]
+    fn only_allowlisted_types_render_inline() {
+        for m in [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "video/mp4",
+            "audio/mpeg",
+            "audio/ogg",
+        ] {
+            assert_eq!(safe_content_type(m), m);
+        }
+        for m in [
+            "text/plain",
+            "text/css",
+            "application/pdf",
+            "application/json",
+            "image/x-icon",
+            "image/svg+xml",
+            "text/xml",
+            "multipart/x-mixed-replace",
+            "IMAGE/PNG",
+            "image/png; charset=x",
+            "audio/",
+            "audio/x;y",
+        ] {
+            assert_eq!(safe_content_type(m), "application/octet-stream", "{m}");
+        }
+    }
+
+    #[test]
     fn locked_store_is_forbidden() {
         let req = Request::builder()
             .uri(format!("emp-asset://localhost/{ID}"))
@@ -415,6 +475,15 @@ mod tests {
         (dir, created.store)
     }
 
+    /// A valid 1×1 PNG.
+    const PNG_1X1: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
+        0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+
     fn get(store: &emp_store::Store, id: &str, range: Option<&str>) -> Response<Vec<u8>> {
         let mut b = Request::builder().uri(format!("emp-asset://localhost/{id}"));
         if let Some(r) = range {
@@ -438,6 +507,39 @@ mod tests {
         assert_eq!(full.body(), &body);
         assert_eq!(full.headers()["x-content-type-options"], "nosniff");
         assert_eq!(full.headers()[header::CACHE_CONTROL], "no-store");
+        // Not an inline type: an opaque download, never rendered.
+        assert_eq!(
+            full.headers()[header::CONTENT_TYPE],
+            "application/octet-stream"
+        );
+        assert_eq!(full.headers()[header::CONTENT_DISPOSITION], "attachment");
+
+        let png = store
+            .asset_import_bytes(&ws.id, "pixel.png", "image/png", PNG_1X1)
+            .unwrap();
+        let img = get(&store, &png.id, None);
+        assert_eq!(img.status(), StatusCode::OK);
+        assert_eq!(img.headers()[header::CONTENT_TYPE], "image/png");
+        assert!(img.headers().get(header::CONTENT_DISPOSITION).is_none());
+
+        let html = store
+            .asset_import_bytes(
+                &ws.id,
+                "page.html",
+                "text/html",
+                b"<script>alert(1)</script>",
+            )
+            .unwrap();
+        let page = get(&store, &html.id, None);
+        assert_eq!(
+            page.headers()[header::CONTENT_TYPE],
+            "application/octet-stream"
+        );
+        assert_eq!(page.headers()[header::CONTENT_DISPOSITION], "attachment");
+        assert_eq!(
+            page.headers()[header::CONTENT_SECURITY_POLICY],
+            "default-src 'none'; sandbox"
+        );
 
         let part = get(&store, &asset.id, Some("bytes=100-199"));
         assert_eq!(part.status(), StatusCode::PARTIAL_CONTENT);

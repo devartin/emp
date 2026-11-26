@@ -177,6 +177,21 @@ fn parse_attrs(s: &str) -> Vec<(String, String)> {
 }
 
 /// Parses HTML into a forgiving tree.
+/// Byte offset of the first ASCII-case-insensitive occurrence of `needle` (ASCII) in `hay`.
+fn find_ascii_ci(hay: &str, needle: &str) -> Option<usize> {
+    let (h, n) = (hay.as_bytes(), needle.as_bytes());
+    let first = *n.first()?;
+    let mut from = 0;
+    while let Some(off) = h.get(from..)?.iter().position(|b| b.eq_ignore_ascii_case(&first)) {
+        let at = from + off;
+        if h.get(at..at + n.len()).is_some_and(|w| w.eq_ignore_ascii_case(n)) {
+            return Some(at);
+        }
+        from = at + 1;
+    }
+    None
+}
+
 fn parse(html: &str) -> Node {
     let mut stack: Vec<Node> = vec![Node::El {
         name: "#root".into(),
@@ -237,9 +252,10 @@ fn parse(html: &str) -> Node {
             continue;
         }
         if DROP.contains(&name.as_str()) {
+            // Skip to the matching close tag. The search is case-insensitive without copying the
+            // rest of the document, which made many dropped elements quadratic.
             let end = format!("</{name}");
-            let lower = rest.to_ascii_lowercase();
-            rest = lower.find(&end).map_or("", |e| {
+            rest = find_ascii_ci(rest, &end).map_or("", |e| {
                 let after = &rest[e..];
                 after.find('>').map_or("", |g| &after[g + 1..])
             });
@@ -975,5 +991,27 @@ mod tests {
             decode_entities("&lt;a&gt; &#65;&#x42; &bogus;"),
             "<a> AB &bogus;"
         );
+    }
+
+    #[test]
+    fn many_dropped_elements_are_linear() {
+        // Each dropped element used to lowercase a copy of the rest of the document: 200,000
+        // of them (2 MiB) took minutes and could not be cancelled.
+        let html = "<SVG><path/></sVg>".repeat(200_000) + "<p>after</p>";
+        let started = std::time::Instant::now();
+        let r = convert(&html, &mut NoResolve).unwrap();
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(10),
+            "{:?}",
+            started.elapsed()
+        );
+        assert!(serde_json::to_string(&r.doc).unwrap().contains("after"));
+        assert_eq!(find_ascii_ci("abc</ScRiPt>", "</script"), Some(3));
+        assert_eq!(find_ascii_ci("é</x", "</x"), Some(2));
+        assert_eq!(find_ascii_ci("abc", "</x"), None);
+        assert_eq!(find_ascii_ci("abc", ""), None);
+        // Unterminated dropped elements swallow the rest, as before.
+        let r = convert("<p>a</p><script>alert(1)<p>b</p>", &mut NoResolve).unwrap();
+        assert!(!serde_json::to_string(&r.doc).unwrap().contains("alert"));
     }
 }

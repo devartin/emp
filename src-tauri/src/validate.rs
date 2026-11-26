@@ -190,14 +190,14 @@ pub fn password(field: &str, s: &str) -> ApiResult<()> {
     bounded(field, s, MAX_PASSWORD_CHARS)
 }
 
-/// A UI kv namespace (`ui.<name>`, `[a-z0-9._-]`, ≤ 64 bytes) and key (≤ 256 characters).
+/// A UI kv namespace (`ui.<name>`, `[A-Za-z0-9._-]` as the store accepts, e.g. `ui.gettingStarted`; ≤ 64 bytes) and key (≤ 256 characters).
 pub fn kv_key(ns: &str, key: &str) -> ApiResult<()> {
     let name_ok = ns.len() <= 64
         && ns.strip_prefix("ui.").is_some_and(|rest| {
             !rest.is_empty()
                 && rest
                     .bytes()
-                    .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-'))
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
         });
     if !name_ok {
         return Err(ApiError::invalid(
@@ -294,7 +294,9 @@ mod tests {
         assert!(kv_key("ui.sidebar", "width").is_ok());
         assert!(kv_key("ui.", "k").is_err());
         assert!(kv_key("net.log", "k").is_err());
-        assert!(kv_key("ui.Side", "k").is_err());
+        assert!(kv_key("ui.gettingStarted", "create_page").is_ok());
+        assert!(kv_key("ui.side bar", "k").is_err());
+        assert!(kv_key("UI.side", "k").is_err());
         assert!(kv_key("ui.nav", "").is_err());
     }
 

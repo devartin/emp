@@ -544,6 +544,7 @@ impl Store {
             }
         }
         self.tree_changed(&meta.workspace_id, upserted, Vec::new());
+        self.tour_tick_quiet("create_page");
         Ok(PageCreated { meta, doc_rev })
     }
 
@@ -1057,7 +1058,9 @@ impl Store {
         let mut req = PageCreate::new(workspace_id, parent_id, tpl.kind, &tpl.title);
         req.icon = tpl.icon;
         req.template_page_id = Some(template_id.to_owned());
-        Ok(self.page_create(req)?.meta)
+        let meta = self.page_create(req)?.meta;
+        self.tour_tick_quiet("templates");
+        Ok(meta)
     }
 
     /// `daily_note_open`: the daily note for `date` (`YYYY-MM-DD`) in the first workspace, created if missing

@@ -18,6 +18,9 @@ use crate::error::{ApiError, ApiResult, ErrorCode};
 
 /// Minimum interval between two `progress` events (the final one is always sent).
 pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
+/// Most jobs running at once. Each occupies a blocking-pool thread; beyond this a new job ends at once with
+/// `RATE_LIMITED` instead of starving the pool that every command body runs on.
+pub const MAX_RUNNING_JOBS: usize = 64;
 
 thread_local! {
     static IN_BOUNDARY: Cell<bool> = const { Cell::new(false) };
@@ -186,6 +189,14 @@ fn panic_error() -> ApiError {
     ApiError::internal("job panicked")
 }
 
+fn busy_error() -> ApiError {
+    ApiError::new(
+        ErrorCode::RateLimited,
+        "Too many tasks are running; try again when some have finished",
+    )
+    .with_retry_after(1_000)
+}
+
 impl JobRegistry {
     /// Starts `body` on the blocking pool and returns its [`JobRef`] immediately.
     ///
@@ -204,7 +215,13 @@ impl JobRegistry {
         F: FnOnce(&JobCtx) -> ApiResult<T> + Send + 'static,
     {
         let id = new_job_id();
-        let ctx = self.register(&id, kind, cancellable, now_ms, sink);
+        let Some(ctx) = self.try_register(&id, kind, cancellable, now_ms, Arc::clone(&sink)) else {
+            // The caller buffers events that arrive before the JobRef, so the error reaches the job's listener.
+            sink.send(JobEvent::Error {
+                error: busy_error(),
+            });
+            return JobRef { job_id: id };
+        };
         let me = Arc::clone(self);
         let job_id = id.clone();
         tauri::async_runtime::spawn_blocking(move || {
@@ -213,6 +230,7 @@ impl JobRegistry {
         JobRef { job_id: id }
     }
 
+    #[cfg(test)]
     fn register(
         &self,
         id: &str,
@@ -221,10 +239,39 @@ impl JobRegistry {
         now_ms: i64,
         sink: Arc<dyn JobSink>,
     ) -> JobCtx {
+        self.register_inner(id, kind, cancellable, now_ms, sink, usize::MAX)
+            .unwrap_or_else(|| unreachable!("no limit"))
+    }
+
+    /// Registers a job unless [`MAX_RUNNING_JOBS`] are already running.
+    fn try_register(
+        &self,
+        id: &str,
+        kind: &'static str,
+        cancellable: bool,
+        now_ms: i64,
+        sink: Arc<dyn JobSink>,
+    ) -> Option<JobCtx> {
+        self.register_inner(id, kind, cancellable, now_ms, sink, MAX_RUNNING_JOBS)
+    }
+
+    fn register_inner(
+        &self,
+        id: &str,
+        kind: &'static str,
+        cancellable: bool,
+        now_ms: i64,
+        sink: Arc<dyn JobSink>,
+        limit: usize,
+    ) -> Option<JobCtx> {
         let done = Arc::new(AtomicU64::new(0));
         let total = Arc::new(AtomicU64::new(0));
         let cancel = Arc::new(AtomicBool::new(false));
-        self.jobs.lock().insert(
+        let mut jobs = self.jobs.lock();
+        if jobs.len() >= limit {
+            return None;
+        }
+        jobs.insert(
             id.to_owned(),
             Entry {
                 kind,
@@ -235,13 +282,14 @@ impl JobRegistry {
                 cancel: Arc::clone(&cancel),
             },
         );
-        JobCtx {
+        drop(jobs);
+        Some(JobCtx {
             sink,
             done,
             total,
             cancel,
             last_sent: Mutex::new(None),
-        }
+        })
     }
 
     /// Runs a registered job body to completion on the current thread.
@@ -434,6 +482,46 @@ mod tests {
         assert_eq!(reg.cancel("j3").unwrap_err().code, ErrorCode::Unsupported);
         assert_eq!(reg.cancel_all(), 1);
         assert!(ctx.is_cancelled());
+    }
+
+    #[test]
+    fn running_jobs_are_capped() {
+        let reg = JobRegistry::default();
+        let sink: Arc<dyn JobSink> = Arc::new(Collect::default());
+        for i in 0..MAX_RUNNING_JOBS {
+            assert!(
+                reg.try_register(&format!("j{i}"), "t", true, 1, Arc::clone(&sink))
+                    .is_some()
+            );
+        }
+        assert!(
+            reg.try_register("over", "t", true, 1, Arc::clone(&sink))
+                .is_none()
+        );
+        assert_eq!(reg.len(), MAX_RUNNING_JOBS);
+        // A finished job frees its slot.
+        let ctx = reg.try_register("x", "t", true, 1, Arc::clone(&sink));
+        assert!(ctx.is_none());
+        reg.jobs.lock().remove("j0");
+        assert!(reg.try_register("x", "t", true, 1, sink).is_some());
+    }
+
+    #[test]
+    fn spawn_over_the_cap_reports_rate_limited() {
+        let reg = Arc::new(JobRegistry::default());
+        let filler: Arc<dyn JobSink> = Arc::new(Collect::default());
+        for i in 0..MAX_RUNNING_JOBS {
+            reg.register(&format!("j{i}"), "t", true, 1, Arc::clone(&filler));
+        }
+        let sink = Arc::new(Collect::default());
+        let job = reg.spawn("t", true, 1, sink.clone(), |_| Ok(1));
+        assert!(!job.job_id.is_empty());
+        let ev = sink.0.lock().clone();
+        assert!(
+            matches!(&ev[..], [JobEvent::Error { error }] if error.code == ErrorCode::RateLimited),
+            "{ev:?}"
+        );
+        assert_eq!(reg.len(), MAX_RUNNING_JOBS);
     }
 
     #[test]

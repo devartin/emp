@@ -1,12 +1,12 @@
 //! Import commands (SPEC §11.3 "Backup, import, export", §9.16, §17.3–§17.5) and the file-staging helpers the other
 //! domain modules share.
 //!
-//! ## File staging
+//! ## Inspect, then import
 //! Grants are single use (§9.14), but several flows read a file twice: `import_detect` → `import_*`,
-//! `db_import_preview` → `db_import_csv`, `finance_import_start` → `finance_import_commit`. A command that only
-//! *inspects* a file redeems its grant, then **stages** the bytes under the same grant id for [`STAGE_TTL`]; the next
-//! command redeems the staged copy instead of the (already used) grant. Staged files are bounded in count and total
-//! size and expire with the grant lifetime.
+//! `db_import_preview` → `db_import_csv`, `finance_import_start` → `db_import_csv` ("import as a table instead"). A
+//! command that only *inspects* a file checks its grant with [`crate::grants::GrantRegistry::peek`] ([`peek_file`],
+//! [`peek_head`]) without redeeming it; the importing command then redeems the same `grantId` ([`take_file`],
+//! [`take_path`]). Nothing is kept in memory between the two.
 //!
 //! ## Undo
 //! Every importer records an undo log in the store under an *import id*. Job results carry `importId`; in addition the
@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
-use std::time::{Duration, Instant};
 
 use emp_store::import::files::ImportFile;
 use emp_store::import::{ImportKind, detect};
@@ -32,14 +31,7 @@ use crate::jobs::{JobCtx, JobRef};
 use crate::state::{AppState, blocking};
 use crate::validate;
 
-// ───────────────────────────────────────────────────────────────────────────── staging
-
-/// How long a staged file stays available (the grant lifetime).
-pub const STAGE_TTL: Duration = crate::grants::GRANT_TTL;
-/// Maximum number of staged files.
-pub const STAGE_MAX_FILES: usize = 16;
-/// Maximum total size of staged files.
-pub const STAGE_MAX_BYTES: usize = 512 * 1024 * 1024;
+// ───────────────────────────────────────────────────────────────────────────── reading granted files
 
 /// Read caps per kind of input (§9.16).
 pub mod caps {
@@ -72,71 +64,48 @@ pub struct InputFile {
     pub bytes: Arc<Vec<u8>>,
 }
 
-struct Staged {
-    file: InputFile,
-    expires: Instant,
-}
-
-static STAGED: LazyLock<Mutex<HashMap<String, Staged>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Keeps `file` available under `grant_id` for one more redemption.
-pub fn stage(grant_id: &str, file: &InputFile) {
-    let now = Instant::now();
-    let mut m = STAGED.lock();
-    m.retain(|_, s| s.expires > now);
-    while m.len() >= STAGE_MAX_FILES
-        || m.values().map(|s| s.file.bytes.len()).sum::<usize>() + file.bytes.len()
-            > STAGE_MAX_BYTES
-    {
-        let Some(oldest) = m
-            .iter()
-            .min_by_key(|(_, s)| s.expires)
-            .map(|(k, _)| k.clone())
-        else {
-            break;
-        };
-        m.remove(&oldest);
-    }
-    if file.bytes.len() <= STAGE_MAX_BYTES {
-        m.insert(
-            grant_id.to_owned(),
-            Staged {
-                file: file.clone(),
-                expires: now + STAGE_TTL,
-            },
-        );
-    }
-}
-
-fn take_staged(grant_id: &str) -> Option<InputFile> {
-    let now = Instant::now();
-    let mut m = STAGED.lock();
-    m.retain(|_, s| s.expires > now);
-    m.remove(grant_id).map(|s| s.file)
-}
-
-/// Drops every staged file (tests and lock hygiene).
-pub fn clear_staged() {
-    STAGED.lock().clear();
-}
-
-/// Reads at most `max` bytes of a regular file; `TOO_LARGE` above that.
+/// Reads at most `max` bytes of a regular file; `TOO_LARGE` above that. The cap is enforced on the bytes actually
+/// read, so a file that grows after the size check (or lies about its size) cannot exhaust memory.
 pub fn read_capped(path: &Path, max: u64) -> ApiResult<Vec<u8>> {
-    let meta = std::fs::metadata(path)?;
+    use std::io::Read;
+    let too_large = || {
+        ApiError::new(
+            ErrorCode::TooLarge,
+            format!("This file is larger than {} MB", max / (1024 * 1024)),
+        )
+    };
+    if !std::fs::metadata(path)?.is_file() {
+        return Err(ApiError::invalid("grantId", "choose a file, not a folder"));
+    }
+    let f = std::fs::File::open(path)?;
+    let meta = f.metadata()?;
     if !meta.is_file() {
         return Err(ApiError::invalid("grantId", "choose a file, not a folder"));
     }
     if meta.len() > max {
-        return Err(ApiError::new(
-            ErrorCode::TooLarge,
-            format!("This file is larger than {} MB", max / (1024 * 1024)),
-        ));
+        return Err(too_large());
     }
-    Ok(std::fs::read(path)?)
+    let mut out = Vec::with_capacity(usize::try_from(meta.len()).unwrap_or(0));
+    f.take(max.saturating_add(1)).read_to_end(&mut out)?;
+    if out.len() as u64 > max {
+        return Err(too_large());
+    }
+    Ok(out)
 }
 
-/// Redeems `grant_id` (or its staged copy) for one of `purposes` and reads the file (≤ `max` bytes).
+/// Reads at most `max` bytes from the start of a regular file (format sniffing).
+pub fn read_head(path: &Path, max: usize) -> ApiResult<Vec<u8>> {
+    use std::io::Read;
+    let f = std::fs::File::open(path)?;
+    if !f.metadata()?.is_file() {
+        return Err(ApiError::invalid("grantId", "choose a file, not a folder"));
+    }
+    let mut out = Vec::with_capacity(max.min(1 << 20));
+    f.take(max as u64).read_to_end(&mut out)?;
+    Ok(out)
+}
+
+/// Redeems `grant_id` for one of `purposes` and reads the file (≤ `max` bytes).
 pub fn take_file(
     state: &AppState,
     grant_id: &str,
@@ -144,12 +113,6 @@ pub fn take_file(
     max: u64,
 ) -> ApiResult<InputFile> {
     validate::grant_id("grantId", grant_id)?;
-    if let Some(f) = take_staged(grant_id) {
-        if f.bytes.len() as u64 > max {
-            return Err(ApiError::new(ErrorCode::TooLarge, "This file is too large"));
-        }
-        return Ok(f);
-    }
     let g = state.grants.take_any(grant_id, purposes, GrantMode::Read)?;
     let bytes = read_capped(&g.path, max)?;
     Ok(InputFile {
@@ -158,7 +121,31 @@ pub fn take_file(
     })
 }
 
-/// Redeems a read grant that may name a folder; returns the path (staged files are never folders).
+/// Reads the file of `grant_id` (≤ `max` bytes) **without** redeeming the grant, for commands that inspect a file
+/// before the import that redeems it.
+pub fn peek_file(
+    state: &AppState,
+    grant_id: &str,
+    purposes: &[GrantPurpose],
+    max: u64,
+) -> ApiResult<InputFile> {
+    let g = state.grants.peek_any(grant_id, purposes, GrantMode::Read)?;
+    let bytes = read_capped(&g.path, max)?;
+    Ok(InputFile {
+        name: g.display_name,
+        bytes: Arc::new(bytes),
+    })
+}
+
+/// The path and display name of a read grant (file or folder) **without** redeeming it.
+pub fn peek_head(state: &AppState, grant_id: &str) -> ApiResult<(PathBuf, String)> {
+    let g = state
+        .grants
+        .peek_any(grant_id, &[GrantPurpose::Import], GrantMode::Read)?;
+    Ok((g.path, g.display_name))
+}
+
+/// Redeems a read grant that may name a folder; returns the path.
 pub fn take_path(state: &AppState, grant_id: &str) -> ApiResult<(PathBuf, String)> {
     validate::grant_id("grantId", grant_id)?;
     let g = state
@@ -337,14 +324,15 @@ pub fn walk_folder(root: &Path, max_files: usize) -> ApiResult<Vec<(String, Path
     Ok(out)
 }
 
-/// `import_detect({ grantId }) → { kind, details }`. The file stays staged for the import that follows.
+/// `import_detect({ grantId }) → { kind, details }`. The grant is only peeked: the import that follows redeems the
+/// same `grantId`. `details.grantId` (folders) echoes it for callers that read it from there.
 #[tauri::command]
 pub async fn import_detect(app: AppHandle, req: GrantReq) -> ApiResult<DetectDto> {
     validate::grant_id("grantId", &req.grant_id)?;
     blocking(move || {
         let state = app.state::<AppState>();
         state.session()?;
-        let (path, name) = take_path(&state, &req.grant_id)?;
+        let (path, name) = peek_head(&state, &req.grant_id)?;
         if path.is_dir() {
             let files = walk_folder(&path, caps::MARKDOWN_FOLDER_FILES)?;
             let md = files.iter().filter(|(r, _)| is_markdown_name(r)).count();
@@ -353,30 +341,20 @@ pub async fn import_detect(app: AppHandle, req: GrantReq) -> ApiResult<DetectDto
             } else {
                 ImportKind::Unknown
             };
-            // Folders cannot be staged as bytes: re-issue a folder grant under a new id.
-            let g = state
-                .grants
-                .issue(path, GrantPurpose::Import, GrantMode::Read)?;
             return Ok(DetectDto {
                 kind: kind_name(kind),
-                details: json!({ "name": name, "files": files.len(), "markdownFiles": md, "grantId": g.grant_id }),
+                details: json!({ "name": name, "files": files.len(), "markdownFiles": md, "grantId": req.grant_id }),
             });
         }
-        let bytes = read_capped(&path, caps::NOTION_ZIP.max(caps::TABLE))?;
-        let file = InputFile {
-            name: name.clone(),
-            bytes: Arc::new(bytes),
-        };
-        let head = &file.bytes[..file.bytes.len().min(caps::SNIFF)];
-        let mut kind = detect(&name, head);
+        let size = std::fs::metadata(&path)?.len();
+        let head = read_head(&path, caps::SNIFF)?;
+        let mut kind = detect(&name, &head);
         if kind == ImportKind::Unknown && is_markdown_name(&name) {
             kind = ImportKind::Markdown;
         }
-        let details = json!({ "name": name, "size": file.bytes.len() });
-        stage(&req.grant_id, &file);
         Ok(DetectDto {
             kind: kind_name(kind),
-            details,
+            details: json!({ "name": name, "size": size }),
         })
     })
     .await
@@ -404,12 +382,6 @@ pub struct MarkdownDto {
 }
 
 fn markdown_files(state: &AppState, grant_id: &str) -> ApiResult<Vec<ImportFile>> {
-    if let Some(f) = take_staged(grant_id) {
-        return Ok(vec![ImportFile {
-            path: f.name.clone(),
-            bytes: f.bytes.as_ref().clone(),
-        }]);
-    }
     let (path, name) = take_path(state, grant_id)?;
     if path.is_file() {
         let bytes = read_capped(&path, caps::MARKDOWN_FILE)?;
@@ -430,10 +402,20 @@ fn markdown_files(state: &AppState, grant_id: &str) -> ApiResult<Vec<ImportFile>
         if len > caps::MARKDOWN_FILE * 4 {
             continue;
         }
-        out.push(ImportFile {
-            path: rel,
-            bytes: std::fs::read(&p)?,
-        });
+        // Capped on the bytes read as well: a file may grow after the walk or report a size of 0.
+        let bytes = match read_capped(&p, caps::MARKDOWN_FILE * 4) {
+            Ok(b) => b,
+            Err(e) if e.code == ErrorCode::TooLarge => continue,
+            Err(e) => return Err(e),
+        };
+        total += (bytes.len() as u64).saturating_sub(len);
+        if total > caps::MARKDOWN_FOLDER {
+            return Err(ApiError::new(
+                ErrorCode::TooLarge,
+                "This folder is too large",
+            ));
+        }
+        out.push(ImportFile { path: rel, bytes });
     }
     Ok(out)
 }
@@ -592,7 +574,6 @@ pub async fn import_ics(
                 IcsTarget::Database { database_id } => {
                     let (n, import_id) =
                         super::ics::import_into_database(&store, &database_id, &cal)?;
-                    super::db::emit_db_changed(&state, &store, &database_id, None);
                     *out.lock() = Some(import_id.clone());
                     json!({ "events": n, "importId": import_id })
                 }
@@ -640,28 +621,14 @@ pub async fn import_undo(app: AppHandle, req: UndoReq) -> ApiResult<UndoDto> {
 mod tests {
     use super::*;
 
-    fn file(n: usize) -> InputFile {
-        InputFile {
-            name: "a.csv".into(),
-            bytes: Arc::new(vec![0u8; n]),
-        }
-    }
-
     #[test]
-    fn staged_files_are_single_use() {
-        let id = "0123456789abcdef0123456789abcdef";
-        stage(id, &file(3));
-        assert_eq!(take_staged(id).map(|f| f.bytes.len()), Some(3));
-        assert!(take_staged(id).is_none());
-    }
-
-    #[test]
-    fn staging_is_bounded_in_count() {
-        for i in 0..(STAGE_MAX_FILES + 4) {
-            stage(&format!("{i:032x}"), &file(1));
-        }
-        assert!(STAGED.lock().len() <= STAGE_MAX_FILES);
-        clear_staged();
+    fn read_head_reads_only_the_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("x.csv");
+        std::fs::write(&p, vec![b'a'; 100]).unwrap();
+        assert_eq!(read_head(&p, 10).unwrap().len(), 10);
+        assert_eq!(read_head(&p, 1_000).unwrap().len(), 100);
+        assert!(read_head(dir.path(), 10).is_err());
     }
 
     #[test]
@@ -669,6 +636,18 @@ mod tests {
         assert_eq!(kind_name(ImportKind::NotionZip), "notion_zip");
         assert_eq!(kind_name(ImportKind::MarkdownFolder), "markdown_folder");
         assert_eq!(kind_name(ImportKind::Empbackup), "empbackup");
+    }
+
+    /// `/proc` files report a size of 0 but have content: the cap must hold on the bytes read, not the metadata.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn read_capped_enforces_cap_on_bytes_read() {
+        let p = Path::new("/proc/self/status");
+        if std::fs::metadata(p).map(|m| m.len()).unwrap_or(1) != 0 {
+            return;
+        }
+        assert_eq!(read_capped(p, 16).unwrap_err().code, ErrorCode::TooLarge);
+        assert!(!read_capped(p, 1024 * 1024).unwrap().is_empty());
     }
 
     #[test]

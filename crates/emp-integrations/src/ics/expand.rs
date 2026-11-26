@@ -126,6 +126,31 @@ fn overlaps(
     s <= to && (e > from || (e == s && s >= from))
 }
 
+/// Most rule candidates (instances before filtering) an expansion may have to walk.
+const MAX_RULE_CANDIDATES: u64 = 2_000_000;
+
+/// Upper bound on the candidates the rrule iterator generates between `from` and `to`: days in
+/// the span × candidate times per day. Day-level BY rules can only remove days, so they are
+/// ignored; time-level lists multiply per period.
+fn candidate_estimate(rule: &RRule, from: DateTime<Utc>, to: DateTime<Utc>) -> u64 {
+    use rrule::Frequency;
+    let days = u64::try_from((to - from).num_days()).unwrap_or(0) + 1;
+    let interval = u64::from(rule.get_interval().max(1));
+    let n = |len: usize| (len as u64).max(1);
+    let (hours, minutes, seconds) = (
+        n(rule.get_by_hour().len()),
+        n(rule.get_by_minute().len()),
+        n(rule.get_by_second().len()),
+    );
+    let per_day = match rule.get_freq() {
+        Frequency::Secondly => 86_400u64.div_ceil(interval),
+        Frequency::Minutely => 1_440u64.div_ceil(interval) * seconds,
+        Frequency::Hourly => 24u64.div_ceil(interval) * minutes * seconds,
+        _ => hours * minutes * seconds,
+    };
+    days.saturating_mul(per_day)
+}
+
 /// Expand `event` into occurrences overlapping `[window_start, window_end]`.
 ///
 /// Without `RRULE`/`RDATE` the event itself is returned if it overlaps. Expansion stops at
@@ -166,10 +191,27 @@ pub fn expand_event(
     let f = frame(&start);
     let dt_start = f.to_rrule(&start);
     let mut set = RRuleSet::new(dt_start);
+    let horizon = start
+        .to_utc(None)
+        .checked_add_signed(Duration::days(
+            365 * i64::from(limits.horizon_years) + i64::from(limits.horizon_years / 4),
+        ))
+        .unwrap_or(DateTime::<Utc>::MAX_UTC);
     if let Some(rule) = &event.rrule {
         let parsed = RRule::<Unvalidated>::from_str(rule).and_then(|r| r.validate(dt_start));
         match parsed {
-            Ok(r) => set = set.rrule(r),
+            Ok(r) => {
+                // The rrule iterator walks every candidate from DTSTART, including those before
+                // the window that are then discarded: FREQ=SECONDLY started ten years ago is
+                // ~300 million steps. Refuse rules whose candidate count is out of reach.
+                let span_end = window_end.min(horizon);
+                if candidate_estimate(&r, start.to_utc(None), span_end) > MAX_RULE_CANDIDATES {
+                    return single(Some(
+                        "RRULE not expanded: it repeats too often to expand".into(),
+                    ));
+                }
+                set = set.rrule(r)
+            }
             Err(e) => return single(Some(format!("RRULE not expanded: {e}"))),
         }
     }
@@ -184,12 +226,6 @@ pub fn expand_event(
         set = set.exdate(f.to_rrule(x));
     }
 
-    let horizon = start
-        .to_utc(None)
-        .checked_add_signed(Duration::days(
-            365 * i64::from(limits.horizon_years) + i64::from(limits.horizon_years / 4),
-        ))
-        .unwrap_or(DateTime::<Utc>::MAX_UTC);
     let end_bound = window_end.min(horizon);
     let start_bound = window_start
         .checked_sub_signed(length)
@@ -386,5 +422,37 @@ mod tests {
         );
         assert_eq!(x.occurrences.len(), 3);
         assert!(matches!(x.occurrences[2].start, IcsDateTime::Floating(_)));
+    }
+
+    #[test]
+    fn pathological_rules_are_bounded_in_time() {
+        // Rules that produce few or no instances inside the window still iterate from DTSTART;
+        // the 10-year horizon and the rrule iteration limit must keep this fast.
+        for rule in [
+            "FREQ=SECONDLY",
+            "FREQ=SECONDLY;BYMONTH=2;BYMONTHDAY=30",
+            "FREQ=MINUTELY;BYSETPOS=-1;BYHOUR=25",
+            "FREQ=YEARLY;BYMONTHDAY=31;BYMONTH=2",
+            "FREQ=SECONDLY;INTERVAL=1;BYSECOND=59;BYMINUTE=59;BYHOUR=23;BYMONTHDAY=31;BYMONTH=12",
+            "FREQ=DAILY;BYSETPOS=366;BYYEARDAY=366",
+            "FREQ=SECONDLY;COUNT=4294967295",
+        ] {
+            let c = cal(&format!(
+                "BEGIN:VEVENT\nUID:p\nDTSTART:20160101T000000Z\nRRULE:{rule}\nEND:VEVENT"
+            ));
+            let started = std::time::Instant::now();
+            let x = expand_event(
+                &c.events[0],
+                utc(2025, 12, 1),
+                utc(2026, 1, 1),
+                &IcsLimits::default(),
+            );
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(10),
+                "{rule}: {:?}",
+                started.elapsed()
+            );
+            assert!(x.occurrences.len() <= 5_000, "{rule}");
+        }
     }
 }

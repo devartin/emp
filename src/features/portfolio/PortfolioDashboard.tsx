@@ -19,13 +19,14 @@ import { Amount } from "@/ui/Amount";
 import { Button } from "@/ui/Button";
 import { DeltaPill, GainLoss } from "@/ui/DeltaPill";
 import { staggerItem, staggerList } from "@/ui/motion/presets";
+import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import type { TabItem } from "@/ui/Tabs";
 import { DivergingBars } from "../finance/shared/charts";
-import { assignColors, dayLabel, fmtMoney, fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney } from "../finance/shared/format";
+import { assignColors, fmtMoney, fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney } from "../finance/shared/format";
 import { useAsync } from "../finance/shared/hooks";
 import { Disclaimer, HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
 import { HeroMoney } from "../finance/MoneyHQ/widgets";
@@ -257,6 +258,7 @@ function ValueHero({ instanceId, summary: s }: { instanceId: Id; summary?: Portf
 /** Concentric rings: outer thin ring = target, inner ring = current allocation (§16.3 "allocation donut with a target ring"). */
 function AllocationRings({ rows, size = 196 }: { rows: { cls: string; current: number; target: number; color: string }[]; size?: number }) {
   const [hover, setHover] = useState<string | null>(null);
+  const reduced = useReducedMotionPref();
   const cx = size / 2;
   const arcs = (key: "current" | "target", r: number, w: number) => {
     const total = rows.reduce((a, x) => a + x[key], 0) || 1;
@@ -280,7 +282,7 @@ function AllocationRings({ rows, size = 196 }: { rows: { cls: string; current: n
           strokeWidth={w}
           strokeLinecap="butt"
           style={{ opacity: hover && hover !== x.cls ? 0.3 : key === "target" ? 0.5 : 1, transition: "opacity 160ms cubic-bezier(.2,0,0,1)" }}
-          initial={{ pathLength: 0 }}
+          initial={reduced ? false : { pathLength: 0 }}
           animate={{ pathLength: 1 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           onMouseEnter={() => setHover(x.cls)}
@@ -449,8 +451,6 @@ function PfInsights({ instanceId, summary: s }: { instanceId: Id; summary?: Port
     for (const h of s.holdings.filter((x) => x.weight > 0.1 && !/ETF|Fund/i.test(x.name)).slice(0, 1)) {
       out.push({ id: `conc:${h.symbol}`, appInstanceId: instanceId, ruleId: "concentration-10", severity: "tip", title: `${ticker(h.symbol)} is ${(h.weight * 100).toFixed(0)}% of the portfolio`, body: "A single company above 10% adds risk that diversification usually removes. Consider whether that's intentional.", math: [{ label: "Value", value: fmtMoney(h.value.amount, "USD", { noCents: true }) }, { label: "Share", value: fmtPct(h.weight, 1) }], actions: [{ label: "Open holding", route: tab(`holding:${h.symbol}`) }] });
     }
-    const high = s.holdings.find((h) => false && h);
-    void high;
     out.push({ id: "ips", appInstanceId: instanceId, ruleId: "ips-review", severity: "tip", title: "Write down your investment policy", body: "An IPS records your targets and the rules you follow when markets fall — so decisions in a downturn are already made.", actions: [{ label: "Open IPS", route: tab("ips") }] });
     if (total > 0 && s.allocation.find((a) => a.assetClass === "Cash" && a.current > 5)) out.push({ id: "cash", appInstanceId: instanceId, ruleId: "cash-drag", severity: "info", title: "Cash is above 5%", body: "Uninvested cash earns less over time. Consider putting it to work toward your targets.", actions: [{ label: "Plan a rebalance", route: tab("rebalance") }] });
     return out;
@@ -471,4 +471,3 @@ function PfInsights({ instanceId, summary: s }: { instanceId: Id; summary?: Port
   );
 }
 
-export { dayLabel };

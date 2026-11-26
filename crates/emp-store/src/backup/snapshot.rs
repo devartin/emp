@@ -166,7 +166,7 @@ impl Store {
     pub fn backup_write(
         &self,
         dest: &Path,
-        opts: BackupOptions,
+        mut opts: BackupOptions,
         progress: &dyn Progress,
     ) -> Result<u64> {
         let s = self.session()?;
@@ -176,6 +176,11 @@ impl Store {
                 "password",
                 "backups of an unencrypted vault need a backup password",
             ));
+        }
+        // A plaintext vault stores its attachments raw. Beside the file (`<snap>.blobs/`) they would sit outside
+        // the backup-password container in plain sight (often in a synced folder), so they are always packed in.
+        if !encrypted {
+            opts.packed = true;
         }
         let now = self.now();
         // 1. Consistent copy of the database.
@@ -225,6 +230,7 @@ impl Store {
                     .load(&self.inner.vault_id)?
                     .ok_or(StoreError::NotFound("device key"))?;
                 Some(hex::encode(dk.expose_secret()))
+                // (`SnapManifest` zeroizes this copy on drop; `mbytes` below is zeroizing too.)
             };
             let sqlite_len = std::fs::metadata(&tmp_db)?.len();
             let manifest = SnapManifest {
@@ -240,8 +246,8 @@ impl Store {
                 encrypted,
                 device_key,
             };
-            let mut mbytes = Vec::new();
-            ciborium::into_writer(&manifest, &mut mbytes)
+            let mut mbytes = zeroize::Zeroizing::new(Vec::new());
+            ciborium::into_writer(&manifest, &mut *mbytes)
                 .map_err(|e| StoreError::Internal(format!("manifest encoding: {e}")))?;
             let prefix = SnapshotPrefix {
                 manifest_len: u32::try_from(mbytes.len())
@@ -259,7 +265,7 @@ impl Store {
                 std::fs::create_dir_all(dir)?;
             }
             let partial = dest.with_extension("partial");
-            let file = BufWriter::new(File::create(&partial)?);
+            let file = BufWriter::new(crate::vault::create_private_file(&partial)?);
             let mut mac = s.keys().backup_mac()?;
             let write_body = |w: &mut dyn Write, mac: &mut BackupMac| -> Result<()> {
                 let mut mw = MacWriter {

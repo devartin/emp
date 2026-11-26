@@ -8,7 +8,8 @@ use crate::host::Host;
 use crate::value::{ErrorKind, Value};
 use crate::workbook::sheet::{Cell, CellInput};
 use crate::workbook::{DefinedName, SheetError, Workbook, is_valid_name};
-use calamine::{Data, Reader, Xlsx};
+use crate::limits::{MAX_COLS, MAX_ROWS};
+use calamine::{Data, DataType, Reader, Xlsx};
 use std::collections::BTreeSet;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -133,17 +134,33 @@ fn import_inner(
     }
 
     let mut total_cells = 0usize;
+    let mut total_styled = 0usize;
     let mut unsupported: BTreeSet<String> = BTreeSet::new();
     for (idx, (orig_name, _)) in metas.iter().enumerate() {
         opts.check_cancel()?;
         let sid = ids[idx];
-        let range = xl
-            .worksheet_range(orig_name)
-            .map_err(|e| SheetError::Io(format!("{orig_name}: {e}")))?;
-        let formulas = xl.worksheet_formula(orig_name).ok();
+        // Cells are streamed one by one. calamine's `worksheet_range`/`worksheet_formula` build a
+        // dense rows × columns grid of the used area, so two cells at A1 and XFD1048576 would
+        // allocate ~17 billion entries and abort the process (an xlsx bomb).
         let mut cells: Vec<(u32, u32, Cell)> = Vec::new();
-        if let Some((r0, c0)) = range.start() {
-            for (r, c, d) in range.used_cells() {
+        let mut outside = 0usize;
+        {
+            let mut reader = xl
+                .worksheet_cells_reader(orig_name)
+                .map_err(|e| SheetError::Io(format!("{orig_name}: {e}")))?;
+            loop {
+                let next = reader
+                    .next_cell()
+                    .map_err(|e| SheetError::Io(format!("{orig_name}: {e}")))?;
+                let Some(cell) = next else { break };
+                if cell.get_value().is_empty() {
+                    continue;
+                }
+                let (row, col) = cell.get_position();
+                if row >= MAX_ROWS || col >= MAX_COLS {
+                    outside += 1;
+                    continue;
+                }
                 total_cells += 1;
                 if total_cells > opts.max_cells {
                     return Err(SheetError::TooLarge(format!(
@@ -151,11 +168,11 @@ fn import_inner(
                         opts.max_cells
                     )));
                 }
-                cells.push((
-                    r0 + r as u32,
-                    c0 + c as u32,
-                    Cell::literal(data_value(d), 0),
-                ));
+                if total_cells % 65_536 == 0 {
+                    opts.check_cancel()?;
+                }
+                let value = Data::from(cell.get_value().clone());
+                cells.push((row, col, Cell::literal(data_value(&value), 0)));
             }
         }
         let mut by_pos: std::collections::HashMap<(u32, u32), usize> = cells
@@ -163,14 +180,32 @@ fn import_inner(
             .enumerate()
             .map(|(i, (r, c, _))| ((*r, *c), i))
             .collect();
-        if let Some(fr) = formulas
-            && let Some((r0, c0)) = fr.start()
-        {
-            for (r, c, f) in fr.used_cells() {
-                if f.trim().is_empty() {
+        let mut formulas: Vec<(u32, u32, String)> = Vec::new();
+        if let Ok(mut reader) = xl.worksheet_cells_reader(orig_name) {
+            // A malformed formula stream keeps the values read above (as calamine's own
+            // `worksheet_formula(..).ok()` did).
+            while let Ok(Some(cell)) = reader.next_formula() {
+                let (row, col) = cell.get_position();
+                if cell.get_value().trim().is_empty() || row >= MAX_ROWS || col >= MAX_COLS {
                     continue;
                 }
-                let (row, col) = (r0 + r as u32, c0 + c as u32);
+                if formulas.len() >= opts.max_cells {
+                    return Err(SheetError::TooLarge(format!(
+                        "the file has more than {} cells",
+                        opts.max_cells
+                    )));
+                }
+                formulas.push((row, col, cell.get_value().clone()));
+            }
+        }
+        if outside > 0 {
+            warnings.push(format!(
+                "{orig_name}: {outside} cell(s) outside the 1,048,576 × 16,384 grid were dropped."
+            ));
+        }
+        {
+            for (row, col, f) in formulas {
+                let f = f.as_str();
                 let cached = by_pos
                     .get(&(row, col))
                     .map(|i| cells[*i].2.value.clone())
@@ -223,8 +258,10 @@ fn import_inner(
             .iter()
             .find(|(n, _, _)| n == orig_name)
             .and_then(|(_, path, _)| read_entry(&mut z, path))
-            .map(|xml| parse_sheet(&xml, opts.max_cells))
+            .map(|xml| parse_sheet(&xml, opts.max_cells.saturating_sub(total_styled)))
             .unwrap_or_else(SheetExtras::default);
+        // Styled empty cells become cells too: bound them across the whole workbook.
+        total_styled += extras.cell_styles.len();
         let Some(sheet) = wb.sheet_mut(sid) else {
             continue;
         };
@@ -302,10 +339,23 @@ fn import_inner(
             ));
         }
     }
+    cap_warnings(&mut warnings);
     Ok(ImportResult {
         workbook: wb,
         warnings,
     })
+}
+
+/// Most warnings an import returns; a hostile file could otherwise produce one per cell.
+pub(crate) const MAX_WARNINGS: usize = 200;
+
+/// Keep the first [`MAX_WARNINGS`] warnings and summarise the rest.
+pub(crate) fn cap_warnings(warnings: &mut Vec<String>) {
+    if warnings.len() > MAX_WARNINGS {
+        let more = warnings.len() - MAX_WARNINGS;
+        warnings.truncate(MAX_WARNINGS);
+        warnings.push(format!("… and {more} more warning(s)."));
+    }
 }
 
 fn values_close(a: &Value, b: &Value) -> bool {

@@ -26,7 +26,9 @@ pub mod snapshot;
 use serde::{Deserialize, Serialize};
 
 /// The CBOR manifest of a snapshot or backup.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `device_key` is secret: its `Debug` output is redacted and it is zeroized on drop.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SnapManifest {
     /// Vault id (hex).
     pub vault_id: String,
@@ -51,6 +53,36 @@ pub struct SnapManifest {
     /// Plaintext vaults only: the device key (hex), protected by the backup-password container.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_key: Option<String>,
+}
+
+impl std::fmt::Debug for SnapManifest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SnapManifest")
+            .field("vault_id", &self.vault_id)
+            .field("created_at", &self.created_at)
+            .field("app_version", &self.app_version)
+            .field("schema_version", &self.schema_version)
+            .field("write_counter", &self.write_counter)
+            .field("mset_root", &self.mset_root)
+            .field("blobs", &self.blobs.len())
+            .field("sqlite_len", &self.sqlite_len)
+            .field("packed", &self.packed)
+            .field("encrypted", &self.encrypted)
+            .field(
+                "device_key",
+                &self.device_key.as_ref().map(|_| "[REDACTED]"),
+            )
+            .finish()
+    }
+}
+
+impl Drop for SnapManifest {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        if let Some(k) = self.device_key.as_mut() {
+            k.zeroize();
+        }
+    }
 }
 
 /// Internal secrets provider holding the backup password used for automatic snapshots of plaintext vaults.

@@ -40,6 +40,10 @@ pub const REAUTH_MS: i64 = 5 * 60 * 1000;
 pub const REENCRYPT_BATCH: usize = 1000;
 /// `vault_meta.format_version`.
 pub const FORMAT_VERSION: &str = "1";
+/// `vault_meta` key (covered by the header MAC) naming the target mode (`on` / `off`) of an encryption toggle whose
+/// row and asset rewrite has not finished yet. Unlock resumes the rewrite only when this authenticated marker says
+/// so; rows in the "wrong" mode without it are never converted (they did not come from EMP).
+pub const ENCRYPTION_JOB_KEY: &str = "encryption_job";
 
 // ───────────────────────────────────────────────────────────────────────────── injectable environment
 
@@ -144,9 +148,54 @@ impl DeviceKeyStore for FileDeviceKeyStore {
     }
 }
 
-/// Writes a file readable only by the owner (0600 on Unix).
+/// Atomically replaces `path` with `bytes`, readable only by the owner (0600 on Unix).
+///
+/// The bytes go to a fresh temporary file beside `path` (created 0600, fsynced) which is then renamed over it, and
+/// the directory is fsynced. A crash or a full disk therefore leaves either the old or the new contents, never a
+/// truncated file — important for `device.key`, which holds the device key of every plaintext vault.
 pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     use std::io::Write;
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let name = path
+        .file_name()
+        .ok_or_else(|| StoreError::invalid("write_private needs a file path"))?;
+    let mut nonce = [0u8; 8];
+    getrandom::getrandom(&mut nonce)
+        .map_err(|_| StoreError::Internal("the OS random number generator failed".into()))?;
+    let mut tmp_name = std::ffi::OsString::from(".");
+    tmp_name.push(name);
+    tmp_name.push(format!(".{}.tmp", hex::encode(nonce)));
+    let tmp = dir.join(tmp_name);
+    let result = (|| -> Result<()> {
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut f = opts.open(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, path)?;
+        #[cfg(unix)]
+        if let Ok(d) = std::fs::File::open(dir) {
+            let _ = d.sync_all();
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
+/// Creates (or truncates) a file readable only by the owner (0600 on Unix, also when it already existed).
+pub fn create_private_file(path: &Path) -> Result<std::fs::File> {
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create(true).truncate(true);
     #[cfg(unix)]
@@ -154,9 +203,41 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
         opts.mode(0o600);
     }
-    let mut f = opts.open(path)?;
-    f.write_all(bytes)?;
-    f.sync_all()?;
+    let f = opts.open(path)?;
+    restrict_file(path)?;
+    Ok(f)
+}
+
+/// Sets an existing file to owner-only access (0600 on Unix; a no-op elsewhere and for missing files).
+pub fn restrict_file(path: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        match std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+/// `vault.db` and its `-wal` / `-shm` companions, created owner-only (SQLite gives its companion files the
+/// database file's mode, so creating `vault.db` with 0600 before SQLite opens it covers all three).
+fn prepare_db_file(db: &Path) -> Result<()> {
+    if !db.exists() {
+        drop(create_private_file(db)?);
+    }
+    restrict_file(db)?;
+    let name = db
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("vault.db");
+    for suffix in ["-wal", "-shm", "-journal"] {
+        restrict_file(&db.with_file_name(format!("{name}{suffix}")))?;
+    }
     Ok(())
 }
 
@@ -206,6 +287,18 @@ pub enum StoreEvent {
     },
     /// `vault:status` should be re-sent (after toggles and migrations).
     StatusChanged,
+    /// `db:changed`: a database's rows (`data_rev`) or schema / views (`schema_rev`) changed. Emitted after every
+    /// committed database write, in addition to the `PageChanged` for the database page.
+    DbChanged {
+        /// Database (page) id.
+        database_id: String,
+        /// Data revision after the change.
+        data_rev: i64,
+        /// Schema revision after the change.
+        schema_rev: i64,
+        /// The rows whose values changed, when the change was limited to them (`None`: re-query everything).
+        row_ids: Option<Vec<String>>,
+    },
 }
 
 /// Receives [`StoreEvent`]s. Implementations must be cheap and must not call back into the store synchronously.
@@ -240,6 +333,9 @@ pub struct StoreOptions {
     /// Build the search index and run the integrity check on a background thread after unlock (default `true`).
     /// When `false` they run synchronously inside the unlock call.
     pub background_indexing: bool,
+    /// [`Store::create`] also writes the starter tour (SPEC §6.2 "Getting Started" and its guide pages, pinned to
+    /// favorites) into the first workspace (default `false`; the app turns it on for `vault_create`).
+    pub starter_tour: bool,
 }
 
 impl StoreOptions {
@@ -254,6 +350,7 @@ impl StoreOptions {
             readers: crate::db::readers::READERS,
             app_version: env!("CARGO_PKG_VERSION").into(),
             background_indexing: true,
+            starter_tour: false,
         }
     }
 }
@@ -392,7 +489,16 @@ pub(crate) struct Session {
     pub reauth_until: Mutex<Option<i64>>,
     pub cancel: Arc<AtomicBool>,
     pub edits: Mutex<std::collections::HashMap<String, EditStats>>,
+    /// Cached reverse relation graph (target database → databases relating to it), keyed by
+    /// `(sum(schema_rev), count(databases))`; see `Store::db_changes`.
+    pub db_dependents: Mutex<Option<DbDependents>>,
 }
+
+/// Cache key and reverse relation graph of [`Session::db_dependents`].
+pub(crate) type DbDependents = (
+    (i64, i64),
+    Arc<std::collections::BTreeMap<String, std::collections::BTreeSet<String>>>,
+);
 
 impl Session {
     fn new(dek: Dek, keys: Arc<VaultKeys>, encrypted: bool) -> Self {
@@ -406,6 +512,7 @@ impl Session {
             reauth_until: Mutex::new(None),
             cancel: Arc::new(AtomicBool::new(false)),
             edits: Mutex::new(std::collections::HashMap::new()),
+            db_dependents: Mutex::new(None),
         }
     }
 
@@ -566,6 +673,7 @@ impl Store {
     /// Creates a new vault in `<data_dir>/vaults/<new id>/` and returns it unlocked.
     pub fn create(data_dir: &Path, create: CreateOptions, opts: StoreOptions) -> Result<Created> {
         let vault_id = VaultId::generate()?;
+        create_private_dir(&data_dir.join("vaults"))?;
         let paths = VaultPaths::in_data_dir(data_dir, &vault_id);
         Self::create_with_id(paths, vault_id, create, opts)
     }
@@ -657,7 +765,10 @@ impl Store {
             crate::repo::kv::put_internal(&store, &session, RECOVERY_NS, RECOVERY_KEY, &**w)?;
         }
         if let Some(name) = create.workspace_name {
-            store.workspace_create(&name, None)?;
+            let ws = store.workspace_create(&name, None)?;
+            if store.inner.opts.starter_tour {
+                store.starter_tour_create(&ws.id)?;
+            }
         }
         store.finish_unlock(&session)?;
         Ok(Created {
@@ -678,9 +789,14 @@ impl Store {
     fn open_paths(paths: VaultPaths, opts: StoreOptions, new_id: Option<VaultId>) -> Result<Self> {
         create_private_dir(paths.root())?;
         create_private_dir(&paths.tmp())?;
+        create_private_dir(&paths.assets())?;
         paths.wipe_tmp()?;
+        prepare_db_file(&paths.db())?;
         let mut rw = conn::open_rw(&paths.db())?;
         migrate::migrate(&mut rw, Some(&paths.backups()), opts.clock.now_ms())?;
+        // Before anything writes: a trigger or view planted in the file would run on this connection, and EMP's
+        // manifest triggers would then re-seal whatever it changed.
+        migrate::verify_schema(&rw)?;
         conn::configure_rw(&rw)?;
         let vault_id = match new_id {
             Some(id) => id,
@@ -801,7 +917,8 @@ impl Store {
             } else {
                 VaultState::Locked
             },
-            encrypted,
+            // While unlocked, the mode proven by the keyslot (the `vault_meta` flag is only a hint before that).
+            encrypted: session.as_ref().map_or(encrypted, |s| s.codec.encrypting()),
             vault_id: Some(self.inner.vault_id.to_hex()),
             kdf,
             recovery_confirmed: confirmed,
@@ -848,6 +965,17 @@ impl Store {
     fn check_backoff(&self) -> Result<()> {
         let now = self.now();
         let lockout = self.read(|c| meta_get_i64(c, "lockout_until"))?;
+        let max = i64::try_from(emp_crypto::password::BACKOFF_MAX.as_millis()).unwrap_or(i64::MAX);
+        if lockout.saturating_sub(now) > max {
+            // Never set this far ahead by EMP: the wall clock moved back or `vault_meta` was edited. Re-anchor the
+            // lockout to the policy maximum from now, so the vault does not stay locked for days (and the
+            // remaining wait reported by `retry_after_ms` is honest).
+            let until = now.saturating_add(max);
+            self.inner.writer.txn(Durability::Full, move |tx| {
+                meta_set(tx, "lockout_until", until.to_string().as_bytes())
+            })?;
+        }
+        let lockout = lockout.min(now.saturating_add(max));
         let wait = retry_after_ms(now, lockout);
         if wait > 0 {
             return Err(StoreError::RateLimited {
@@ -892,7 +1020,10 @@ impl Store {
             Err(emp_crypto::CryptoError::BadPassword) => return Err(self.record_failure()?),
             Err(e) => return Err(e.into()),
         };
-        self.complete_unlock(dek, SecurityEvent::UnlockOk)
+        // A password slot only exists in encrypted vaults (it is added and the device slot removed in the same
+        // transaction), so the slot that just authenticated decides the mode — never the unauthenticated
+        // `vault_meta.encryption` flag.
+        self.complete_unlock(dek, SecurityEvent::UnlockOk, true)
     }
 
     /// Unlocks an unencrypted vault with the device key.
@@ -912,7 +1043,7 @@ impl Store {
             .load(&self.inner.vault_id)?
             .ok_or(StoreError::NotFound("device key"))?;
         let dek = slot.unwrap_device(&self.inner.vault_id, &dk)?;
-        self.complete_unlock(dek, SecurityEvent::UnlockOk)
+        self.complete_unlock(dek, SecurityEvent::UnlockOk, false)
     }
 
     /// `vault_unlock_recovery`: unlocks with the 24 recovery words and sets a new password.
@@ -940,7 +1071,7 @@ impl Store {
         if self.is_unlocked() {
             drop(dek);
         } else {
-            self.complete_unlock(dek, SecurityEvent::RecoveryUnlock)?;
+            self.complete_unlock(dek, SecurityEvent::RecoveryUnlock, true)?;
         }
         self.write_full(move |tx| {
             tx.execute("DELETE FROM keyslots WHERE kind = 'password'", [])?;
@@ -952,9 +1083,14 @@ impl Store {
         self.status()
     }
 
-    fn complete_unlock(&self, dek: Dek, event: SecurityEvent) -> Result<VaultStatus> {
+    /// `encrypted` is the mode proven by the keyslot that unlocked (password / recovery ⇒ encrypted, device ⇒ not).
+    fn complete_unlock(
+        &self,
+        dek: Dek,
+        event: SecurityEvent,
+        encrypted: bool,
+    ) -> Result<VaultStatus> {
         let keys = Arc::new(VaultKeys::derive(&dek, &self.inner.vault_id)?);
-        let encrypted = self.is_encrypted()?;
         self.inner
             .writer
             .tracker()
@@ -984,14 +1120,35 @@ impl Store {
 
     /// Post-unlock work: header MAC, resuming an interrupted encryption toggle, integrity check and index build.
     fn finish_unlock(&self, session: &Arc<Session>) -> Result<()> {
-        let header_ok = self.read(|c| manifest::verify_header_mac(c, session.keys()))?;
-        if !header_ok {
+        let mode = session.codec.encrypting();
+        let (header_ok, meta_on, job) = self.read(|c| {
+            Ok((
+                manifest::verify_header_mac(c, session.keys())?,
+                meta_get_str(c, "encryption")?.as_deref() == Some("on"),
+                meta_get_str(c, ENCRYPTION_JOB_KEY)?,
+            ))
+        })?;
+        // The header MAC covers `encryption` and `encryption_job`; the mode itself is proven by the keyslot. A
+        // mismatch means `vault_meta` was edited outside EMP: warn, and never act on the edited values.
+        let trusted = header_ok && meta_on == mode;
+        if !trusted {
             *session.integrity.lock() = IntegrityState::Warning;
         }
-        // Resume a re-encryption job that was interrupted (rows whose enc differs from the vault mode).
-        let target = session.codec.encrypting();
-        if self.rows_pending_reencryption(target)? > 0 {
-            self.reencrypt_all(target, &NoProgress)?;
+        // Resume an interrupted encryption toggle — only when the authenticated job marker asks for exactly this
+        // mode. Rows in the other mode without it were planted (or rolled back) outside EMP: they are not converted
+        // (that would launder them into authenticated records) and, in an encrypted vault, read as damaged.
+        let job_target = match job.as_deref() {
+            Some("on") => Some(true),
+            Some("off") => Some(false),
+            _ => None,
+        };
+        if trusted && job_target == Some(mode) {
+            self.resume_encryption_job(session, mode, &NoProgress)?;
+        }
+        // Deferred payload migrations (§10.3). A failure leaves them pending (reads keep upcasting lazily) rather
+        // than making the vault impossible to unlock; the next unlock retries.
+        if !self.read(crate::db::payload_migrate::pending)?.is_empty() {
+            let _ = self.payload_migrations_run(&NoProgress);
         }
         if self.inner.opts.background_indexing {
             let me = self.clone();
@@ -1005,6 +1162,32 @@ impl Store {
         } else {
             self.post_unlock_jobs(session);
         }
+        Ok(())
+    }
+
+    /// Converts every row and asset to `target` and then clears the job marker (encryption toggles and their
+    /// resumption at unlock).
+    fn resume_encryption_job(
+        &self,
+        session: &Arc<Session>,
+        target: bool,
+        progress: &dyn Progress,
+    ) -> Result<()> {
+        // Rows that are still plaintext are EMP's own (the job marker is authenticated) until the rewrite finishes.
+        session.codec.set_accept_plaintext(true);
+        self.reencrypt_all(target, progress)?;
+        if target {
+            self.inner.opts.device_keys.delete(&self.inner.vault_id)?;
+        }
+        let keys = session.codec.keys_arc();
+        self.write_full(move |tx| {
+            tx.execute(
+                "DELETE FROM vault_meta WHERE key = ?1",
+                [ENCRYPTION_JOB_KEY],
+            )?;
+            manifest::write_header_mac(tx, &keys)
+        })?;
+        session.codec.set_accept_plaintext(!target);
         Ok(())
     }
 
@@ -1026,10 +1209,22 @@ impl Store {
     fn background_integrity(&self, session: &Arc<Session>) {
         let encrypted = session.codec.encrypting();
         let result = if encrypted {
-            self.inner
+            let manifest_ok = self
+                .inner
                 .readers
                 .snapshot(|c| manifest::verify(c, session.keys()))
-                .map(|m| m.ok())
+                .map(|m| m.ok());
+            // Plaintext rows in an encrypted vault (outside an authenticated encryption-on job) were not written by
+            // EMP; the manifest only covers sealed rows, so count them separately.
+            let planted = if session.codec.accepts_plaintext() {
+                Ok(0)
+            } else {
+                self.rows_pending_reencryption(true)
+            };
+            match (manifest_ok, planted) {
+                (Ok(ok), Ok(n)) => Ok(ok && n == 0),
+                (Err(e), _) | (_, Err(e)) => Err(e),
+            }
         } else {
             self.read(conn::quick_check)
         };
@@ -1078,6 +1273,10 @@ impl Store {
 
     /// `vault_lock`: drops the session (zeroizing keys), wipes `tmp/` and logs the event.
     pub fn lock(&self) -> Result<()> {
+        if self.is_unlocked() {
+            // Getting Started "Lock with ⌘⇧L": the last write before the keys go.
+            self.tour_tick_quiet("lock");
+        }
         let _g = self.inner.keyops.lock();
         let session = self.inner.session.write().take();
         let Some(session) = session else {
@@ -1105,6 +1304,9 @@ impl Store {
     /// `vault_reauth`: verifies the password and opens a 5-minute sudo window. Unencrypted vaults have no password,
     /// so the window opens immediately.
     pub fn reauth(&self, password: &SecretString) -> Result<i64> {
+        // Serialised with unlock and key changes: concurrent attempts would each pass the backoff check before any
+        // failure is recorded (and run several 256 MiB Argon2 instances at once).
+        let _g = self.inner.keyops.lock();
         let session = self.session()?;
         if session.codec.encrypting() {
             self.check_backoff()?;
@@ -1290,15 +1492,16 @@ impl Store {
             insert_keyslot(tx, &pw_slot)?;
             insert_keyslot(tx, &rec_slot)?;
             meta_set(tx, "encryption", b"on")?;
+            meta_set(tx, ENCRYPTION_JOB_KEY, b"on")?;
             meta_set(tx, "recovery_confirmed", b"0")?;
             log_event(tx, now, SecurityEvent::EncOn)?;
             manifest::reseal(tx, &keys)?;
             manifest::write_header_mac(tx, &keys)
         })?;
         session.codec.set_encrypting(true);
-        self.reencrypt_all(true, progress)?;
-        self.inner.opts.device_keys.delete(&self.inner.vault_id)?;
+        // Stored (sealed) before the long rewrite, so an interrupted job does not lose the only copy of the words.
         crate::repo::kv::put_internal(self, &session, RECOVERY_NS, RECOVERY_KEY, &*words)?;
+        self.resume_encryption_job(&session, true, progress)?;
         self.compact()?;
         self.emit(StoreEvent::StatusChanged);
         Ok(words)
@@ -1336,13 +1539,14 @@ impl Store {
             )?;
             insert_keyslot(tx, &slot)?;
             meta_set(tx, "encryption", b"off")?;
+            meta_set(tx, ENCRYPTION_JOB_KEY, b"off")?;
             log_event(tx, now, SecurityEvent::EncOff)?;
             manifest::reseal(tx, &keys)?;
             manifest::write_header_mac(tx, &keys)
         })?;
         crate::repo::kv::delete_internal(self, RECOVERY_NS, RECOVERY_KEY)?;
         session.codec.set_encrypting(false);
-        self.reencrypt_all(false, progress)?;
+        self.resume_encryption_job(&session, false, progress)?;
         self.compact()?;
         self.emit(StoreEvent::StatusChanged);
         Ok(())

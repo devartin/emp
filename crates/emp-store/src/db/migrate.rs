@@ -115,12 +115,13 @@ fn pre_migration_backup(
     from: i64,
     now_ms: i64,
 ) -> Result<std::path::PathBuf> {
-    std::fs::create_dir_all(dir)?;
+    crate::vault::create_private_dir(dir)?;
     let path = dir.join(format!("pre-v{from}-{now_ms}.sqlite"));
     let p = path
         .to_str()
         .ok_or_else(|| StoreError::Internal("non UTF-8 backup path".into()))?;
     conn.execute("VACUUM INTO ?1", [p])?;
+    crate::vault::restrict_file(&path)?;
     // Keep the newest KEEP_PRE_MIGRATION_BACKUPS.
     let mut existing: Vec<_> = std::fs::read_dir(dir)?
         .filter_map(|e| e.ok())
@@ -139,16 +140,57 @@ fn pre_migration_backup(
     Ok(path)
 }
 
-/// One schema object: `(type, name, tbl_name)`.
-pub type SchemaObject = (String, String, String);
+/// One schema object: `(type, name, tbl_name, sql)`.
+pub type SchemaObject = (String, String, String, Option<String>);
 
-/// The schema objects of `conn` (excluding SQLite internals), sorted.
+/// Planner-statistics tables SQLite itself creates (`ANALYZE`, `PRAGMA optimize`). They are the only objects a
+/// healthy vault may have beyond the migrations' own, and they hold statistics only.
+const SQLITE_STAT_TABLES: &[&str] = &[
+    "sqlite_stat1",
+    "sqlite_stat2",
+    "sqlite_stat3",
+    "sqlite_stat4",
+];
+
+fn is_stat_table(kind: &str, name: &str, sql: Option<&str>) -> bool {
+    kind == "table"
+        && SQLITE_STAT_TABLES
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case(name))
+        && sql.is_some_and(|s| {
+            s.get(..20)
+                .is_some_and(|p| p.eq_ignore_ascii_case("CREATE TABLE sqlite_"))
+        })
+}
+
+/// Every schema object of `conn` — including its `CREATE` text and SQLite's own automatic indexes — sorted, minus
+/// SQLite's planner-statistics tables.
+///
+/// Nothing is skipped by name pattern: a filter such as `name NOT LIKE 'sqlite_%'` would also hide a planted
+/// `sqliteXtrigger` (`_` is a wildcard), and comparing names alone would miss a legitimate trigger or table whose
+/// body was rewritten.
 pub fn schema_objects(conn: &Connection) -> Result<Vec<SchemaObject>> {
     let mut st = conn.prepare(
-        "SELECT type, name, tbl_name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name",
+        "SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name, tbl_name, sql",
     )?;
-    let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+    let all: Vec<SchemaObject> = rows.collect::<rusqlite::Result<_>>()?;
+    Ok(all
+        .into_iter()
+        .filter(|(kind, name, _, sql)| !is_stat_table(kind, name, sql.as_deref()))
+        .collect())
+}
+
+/// Fails with `INTEGRITY` unless `conn` holds exactly the objects of a database at [`LATEST_VERSION`]. Run on every
+/// open: a trigger or view stored in the file would otherwise run on EMP's write connection.
+pub fn verify_schema(conn: &Connection) -> Result<()> {
+    if schema_objects(conn)? == expected_schema_objects()? {
+        Ok(())
+    } else {
+        Err(StoreError::Integrity(
+            "the vault database has unexpected schema objects (it was modified outside EMP)".into(),
+        ))
+    }
 }
 
 /// The exact set of objects a database at [`LATEST_VERSION`] contains (built by migrating an in-memory database).
@@ -209,6 +251,45 @@ mod tests {
         assert_eq!(triggers, 2);
         // Idempotent.
         assert_eq!(migrate(&mut c, None, 0).unwrap().from, LATEST_VERSION);
+    }
+
+    #[test]
+    fn schema_check_sees_hidden_and_rewritten_objects() {
+        let fresh = || {
+            let mut c = Connection::open_in_memory().unwrap();
+            migrate(&mut c, None, 0).unwrap();
+            c
+        };
+        verify_schema(&fresh()).unwrap();
+        // `ANALYZE` statistics are tolerated.
+        let c = fresh();
+        c.execute_batch("ANALYZE").unwrap();
+        verify_schema(&c).unwrap();
+        // Regression: `NOT LIKE 'sqlite_%'` hid any name starting with "sqlite" + one character.
+        let c = fresh();
+        c.execute_batch(
+            "CREATE TRIGGER sqliteXspy AFTER INSERT ON pages BEGIN DELETE FROM keyslots; END;",
+        )
+        .unwrap();
+        assert!(matches!(verify_schema(&c), Err(StoreError::Integrity(_))));
+        // Regression: a legitimate trigger with a rewritten body has the same (type, name, tbl_name).
+        let c = fresh();
+        c.execute_batch(
+            "DROP TRIGGER pages_purge_docs;
+             CREATE TRIGGER pages_purge_docs AFTER DELETE ON pages BEGIN DELETE FROM keyslots; END;",
+        )
+        .unwrap();
+        assert!(matches!(verify_schema(&c), Err(StoreError::Integrity(_))));
+        // Views and extra tables.
+        for extra in [
+            "CREATE VIEW v AS SELECT 1",
+            "CREATE TABLE extra (x)",
+            "CREATE INDEX extra_idx ON pages(rev)",
+        ] {
+            let c = fresh();
+            c.execute_batch(extra).unwrap();
+            assert!(verify_schema(&c).is_err(), "{extra}");
+        }
     }
 
     #[test]

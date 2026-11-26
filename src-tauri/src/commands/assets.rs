@@ -24,21 +24,139 @@ pub const MAX_UPLOAD_BYTES: usize = 64 * 1024 * 1024;
 /// Most files per `asset_import_grants`.
 pub const MAX_IMPORT_FILES: usize = 100;
 
-/// File extensions EMP never hands to the OS opener (they would run code).
+/// File extensions EMP never hands to the OS opener: programs, installers, scripts, shortcuts that launch programs,
+/// macro add-ins and disk images (mounting one drops the downloaded-file mark from its contents).
 pub const EXECUTABLE_EXTENSIONS: &[&str] = &[
-    "app", "appimage", "apk", "bat", "bin", "cmd", "com", "command", "cpl", "deb", "desktop",
-    "dll", "dmg", "elf", "exe", "gadget", "hta", "inf", "ins", "jar", "js", "jse", "ksh", "lnk",
-    "msc", "msi", "msp", "mst", "pif", "pkg", "ps1", "ps2", "psc1", "psm1", "py", "rb", "reg",
-    "rpm", "run", "scf", "scr", "sh", "shb", "so", "url", "vb", "vbe", "vbs", "ws", "wsc", "wsf",
-    "wsh", "workflow", "xpi",
+    "action",
+    "app",
+    "appimage",
+    "application",
+    "applescript",
+    "appref-ms",
+    "appinstaller",
+    "appx",
+    "appxbundle",
+    "apk",
+    "bash",
+    "bat",
+    "bin",
+    "cjs",
+    "chm",
+    "cmd",
+    "com",
+    "command",
+    "cpl",
+    "csh",
+    "deb",
+    "desktop",
+    "diagcab",
+    "dll",
+    "dmg",
+    "elf",
+    "exe",
+    "fileloc",
+    "fish",
+    "flatpakref",
+    "gadget",
+    "hta",
+    "img",
+    "inetloc",
+    "inf",
+    "ins",
+    "iso",
+    "jar",
+    "jnlp",
+    "js",
+    "jse",
+    "ksh",
+    "library-ms",
+    "lnk",
+    "lua",
+    "mjs",
+    "mpkg",
+    "msc",
+    "msi",
+    "msix",
+    "msixbundle",
+    "msp",
+    "mst",
+    "osax",
+    "php",
+    "pif",
+    "pkg",
+    "pl",
+    "prefpane",
+    "ps1",
+    "ps1xml",
+    "ps2",
+    "psc1",
+    "psd1",
+    "psm1",
+    "py",
+    "pyc",
+    "pyo",
+    "pyw",
+    "pyz",
+    "pyzw",
+    "rb",
+    "reg",
+    "rpm",
+    "run",
+    "scf",
+    "scpt",
+    "scptd",
+    "scr",
+    "searchconnector-ms",
+    "settingcontent-ms",
+    "sh",
+    "shb",
+    "snap",
+    "so",
+    "tcl",
+    "terminal",
+    "tool",
+    "url",
+    "vb",
+    "vbe",
+    "vbs",
+    "vhd",
+    "vhdx",
+    "webloc",
+    "workflow",
+    "ws",
+    "wsb",
+    "wsc",
+    "wsf",
+    "wsh",
+    "xbap",
+    "xll",
+    "xpi",
+    "zsh",
 ];
 
 /// `true` when `name` has an executable extension (case-insensitive).
+///
+/// The name is first normalised the way file systems and shells do when the file is written and opened: trailing
+/// dots and whitespace are dropped (Windows strips them, so `setup.exe.` and `setup.exe ` are `setup.exe`), as are
+/// trailing control and invisible formatting characters.
 #[must_use]
 pub fn is_executable_name(name: &str) -> bool {
-    name.rsplit_once('.')
+    let trimmed = name.trim_end_matches(|c: char| {
+        c == '.' || c.is_whitespace() || c.is_control() || is_invisible_format_char(c)
+    });
+    trimmed
+        .rsplit_once('.')
         .map(|(_, ext)| ext.to_ascii_lowercase())
         .is_some_and(|ext| EXECUTABLE_EXTENSIONS.contains(&ext.as_str()))
+}
+
+/// Zero-width and bidirectional formatting characters (they render as nothing but are part of the name).
+fn is_invisible_format_char(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{2069}' | '\u{FEFF}'
+    )
 }
 
 /// A MIME type of the form `type/subtype` (`[a-z0-9.+-]`), ≤ 128 bytes.
@@ -331,6 +449,42 @@ mod tests {
         }
         for n in ["photo.png", "report.pdf", "notes", "archive.tar.gz"] {
             assert!(!is_executable_name(n), "{n}");
+        }
+    }
+
+    #[test]
+    fn executable_check_survives_name_normalisation() {
+        // Windows drops trailing dots and spaces when the file is created, so these open as programs.
+        for n in [
+            "invoice.pdf.exe.",
+            "invoice.exe...",
+            "invoice.exe ",
+            "invoice.exe. . ",
+            "invoice.exe\u{200B}",
+            "invoice.EXE\u{FEFF}.",
+            "run.sh\t",
+        ] {
+            assert!(is_executable_name(n), "{n:?}");
+        }
+        // Shortcut, script and disk-image types that launch code without being programs themselves.
+        for n in [
+            "a.fileloc",
+            "a.webloc",
+            "a.settingcontent-ms",
+            "a.appref-ms",
+            "a.msix",
+            "a.iso",
+            "a.vhdx",
+            "a.jnlp",
+            "a.chm",
+            "a.pyw",
+            "a.terminal",
+            "a.scpt",
+        ] {
+            assert!(is_executable_name(n), "{n}");
+        }
+        for n in ["notes.txt.", "photo.png ", "...", "", "."] {
+            assert!(!is_executable_name(n), "{n:?}");
         }
     }
 

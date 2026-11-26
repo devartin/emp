@@ -482,6 +482,32 @@ impl Store {
         }
         let Some(ord) = world.ord(db_id) else { return };
         let d = world.at(ord);
+        // Row bodies are searchable like page text (block ids let a hit jump to the block).
+        let with_body: Vec<&String> = ids
+            .iter()
+            .filter(|id| d.row_index(id).is_some_and(|i| d.rows[i].has_body))
+            .collect();
+        let bodies: std::collections::HashMap<String, Vec<(String, String)>> =
+            if with_body.is_empty() {
+                std::collections::HashMap::new()
+            } else {
+                self.read(|c| {
+                    let mut out = std::collections::HashMap::new();
+                    for id in &with_body {
+                        // A damaged body is reported by the integrity check; the row stays findable by title.
+                        if let Ok(Some((doc, _))) = crate::repo::docs::load_doc(c, &s.codec, id) {
+                            let blocks = crate::doc::index::extract(&doc)
+                                .blocks
+                                .into_iter()
+                                .map(|b| (b.id, b.text))
+                                .collect();
+                            out.insert((*id).clone(), blocks);
+                        }
+                    }
+                    Ok(out)
+                })
+                .unwrap_or_default()
+            };
         let mut idx = s.search.write();
         for id in ids {
             match d.row_index(id) {
@@ -493,7 +519,7 @@ impl Store {
                     parent_id: Some(db_id.to_owned()),
                     db_id: Some(db_id.to_owned()),
                     updated_at: d.rows[i].updated_at,
-                    blocks: Vec::new(),
+                    blocks: bodies.get(id).cloned().unwrap_or_default(),
                     hidden: false,
                 }),
                 None => idx.remove(id),
@@ -571,9 +597,23 @@ impl Store {
     }
 
     fn notify_dbs(&self, dbs: impl IntoIterator<Item = String>) {
-        for d in dbs {
-            self.db_changed(&d);
-        }
+        self.db_changes(dbs.into_iter().map(|d| (d, None)).collect());
+    }
+
+    /// Like [`Self::notify_dbs`], naming the changed rows of each database when `rows` lists them.
+    fn notify_dbs_rows(
+        &self,
+        dbs: impl IntoIterator<Item = String>,
+        rows: Option<&BTreeMap<String, Vec<String>>>,
+    ) {
+        self.db_changes(
+            dbs.into_iter()
+                .map(|d| {
+                    let ids = rows.and_then(|m| m.get(&d).cloned());
+                    (d, ids)
+                })
+                .collect(),
+        );
     }
 
     /// `db_row_create`: values, a template (or the database default) and the filter of `view_id` pre-fill the row.
@@ -587,9 +627,10 @@ impl Store {
             .unwrap_or_default();
         let sess = Arc::clone(&s);
         let db_id = req.database_id.clone();
-        let (id, touched) = self.write(move |tx| {
+        let (id, touched, is_txn) = self.write(move |tx| {
             let codec = &sess.codec;
             let dbr = load_db(tx, codec, &req.database_id)?;
+            let is_txn = dbr.payload.roles.contains_key("txn.amount");
             if count_rows(tx, &req.database_id)? >= MAX_ROWS {
                 return Err(StoreError::TooLarge("rows"));
             }
@@ -666,9 +707,12 @@ impl Store {
             for d in &touched {
                 bump(tx, d, false, true)?;
             }
-            Ok((id, touched))
+            Ok((id, touched, is_txn))
         })?;
         self.notify_dbs(touched);
+        if is_txn {
+            self.tour_tick_quiet("add_transaction");
+        }
         self.rows_dto(&s, &db_id, std::slice::from_ref(&id))?
             .pop()
             .ok_or(StoreError::NotFound("row"))
@@ -730,10 +774,11 @@ impl Store {
         let s = self.session()?;
         let now = self.now();
         let sess = Arc::clone(&s);
-        let (by_db, touched) = self.write(move |tx| {
+        let (by_db, touched, relations_changed) = self.write(move |tx| {
             let codec = &sess.codec;
             let mut by_db: BTreeMap<String, Vec<String>> = BTreeMap::new();
             let mut touched = HashSet::new();
+            let mut relations_changed = false;
             let mut props_cache: BTreeMap<String, Vec<Property>> = BTreeMap::new();
             for u in updates {
                 let (r, db, deleted) =
@@ -774,6 +819,7 @@ impl Store {
                 }
                 save_row_payload(tx, codec, &r.id, r.rev, &p, now)?;
                 for (prop, old, new) in rel_changes {
+                    relations_changed = true;
                     sync_dual(tx, codec, &prop, &r.id, &old, &new, now, &mut touched)?;
                 }
                 touched.insert(db.clone());
@@ -782,9 +828,10 @@ impl Store {
             for d in &touched {
                 bump(tx, d, false, true)?;
             }
-            Ok((by_db, touched))
+            Ok((by_db, touched, relations_changed))
         })?;
-        self.notify_dbs(touched);
+        // Relation edits also rewrite paired rows (and rollups elsewhere): those need a full re-query.
+        self.notify_dbs_rows(touched, (!relations_changed).then_some(&by_db));
         let mut out = Vec::new();
         for (db, ids) in by_db {
             out.extend(self.rows_dto(&s, &db, &ids)?);
@@ -1142,7 +1189,7 @@ impl Store {
             save_row_payload(tx, codec, &rid, r.rev, &pl, now)?;
             bump(tx, &db2, false, true)
         })?;
-        self.db_changed(&db);
+        self.db_changed_rows(&db, Some(vec![row_id.to_owned()]));
         self.rows_dto(&s, &db, &[row_id.to_owned()])?
             .pop()
             .ok_or(StoreError::NotFound("row"))
@@ -1380,8 +1427,14 @@ impl Store {
         let now = self.now();
         let sess = Arc::clone(&s);
         let db = database_id.to_owned();
-        let (ids, touched) = self.write(move |tx| {
+        // Imported transactions (not tagged sample data) count as "Add a transaction" for Getting Started.
+        let user_rows = tags.is_none() && !rows.is_empty();
+        let (ids, touched, is_txn) = self.write(move |tx| {
             let codec = &sess.codec;
+            let is_txn = load_db(tx, codec, &db)?
+                .payload
+                .roles
+                .contains_key("txn.amount");
             let props = live_properties(tx, codec, &db)?;
             if count_rows(tx, &db)? + rows.len() > MAX_ROWS {
                 return Err(StoreError::TooLarge("rows"));
@@ -1411,9 +1464,12 @@ impl Store {
             for d in &touched {
                 bump(tx, d, false, true)?;
             }
-            Ok((ids, touched))
+            Ok((ids, touched, is_txn))
         })?;
         self.notify_dbs(touched);
+        if is_txn && user_rows {
+            self.tour_tick_quiet("add_transaction");
+        }
         Ok(ids)
     }
 
@@ -1450,7 +1506,7 @@ impl Store {
             bump(tx, &db, false, true)?;
             Ok(db)
         })?;
-        self.db_changed(&db);
+        self.db_changed_rows(&db, Some(vec![row_id.to_owned()]));
         Ok(())
     }
 

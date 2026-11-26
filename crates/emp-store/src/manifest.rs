@@ -101,7 +101,11 @@ impl ManifestTracker {
     /// Registers `emp_mset` and the `TEMP` triggers on the writer connection.
     pub fn install(self: &Arc<Self>, conn: &Connection) -> Result<()> {
         let me = Arc::clone(self);
-        conn.create_scalar_function(MSET_FN, 5, FunctionFlags::SQLITE_UTF8, move |ctx| {
+        // DIRECTONLY (plus `trusted_schema = OFF`): only EMP's own TEMP triggers may call it, never a trigger or
+        // view stored in the database file — otherwise a planted trigger could XOR arbitrary row hashes into the
+        // root and have EMP re-seal a tampered state.
+        let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DIRECTONLY;
+        conn.create_scalar_function(MSET_FN, 5, flags, move |ctx| {
             let tag: i64 = ctx.get(0)?;
             let k1 = match ctx.get_raw(1) {
                 ValueRef::Text(t) => std::str::from_utf8(t)
@@ -325,10 +329,20 @@ fn subtle_eq(a: &[u8; 32], b: &[u8; 32]) -> bool {
 }
 
 /// Opens every encrypted record and returns the ones that fail their AEAD check (SPEC §9.8 per-record failure).
+///
+/// Once the vault is encrypted (the codec no longer accepts plaintext), every `enc = 0` row except device-scope
+/// settings is also reported: such a row was not written by EMP.
 pub fn check_records(conn: &Connection, codec: &Codec) -> Result<Vec<DamagedItem>> {
     let mut damaged = Vec::new();
     for d in PAYLOAD_TABLES {
-        let sql = format!("{} WHERE enc != 0", d.select_sql());
+        let cond = if codec.accepts_plaintext() {
+            "enc != 0"
+        } else if d.tag == emp_crypto::TableTag::Settings {
+            "scope = 'vault'"
+        } else {
+            "1"
+        };
+        let sql = format!("{} WHERE {cond}", d.select_sql());
         let mut st = conn.prepare(&sql)?;
         let mut rows = st.query([])?;
         while let Some(r) = rows.next()? {
@@ -353,7 +367,17 @@ pub fn check_records(conn: &Connection, codec: &Codec) -> Result<Vec<DamagedItem
 }
 
 /// `vault_meta` keys covered by the header MAC (volatile keys are excluded).
-pub const HEADER_KEYS: &[&str] = &["format_version", "vault_id", "encryption", "created_day"];
+///
+/// `encryption_job` (present only while an encryption toggle is rewriting rows) is covered so that a resumed
+/// rewrite at unlock is always one EMP started. Absent keys are left out of the canonical form, so adding a key here
+/// does not change the MAC of vaults that never had it.
+pub const HEADER_KEYS: &[&str] = &[
+    "format_version",
+    "vault_id",
+    "encryption",
+    "created_day",
+    crate::vault::ENCRYPTION_JOB_KEY,
+];
 
 /// Canonical bytes of the covered `vault_meta` entries.
 pub fn canonical_meta(conn: &Connection) -> Result<Vec<u8>> {
@@ -393,5 +417,65 @@ pub fn verify_header_mac(conn: &Connection, keys: &VaultKeys) -> Result<bool> {
     match stored {
         Some(s) => Ok(keys.verify_header_mac(&canonical_meta(conn)?, &s)?),
         None => Ok(false),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use emp_crypto::{Dek, VaultId};
+
+    fn conn_with_tracker() -> (Connection, Arc<ManifestTracker>) {
+        let mut c = Connection::open_in_memory().unwrap();
+        crate::db::pragmas::harden(&c).unwrap();
+        crate::db::migrate::migrate(&mut c, None, 0).unwrap();
+        let t = ManifestTracker::new();
+        let keys =
+            VaultKeys::derive(&Dek::generate(1).unwrap(), &VaultId::generate().unwrap()).unwrap();
+        t.set_keys(Some(Arc::new(keys)));
+        t.install(&c).unwrap();
+        (c, t)
+    }
+
+    #[test]
+    fn temp_triggers_feed_the_tracker() {
+        let (c, t) = conn_with_tracker();
+        t.begin();
+        c.execute(
+            "INSERT INTO workspaces (id, sort_key, created_at, updated_at, rev, enc, payload) VALUES ('w', 'a', 0, 0, 1, 1, X'00')",
+            [],
+        )
+        .unwrap();
+        let (delta, touched) = t.take();
+        assert!(touched);
+        assert_ne!(delta, [0u8; 32]);
+    }
+
+    #[test]
+    fn mset_function_is_not_callable_from_stored_schema() {
+        // Regression (defence in depth next to the open-time schema check): a trigger stored in the database file
+        // must not be able to XOR chosen row hashes into the manifest delta.
+        let (c, t) = conn_with_tracker();
+        c.execute_batch(
+            "CREATE TRIGGER planted AFTER INSERT ON outbox BEGIN SELECT emp_mset(2, 'victim', NULL, 1, X'00'); END;",
+        )
+        .unwrap();
+        t.begin();
+        let r = c.execute(
+            "INSERT INTO outbox (id, provider, created_at, next_attempt_at, attempts, rev, enc, payload) VALUES ('o', 'p', 0, 0, 0, 0, 0, X'00')",
+            [],
+        );
+        assert!(r.is_err(), "a stored trigger called emp_mset");
+        let (_, touched) = t.take();
+        assert!(!touched);
+        // Neither may a view.
+        c.execute_batch(
+            "CREATE VIEW planted_view AS SELECT emp_mset(2, 'v', NULL, 1, X'00') AS x;",
+        )
+        .unwrap();
+        assert!(
+            c.query_row("SELECT x FROM planted_view", [], |_| Ok(()))
+                .is_err()
+        );
     }
 }

@@ -117,8 +117,8 @@ impl PortfolioData {
             }
         }
         if let Some(d) = dbs.get("inv_accounts") {
-            let tt = d.col("", &["Tax treatment"]);
-            let ty = d.col("", &["Type"]);
+            let tt = d.keyed("tax_treatment", &["Tax treatment"]);
+            let ty = d.keyed("type", &["Type"]);
             for r in &d.rows {
                 let t = d
                     .option_name(r, tt)
@@ -310,12 +310,12 @@ fn write_lots(
     for c in old.chunks(1_000) {
         store.db_rows_purge(c)?;
     }
-    let sec = db.col_id("", &["Security"]);
-    let acct = db.col_id("", &["Account"]);
-    let acq = db.col_id("", &["Acquired"]);
-    let qty = db.col_id("", &["Quantity"]);
-    let basis = db.col_id("", &["Cost basis"]);
-    let term = db.col_id("", &["Term"]);
+    let sec = db.keyed_id("security", &["Security"]);
+    let acct = db.keyed_id("account", &["Account"]);
+    let acq = db.keyed_id("acquired", &["Acquired"]);
+    let qty = db.keyed_id("qty", &["Quantity"]);
+    let basis = db.keyed_id("basis", &["Cost basis"]);
+    let term = db.keyed_id("term", &["Term"]);
     let row_of: HashMap<&str, &str> = data
         .symbol_of
         .iter()
@@ -406,7 +406,6 @@ pub async fn portfolio_rebuild(
     validate::id("instanceId", &req.instance_id)?;
     let store = state.session()?;
     let sink = job_sink(&webview, &req.on_event);
-    let app = webview.app_handle().clone();
     Ok(state.jobs.spawn("portfolio_rebuild", true, store.now(), sink, move |ctx| {
         ctx.report(0, 3, Some("Loading"));
         let data = PortfolioData::load(&store, &req.instance_id)?;
@@ -417,7 +416,6 @@ pub async fn portfolio_rebuild(
         ctx.report(2, 3, Some("Saving"));
         if let Some(db) = &data.lots_db {
             write_lots(&store, db, &data, &book, local_today(&store))?;
-            super::db::emit_db_changed(&app.state::<AppState>(), &store, db.id(), None);
         }
         ctx.report(3, 3, Some("Done"));
         Ok(json!({ "lots": book.lots.len(), "realizedEvents": book.realized.len(), "warnings": book.warnings }))

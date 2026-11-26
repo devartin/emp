@@ -69,6 +69,36 @@ fn num(x: f64) -> Res {
     }
 }
 
+/// Regex replace that gives up as soon as the result exceeds the text limit, so a replacement
+/// that expands every match (e.g. `replaceAll(t, ".", <32k chars>)`) cannot allocate gigabytes.
+fn bounded_replace(
+    re: &regex::Regex,
+    s: &str,
+    rep: &str,
+    all: bool,
+) -> Result<String, EvalError> {
+    // A text of MAX_TEXT_LEN characters is at most 4 × MAX_TEXT_LEN bytes.
+    const MAX_BYTES: usize = 4 * MAX_TEXT_LEN;
+    let mut out = String::new();
+    let mut last = 0;
+    for caps in re.captures_iter(s) {
+        let Some(m) = caps.get(0) else { continue };
+        out.push_str(&s[last..m.start()]);
+        caps.expand(rep, &mut out);
+        last = m.end();
+        if out.len() > MAX_BYTES {
+            return Err(EvalError {
+                message: "Text is too long".into(),
+            });
+        }
+        if !all {
+            break;
+        }
+    }
+    out.push_str(&s[last..]);
+    Ok(out)
+}
+
 fn text(s: String) -> Res {
     if s.chars().count() > MAX_TEXT_LEN {
         return err("Text is too long");
@@ -562,11 +592,7 @@ impl<'a> DialectEval<'a> {
                 let re = build_regex(&pat, false).map_err(|e| EvalError {
                     message: format!("Invalid pattern: {e}"),
                 })?;
-                text(if lname == "replace" {
-                    re.replace(&s, rep.as_str()).into_owned()
-                } else {
-                    re.replace_all(&s, rep.as_str()).into_owned()
-                })
+                text(bounded_replace(&re, &s, &rep, lname == "replaceall")?)
             }
             "test" => {
                 Self::arity(name, a, 2, 2)?;

@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager};
 
 use super::pages::RevDto;
 use super::workspaces::IdReq;
-use crate::error::{ApiError, ApiResult};
+use crate::error::ApiResult;
 use crate::state::{AppState, blocking};
 use crate::validate;
 
@@ -68,10 +68,8 @@ pub enum CreateTarget {
     Workbook,
 }
 
-/// `version_create({ targetId, targetKind: 'page_doc'|'workbook', label }) → VersionMeta`.
-///
-/// Workbook versions are created by the sheets workstream (`sheet_*` commands); here they report `UNSUPPORTED`
-/// until the store exposes a manual workbook checkpoint.
+/// `version_create({ targetId, targetKind: 'page_doc'|'workbook', label }) → VersionMeta` (a named version of a page
+/// document or of a whole workbook).
 #[tauri::command]
 pub async fn version_create(app: AppHandle, req: VersionCreateReq) -> ApiResult<VersionMeta> {
     validate::id("targetId", &req.target_id)?;
@@ -79,11 +77,7 @@ pub async fn version_create(app: AppHandle, req: VersionCreateReq) -> ApiResult<
     validate::title("label", &req.label)?;
     let kind = match req.target_kind {
         CreateTarget::PageDoc => VersionTargetKind::PageDoc,
-        CreateTarget::Workbook => {
-            return Err(ApiError::unsupported(
-                "Named workbook versions are created from the sheet",
-            ));
-        }
+        CreateTarget::Workbook => VersionTargetKind::Workbook,
     };
     blocking(move || {
         Ok(app.state::<AppState>().session()?.version_create(

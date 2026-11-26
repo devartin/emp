@@ -169,6 +169,8 @@ impl Store {
         for id in dirty {
             self.reindex_from_db(session, &id)?;
         }
+        // Database rows (titles and bodies) join the index once it is ready.
+        let docs = docs + self.db_index_rows().unwrap_or(0);
         self.emit(StoreEvent::SearchReady { docs });
         Ok(docs)
     }

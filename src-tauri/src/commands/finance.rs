@@ -1,14 +1,17 @@
 //! Finance commands (SPEC §11.3 "Finance", §15, §16.2).
 //!
 //! `emp-finance` is pure; this module is the glue of §15: it loads the databases of a life-app instance from
-//! `emp-store` **by semantic role** (§15.0, falling back to the manifest's database titles and property names for
-//! databases without roles, e.g. *Budgets*), converts rows into finance inputs, runs the engines and writes results
-//! back as rows.
+//! `emp-store` through the instance's record key map (`lifeapp_key_map`: the generated databases and their
+//! properties by manifest key), reads columns **by semantic role** (§15.0) or manifest property key, falling back to
+//! roles and manifest titles / property names for databases the key map does not name, converts rows into finance
+//! inputs, runs the engines and writes results back as rows. The budget method and month start come from the
+//! stored configuration, else from the wizard answers (`lifeapp_answers`).
 //!
 //! App-side state that has no database of its own lives in the encrypted kv store:
 //! * `fin.rules` — categorisation rules per instance (the IPC `Rule` shape, richer than the *Rules* database);
 //! * `fin.profiles` — CSV import profiles by header fingerprint (§15.2);
-//! * `fin.budget` — the budget configuration per instance (method, month start day).
+//! * `fin.budget` — the budget configuration per instance (method, month start day);
+//! * `fin.networth` — the last month the automatic net-worth snapshot ran, per instance.
 //!
 //! Statement imports are staged in memory between `finance_import_start`, `_preview` and `_commit` (bounded, 30 min).
 
@@ -37,7 +40,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, State, Webview};
 
-use super::import::{caps, stage, take_file};
+use super::import::{caps, peek_file};
 use super::job_sink;
 use crate::error::{ApiError, ApiResult, ErrorCode};
 use crate::grants::GrantPurpose;
@@ -51,6 +54,10 @@ pub const RULES_NS: &str = "fin.rules";
 pub const PROFILES_NS: &str = "fin.profiles";
 /// kv namespace of budget configuration.
 pub const BUDGET_NS: &str = "fin.budget";
+/// kv namespace recording, per Money HQ instance, the month whose automatic net-worth snapshot check ran.
+pub const NETWORTH_NS: &str = "fin.networth";
+/// Most months one automatic net-worth catch-up writes.
+pub const MAX_AUTO_SNAPSHOT_MONTHS: usize = 120;
 /// Staged statement imports.
 pub const MAX_IMPORTS: usize = 8;
 /// Lifetime of a staged statement import.
@@ -132,6 +139,9 @@ pub struct InstanceDb {
     pub schema: DbSchema,
     /// Live rows in manual order.
     pub rows: Vec<RowDto>,
+    /// Manifest property key → property id, from the instance's record key map (empty for databases the app did
+    /// not generate).
+    pub prop_keys: BTreeMap<String, String>,
 }
 
 impl InstanceDb {
@@ -164,6 +174,22 @@ impl InstanceDb {
     #[must_use]
     pub fn col_id(&self, role: &str, names: &[&str]) -> Option<String> {
         self.col(role, names).map(|p| p.id.clone())
+    }
+
+    /// The property generated from the manifest property `key` (found even after the user renamed it), else the
+    /// property named one of `names` — for columns without a semantic role.
+    #[must_use]
+    pub fn keyed(&self, key: &str, names: &[&str]) -> Option<&Property> {
+        self.prop_keys
+            .get(key)
+            .and_then(|id| self.schema.property(id))
+            .or_else(|| names.iter().find_map(|n| self.schema.property_named(n)))
+    }
+
+    /// The id of [`InstanceDb::keyed`].
+    #[must_use]
+    pub fn keyed_id(&self, key: &str, names: &[&str]) -> Option<String> {
+        self.keyed(key, names).map(|p| p.id.clone())
     }
 
     /// The title property id.
@@ -333,7 +359,8 @@ pub fn instance_databases(
         .collect())
 }
 
-/// Classifies a database of a finance app by its roles, then by its title.
+/// Classifies a database of a finance app by its roles, then by its title (the fallback for databases the instance's
+/// key map does not name, e.g. ones added by hand or by an older manifest).
 #[must_use]
 pub fn classify(schema: &DbSchema, titles: &BTreeMap<String, String>) -> Option<String> {
     let roles = &schema.database.roles;
@@ -362,7 +389,18 @@ pub fn classify(schema: &DbSchema, titles: &BTreeMap<String, String>) -> Option<
     titles
         .iter()
         .find(|(_, title)| title.to_lowercase() == t)
-        .map(|(k, _)| k.clone())
+        .map(|(k, _)| canonical_key(k).to_owned())
+}
+
+/// The key this module files a manifest database template under (the Portfolio manifest's `inv_txns` and `targets`
+/// are read as `investments` and `allocation`, the names their roles classify to).
+#[must_use]
+pub fn canonical_key(template_key: &str) -> &str {
+    match template_key {
+        "inv_txns" => "investments",
+        "targets" => "allocation",
+        k => k,
+    }
 }
 
 /// Template key → title of the database templates of `app_id`'s manifest.
@@ -390,14 +428,56 @@ pub fn manifest_titles(store: &Store, app_id: &str) -> BTreeMap<String, String> 
 }
 
 /// Loads every database of an instance, keyed by template key.
+///
+/// The databases the app generated are found exactly through the instance's record key map
+/// (`Store::lifeapp_key_map`: template key → database id, `<key>.prop:<prop>` → property id), so renaming a database
+/// or a column does not lose it. Live databases of the instance that the key map does not name are classified by
+/// role, then by manifest title.
 pub fn load_instance(
     store: &Store,
     instance_id: &str,
 ) -> ApiResult<(String, BTreeMap<String, InstanceDb>)> {
     let (ws, app_id) = find_instance(store, instance_id)?;
     let titles = manifest_titles(store, &app_id);
+    let key_map = store.lifeapp_key_map(instance_id).unwrap_or_else(|e| {
+        tracing::debug!(
+            code = e.code(),
+            "life-app key map unavailable; classifying by role"
+        );
+        BTreeMap::new()
+    });
+    let metas = instance_databases(store, &ws, instance_id)?;
+    let live: HashSet<&str> = metas.iter().map(|m| m.id.as_str()).collect();
+    let load = |id: &str, prop_keys: BTreeMap<String, String>| -> ApiResult<InstanceDb> {
+        Ok(InstanceDb {
+            schema: store.db_get_schema(id)?,
+            rows: super::db::all_rows(store, id, None)?,
+            prop_keys,
+        })
+    };
     let mut out = BTreeMap::new();
-    for meta in instance_databases(store, &ws, instance_id)? {
+    let mut claimed = HashSet::new();
+    for tkey in titles.keys() {
+        let Some(id) = key_map.get(tkey).filter(|id| live.contains(id.as_str())) else {
+            continue;
+        };
+        let key = canonical_key(tkey);
+        if out.contains_key(key) {
+            continue;
+        }
+        let prefix = format!("{tkey}.prop:");
+        let prop_keys = key_map
+            .range(prefix.clone()..)
+            .take_while(|(k, _)| k.starts_with(&prefix))
+            .map(|(k, v)| (k[prefix.len()..].to_owned(), v.clone()))
+            .collect();
+        out.insert(key.to_owned(), load(id, prop_keys)?);
+        claimed.insert(id.as_str());
+    }
+    for meta in &metas {
+        if claimed.contains(meta.id.as_str()) {
+            continue;
+        }
         let schema = store.db_get_schema(&meta.id)?;
         let Some(key) = classify(&schema, &titles) else {
             continue;
@@ -406,7 +486,14 @@ pub fn load_instance(
             continue;
         }
         let rows = super::db::all_rows(store, &meta.id, None)?;
-        out.insert(key, InstanceDb { schema, rows });
+        out.insert(
+            key,
+            InstanceDb {
+                schema,
+                rows,
+                prop_keys: BTreeMap::new(),
+            },
+        );
     }
     Ok((ws, out))
 }
@@ -471,7 +558,7 @@ impl Ledger {
             let limit = d.col_id("acct.limit", &["Credit limit"]);
             let onb = d.col_id("acct.on_budget", &["On budget"]);
             let low = d.col_id("acct.low_threshold", &["Low-balance threshold"]);
-            let closed = d.col_id("", &["Closed"]);
+            let closed = d.keyed_id("closed", &["Closed"]);
             for r in &d.rows {
                 let c = text(get(r, &cur));
                 l.accounts.push(Account {
@@ -494,7 +581,7 @@ impl Ledger {
             let group = d.col("cat.group", &["Group"]);
             let ess = d.col_id("cat.essential", &["Essential"]);
             let roll = d.col_id("cat.rollover", &["Rollover"]);
-            let color = d.col("", &["Color"]);
+            let color = d.keyed("color", &["Color"]);
             for r in &d.rows {
                 let g = d.option_name(r, group).unwrap_or_default();
                 let gn = norm(&g);
@@ -563,9 +650,9 @@ impl Ledger {
             }
         }
         if let Some(d) = dbs.get("budgets") {
-            let m = d.col_id("", &["Month"]);
-            let cat = d.col_id("", &["Category"]);
-            let asg = d.col_id("", &["Assigned"]);
+            let m = d.keyed_id("month", &["Month"]);
+            let cat = d.keyed_id("category", &["Category"]);
+            let asg = d.keyed_id("assigned", &["Assigned"]);
             for r in &d.rows {
                 let get = |c: &Option<String>| c.as_ref().and_then(|c| r.values.get(c));
                 let (Ok(month), Some(category_id)) =
@@ -610,19 +697,53 @@ impl Ledger {
     }
 }
 
-/// The stored budget configuration of an instance (default: zero-based, months start on the 1st).
+/// The budget configuration of an instance: the stored one (`fin.budget`), else the one the wizard chose
+/// ([`budget_config_from_answers`] over `Store::lifeapp_answers`, so Quick-mode installs get the recommended method).
 pub fn budget_config(store: &Store, instance_id: &str) -> BudgetConfig {
-    store
+    if let Some(cfg) = store
         .kv_get_any(BUDGET_NS, instance_id)
         .ok()
         .flatten()
         .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or(BudgetConfig {
-            method: BudgetMethod::ZeroBased,
-            month_start_day: 1,
-            income_buffer: false,
-            savings_target_pct: None,
-        })
+    {
+        return cfg;
+    }
+    let answers = store.lifeapp_answers(instance_id).unwrap_or_else(|e| {
+        tracing::debug!(
+            code = e.code(),
+            "life-app answers unavailable; default budget"
+        );
+        serde_json::Map::new()
+    });
+    budget_config_from_answers(&answers)
+}
+
+/// The budget configuration of Money HQ's wizard answers (§16.2): `method` (default zero-based),
+/// `currency.monthStartDay` (1–28, default 1), and the income buffer for irregular income
+/// (`income.stability == "irregular"`) under a method that assigns income.
+#[must_use]
+pub fn budget_config_from_answers(answers: &serde_json::Map<String, Value>) -> BudgetConfig {
+    let method = answers
+        .get("method")
+        .and_then(|m| serde_json::from_value::<BudgetMethod>(m.clone()).ok())
+        .unwrap_or(BudgetMethod::ZeroBased);
+    let month_start_day = answers
+        .get("currency")
+        .and_then(|c| c.get("monthStartDay"))
+        .and_then(Value::as_u64)
+        .and_then(|d| u8::try_from(d.clamp(1, 28)).ok())
+        .unwrap_or(1);
+    let irregular = answers
+        .get("income")
+        .and_then(|i| i.get("stability"))
+        .and_then(Value::as_str)
+        == Some("irregular");
+    BudgetConfig {
+        method,
+        month_start_day,
+        income_buffer: irregular && method.uses_tba(),
+        savings_target_pct: None,
+    }
 }
 
 fn budget_month(
@@ -713,7 +834,7 @@ pub struct Overview {
 
 /// The next due date of a recurring row (its computed "Next date", else its schedule start).
 fn recurring_next(d: &InstanceDb, r: &RowDto) -> Option<NaiveDate> {
-    let next = d.col_id("", &["Next date"]);
+    let next = d.keyed_id("next", &["Next date"]);
     if let Some(n) = date(next.as_ref().and_then(|c| r.values.get(c))) {
         return Some(n);
     }
@@ -903,8 +1024,8 @@ pub async fn finance_networth_series(
             snaps.insert(s.month, s);
         }
         if let Some(d) = l.dbs.get("networth") {
-            let a = d.col_id("", &["Assets"]);
-            let li = d.col_id("", &["Liabilities"]);
+            let a = d.keyed_id("assets", &["Assets"]);
+            let li = d.keyed_id("liabilities", &["Liabilities"]);
             for r in &d.rows {
                 let Ok(m) = d.title(r).trim().parse::<YearMonth>() else {
                     continue;
@@ -935,6 +1056,123 @@ pub async fn finance_networth_series(
         Ok(emp_finance::networth::series(&list, &base))
     })
     .await
+}
+
+// ───────────────────────────────────────────────────────────────────────────── automatic net-worth snapshots
+
+/// The automatic monthly net-worth snapshot (§15.5, §16.2 "Net worth snapshots"): for every Money HQ instance, the
+/// first time this runs in a month it adds a row (source *Automatic*) for each month from the latest snapshot row
+/// (exclusive) to the current month, valued from opening balances and transactions (the current month as of
+/// today). Returns the ids of the databases that got rows. Runs at unlock and from the background ticker.
+pub fn auto_networth_snapshots(store: &Store) -> ApiResult<Vec<String>> {
+    let today = local_today(store);
+    let this_month = YearMonth::of(today).to_string();
+    let mut written = Vec::new();
+    for ws in store.workspace_list()? {
+        for inst in store.lifeapp_instances(&ws.id)? {
+            if inst.detached || inst.app_id != "money-hq" {
+                continue;
+            }
+            let done = store
+                .kv_get_any(NETWORTH_NS, &inst.id)?
+                .is_some_and(|v| v.as_str() == Some(this_month.as_str()));
+            if done {
+                continue;
+            }
+            match networth_snapshot_rows(store, &inst.id, today) {
+                Ok(Some(db)) => written.push(db),
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::info!(code = e.code.as_str(), "net-worth snapshot skipped");
+                    continue;
+                }
+            }
+            store.kv_set_any(NETWORTH_NS, &inst.id, json!(this_month), None)?;
+        }
+    }
+    Ok(written)
+}
+
+/// Writes the missing snapshot rows of one instance; `Some(database id)` when rows were added.
+fn networth_snapshot_rows(
+    store: &Store,
+    instance_id: &str,
+    today: NaiveDate,
+) -> ApiResult<Option<String>> {
+    let l = Ledger::load(store, instance_id)?;
+    let Some(d) = l.dbs.get("networth") else {
+        return Ok(None);
+    };
+    if l.accounts.is_empty() {
+        return Ok(None);
+    }
+    let existing: Vec<YearMonth> = d
+        .rows
+        .iter()
+        .filter_map(|r| d.title(r).trim().parse::<YearMonth>().ok())
+        .collect();
+    let mut months = emp_finance::networth::missing_months(&existing, today);
+    if months.len() > MAX_AUTO_SNAPSHOT_MONTHS {
+        months.drain(..months.len() - MAX_AUTO_SNAPSHOT_MONTHS);
+    }
+    let (Some(&first), Some(&last)) = (months.first(), months.last()) else {
+        return Ok(None);
+    };
+    let (Some(acol), Some(lcol)) = (
+        d.keyed_id("assets", &["Assets"]),
+        d.keyed_id("liabilities", &["Liabilities"]),
+    ) else {
+        return Err(ApiError::invalid(
+            "instanceId",
+            "the Net worth database is missing columns",
+        ));
+    };
+    let source = d.keyed("source", &["Source"]).and_then(|p| {
+        p.select_options()
+            .into_iter()
+            .find(|o| matches!(norm(&o.name).as_str(), "automatic" | "auto"))
+            .map(|o| (p.id.clone(), o.id))
+    });
+    let base = Currency::new(&l.currency).map_err(fin_err)?;
+    let money = |v: Decimal| CellValue::Money {
+        v: Some(v.round_dp(2).normalize().to_string()),
+        cur: l.currency.clone(),
+    };
+    let rows: Vec<BTreeMap<String, CellValue>> = emp_finance::networth::backfill_from_transactions(
+        &l.accounts,
+        &l.txns,
+        first,
+        last,
+        today,
+        &base,
+        &emp_finance::fx::FxRates::new(),
+    )
+    .into_iter()
+    .filter(|s| months.contains(&s.month))
+    .map(|s| {
+        let mut values = BTreeMap::new();
+        values.insert(
+            d.title_id().to_owned(),
+            CellValue::text(&s.month.to_string()),
+        );
+        values.insert(acol.clone(), money(s.assets));
+        values.insert(lcol.clone(), money(s.liabilities));
+        if let Some((col, opt)) = &source {
+            values.insert(
+                col.clone(),
+                CellValue::Select {
+                    v: Some(opt.clone()),
+                },
+            );
+        }
+        values
+    })
+    .collect();
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    store.db_rows_insert_bulk(d.id(), rows, None)?;
+    Ok(Some(d.id().to_owned()))
 }
 
 /// `finance_spending_breakdown` request.
@@ -1116,9 +1354,9 @@ pub async fn finance_budget_assign(app: AppHandle, req: AssignReq) -> ApiResult<
         }
         let d = l.db("budgets")?;
         let (Some(mcol), Some(ccol), Some(acol)) = (
-            d.col_id("", &["Month"]),
-            d.col_id("", &["Category"]),
-            d.col_id("", &["Assigned"]),
+            d.keyed_id("month", &["Month"]),
+            d.keyed_id("category", &["Category"]),
+            d.keyed_id("assigned", &["Assigned"]),
         ) else {
             return Err(ApiError::invalid(
                 "instanceId",
@@ -1159,7 +1397,6 @@ pub async fn finance_budget_assign(app: AppHandle, req: AssignReq) -> ApiResult<
                 store.db_rows_insert_bulk(d.id(), vec![values], None)?;
             }
         }
-        super::db::emit_db_changed(&state, &store, d.id(), None);
         let l = Ledger::load(&store, &req.instance_id)?;
         let bm = budget_month(&store, &req.instance_id, &l, m)?;
         Ok(AssignDto {
@@ -1186,6 +1423,11 @@ struct StagedImport {
 
 static IMPORTS: LazyLock<Mutex<HashMap<String, StagedImport>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Drops every staged statement import (lock hygiene: the bytes are decrypted user data).
+pub fn clear_staged_imports() {
+    IMPORTS.lock().clear();
+}
 
 /// A staged import: instance, file name, bytes, format and CSV header fingerprint.
 type Staged = (String, String, Arc<Vec<u8>>, ImportFormat, Option<String>);
@@ -1258,7 +1500,9 @@ pub async fn finance_import_start(
         let state = app.state::<AppState>();
         let store = state.session()?;
         let l = Ledger::load(&store, &req.instance_id)?;
-        let file = take_file(
+        // Peeked, not redeemed: the statement is staged below by import id, and the same grant stays usable by a
+        // generic importer afterwards (e.g. "import as a table instead").
+        let file = peek_file(
             &state,
             &req.grant_id,
             &[GrantPurpose::Import],
@@ -1323,8 +1567,6 @@ pub async fn finance_import_start(
                 },
             );
         }
-        // The same grant may be used by a generic importer afterwards (e.g. "import as a table instead").
-        stage(&req.grant_id, &file);
         Ok(ImportStartDto {
             import_id,
             format: st.format,
@@ -1387,8 +1629,8 @@ fn rules_of(store: &Store, instance_id: &str) -> ApiResult<Vec<Rule>> {
 fn aliases_of(l: &Ledger) -> emp_finance::payee::PayeeAliases {
     let mut a = emp_finance::payee::PayeeAliases::new();
     if let Some(d) = l.dbs.get("payees") {
-        let al = d.col_id("", &["Aliases"]);
-        let dc = d.col_id("", &["Default category"]);
+        let al = d.keyed_id("aliases", &["Aliases"]);
+        let dc = d.keyed_id("default_category", &["Default category"]);
         for r in &d.rows {
             let p = emp_finance::payee::PayeeRef {
                 payee_id: r.id.clone(),
@@ -1598,11 +1840,9 @@ pub async fn finance_import_commit(
     }
     let store = state.session()?;
     let sink = job_sink(&webview, &req.on_event);
-    let app = webview.app_handle().clone();
     let cell = super::import::import_cell();
     let out = Arc::clone(&cell);
     let job = state.jobs.spawn("finance_import_commit", true, store.now(), sink, move |ctx| {
-        let state = app.state::<AppState>();
         ctx.report(0, 3, Some("Checking"));
         let (_, preview, l, fingerprint) = run_preview(&store, &req.import_id, &req.mapping, &req.account_id)?;
         ctx.check_cancelled()?;
@@ -1695,7 +1935,6 @@ pub async fn finance_import_commit(
         let import_id = emp_store::model::ids::new_id();
         super::ics::save_row_undo(&store, &import_id, &ids)?;
         *out.lock() = Some(import_id.clone());
-        super::db::emit_db_changed(&state, &store, d.id(), None);
         ctx.report(3, 3, Some("Done"));
         Ok(json!({ "inserted": ids.len(), "skipped": skipped, "transfersLinked": linked, "importId": import_id }))
     });
@@ -1848,11 +2087,9 @@ pub async fn finance_rules_apply(
     validate::id("instanceId", &req.instance_id)?;
     let store = state.session()?;
     let sink = job_sink(&webview, &req.on_event);
-    let app = webview.app_handle().clone();
     Ok(state
         .jobs
         .spawn("finance_rules_apply", true, store.now(), sink, move |ctx| {
-            let state = app.state::<AppState>();
             let l = Ledger::load(&store, &req.instance_id)?;
             let mut rules = rules_of(&store, &req.instance_id)?;
             let set = RuleSet::compile(&rules).map_err(fin_err)?;
@@ -1919,7 +2156,6 @@ pub async fn finance_rules_apply(
                     r.times_applied += applied.get(&r.id).copied().unwrap_or(0);
                 }
                 store.kv_set_any(RULES_NS, &req.instance_id, json!(rules), None)?;
-                super::db::emit_db_changed(&state, &store, d.id(), None);
             }
             ctx.report(total, total, Some("Done"));
             Ok(json!({ "changed": changed, "sample": sample }))
@@ -2109,7 +2345,6 @@ pub async fn finance_recurring_accept(app: AppHandle, req: AcceptReq) -> ApiResu
             rows.push(v);
         }
         let created = store.db_rows_insert_bulk(d.id(), rows, None)?;
-        super::db::emit_db_changed(&state, &store, d.id(), None);
         Ok(json!({ "created": created }))
     })
     .await
@@ -2512,6 +2747,116 @@ mod tests {
             today,
         );
         assert!(!sankey.nodes.is_empty());
+    }
+
+    #[test]
+    fn automatic_networth_snapshot_fills_the_current_month_once() {
+        let (_dir, store) = test_support::temp_store();
+        let (_, inst) = test_support::install(&store, "money-hq");
+        let l = Ledger::load(&store, &inst).unwrap();
+        let d = l.dbs.get("networth").expect("net worth database");
+        let ids: Vec<String> = d.rows.iter().map(|r| r.id.clone()).collect();
+        store.db_rows_delete(&ids).unwrap();
+
+        let written = auto_networth_snapshots(&store).unwrap();
+        assert_eq!(written, vec![d.id().to_owned()]);
+        let l = Ledger::load(&store, &inst).unwrap();
+        let d = l.dbs.get("networth").unwrap();
+        assert_eq!(d.rows.len(), 1);
+        let today = local_today(&store);
+        assert_eq!(d.title(&d.rows[0]), YearMonth::of(today).to_string());
+        let src = d.keyed("source", &["Source"]);
+        assert_eq!(d.option_name(&d.rows[0], src).as_deref(), Some("Automatic"));
+        let assets = d.keyed_id("assets", &["Assets"]).unwrap();
+        assert!(matches!(
+            d.rows[0].values.get(&assets),
+            Some(CellValue::Money { v: Some(_), .. })
+        ));
+
+        // Once per month: a second run writes nothing.
+        assert!(auto_networth_snapshots(&store).unwrap().is_empty());
+    }
+
+    #[test]
+    fn budget_config_follows_the_wizard_answers() {
+        let a = |v: Value| v.as_object().cloned().unwrap();
+        let c = budget_config_from_answers(&a(json!({
+            "method": "fifty_thirty_twenty",
+            "currency": { "code": "USD", "monthStartDay": 15 },
+            "income": { "stability": "irregular" }
+        })));
+        assert_eq!(c.method, BudgetMethod::FiftyThirtyTwenty);
+        assert_eq!(c.month_start_day, 15);
+        assert!(!c.income_buffer, "50/30/20 assigns no income");
+        let c = budget_config_from_answers(&a(json!({
+            "method": "zero_based",
+            "currency": { "monthStartDay": 31 },
+            "income": { "stability": "irregular" }
+        })));
+        assert_eq!(c.method, BudgetMethod::ZeroBased);
+        assert_eq!(c.month_start_day, 28);
+        assert!(c.income_buffer);
+        let c = budget_config_from_answers(&a(json!({ "method": "made_up" })));
+        assert_eq!(c.method, BudgetMethod::ZeroBased);
+        assert_eq!(c.month_start_day, 1);
+    }
+
+    #[test]
+    fn budget_config_prefers_stored_then_answers() {
+        let (_dir, store) = test_support::temp_store();
+        let (_, inst) = test_support::install(&store, "money-hq");
+        let answers = store.lifeapp_answers(&inst).unwrap();
+        let expected: BudgetMethod = serde_json::from_value(answers["method"].clone()).unwrap();
+        assert_eq!(budget_config(&store, &inst).method, expected);
+        let stored = BudgetConfig {
+            method: BudgetMethod::Envelopes,
+            month_start_day: 5,
+            income_buffer: false,
+            savings_target_pct: None,
+        };
+        store
+            .kv_set_any(BUDGET_NS, &inst, json!(stored), None)
+            .unwrap();
+        assert_eq!(budget_config(&store, &inst), stored);
+    }
+
+    #[test]
+    fn generated_databases_are_found_after_renames() {
+        let (_dir, store) = test_support::temp_store();
+        let (_, inst) = test_support::install(&store, "money-hq");
+        let l = Ledger::load(&store, &inst).unwrap();
+        let budgets = l.dbs.get("budgets").expect("budgets").clone();
+        let assigned = budgets.keyed_id("assigned", &["Assigned"]).unwrap();
+        let before = l.assignments.len();
+        assert!(before > 0, "sample budget assignments");
+        // Rename the database and its roleless column: title and name heuristics would both miss it now.
+        store
+            .page_update_meta(
+                budgets.id(),
+                emp_store::model::PageMetaPatch {
+                    title: Some("Spending plan".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        store
+            .db_property_update(
+                &assigned,
+                emp_store::dbmodel::PropertyPatch {
+                    name: Some("Planned".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let l = Ledger::load(&store, &inst).unwrap();
+        let d = l.dbs.get("budgets").expect("budgets after rename");
+        assert_eq!(d.id(), budgets.id());
+        assert_eq!(
+            d.keyed_id("assigned", &["Assigned"]).as_deref(),
+            Some(assigned.as_str())
+        );
+        assert_eq!(l.assignments.len(), before);
+        assert!(l.dbs.contains_key("transactions"));
     }
 
     #[test]

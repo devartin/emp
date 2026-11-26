@@ -278,10 +278,10 @@ impl Store {
         }
         let encrypted = s.codec.encrypting();
         let tmp_dir = self.inner.paths.tmp();
-        std::fs::create_dir_all(&tmp_dir)?;
+        crate::vault::create_private_dir(&tmp_dir)?;
         let tmp = tmp_dir.join(format!("import-{}", new_id()));
         let result = (|| -> Result<(String, Option<Vec<u8>>, u64)> {
-            let file = File::create(&tmp)?;
+            let file = crate::vault::create_private_file(&tmp)?;
             let mut hasher = ContentHasher::new();
             let mut total = head.len() as u64;
             hasher.update(&head);
@@ -367,7 +367,7 @@ impl Store {
             }
             _ => {
                 if let Some(dir) = path.parent() {
-                    std::fs::create_dir_all(dir)?;
+                    crate::vault::create_private_dir(dir)?;
                 }
                 std::fs::rename(&tmp, &path)?;
             }
@@ -580,8 +580,11 @@ impl Store {
             let (new_wrapped, stored) = if target {
                 let len = std::fs::metadata(&path)?.len();
                 let fk = FileKey::generate()?;
-                let mut w =
-                    BlobWriter::new(&fk, len, std::io::BufWriter::new(File::create(&tmp)?))?;
+                let mut w = BlobWriter::new(
+                    &fk,
+                    len,
+                    std::io::BufWriter::new(crate::vault::create_private_file(&tmp)?),
+                )?;
                 let mut src = BufReader::new(File::open(&path)?);
                 std::io::copy(&mut src, &mut w)?;
                 let f = w
@@ -598,7 +601,7 @@ impl Store {
                 let w = wrapped.ok_or_else(|| StoreError::Integrity("missing file key".into()))?;
                 let fk = Self::file_key(s.keys(), &name, &w)?;
                 let mut r = blob_reader(&fk, BufReader::new(File::open(&path)?))?;
-                let mut out = std::io::BufWriter::new(File::create(&tmp)?);
+                let mut out = std::io::BufWriter::new(crate::vault::create_private_file(&tmp)?);
                 std::io::copy(&mut r, &mut out)?;
                 let f = out
                     .into_inner()

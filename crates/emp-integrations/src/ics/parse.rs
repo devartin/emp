@@ -380,8 +380,17 @@ pub(crate) fn parse_duration(s: &str) -> Option<Duration> {
     if num.is_some() || !any {
         return None;
     }
-    Some(Duration::seconds(if neg { -total } else { total }))
+    // Each component is checked above, but a line may repeat units (`P99999999W99999999W…`)
+    // until the sum leaves chrono's range, where `Duration::seconds` panics. No event lasts
+    // longer than this.
+    if total > MAX_DURATION_SECS {
+        return None;
+    }
+    Duration::try_seconds(if neg { -total } else { total })
 }
+
+/// Longest DURATION accepted (about 1,000 years).
+const MAX_DURATION_SECS: i64 = 1_000 * 366 * 86_400;
 
 fn text(c: &Component, name: &str) -> Option<String> {
     c.prop(name)
@@ -811,6 +820,30 @@ END:VCALENDAR\r\n";
         assert!(cal.warnings.iter().any(|w| w.contains("unknown time zone")));
         let s = cal.events[0].start.as_ref().unwrap();
         assert_eq!(s.to_utc(None).to_rfc3339(), "2026-01-01T10:00:00+00:00");
+    }
+
+    #[test]
+    fn huge_durations_do_not_panic() {
+        // Used to panic in `Duration::seconds` (out of range) instead of being ignored.
+        let many = format!("P{}", "99999999W".repeat(20_000));
+        assert_eq!(parse_duration(&many), None);
+        assert_eq!(parse_duration(&format!("-{many}")), None);
+        assert_eq!(parse_duration("P99999999W"), None);
+        assert_eq!(parse_duration("P1W1D"), Some(Duration::days(8)));
+        let body = format!(
+            "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:d\nDTSTART:20260101T000000Z\nDURATION:{many}\nRRULE:FREQ=DAILY;COUNT=3\nEND:VEVENT\nEND:VCALENDAR\n"
+        );
+        let cal = parse_ics(body.as_bytes(), &IcsLimits::default()).unwrap();
+        assert_eq!(cal.events.len(), 1);
+        assert!(cal.events[0].duration.is_none());
+        // A DTSTART near chrono's limit plus the longest accepted duration must not panic.
+        let edge = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:e\nDTSTART:99991231T235959Z\nDURATION:P52000W\nRRULE:FREQ=YEARLY;COUNT=2\nEND:VEVENT\nEND:VCALENDAR\n";
+        let cal = parse_ics(edge.as_bytes(), &IcsLimits::default()).unwrap();
+        let ev = &cal.events[0];
+        let _ = ev.effective_end();
+        let _ = ev.length();
+        let from = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        let _ = super::super::expand_event(ev, from, DateTime::<Utc>::MAX_UTC, &IcsLimits::default());
     }
 
     #[test]

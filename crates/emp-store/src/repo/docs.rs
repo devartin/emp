@@ -104,7 +104,7 @@ impl Store {
         let owner = owner_id.to_owned();
         let new_text = extract(&doc).full_text();
         let doc_for_tx = doc.clone();
-        let (rev, versioned) = self.write(move |tx| {
+        let (rev, versioned, row_db) = self.write(move |tx| {
             let codec = &sess.codec;
             match owner_kind {
                 DocOwnerKind::Page => {
@@ -139,6 +139,20 @@ impl Store {
                 new_rev,
                 now,
             )?;
+            // A row body edit is a row edit (§8.1 `updated_time`): touch the row and its database's data rev.
+            let row_db = if owner_kind == DocOwnerKind::Row {
+                tx.prepare_cached("UPDATE db_rows SET updated_at = ?2 WHERE id = ?1")?
+                    .execute(rusqlite::params![owner, now])?;
+                let db: String = tx.query_row(
+                    "SELECT database_id FROM db_rows WHERE id = ?1",
+                    [&owner],
+                    |r| r.get(0),
+                )?;
+                crate::repo::databases::bump(tx, &db, false, true)?;
+                Some(db)
+            } else {
+                None
+            };
             // Automatic versions (§7.8).
             let old_text = current
                 .as_ref()
@@ -168,9 +182,14 @@ impl Store {
                     }
                 }
             }
-            Ok((new_rev, versioned))
+            Ok((new_rev, versioned, row_db))
         })?;
         let _ = versioned;
+        if let Some(db) = row_db {
+            // Re-index the row (its body is searchable) before telling views about it.
+            let _ = self.rows_dto(&s, &db, &[owner_id.to_owned()]);
+            self.db_changed_rows(&db, Some(vec![owner_id.to_owned()]));
+        }
         if owner_kind == DocOwnerKind::Page {
             if let Ok(Some(meta)) = self.read(|c| load_meta(c, &s.codec, owner_id)) {
                 self.index_page(&s, &meta, Some(&doc));

@@ -173,6 +173,7 @@ fn if_fn(ctx: &mut EvalCtx, args: &[Expr]) -> R {
         let (fr, fc) = dims(&f);
         let rows = crate::eval::bdim(crate::eval::bdim(cond.rows(), tr), fr);
         let cols = crate::eval::bdim(crate::eval::bdim(cond.cols(), tc), fc);
+        ctx.check_broadcast(rows, cols)?;
         let mut data = Vec::with_capacity(rows * cols);
         for r in 0..rows {
             for c in 0..cols {

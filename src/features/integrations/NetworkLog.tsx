@@ -25,7 +25,7 @@ function time(at: number): string {
   const d = new Date(at);
   const today = new Date();
   const sameDay = d.toDateString() === today.toDateString();
-  return sameDay ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }) : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return sameDay ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export function OfflineSwitch() {
@@ -124,7 +124,7 @@ export function NetworkLog({ limit = 1000, height = 420 }: { limit?: number; hei
                 <div key={it.key} role="row" className={cn("ig-log-row", isNew && "is-new")} style={{ position: "absolute", top: 0, left: 0, right: 0, height: it.size, transform: `translateY(${it.start}px)` }}>
                   <span role="cell" className="tabular text-tertiary">{time(r.at)}</span>
                   <span role="cell" className="truncate">{CONNECTOR_LABEL[r.connector] ?? r.connector}</span>
-                  <span role="cell" className="min-w-0 truncate">
+                  <span role="cell" className="min-w-0 truncate" title={`${r.method} ${r.host}${r.path}`}>
                     <span className="ig-method">{r.method}</span>
                     <span className="text-secondary">{r.host}</span>
                     <span className="text-tertiary">{r.path}</span>

@@ -113,8 +113,11 @@ fn build_router(state: &AppState, store: &Store) -> ApiResult<MarketRouter> {
 }
 
 /// The router of the unlocked vault (built on first use).
+///
+/// Uses [`AppState::session_quiet`]: background quote fetches (formula host, subscriptions) must not count as user
+/// activity. Commands that call this have already called `session()`.
 pub fn router(state: &AppState) -> ApiResult<Arc<MarketRouter>> {
-    let store = match state.session() {
+    let store = match state.session_quiet() {
         Ok(s) => s,
         Err(e) => {
             drop_router();
@@ -336,6 +339,15 @@ fn check_symbols(field: &str, symbols: &[String]) -> ApiResult<Vec<String>> {
     Ok(out)
 }
 
+/// The keys of `keys` whose fetch in `fetched` (same order) succeeded.
+fn arrived_keys<T, E>(keys: &[String], fetched: &[Result<T, E>]) -> Vec<String> {
+    keys.iter()
+        .zip(fetched)
+        .filter(|(_, r)| r.is_ok())
+        .map(|(k, _)| k.clone())
+        .collect()
+}
+
 /// Quotes for `keys`: fresh cache hits immediately, stale hits now plus a background refresh, misses fetched with a
 /// deadline. Symbols that cannot be priced are omitted.
 pub async fn quotes_for(r: &Arc<MarketRouter>, keys: &[String]) -> Vec<Quote> {
@@ -358,13 +370,15 @@ pub async fn quotes_for(r: &Arc<MarketRouter>, keys: &[String]) -> Vec<Quote> {
     if !stale.is_empty() {
         let r2 = Arc::clone(r);
         tauri::async_runtime::spawn(async move {
-            let _ = r2.quotes(&stale, &HashMap::new()).await;
+            let fetched = r2.quotes(&stale, &HashMap::new()).await;
+            note_quote_arrival(&arrived_keys(&stale, &fetched));
         });
     }
     if !missing.is_empty() {
         if let Ok(fetched) =
             tokio::time::timeout(FIRST_FETCH_DEADLINE, r.quotes(&missing, &HashMap::new())).await
         {
+            note_quote_arrival(&arrived_keys(&missing, &fetched));
             let mut it = fetched.into_iter();
             for slot in &mut out {
                 if slot.is_none() {
@@ -561,7 +575,7 @@ pub async fn market_subscribe(webview: Webview, req: SubscribeReq) -> ApiResult<
             let ctx = blocking(move || {
                 let state = app2.state::<AppState>();
                 let r = router(&state)?;
-                let lists = load_watchlists(&state.session()?)?;
+                let lists = load_watchlists(&state.session_quiet()?)?;
                 Ok((r, lists))
             })
             .await;
@@ -581,6 +595,14 @@ pub async fn market_subscribe(webview: Webview, req: SubscribeReq) -> ApiResult<
     });
     SUBS.lock().insert(sub_id.clone(), handle);
     Ok(SubDto { sub_id })
+}
+
+/// Stops every live quote subscription (on lock: they must not outlive the session).
+pub fn stop_subscriptions() {
+    let subs: Vec<_> = SUBS.lock().drain().map(|(_, h)| h).collect();
+    for h in subs {
+        h.abort();
+    }
 }
 
 /// `market_unsubscribe` request.
@@ -739,6 +761,7 @@ pub async fn fx_rates(app: AppHandle, req: FxReq) -> ApiResult<FxRates> {
     let r = blocking(move || router(&app.state::<AppState>())).await?;
     let rates = r.fx(&base, &symbols, date).await?;
     FX_SNAPSHOT.record(&rates);
+    note_fx_arrival(&base, req.date.as_deref());
     Ok(rates)
 }
 
@@ -821,11 +844,22 @@ pub fn quote_field(q: &Quote, field: &str) -> Option<emp_sheets::Value> {
 
 /// The formula host backed by the market caches (§9.17): cache reads only; misses are queued and fetched outside the
 /// engine, so the next recalculation sees them.
+///
+/// The host also remembers which formula keys (`STOCK("aapl","price")`, `FX("EUR","USD")`, …) read which cache
+/// entry, so that when a quote or rate arrives the workbooks reading it are refreshed and get `sheet:changed`
+/// (see [`super::sheet::queue_external_refresh`]).
 pub struct MarketHost {
     app: AppHandle,
     pending: Mutex<HashSet<String>>,
     fx_pending: Mutex<HashSet<(String, Option<String>)>>,
+    /// Quote cache key (`TICKER:MIC`) → formula keys that read it.
+    readers: Mutex<HashMap<String, HashSet<ExternalKey>>>,
+    /// `FX` formula keys seen.
+    fx_readers: Mutex<HashSet<ExternalKey>>,
 }
+
+/// Bound on remembered formula keys (each map is cleared when it grows past this; it refills on the next recalc).
+pub const MAX_TRACKED_KEYS: usize = 4_096;
 
 impl MarketHost {
     /// A host for `app`.
@@ -835,7 +869,63 @@ impl MarketHost {
             app,
             pending: Mutex::new(HashSet::new()),
             fx_pending: Mutex::new(HashSet::new()),
+            readers: Mutex::new(HashMap::new()),
+            fx_readers: Mutex::new(HashSet::new()),
         }
+    }
+
+    fn track_quote_reader(&self, quote_key: &str, key: &ExternalKey) {
+        let mut m = self.readers.lock();
+        if !m.contains_key(quote_key) && m.len() >= MAX_TRACKED_KEYS {
+            m.clear();
+        }
+        let set = m.entry(quote_key.to_owned()).or_default();
+        if set.len() < MAX_TRACKED_KEYS {
+            set.insert(key.clone());
+        }
+    }
+
+    fn track_fx_reader(&self, key: &ExternalKey) {
+        let mut s = self.fx_readers.lock();
+        if s.len() >= MAX_TRACKED_KEYS {
+            s.clear();
+        }
+        s.insert(key.clone());
+    }
+
+    /// Formula keys that read the quotes of `quote_keys`.
+    #[must_use]
+    pub fn quote_readers(&self, quote_keys: &[String]) -> Vec<ExternalKey> {
+        let m = self.readers.lock();
+        let mut out: Vec<ExternalKey> = quote_keys
+            .iter()
+            .filter_map(|k| m.get(k))
+            .flatten()
+            .cloned()
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    /// `FX` formula keys answered by rates against `base` on `date` (`None` = latest).
+    #[must_use]
+    pub fn fx_readers(&self, base: &str, date: Option<&str>) -> Vec<ExternalKey> {
+        let mut out: Vec<ExternalKey> = self
+            .fx_readers
+            .lock()
+            .iter()
+            .filter(|k| match k {
+                ExternalKey::Fx { from, to, date: d } => {
+                    (from.eq_ignore_ascii_case(base) || to.eq_ignore_ascii_case(base))
+                        && d.as_deref() == date
+                }
+                _ => false,
+            })
+            .cloned()
+            .collect();
+        out.sort();
+        out
     }
 
     fn cached_router(&self) -> Option<Arc<MarketRouter>> {
@@ -849,11 +939,20 @@ impl MarketHost {
         let app = self.app.clone();
         tauri::async_runtime::spawn(async move {
             let app2 = app.clone();
+            let mut arrived = false;
             if let Ok(r) = blocking(move || router(&app2.state::<AppState>())).await {
-                let _ = r.quotes(std::slice::from_ref(&key), &HashMap::new()).await;
+                arrived = r
+                    .quotes(std::slice::from_ref(&key), &HashMap::new())
+                    .await
+                    .iter()
+                    .any(Result::is_ok);
             }
-            if let Some(h) = HOST.lock().as_ref() {
+            let host = HOST.lock().clone();
+            if let Some(h) = host {
                 h.pending.lock().remove(&key);
+                if arrived {
+                    notify_quotes(&h, std::slice::from_ref(&key));
+                }
             }
         });
     }
@@ -871,9 +970,11 @@ impl MarketHost {
                     .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
                 if let Ok(rates) = r.fx(&base, &[], d).await {
                     FX_SNAPSHOT.record(&rates);
+                    note_fx_arrival(&base, date.as_deref());
                 }
             }
-            if let Some(h) = HOST.lock().as_ref() {
+            let host = HOST.lock().clone();
+            if let Some(h) = host {
                 h.fx_pending.lock().remove(&(base, date));
             }
         });
@@ -903,6 +1004,7 @@ impl Host for MarketHost {
                 let Some(k) = stock_key(&sym) else {
                     return ExternalValue::Unavailable;
                 };
+                self.track_quote_reader(&k, key);
                 match self.cached_router().and_then(|r| r.cached_quote(&k)) {
                     Some((q, fresh)) => {
                         if !fresh {
@@ -918,6 +1020,7 @@ impl Host for MarketHost {
                 }
             }
             ExternalKey::Fx { from, to, date } => {
+                self.track_fx_reader(key);
                 let (f, t) = (from.to_ascii_uppercase(), to.to_ascii_uppercase());
                 match FX_SNAPSHOT.get(&f, &t, date.as_deref()) {
                     Some(r) => ExternalValue::Ready(emp_sheets::Value::Number(r)),
@@ -933,6 +1036,36 @@ impl Host for MarketHost {
 
 static HOST: LazyLock<Mutex<Option<Arc<MarketHost>>>> = LazyLock::new(|| Mutex::new(None));
 static HOST_VAULT: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+
+fn notify_quotes(host: &MarketHost, quote_keys: &[String]) {
+    let keys = host.quote_readers(quote_keys);
+    if !keys.is_empty() {
+        super::sheet::queue_external_refresh(&host.app, keys);
+    }
+}
+
+/// Quotes for `quote_keys` were fetched (by any path): refresh the workbooks whose formulas read them.
+pub fn note_quote_arrival(quote_keys: &[String]) {
+    if quote_keys.is_empty() {
+        return;
+    }
+    let host = HOST.lock().clone();
+    if let Some(h) = host {
+        notify_quotes(&h, quote_keys);
+    }
+}
+
+/// FX rates against `base` (on `date`, `None` = latest) were fetched: refresh the workbooks whose `FX` formulas
+/// read them.
+pub fn note_fx_arrival(base: &str, date: Option<&str>) {
+    let host = HOST.lock().clone();
+    if let Some(h) = host {
+        let keys = h.fx_readers(base, date);
+        if !keys.is_empty() {
+            super::sheet::queue_external_refresh(&h.app, keys);
+        }
+    }
+}
 
 /// Installs the [`MarketHost`] into `store`'s sheet engines once per vault.
 pub fn ensure_sheet_host(app: &AppHandle, store: &Store) {

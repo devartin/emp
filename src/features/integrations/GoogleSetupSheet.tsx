@@ -5,7 +5,7 @@
  *
  *   <GoogleSetupSheet open={open} onOpenChange={setOpen} feature="calendar" />
  */
-import { Check, Copy, ExternalLink, Info, RefreshCw, ShieldCheck, TriangleAlert, Unplug } from "lucide-react";
+import { Check, ChevronRight, Copy, ExternalLink, Info, RefreshCw, ShieldCheck, TriangleAlert, Unplug } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api, backendMode, errorMessage, hasCode } from "@/backend";
@@ -148,6 +148,7 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
   const [fieldErr, setFieldErr] = useState<{ field?: string; message: string } | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [tested, setTested] = useState(false);
+  const [showSteps, setShowSteps] = useState(false);
   const { run, dialog } = useReauth();
 
   const refresh = useCallback(() => {
@@ -228,7 +229,16 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
         <Banner tone="warning" inline icon={TriangleAlert}>
           In Testing mode Google expires access every 7 days. Publishing for personal use is fine: Google will show an “unverified app” screen you can continue past.
         </Banner>
-        <ol className="ig-steps">
+        {configured ? (
+          <button type="button" className="ig-guide-toggle" onClick={() => setShowSteps((v) => !v)} aria-expanded={showSteps}>
+            <ChevronRight size={14} className={cn("transition-transform duration-160", showSteps && "rotate-90")} aria-hidden />
+            Setup guide · 6 steps
+            <span className="ml-auto text-caption text-gain-text">Done</span>
+          </button>
+        ) : null}
+        <AnimatePresence initial={false}>
+        {!configured || showSteps ? (
+        <m.ol className="ig-steps overflow-hidden" initial={configured ? { height: 0, opacity: 0 } : false} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}>
           <StepItem n={1} title="Create a Google Cloud project" done={configured}>
             <p className="ig-p">Any name works. It’s yours — EMP never sees it.</p>
             <div className="flex flex-wrap items-center gap-2">
@@ -257,7 +267,7 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
             <p className="ig-p">
               Choose user type <strong>External</strong>. App name and your email are all that’s required.
             </p>
-            <Button size="sm" variant="secondary" iconRight={ExternalLink} onClick={() => openLink("https://console.cloud.google.com/apis/credentials/consent")}>
+            <Button className="self-start" size="sm" variant="secondary" iconRight={ExternalLink} onClick={() => openLink("https://console.cloud.google.com/apis/credentials/consent")}>
               Consent screen
             </Button>
           </StepItem>
@@ -270,7 +280,7 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
             <p className="ig-p">
               Credentials → Create credentials → OAuth client ID → <strong>Desktop app</strong>. There’s no redirect URI to set: EMP picks a random <code className="ig-code">http://127.0.0.1:&lt;port&gt;</code> each time.
             </p>
-            <Button size="sm" variant="secondary" iconRight={ExternalLink} onClick={() => openLink("https://console.cloud.google.com/apis/credentials/oauthclient")}>
+            <Button className="self-start" size="sm" variant="secondary" iconRight={ExternalLink} onClick={() => openLink("https://console.cloud.google.com/apis/credentials/oauthclient")}>
               Create client
             </Button>
           </StepItem>
@@ -304,7 +314,9 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
               ) : null}
             </div>
           </StepItem>
-        </ol>
+        </m.ol>
+        ) : null}
+        </AnimatePresence>
         <AnimatePresence>
           {testing || tested ? (
             <m.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: spring.gentle }} exit={{ opacity: 0 }} className={cn("ig-test", tested && "is-ok")} role="status">

@@ -3,6 +3,8 @@ import { useState } from "react";
 import { api } from "@/backend";
 import type { Id, PortfolioSummary } from "@/backend/types";
 import { BarChart } from "@/charts/Bar";
+import { withAlpha } from "@/charts/axis";
+import { useChartTheme } from "@/charts/theme";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { fmtMoney, fmtPct, monthLabel, num } from "../finance/shared/format";
@@ -10,6 +12,7 @@ import { useAsync } from "../finance/shared/hooks";
 import { Section, Stat } from "../finance/shared/ui";
 
 export default function Dividends({ instanceId, summary: s }: { instanceId: Id; summary?: PortfolioSummary }) {
+  const t = useChartTheme();
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(String(thisYear));
   const d = useAsync(() => api.portfolio.dividends({ instanceId, year: Number(year) }), [instanceId, year]);
@@ -36,7 +39,7 @@ export default function Dividends({ instanceId, summary: s }: { instanceId: Id; 
         subtitle="Paid and projected by month"
         actions={<Segmented size="sm" value={year} onValueChange={setYear} aria-label="Year" options={[thisYear - 2, thisYear - 1, thisYear].map((y) => ({ value: String(y), label: String(y) }))} />}
       >
-        <BarChart data={rows} x="m" series={[{ key: "paid", label: "Paid", color: "var(--accent-solid)" }, { key: "projected", label: "Projected", color: "color-mix(in oklab, var(--accent-solid) 30%, transparent)" }]} stacked height={260} yAxis="right" loading={d.loading && !d.data} summaryLabel={`Dividends by month, ${year}`} />
+        <BarChart data={rows} x="m" series={[{ key: "paid", label: "Paid", color: t.accent }, { key: "projected", label: "Projected", color: withAlpha(t.accent, 0.3) }]} stacked height={260} yAxis="right" loading={d.loading && !d.data} summaryLabel={`Dividends by month, ${year}`} />
       </Section>
     </div>
   );

@@ -5,6 +5,7 @@
 //! XML is parsed with `quick-xml`, which never resolves DTDs or custom entities.
 
 use crate::address::{Rect, parse_a1, parse_rect};
+use crate::limits::{MAX_COLS, MAX_ROWS};
 use crate::numfmt::builtin_format;
 use crate::workbook::style::{Align, CellStyle, FontStyle, HAlign, VAlign};
 use quick_xml::Reader;
@@ -289,6 +290,7 @@ pub fn width_to_px(w: f64) -> f64 {
 /// Parse a worksheet part for styles, sizes, panes and merges.
 pub fn parse_sheet(xml: &[u8], max_cells: usize) -> SheetExtras {
     let mut out = SheetExtras::default();
+    let mut col_spans: Vec<(u32, u32, f64)> = Vec::new();
     let mut r = Reader::from_reader(xml);
     let mut buf = Vec::new();
     loop {
@@ -315,8 +317,8 @@ pub fn parse_sheet(xml: &[u8], max_cells: usize) -> SheetExtras {
                         && custom
                         && min >= 1
                     {
-                        for c in min..=max.min(min + 16_384) {
-                            out.col_widths.push((c - 1, width_to_px(w)));
+                        if min <= MAX_COLS && min <= max && w.is_finite() {
+                            col_spans.push((min - 1, max.min(MAX_COLS) - 1, width_to_px(w)));
                         }
                     }
                 }
@@ -329,6 +331,8 @@ pub fn parse_sheet(xml: &[u8], max_cells: usize) -> SheetExtras {
                         && let (Some(rr), Some(ht)) = (attr(&e, b"r"), attr(&e, b"ht"))
                         && let (Ok(rr), Ok(ht)) = (rr.parse::<u32>(), ht.parse::<f64>())
                         && rr >= 1
+                        && rr <= MAX_ROWS
+                        && ht.is_finite()
                     {
                         out.row_heights.push((rr - 1, (ht * 4.0 / 3.0).round()));
                     }
@@ -344,7 +348,10 @@ pub fn parse_sheet(xml: &[u8], max_cells: usize) -> SheetExtras {
                         let y = attr(&e, b"ySplit")
                             .and_then(|v| v.parse::<f64>().ok())
                             .unwrap_or(0.0);
-                        out.frozen = (y as u32, x as u32);
+                        out.frozen = (
+                            (y.max(0.0) as u32).min(MAX_ROWS - 1),
+                            (x.max(0.0) as u32).min(MAX_COLS - 1),
+                        );
                     }
                 }
                 b"mergeCell" => {
@@ -362,7 +369,48 @@ pub fn parse_sheet(xml: &[u8], max_cells: usize) -> SheetExtras {
         }
         buf.clear();
     }
+    out.col_widths = resolve_col_spans(&col_spans);
     out
+}
+
+/// Column widths from `<col>` spans, later spans winning. Each `<col>` may cover the whole grid,
+/// and repeated spans must not multiply (a million `<col min="1" max="16384">` elements would
+/// otherwise mean 16 billion writes), so spans are applied last-to-first and every column is
+/// assigned at most once, skipping assigned runs with a union-find "next free column" table.
+fn resolve_col_spans(spans: &[(u32, u32, f64)]) -> Vec<(u32, f64)> {
+    if spans.is_empty() {
+        return Vec::new();
+    }
+    let n = MAX_COLS as usize;
+    let mut width: Vec<Option<f64>> = vec![None; n];
+    // next[i] = smallest unassigned column ≥ i (n = none left).
+    let mut next: Vec<u32> = (0..=MAX_COLS).collect();
+    fn find(next: &mut [u32], i: u32) -> u32 {
+        let mut root = i;
+        while next[root as usize] != root {
+            root = next[root as usize];
+        }
+        let mut cur = i;
+        while next[cur as usize] != root {
+            let up = next[cur as usize];
+            next[cur as usize] = root;
+            cur = up;
+        }
+        root
+    }
+    for &(lo, hi, px) in spans.iter().rev() {
+        let mut c = find(&mut next, lo);
+        while c <= hi && (c as usize) < n {
+            width[c as usize] = Some(px);
+            next[c as usize] = c + 1;
+            c = find(&mut next, c + 1);
+        }
+    }
+    width
+        .into_iter()
+        .enumerate()
+        .filter_map(|(c, w)| w.map(|w| (c as u32, w)))
+        .collect()
 }
 
 #[cfg(test)]

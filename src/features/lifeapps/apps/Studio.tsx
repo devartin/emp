@@ -4,8 +4,7 @@
  */
 import { ArrowRight, FileSpreadsheet, FileUp, Sheet as SheetIcon } from "lucide-react";
 import { m } from "motion/react";
-import { useState } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useMemo, useState } from "react";
 import { api, errorMessage } from "@/backend";
 import type { LifeAppInstance } from "@/backend/types";
 import { navigate } from "@/app/router";
@@ -53,24 +52,23 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
   const ws = useWorkspace((s) => s.workspace);
   const color = identity("spreadsheet-studio").color;
   const { metrics } = useMetrics(instance.id, ["workbook_count"]);
-  const recent = useTree(
-    useShallow((s) => {
-      const out = [];
-      for (const p of s.byId.values()) if (p.kind === "sheet" && !p.deletedAt) out.push(p);
-      return out.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 12);
-    }),
-  );
-  const pathOf = useTree((s) => (id: string) => {
+  const byId = useTree((s) => s.byId);
+  const recent = useMemo(() => {
+    const out = [];
+    for (const p of byId.values()) if (p.kind === "sheet" && !p.deletedAt) out.push(p);
+    return out.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 12);
+  }, [byId]);
+  const pathOf = (id: string) => {
     const parts: string[] = [];
-    let cur = s.byId.get(id)?.parentId ?? null;
+    let cur = byId.get(id)?.parentId ?? null;
     while (cur) {
-      const p = s.byId.get(cur);
+      const p = byId.get(cur);
       if (!p) break;
       parts.unshift(p.title || "Untitled");
       cur = p.parentId;
     }
     return parts.join(" / ");
-  });
+  };
 
   const create = async (intent: string) => {
     setCreating(intent);
@@ -188,7 +186,7 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
             <Card title="How these workbooks are built">
               <ul className="flex flex-col gap-2.5 text-body-sm text-secondary">
                 <li className="flex gap-2"><span className="mt-1 h-3 w-3 flex-none rounded-[3px]" style={{ background: `color-mix(in oklab, ${color} 22%, transparent)` }} />Tinted cells are inputs — change these.</li>
-                <li className="flex gap-2"><span className="mt-1 h-3 w-3 flex-none rounded-[3px] bg-surface-3" /><strong className="font-semibold text-primary">Bold</strong>&nbsp;cells are outputs.</li>
+                <li className="flex gap-2"><span className="mt-1 h-3 w-3 flex-none rounded-[3px] bg-surface-3" /><span><strong className="font-semibold text-primary">Bold</strong> cells are outputs.</span></li>
                 <li className="flex gap-2"><span className="mt-1 h-3 w-3 flex-none rounded-[3px] bg-gain-soft" />Checks turn green when the model adds up.</li>
                 <li className="flex gap-2"><span className="mt-1 h-3 w-3 flex-none rounded-[3px] bg-surface-2" />Constants live in named ranges; headers are frozen; dates are ISO.</li>
               </ul>

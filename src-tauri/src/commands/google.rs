@@ -11,6 +11,7 @@
 //! * **Docs / Sheets** import into pages, workbooks or databases and export through `drive.file`.
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock};
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -236,7 +237,7 @@ pub fn integration_err(app: &AppHandle, account_id: &str, e: IntegrationError) -
     if matches!(e, IntegrationError::ReauthRequired) {
         SESSIONS.lock().remove(account_id);
         let state = app.state::<AppState>();
-        if let Ok(store) = state.session() {
+        if let Ok(store) = state.session_quiet() {
             if let Ok(mut d) = account(&store, account_id) {
                 d.status = "reauth_required".into();
                 let _ = save_account(&store, Some(account_id), &d);
@@ -261,7 +262,8 @@ async fn session_async(
     let (app2, id) = (app.clone(), account_id.to_owned());
     blocking(move || {
         let state = app2.state::<AppState>();
-        let store = state.session()?;
+        // Quiet: scheduled syncs must not count as user activity (the commands already called `session()`).
+        let store = state.session_quiet()?;
         let s = session_for(&state, &store, &id)?;
         Ok((store, s))
     })
@@ -530,8 +532,9 @@ pub struct SyncSettings {
     pub last_sync: Option<i64>,
 }
 
+/// SPEC §17.1: "every 5 minutes (the default) while unlocked".
 fn default_interval() -> u32 {
-    15
+    5
 }
 
 fn settings(store: &Store, account_id: &str) -> ApiResult<SyncSettings> {
@@ -784,6 +787,95 @@ async fn sync_account(app: &AppHandle, account_id: &str, totals: &mut SyncTotals
     cfg.last_sync = Some(now_ms());
     let (st, id) = (store, account_id.to_owned());
     blocking(move || Ok(st.kv_set_any(SYNC_NS, &id, json!(cfg), None)?)).await
+}
+
+// ───────────────────────────────────────────────────────────────────────────── scheduled sync
+
+/// A nudge (window focus regained, unlock after sleep) syncs accounts last synced longer ago than this.
+pub const NUDGE_MIN_AGE_MS: i64 = 60_000;
+
+static SCHEDULED_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// Whether a connected account can read calendars.
+#[must_use]
+pub fn has_calendar_scope(scopes: &[String]) -> bool {
+    scopes.iter().any(|s| {
+        s == emp_integrations::oauth::scopes::CALENDAR_READONLY
+            || s == emp_integrations::oauth::scopes::CALENDAR_EVENTS
+            || s == "https://www.googleapis.com/auth/calendar"
+    })
+}
+
+/// Whether a calendar sync is due: never synced, or the interval (with `nudge`: at most [`NUDGE_MIN_AGE_MS`])
+/// elapsed since the last one.
+#[must_use]
+pub fn sync_due(last_sync: Option<i64>, interval_min: u32, now_ms: i64, nudge: bool) -> bool {
+    let interval = i64::from(interval_min.max(1)) * 60_000;
+    let needed = if nudge {
+        interval.min(NUDGE_MIN_AGE_MS)
+    } else {
+        interval
+    };
+    last_sync.is_none_or(|t| now_ms.saturating_sub(t) >= needed)
+}
+
+/// Accounts with a calendar sync due (connected, calendar scope granted, not awaiting re-consent).
+fn due_accounts(store: &Store, now: i64, nudge: bool) -> ApiResult<Vec<String>> {
+    let mut out = Vec::new();
+    for (id, d) in accounts(store)? {
+        if d.status == "reauth_required" || !has_calendar_scope(&d.scopes) {
+            continue;
+        }
+        let cfg = settings(store, &id)?;
+        if sync_due(cfg.last_sync, cfg.interval_min, now, nudge) {
+            out.push(id);
+        }
+    }
+    Ok(out)
+}
+
+/// The scheduled Google Calendar sync (SPEC §17.1 "When it syncs"): every account whose `intervalMin` elapsed, or
+/// with `nudge` (window focus regained, unlock) whose last sync is older than a minute. Runs in the background,
+/// one pass at a time; skipped while locked or offline. Reports `sync:status` like `gcal_sync_now`.
+pub fn scheduled_sync(app: &AppHandle, nudge: bool) {
+    if SCHEDULED_RUNNING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let app2 = app.clone();
+        let due = blocking(move || {
+            let state = app2.state::<AppState>();
+            let store = state.session_quiet()?;
+            if state.net.is_offline() || client(&store)?.is_none() {
+                return Ok(Vec::new());
+            }
+            due_accounts(&store, now_ms(), nudge)
+        })
+        .await
+        .unwrap_or_default();
+        if !due.is_empty() {
+            let state = app.state::<AppState>();
+            sync_status(&state, "syncing", None);
+            let mut totals = SyncTotals::default();
+            let mut error = None;
+            for id in &due {
+                if let Err(e) = sync_account(&app, id, &mut totals).await {
+                    if e.code == ErrorCode::Locked {
+                        error = None;
+                        break;
+                    }
+                    tracing::info!(code = e.code.as_str(), "scheduled calendar sync failed");
+                    error = Some(e.message);
+                }
+            }
+            match error {
+                Some(m) => sync_status(&state, "error", Some(m)),
+                None => sync_status(&state, "idle", None),
+            }
+        }
+        SCHEDULED_RUNNING.store(false, Ordering::SeqCst);
+    });
 }
 
 /// `gcal_sync_now` request.
@@ -1607,6 +1699,30 @@ pub async fn gsheets_export(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scheduled_sync_is_due_by_interval_or_nudge() {
+        let now = 10_000_000;
+        assert!(sync_due(None, 15, now, false));
+        assert!(!sync_due(Some(now - 4 * 60_000), 5, now, false));
+        assert!(sync_due(Some(now - 5 * 60_000), 5, now, false));
+        // A nudge syncs anything older than a minute, but never more often.
+        assert!(sync_due(Some(now - 2 * 60_000), 30, now, true));
+        assert!(!sync_due(Some(now - 30_000), 30, now, true));
+        assert!(!sync_due(Some(now - 2 * 60_000), 30, now, false));
+        assert_eq!(default_interval(), 5);
+    }
+
+    #[test]
+    fn calendar_scope_is_required() {
+        assert!(has_calendar_scope(&[
+            "openid".into(),
+            emp_integrations::oauth::scopes::CALENDAR_READONLY.into()
+        ]));
+        assert!(!has_calendar_scope(&[
+            "https://www.googleapis.com/auth/drive.file".into()
+        ]));
+    }
     use emp_integrations::google::calendar::{EventStatus, EventSync, EventTime};
 
     fn ev(id: &str, title: &str) -> GcalEvent {

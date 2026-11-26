@@ -653,6 +653,16 @@ impl<'a> EvalCtx<'a> {
 
     // ------------------------------------------------------------------ lifting & operators
 
+    /// Bound the size of an array built by broadcasting operands of different shapes, and charge
+    /// the operation budget for it. Fails with `#CALC!` above [`MAX_MATERIALIZE_CELLS`].
+    pub fn check_broadcast(&mut self, rows: usize, cols: usize) -> Result<(), ErrorKind> {
+        let size = (rows as u64).saturating_mul(cols as u64);
+        if size > MAX_MATERIALIZE_CELLS {
+            return Err(ErrorKind::Calc);
+        }
+        self.tick(size / 8 + 1)
+    }
+
     /// Apply a scalar function element-wise.
     pub fn lift1(&mut self, v: Ev, f: impl Fn(&Value) -> Value) -> Ev {
         let v = self.to_value(v);
@@ -670,6 +680,11 @@ impl<'a> EvalCtx<'a> {
             (Value::Array(x), Value::Array(y)) => {
                 let rows = bdim(x.rows(), y.rows());
                 let cols = bdim(x.cols(), y.cols());
+                // Broadcasting a column against a row multiplies their sizes: bound the result
+                // before allocating it (e.g. `A:A*1:1` would be 17 billion cells).
+                if let Err(e) = self.check_broadcast(rows, cols) {
+                    return e.into();
+                }
                 let mut data = Vec::with_capacity(rows * cols);
                 for r in 0..rows {
                     for c in 0..cols {

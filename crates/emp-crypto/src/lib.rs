@@ -70,6 +70,8 @@ pub mod blob;
 pub mod codec;
 pub mod envelope;
 pub mod error;
+#[cfg(test)]
+mod fuzz_props;
 pub mod hkdf_labels;
 #[cfg(test)]
 mod kat;

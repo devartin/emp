@@ -31,7 +31,7 @@
 .ig-offline.is-on .ig-offline-ico { background: var(--warning-soft); color: var(--warning-text); }
 
 .ig-log { border-radius: 12px; box-shadow: inset 0 0 0 1px var(--border-subtle); overflow: hidden; background: var(--bg-surface-1); }
-.ig-log-head, .ig-log-row { display: grid; grid-template-columns: 112px 92px minmax(0, 1fr) 64px 72px; gap: 12px; align-items: center; padding: 0 14px; font-size: calc(12.5rem / 14); }
+.ig-log-head, .ig-log-row { display: grid; grid-template-columns: 86px 84px minmax(0, 1fr) 52px 64px; gap: 12px; align-items: center; padding: 0 14px; font-size: calc(12.5rem / 14); }
 .ig-log-head { height: 32px; font-size: calc(11rem / 14); font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-tertiary); background: var(--bg-surface-2); border-bottom: 1px solid var(--border-subtle); }
 .ig-log-body { overflow-y: auto; position: relative; }
 .ig-log-row { color: var(--text-primary); border-bottom: 1px solid var(--border-subtle); }
@@ -43,3 +43,5 @@
 .ig-status { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .ig-status.is-ok { background: var(--gain-soft); color: var(--gain-text); }
 .ig-status.is-bad { background: var(--loss-soft); color: var(--loss-text); }
+.ig-guide-toggle { display: flex; align-items: center; gap: 8px; width: 100%; height: 40px; padding: 0 12px; border-radius: 10px; font-size: calc(13rem / 14); font-weight: 600; color: var(--text-primary); background: var(--bg-surface-2); transition: background-color var(--dur-fast) var(--ease-out); }
+.ig-guide-toggle:hover { background: var(--bg-surface-3); }

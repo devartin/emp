@@ -201,8 +201,8 @@ function CashCalendar({ items }: { items: RecurringRow[] }) {
             <Tooltip key={d.day} content={d.flows.length ? <div className="flex flex-col gap-0.5"><b>{dayLabel(d.day)}</b>{d.flows.map((f, k) => <span key={k}>{f.name} · {fmtMoney(f.amount, "USD", { signed: true })}</span>)}</div> : `${dayLabel(d.day)} · nothing scheduled`}>
               <div className="fh-cal-day" data-weekend={weekend ? "" : undefined} data-today={i === 0 ? "" : undefined} tabIndex={0}>
                 <div className="fh-cal-bars">
-                  {inn ? <m.span className="fh-cal-in" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 0.5, delay: Math.min(0.3, i * 0.01), ease: [0.16, 1, 0.3, 1] }} style={{ height: `${(inn / max) * 100}%` }} /> : null}
-                  {out ? <m.span className="fh-cal-out" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 0.5, delay: Math.min(0.3, i * 0.01), ease: [0.16, 1, 0.3, 1] }} style={{ height: `${(out / max) * 100}%` }} /> : null}
+                  {inn ? <m.span className="fh-cal-in" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 0.5, delay: Math.min(0.3, i * 0.01), ease: [0.16, 1, 0.3, 1] }} style={{ height: `${Math.sqrt(inn / max) * 100}%` }} /> : null}
+                  {out ? <m.span className="fh-cal-out" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 0.5, delay: Math.min(0.3, i * 0.01), ease: [0.16, 1, 0.3, 1] }} style={{ height: `${Math.sqrt(out / max) * 100}%` }} /> : null}
                 </div>
                 <span className="fh-cal-num">{dt.getDate()}</span>
               </div>

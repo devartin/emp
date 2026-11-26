@@ -1,5 +1,5 @@
 /* Home (§6.4). Tokens only. */
-.hm-page { max-width: 1120px; margin: 0 auto; padding: 48px 40px 96px; }
+.hm-page { width: 100%; max-width: 1120px; margin: 0 auto; padding: 48px 40px 96px; }
 .hm-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .hm-grid { position: relative; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; align-items: stretch; border-radius: 16px; }
 .hm-grid.is-editing::before {
