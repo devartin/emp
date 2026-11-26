@@ -137,6 +137,9 @@ function stopProbe() {
 
 function syncProbe() {
   if (!decision.probe) {
+    // While the frame monitor has effects reduced, glass isn't painted and the probe can't sample — keep its budget
+    // (it pauses itself via glassRenders) so the evidence so far still counts if effects are restored.
+    if (decision.status === "auto-effects" && linux && verdict === null && !passed && probe) return;
     stopProbe();
     return;
   }
