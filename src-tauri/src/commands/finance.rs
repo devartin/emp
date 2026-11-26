@@ -896,45 +896,62 @@ fn recurring_next(d: &InstanceDb, r: &RowDto) -> Option<NaiveDate> {
     }
 }
 
-fn debt_free_date(l: &Ledger, today: NaiveDate) -> Option<String> {
-    let debts: Vec<_> = l
-        .accounts
+/// The debts Money HQ plans with (the Debt tab's `debtInputs` and the browser mock's `debtsOf` build the same
+/// list): open liability accounts owing money today, at their minimum payment, or `max($25, 2% of the balance)`
+/// when they have none.
+pub fn ledger_debts(l: &Ledger, today: NaiveDate) -> Vec<emp_finance::debt::Debt> {
+    l.accounts
         .iter()
         .filter(|a| a.kind.is_liability() && !a.closed)
         .filter_map(|a| {
             let owed = -l.balance(a, today);
-            (owed > Decimal::ZERO).then(|| emp_finance::debt::DebtInput {
+            (owed > Decimal::ZERO).then(|| emp_finance::debt::Debt {
                 name: a.id.clone(),
-                balance: owed.to_string(),
-                apr_pct: a.apr_pct.unwrap_or_default().to_string(),
+                balance: owed,
+                apr_pct: a.apr_pct.unwrap_or_default(),
                 min_payment: a
                     .min_payment
-                    .unwrap_or_else(|| (owed / Decimal::from(50)).round_dp(2))
-                    .to_string(),
+                    .filter(|m| *m > Decimal::ZERO)
+                    .unwrap_or_else(|| {
+                        (owed / Decimal::from(50))
+                            .round_dp(2)
+                            .max(Decimal::from(25))
+                    }),
             })
         })
-        .collect();
+        .collect()
+}
+
+/// `debtFreeDate` — the one definition behind Money HQ's "Debt-free" tile, the `debt_free_date` life-app metric
+/// and its KPI tile: the month the last of [`ledger_debts`] is paid off **paying the minimums only** (no extra, no
+/// rollover; the Debt tab's planner shows strategies with extra payments separately), starting next month — this
+/// month's payments are already in the ledger. `None` without debts or when the minimums never clear them within
+/// 600 months. The browser mock's `finance_overview` computes the same.
+fn debt_free_date(l: &Ledger, today: NaiveDate) -> Option<String> {
+    let debts = ledger_debts(l, today);
     if debts.is_empty() {
         return None;
     }
-    let req = emp_finance::debt::DebtPlanRequest {
-        debts,
-        strategy: emp_finance::debt::Strategy::Avalanche,
-        extra_monthly: "0".into(),
-        order: None,
-        start_month: YearMonth::of(today),
-    };
-    let plan = emp_finance::debt::plan(&req).ok()?;
-    plan.strategies.first()?.payoff_date.map(|m| m.to_string())
+    emp_finance::debt::simulate(
+        &debts,
+        emp_finance::debt::Strategy::MinimumsOnly,
+        Decimal::ZERO,
+        None,
+        YearMonth::of(today).next(),
+    )
+    .ok()?
+    .debt_free()
+    .map(|m| m.to_string())
 }
 
 // ───────────────────────────────────────────────────────────────────────────── Portfolio valuation (§16.8)
 
 /// Portfolio's market value over time — what Money HQ counts in place of its investment accounts (§16.8 "Investment
-/// account values become Net worth assets"). Today's value is exactly `portfolio_summary.totalValue` (same lots,
-/// quotes and [`emp_finance::portfolio::holdings::value`]); an earlier date values the positions held at the end of
-/// that day at that day's close (daily bars, cache first), falling back to today's price, then to average cost.
-/// Without any market data (offline, no provider) every date is valued at cost, like `portfolio_summary`.
+/// account values become Net worth assets"). Today's value is `portfolio_summary.totalValue` computed from the
+/// cached quotes (same lots and [`emp_finance::portfolio::holdings::value`]); an earlier date values the positions
+/// held at the end of that day at that day's cached close, falling back to today's price, then to average cost.
+/// Without any market data (offline, no provider, cold cache) every date is valued at cost, like
+/// `portfolio_summary` offline. Built by [`portfolio_marks_cached`] — never from the network.
 #[derive(Debug, Clone, Default)]
 pub struct PortfolioMarks {
     today: NaiveDate,
@@ -1018,81 +1035,90 @@ fn portfolio_instance_for(store: &Store, money_id: &str) -> ApiResult<Option<Str
         .map(|i| i.id))
 }
 
-/// Offline marks (no network): cost basis and cached quotes only. Used where no async router call is possible
-/// (the background net-worth snapshot); `None` without a Portfolio instance.
-pub fn portfolio_marks_offline(
+/// What a cache-only valuation could not price from the market caches; [`refresh_marks`] fetches it in the
+/// background so the next valuation has it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MarksRefresh {
+    /// Held symbols without a fresh cached quote.
+    pub quotes: Vec<String>,
+    /// Held symbols with no cached quote at all (valued at cost today).
+    pub unpriced: Vec<String>,
+    /// Symbols whose cached daily closes do not cover the history the valuation needs.
+    pub bars: Vec<String>,
+    /// Start of that history.
+    pub from: Option<NaiveDate>,
+    /// Its end (the valuation's today).
+    pub until: Option<NaiveDate>,
+}
+
+impl MarksRefresh {
+    /// Whether every held symbol is valued at a cached market price today.
+    #[must_use]
+    pub fn priced_today(&self) -> bool {
+        self.unpriced.is_empty()
+    }
+}
+
+/// Portfolio's value for Money HQ **from the market caches only** — never the network, so `finance_overview`, the
+/// net-worth series and the life-app metrics stay local computations. Today: cached quotes (fresh or stale, the
+/// same quotes `portfolio_summary` shows once it has fetched them), cost basis for symbols with none. Earlier
+/// dates (back to `history_from`, clamped to Portfolio's first transaction): cached daily closes. Returns `None`
+/// without a Portfolio instance, plus what was missing (hand it to [`refresh_marks`]). `router: None` (no market
+/// access, tests) values everything at cost, like `portfolio_summary` offline.
+pub fn portfolio_marks_cached(
     store: &Store,
+    router: Option<&emp_integrations::market::MarketRouter>,
     money_id: &str,
     today: NaiveDate,
-) -> ApiResult<Option<PortfolioMarks>> {
+    history_from: Option<NaiveDate>,
+) -> ApiResult<Option<(PortfolioMarks, MarksRefresh)>> {
     let Some(pf) = portfolio_instance_for(store, money_id)? else {
         return Ok(None);
     };
     let data = super::portfolio::PortfolioData::load(store, &pf)?;
-    Ok(Some(PortfolioMarks::build(
-        &data,
-        &HashMap::new(),
-        HashMap::new(),
-        today,
-    )))
-}
-
-/// Live marks for `finance_overview` / `finance_networth_series`: today's quotes (as `portfolio_summary`) and daily
-/// closes back to `history_from` for the earlier dates. `None` without a Portfolio instance; network failures fall
-/// back to the cache / cost basis rather than failing the finance command.
-pub async fn portfolio_marks(
-    app: &AppHandle,
-    money_id: &str,
-    history: Option<chrono::Duration>,
-) -> ApiResult<Option<PortfolioMarks>> {
-    let (app2, id) = (app.clone(), money_id.to_owned());
-    let loaded = blocking(move || {
-        let state = app2.state::<AppState>();
-        let store = state.session()?;
-        let Some(pf) = portfolio_instance_for(&store, &id)? else {
-            return Ok(None);
-        };
-        let data = super::portfolio::PortfolioData::load(&store, &pf)?;
-        let today = local_today(&store);
-        let router = super::market::router(&state).ok();
-        Ok(Some((data, today, router)))
-    })
-    .await?;
-    let Some((data, today, router)) = loaded else {
-        return Ok(None);
-    };
+    let mut need = MarksRefresh::default();
     let mut prices = HashMap::new();
     let mut closes: HashMap<String, BTreeMap<NaiveDate, Decimal>> = HashMap::new();
+    let first = data.txns.iter().map(|t| t.date).min();
+    let from = history_from
+        .zip(first)
+        .map(|(h, f)| h.max(f))
+        .filter(|f| *f < today);
     if let Some(r) = router {
         let book = data.book();
         let held: Vec<String> = super::portfolio::PortfolioData::held(&book)
             .into_keys()
             .take(super::portfolio::MAX_SYMBOLS)
             .collect();
-        if !held.is_empty() {
-            for q in super::market::quotes_for(&r, &held).await {
-                if !q.is_sane() {
-                    continue;
+        for k in held {
+            match r.cached_quote(&k) {
+                Some((q, fresh)) if q.is_sane() => {
+                    if !fresh {
+                        need.quotes.push(k.clone());
+                    }
+                    if let Some(as_of) =
+                        chrono::DateTime::from_timestamp_millis(q.as_of).map(|t| t.date_naive())
+                    {
+                        prices.insert(
+                            q.symbol.clone(),
+                            emp_finance::portfolio::holdings::PriceQuote {
+                                price: emp_finance::money::from_f64(q.price),
+                                prev_close: q
+                                    .prev_close
+                                    .filter(|x| x.is_finite() && *x > 0.0)
+                                    .map(emp_finance::money::from_f64),
+                                as_of,
+                            },
+                        );
+                    }
                 }
-                let Some(as_of) =
-                    chrono::DateTime::from_timestamp_millis(q.as_of).map(|t| t.date_naive())
-                else {
-                    continue;
-                };
-                prices.insert(
-                    q.symbol.clone(),
-                    emp_finance::portfolio::holdings::PriceQuote {
-                        price: emp_finance::money::from_f64(q.price),
-                        prev_close: q
-                            .prev_close
-                            .filter(|x| x.is_finite() && *x > 0.0)
-                            .map(emp_finance::money::from_f64),
-                        as_of,
-                    },
-                );
+                _ => {
+                    need.quotes.push(k.clone());
+                    need.unpriced.push(k);
+                }
             }
         }
-        if let Some(from) = history.map(|h| today - h).filter(|f| *f < today) {
+        if let Some(from) = from {
             let mut symbols: Vec<String> = data
                 .txns
                 .iter()
@@ -1103,32 +1129,129 @@ pub async fn portfolio_marks(
             symbols.sort();
             symbols.dedup();
             symbols.truncate(super::portfolio::MAX_HISTORY_SYMBOLS);
+            let yesterday = today.pred_opt().unwrap_or(today);
             for sym in symbols {
-                if let Ok(series) = r
-                    .bars(
-                        &sym,
-                        emp_integrations::market::BarInterval::Day,
-                        from - chrono::Duration::days(7),
-                        today,
-                        true,
-                        &BTreeMap::new(),
-                    )
-                    .await
-                {
+                let key = emp_integrations::market::Symbol::parse(&sym)
+                    .map(|s| s.key())
+                    .unwrap_or_else(|_| sym.clone());
+                let cached = r.bar_cache().get(&key, true);
+                if !cached.as_ref().is_some_and(|c| c.covers(from, yesterday)) {
+                    need.bars.push(sym.clone());
+                }
+                if let Some(c) = cached {
                     closes.insert(
                         sym,
-                        series
-                            .bars
-                            .iter()
+                        c.bars
+                            .values()
                             .filter(|b| b.close.is_finite() && b.close > 0.0)
                             .map(|b| (b.date, emp_finance::money::from_f64(b.close)))
                             .collect(),
                     );
                 }
             }
+            if !need.bars.is_empty() {
+                need.from = Some(from);
+                need.until = Some(today);
+            }
         }
     }
-    Ok(Some(PortfolioMarks::build(&data, &prices, closes, today)))
+    Ok(Some((
+        PortfolioMarks::build(&data, &prices, closes, today),
+        need,
+    )))
+}
+
+/// Symbols fetched recently by [`refresh_marks`] (symbol → when): a symbol a provider cannot serve is not asked
+/// for again on every overview.
+static REFRESHED: LazyLock<Mutex<HashMap<String, Instant>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// How long [`refresh_marks`] waits before asking for the same symbol again.
+pub const MARKS_REFRESH_COOLDOWN: Duration = Duration::from_secs(10 * 60);
+/// Per-symbol deadline of a background bars fetch.
+pub const MARKS_BARS_DEADLINE: Duration = Duration::from_secs(15);
+
+/// Fetches what [`portfolio_marks_cached`] was missing, in the background (quotes through
+/// [`super::market::quotes_for`], daily bars one symbol at a time, each with a deadline). Each symbol is asked for
+/// at most once per [`MARKS_REFRESH_COOLDOWN`]. Returns at once.
+pub fn refresh_marks(router: Arc<emp_integrations::market::MarketRouter>, need: MarksRefresh) {
+    let now = Instant::now();
+    let take = |kind: &str, list: Vec<String>| -> Vec<String> {
+        let mut seen = REFRESHED.lock();
+        seen.retain(|_, at| now.duration_since(*at) < MARKS_REFRESH_COOLDOWN);
+        list.into_iter()
+            .filter(|s| {
+                let k = format!("{kind}:{s}");
+                if seen.contains_key(&k) {
+                    return false;
+                }
+                seen.insert(k, now);
+                true
+            })
+            .collect()
+    };
+    let quotes = take("q", need.quotes);
+    let bars = take("b", need.bars);
+    if quotes.is_empty() && bars.is_empty() {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        if !quotes.is_empty() {
+            super::market::quotes_for(&router, &quotes).await;
+        }
+        let (Some(from), Some(today)) = (need.from, need.until) else {
+            return;
+        };
+        for sym in bars {
+            let _ = tokio::time::timeout(
+                MARKS_BARS_DEADLINE,
+                router.bars(
+                    &sym,
+                    emp_integrations::market::BarInterval::Day,
+                    from - chrono::Duration::days(7),
+                    today,
+                    true,
+                    &BTreeMap::new(),
+                ),
+            )
+            .await;
+        }
+    });
+}
+
+/// The app handle, for the market router of work that has only a [`Store`] (the life-app metric provider, the
+/// background net-worth snapshot). Set by [`ensure_metric_provider`].
+static APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
+
+/// The market router of the unlocked vault, when the app has one (none in unit tests).
+fn market_router(state: Option<&AppState>) -> Option<Arc<emp_integrations::market::MarketRouter>> {
+    match state {
+        Some(s) => super::market::router(s).ok(),
+        None => APP
+            .get()
+            .and_then(|a| a.try_state::<AppState>())
+            .and_then(|s| super::market::router(&s).ok()),
+    }
+}
+
+/// Portfolio marks for a Money HQ computation: [`portfolio_marks_cached`] with the app's router, kicking off
+/// [`refresh_marks`] for whatever the caches lacked. `None` without a Portfolio instance.
+pub fn marks_now(
+    store: &Store,
+    state: Option<&AppState>,
+    money_id: &str,
+    history_from: Option<NaiveDate>,
+) -> ApiResult<Option<PortfolioMarks>> {
+    let router = market_router(state);
+    let today = local_today(store);
+    let Some((marks, need)) =
+        portfolio_marks_cached(store, router.as_deref(), money_id, today, history_from)?
+    else {
+        return Ok(None);
+    };
+    if let Some(r) = router {
+        refresh_marks(r, need);
+    }
+    Ok(Some(marks))
 }
 
 /// Computes `finance_overview`.
@@ -1222,19 +1345,21 @@ pub fn overview(
 
 /// `finance_overview({ instanceId, month }) → { netWorth, netWorthDelta30d, toBeAssigned?, leftToSpend?, savingsRate3m,
 /// efMonths, debtFreeDate?, budget, upcoming, uncategorized, asOf }`.
+///
+/// Local only: Portfolio is valued from the market caches ([`marks_now`]); missing prices are fetched in the
+/// background for the next call.
 #[tauri::command]
 pub async fn finance_overview(app: AppHandle, req: MonthReq) -> ApiResult<Overview> {
     validate::id("instanceId", &req.instance_id)?;
     let m = month("month", &req.month)?;
-    // 30 days of history for the 30-day delta.
-    let marks = portfolio_marks(&app, &req.instance_id, Some(chrono::Duration::days(31))).await?;
     blocking(move || {
-        overview(
-            &app.state::<AppState>().session()?,
-            &req.instance_id,
-            m,
-            marks.as_ref(),
-        )
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        ensure_metric_provider(&app, &store);
+        // 30 days of history for the 30-day delta.
+        let from = local_today(&store) - chrono::Duration::days(31);
+        let marks = marks_now(&store, Some(&state), &req.instance_id, Some(from))?;
+        overview(&store, &req.instance_id, m, marks.as_ref())
     })
     .await
 }
@@ -1263,12 +1388,16 @@ pub async fn finance_networth_series(
         "all" => None,
         _ => return Err(ApiError::invalid("range", "must be 6m, 1y, 3y, 5y or all")),
     };
-    let history = months.map_or(chrono::Duration::days(366 * 10), |n| {
-        chrono::Duration::days(31 * i64::from(n) + 31)
-    });
-    let marks = portfolio_marks(&app, &req.instance_id, Some(history)).await?;
     blocking(move || {
-        let store = app.state::<AppState>().session()?;
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        let today = local_today(&store);
+        // `all` reaches back to Portfolio's first transaction (`portfolio_marks_cached` clamps to it).
+        let from = match months {
+            Some(n) => YearMonth::of(today).plus_months(-n).first_day(),
+            None => NaiveDate::MIN,
+        };
+        let marks = marks_now(&store, Some(&state), &req.instance_id, Some(from))?;
         networth_series(&store, &req.instance_id, months, marks.as_ref())
     })
     .await

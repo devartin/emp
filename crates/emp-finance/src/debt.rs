@@ -339,7 +339,9 @@ pub struct PlanRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DebtPlanResponse {
-    /// Avalanche, snowball, hybrid (and custom when an order is given).
+    /// Avalanche, snowball, hybrid (and custom when an order is given), then the minimums-only baseline as
+    /// `"minimum"` (what the browser mock returns too; the Debt tab's "Months sooner" and Money HQ's debt-free date
+    /// read it).
     pub strategies: Vec<StrategySummary>,
     /// Schedule for the requested strategy.
     pub schedule: Vec<PlanRow>,
@@ -396,6 +398,13 @@ pub fn plan(req: &DebtPlanRequest) -> Result<DebtPlanResponse> {
                 .collect();
         }
     }
+    strategies.push(StrategySummary {
+        strategy: "minimum".into(),
+        months: baseline.months,
+        payoff_date: baseline.debt_free(),
+        total_interest: baseline.total_interest,
+        interest_saved_vs_min: Decimal::ZERO,
+    });
     if req.strategy == Strategy::MinimumsOnly {
         schedule = baseline
             .schedule
@@ -539,7 +548,11 @@ mod tests {
             start_month: start,
         })
         .unwrap();
-        assert_eq!(resp.strategies.len(), 3);
+        assert_eq!(resp.strategies.len(), 4);
+        let base = resp.strategies.last().unwrap();
+        assert_eq!(base.strategy, "minimum");
+        assert_eq!(base.months, min.months);
+        assert_eq!(base.payoff_date, min.debt_free());
         assert_eq!(resp.schedule.len() as u32, sb.months);
         let a = &resp.strategies[0];
         assert_eq!(
