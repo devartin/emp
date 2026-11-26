@@ -5,18 +5,23 @@
 //!   signal and its `LockedHint` property; and `ActiveChanged(true)` from the desktop screen saver on the session bus
 //!   (`org.freedesktop.ScreenSaver`, `org.gnome.ScreenSaver`, …). Without a bus (containers, minimal sessions) the
 //!   watchers log once and stop.
-//! * **macOS**: `NSWorkspaceWillSleepNotification` (sleep), `NSWorkspaceScreensDidSleepNotification`,
+//! * **macOS**: IOKit `kIOMessageSystemWillSleep` (sleep, on a dedicated power thread that acknowledges with
+//!   `IOAllowPowerChange` only after the lock); `NSWorkspaceScreensDidSleepNotification`,
 //!   `NSWorkspaceSessionDidResignActiveNotification` (fast user switching) and the distributed
-//!   `com.apple.screenIsLocked` (screen lock), observed on the main thread.
+//!   `com.apple.screenIsLocked` (screen lock), observed on the main thread. `NSWorkspaceWillSleepNotification` is
+//!   the fallback sleep signal when IOKit registration fails.
 //! * **Windows**: `WM_POWERBROADCAST` / `PBT_APMSUSPEND` (via `RegisterSuspendResumeNotification`) and
 //!   `WM_WTSSESSION_CHANGE` with `WTS_SESSION_LOCK` / `WTS_CONSOLE_DISCONNECT` / `WTS_REMOTE_DISCONNECT`, on a
 //!   message-only window with its own thread.
 //!
 //! The FFI lives in [`crate::platform`]; this module only sees safe callbacks. On macOS and Windows the callbacks
-//! hand the signal to one worker thread (the lock sequence never runs on the main thread); a sleep signal waits for
-//! the lock, bounded by [`SLEEP_WAIT`], so the OS suspends after the keys are gone where it lets us delay it. If a
-//! platform refuses registration the failure is logged once and the idle lock keeps working. Everywhere, as a
-//! backstop, the ticker's monotonic-gap detection ([`crate::autolock::SLEEP_GAP`]) locks after a resume from sleep.
+//! hand the signal to one worker thread (the lock sequence never runs on the main thread). A sleep signal delivered
+//! on a dedicated OS thread ([`Delivery::MayBlock`](crate::platform::Delivery)) waits for the lock, bounded by
+//! [`SLEEP_WAIT`], so the OS suspends after the keys are gone; a signal delivered on the UI main thread never waits,
+//! because a screen lock's flush window (`vault:will-lock`, then the UI's last saves over IPC) needs that thread —
+//! a sleep arriving during that window therefore still gets its flush. If a platform refuses registration the
+//! failure is logged once and the idle lock keeps working. Everywhere, as a backstop, the ticker's monotonic-gap
+//! detection ([`crate::autolock::SLEEP_GAP`]) locks after a resume from sleep.
 //!
 //! Every signal ends in [`handle`], which applies the vault's auto-lock settings (`onSleep`, `onScreenLock`).
 
@@ -95,7 +100,7 @@ mod native {
     use tauri::AppHandle;
 
     use super::{SLEEP_WAIT, SystemEvent, handle};
-    use crate::platform::{SignalHandler, SignalWatcher, watch_system_signals};
+    use crate::platform::{Delivery, SignalHandler, SignalWatcher, watch_system_signals};
 
     /// The live registration, dropped (unregistered) by [`stop`].
     static WATCHER: Mutex<Option<SignalWatcher>> = Mutex::new(None);
@@ -122,8 +127,10 @@ mod native {
             tracing::warn!("could not start the system signal worker; idle lock still applies");
             return;
         }
-        let handler: SignalHandler = Arc::new(move |event| {
-            if event == SystemEvent::Sleep {
+        let handler: SignalHandler = Arc::new(move |event, delivery| {
+            // Only a dedicated OS thread may be held: holding the UI main thread would stall the very flush window
+            // (event delivery and IPC) that a lock already in progress is waiting on.
+            if event == SystemEvent::Sleep && delivery == Delivery::MayBlock {
                 let (done_tx, done_rx) = mpsc::sync_channel(1);
                 if tx.send((event, Some(done_tx))).is_ok()
                     && done_rx.recv_timeout(SLEEP_WAIT).is_err()

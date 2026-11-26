@@ -1359,6 +1359,7 @@ dependencies = [
  "base64 0.22.1",
  "block2",
  "chrono",
+ "core-foundation-sys",
  "emp-crypto",
  "emp-finance",
  "emp-integrations",

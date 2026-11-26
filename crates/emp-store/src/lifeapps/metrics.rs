@@ -1,8 +1,13 @@
 //! Life-app metrics (§16.1 "Metrics and the advisor").
 //!
 //! * `kind: rust` metrics are built-in functions over the instance's databases, read by **semantic role**
-//!   (§15.0) or property key ([`MetricData`]). They are deliberately simple, transparent estimates; the app may
-//!   register a [`MetricProvider`] that replaces any of them with the `emp-finance` engines.
+//!   (§15.0) or property key ([`MetricData`]). They are deliberately simple, transparent estimates; the app
+//!   registers a [`MetricProvider`] that replaces any of them with the `emp-finance` engines. The desktop app's
+//!   provider (`src-tauri/src/commands/finance.rs`, `FinanceMetrics`) replaces Money HQ's headline metrics —
+//!   `money.net_worth`, `money.net_worth_delta_30d`, `money.to_be_assigned`, `money.left_to_spend`,
+//!   `money.savings_rate_3m`, `money.essential_monthly_spend`, `money.ef_balance`, `money.debt_free_date` — with
+//!   the values of `finance_overview`, so KPI tiles, insights and their "Show math" use the one definition each
+//!   figure has there. The built-ins below are only the fallback without a provider (e.g. this crate's tests).
 //! * `kind: expr` metrics are Metric-dialect expressions (§14.7) over other metrics, answers and the pack.
 //!
 //! Every value carries "Show math" lines.
@@ -114,8 +119,10 @@ pub struct MetricData {
 
 /// Replaces built-in metric functions (registered by the app, e.g. with `emp-finance` implementations).
 pub trait MetricProvider: Send + Sync {
-    /// Returns `Some` to override `fn_id` for this data.
-    fn compute(&self, fn_id: &str, data: &MetricData) -> Option<MetricValue>;
+    /// The values that replace built-in functions for one computation pass, keyed by function id (e.g.
+    /// `money.net_worth`). Called once per pass with the store `data` was read from; an empty map keeps every
+    /// built-in. A value with a `null` `value` deliberately reports "no value" (it still wins over the built-in).
+    fn overrides(&self, store: &crate::Store, data: &MetricData) -> BTreeMap<String, MetricValue>;
 }
 
 // ───────────────────────────────────────────────────────────────────────────── cell access
@@ -271,6 +278,18 @@ fn money(x: f64, cur: &str) -> String {
 
 fn pct(x: f64) -> String {
     fmt_with("fmt_pct", x, None)
+}
+
+/// Formats an amount the way built-in money metrics display it (`fmt_money`), for [`MetricProvider`]s.
+#[must_use]
+pub fn format_money(x: f64, cur: &str) -> String {
+    money(x, cur)
+}
+
+/// Formats a fraction the way built-in percentage metrics display it (`fmt_pct`), for [`MetricProvider`]s.
+#[must_use]
+pub fn format_pct(x: f64) -> String {
+    pct(x)
 }
 
 fn line(label: &str, value: String, source: Option<&str>) -> MathLine {
@@ -592,14 +611,12 @@ fn owed(a: &Acct) -> f64 {
     a.balance.abs()
 }
 
+/// Fallback net worth (the app's provider replaces it with `emp_finance::networth::point`), with the same side
+/// rule: open accounts, a positive balance is an asset and a negative one a liability whatever the account type.
 fn net_worth(d: &MetricData) -> (f64, f64, f64) {
     let accts = accounts(d);
-    let assets: f64 = accts
-        .iter()
-        .filter(|a| !is_debt(&a.kind))
-        .map(|a| a.balance)
-        .sum();
-    let liab: f64 = accts.iter().filter(|a| is_debt(&a.kind)).map(owed).sum();
+    let assets: f64 = accts.iter().map(|a| a.balance.max(0.0)).sum();
+    let liab: f64 = accts.iter().map(|a| (-a.balance).max(0.0)).sum();
     (assets - liab, assets, liab)
 }
 
@@ -2391,16 +2408,18 @@ fn expr_value(v: &RowValue) -> (Value, String) {
 }
 
 /// Computes every metric of a manifest (rust metrics first, then expression metrics in dependency order).
+/// `overrides` (function id → value, from the app's [`MetricProvider`]) win over the built-in functions.
 pub fn compute_all(
     m: &LifeAppManifest,
     d: &MetricData,
-    provider: Option<&dyn MetricProvider>,
+    overrides: &BTreeMap<String, MetricValue>,
 ) -> BTreeMap<String, MetricValue> {
     let mut out = BTreeMap::new();
     for def in m.metrics.iter().filter(|x| x.kind == MetricKind::Rust) {
         let f = def.func.as_deref().unwrap_or_default();
-        let v = provider
-            .and_then(|p| p.compute(f, d))
+        let v = overrides
+            .get(f)
+            .cloned()
             .or_else(|| builtin(f, d))
             .unwrap_or_else(|| MetricValue::empty(d.now_ms));
         out.insert(def.name.clone(), v);

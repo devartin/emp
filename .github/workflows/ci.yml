@@ -40,7 +40,9 @@ jobs:
       - name: Install the pinned toolchain (rust-toolchain.toml)
         shell: bash
         run: |
-          channel="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)"
+          # Windows runners check out with core.autocrlf=true: drop the CR so the channel name is exact.
+          channel="$(sed -n 's/^channel *= *"\([^"]*\)".*/\1/p' rust-toolchain.toml | tr -d '\r')"
+          test -n "$channel"
           rustup toolchain install "$channel" --profile minimal --component clippy --component rustfmt
           rustc --version
           cargo clippy --version

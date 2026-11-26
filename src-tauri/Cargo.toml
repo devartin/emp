@@ -65,6 +65,8 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSString",
 ] }
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
+# Already in the tree (tao / core-foundation); CFRunLoop for the IOKit system power notification thread.
+core-foundation-sys = "0.8"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6", features = ["windows-native"] }

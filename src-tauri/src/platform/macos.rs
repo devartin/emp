@@ -191,8 +191,9 @@ mod iokit {
         ) -> IoObject;
         pub fn IODeregisterForSystemPower(notifier: *mut IoObject) -> IoReturn;
         pub fn IOAllowPowerChange(kernel_port: IoObject, notification_id: isize) -> IoReturn;
-        pub fn IONotificationPortGetRunLoopSource(notify: NotificationPortRef)
-        -> CFRunLoopSourceRef;
+        pub fn IONotificationPortGetRunLoopSource(
+            notify: NotificationPortRef,
+        ) -> CFRunLoopSourceRef;
         pub fn IONotificationPortDestroy(notify: NotificationPortRef);
         pub fn IOServiceClose(connect: IoObject) -> IoReturn;
     }
