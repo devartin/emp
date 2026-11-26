@@ -20,7 +20,7 @@ import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { dayLabel, daysBetween, fmtMoney, num, todayIso } from "../shared/format";
+import { dayLabel, daysBetween, num, todayIso, fmtWhole } from "../shared/format";
 import { useAsync, V } from "../shared/hooks";
 import { Glyph, Quiet } from "../shared/ui";
 import { useLedgerCtx, type GoalRow } from "./ledger";
@@ -58,15 +58,15 @@ export default function Goals() {
           </div>
           <div className="tabular" style={{ fontSize: 26, lineHeight: "32px", fontWeight: 640, letterSpacing: "-0.022em" }}>
             <span data-sensitive="">
-              <RollingNumber value={totalSaved} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUpKey="money:goals" sensitive />
+              <RollingNumber value={totalSaved} format={(n) => fmtWhole(Math.round(n))} countUpKey="money:goals" sensitive />
             </span>
             <span className="text-tertiary" style={{ fontSize: 16, fontWeight: 500 }}>
               {" "}
-              of <Sensitive>{fmtMoney(totalTarget, "USD", { noCents: true })}</Sensitive>
+              of <Sensitive>{fmtWhole(totalTarget)}</Sensitive>
             </span>
           </div>
           <div className="text-body-sm text-tertiary">
-            Needs about <Sensitive>{fmtMoney(monthly, "USD", { noCents: true })}</Sensitive> a month across dated goals
+            Needs about <Sensitive>{fmtWhole(monthly)}</Sensitive> a month across dated goals
             {overview ? ` · emergency fund covers ${overview.efMonths.toFixed(1)} months of essentials` : ""}
           </div>
         </div>
@@ -185,11 +185,11 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
           </div>
           <div className="mt-2 tabular text-title" style={{ fontWeight: 640 }}>
             <span data-sensitive="">
-              <RollingNumber value={Math.min(s, g.target)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive />
+              <RollingNumber value={Math.min(s, g.target)} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive />
             </span>
             <span className="text-tertiary text-body-sm font-normal">
               {" "}
-              / <Sensitive>{fmtMoney(g.target, "USD", { noCents: true })}</Sensitive>
+              / <Sensitive>{fmtWhole(g.target)}</Sensitive>
             </span>
           </div>
         </div>
@@ -238,10 +238,10 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
                   "Nothing more needed"
                 ) : plan ? (
                   <>
-                    <Sensitive>{fmtMoney(plan.monthlyRequired, "USD", { noCents: true })}</Sensitive>/mo needed
+                    <Sensitive>{fmtWhole(plan.monthlyRequired)}</Sensitive>/mo needed
                   </>
                 ) : g.kind === "emergency" ? (
-                  `${fmtMoney(g.target - s, "USD", { noCents: true })} to go`
+                  `${fmtWhole(g.target - s)} to go`
                 ) : (
                   "Add a date to plan"
                 )}

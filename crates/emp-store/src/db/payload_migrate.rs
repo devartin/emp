@@ -7,8 +7,8 @@
 //! resumable after a crash or lock, and a migration function must be idempotent (it may see a row twice if a batch
 //! is retried). Until a migration finishes, readers keep upcasting old payloads lazily ([`crate::codec::upcast`]).
 //!
-//! v1 registers no payload migrations ([`PAYLOAD_MIGRATIONS`] is empty); the runner is the mechanism later schema
-//! versions use. `versions` snapshots are never rewritten (they are historical and upcast on read).
+//! Schema v2 registers the emoji → Lucide icon rewrite ([`ICON_MIGRATIONS`]: workspace icons, page icons and
+//! database row-template icons). `versions` snapshots are never rewritten (they are historical and upcast on read).
 
 use emp_crypto::TableTag;
 use rusqlite::params_from_iter;
@@ -46,8 +46,52 @@ impl std::fmt::Debug for PayloadMigration {
     }
 }
 
-/// Every payload migration this build knows (none in v1).
-pub const PAYLOAD_MIGRATIONS: &[PayloadMigration] = &[];
+/// Workspace payloads: `icon`.
+fn icons_workspace(mut v: Value) -> Result<Option<Value>> {
+    let changed = v
+        .as_object_mut()
+        .is_some_and(|o| crate::icons::migrate_icon_field(o, "icon"));
+    Ok(changed.then_some(v))
+}
+
+/// Page payloads (pages, databases, dashboards, ...): `icon`.
+fn icons_page(v: Value) -> Result<Option<Value>> {
+    icons_workspace(v)
+}
+
+/// Database payloads: `rowTemplates[].icon`.
+fn icons_database(mut v: Value) -> Result<Option<Value>> {
+    let mut changed = false;
+    if let Some(list) = v.get_mut("rowTemplates").and_then(Value::as_array_mut) {
+        for t in list.iter_mut().filter_map(Value::as_object_mut) {
+            changed |= crate::icons::migrate_icon_field(t, "icon");
+        }
+    }
+    Ok(changed.then_some(v))
+}
+
+/// Schema v2: emoji icons become Lucide icons through the canonical map (`src/ui/icons/emoji-map.json`); unmapped
+/// emoji lose their icon. Idempotent (a migrated payload has no `{t:'emoji'}` left).
+pub const ICON_MIGRATIONS: &[PayloadMigration] = &[
+    PayloadMigration {
+        id: "v2-icons-lucide-workspaces",
+        table: TableTag::Workspaces,
+        apply: icons_workspace,
+    },
+    PayloadMigration {
+        id: "v2-icons-lucide-pages",
+        table: TableTag::Pages,
+        apply: icons_page,
+    },
+    PayloadMigration {
+        id: "v2-icons-lucide-databases",
+        table: TableTag::Databases,
+        apply: icons_database,
+    },
+];
+
+/// Every payload migration this build knows.
+pub const PAYLOAD_MIGRATIONS: &[PayloadMigration] = ICON_MIGRATIONS;
 
 /// An entry of the pending list: a bare id, or an id with the key of the last rewritten row.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -399,5 +443,98 @@ mod tests {
             );
             assert!(store.payload_migrations_pending().unwrap().is_empty());
         }
+    }
+
+    #[test]
+    fn v2_rewrites_emoji_icons_to_lucide() {
+        use crate::model::Icon;
+        let dir = tempfile::tempdir().unwrap();
+        let mut opts = StoreOptions::new(dir.path().join("device.key"));
+        opts.background_indexing = false;
+        let store = Store::create(
+            dir.path(),
+            CreateOptions {
+                password: Some("correct horse battery".to_owned().into()),
+                kdf: emp_crypto::KdfParams::INSECURE_TEST,
+                auto_lock: AutoLock::default(),
+                workspace_name: Some("W".into()),
+            },
+            opts,
+        )
+        .unwrap()
+        .store;
+        let emoji = |s: &str| Some(Icon::Emoji { v: s.into() });
+        let ws = store
+            .workspace_create("Rockets", emoji("\u{1F680}"))
+            .unwrap()
+            .id;
+        let mut mapped = PageCreate::new(&ws, None, PageKind::Doc, "Trip");
+        mapped.icon = emoji("\u{2708}\u{FE0F}");
+        let mapped = store.page_create(mapped).unwrap().meta.id;
+        let mut unmapped = PageCreate::new(&ws, None, PageKind::Doc, "Odd");
+        unmapped.icon = emoji("\u{1FAE0}\u{1FAE0}");
+        let unmapped = store.page_create(unmapped).unwrap().meta.id;
+        let mut keep = PageCreate::new(&ws, None, PageKind::Doc, "Lucide");
+        keep.icon = Some(Icon::Lucide {
+            v: "star".into(),
+            color: Some("blue".into()),
+        });
+        let keep = store.page_create(keep).unwrap().meta.id;
+        // A fresh vault starts with nothing pending; an upgraded v1 vault has these scheduled by migration 0002.
+        store
+            .write(|tx| {
+                for m in ICON_MIGRATIONS {
+                    schedule(tx, m.id)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(store.payload_migrations_run(&NoProgress).unwrap(), 3);
+        assert_eq!(
+            store.page_get(&mapped).unwrap().meta.icon,
+            Some(Icon::Lucide {
+                v: "plane".into(),
+                color: None
+            })
+        );
+        assert_eq!(store.page_get(&unmapped).unwrap().meta.icon, None);
+        assert_eq!(
+            store.page_get(&keep).unwrap().meta.icon,
+            Some(Icon::Lucide {
+                v: "star".into(),
+                color: Some("blue".into())
+            })
+        );
+        let w = store
+            .workspace_list()
+            .unwrap()
+            .into_iter()
+            .find(|w| w.id == ws)
+            .unwrap();
+        assert_eq!(
+            w.icon,
+            Some(Icon::Lucide {
+                v: "rocket".into(),
+                color: None
+            })
+        );
+        assert!(store.payload_migrations_pending().unwrap().is_empty());
+        assert!(store.integrity_check(&NoProgress).unwrap().ok);
+        // Idempotent.
+        store
+            .write(|tx| schedule(tx, "v2-icons-lucide-pages"))
+            .unwrap();
+        assert_eq!(store.payload_migrations_run(&NoProgress).unwrap(), 0);
+    }
+
+    #[test]
+    fn migration_0002_schedules_the_icon_rewrite() {
+        let mut c = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate::migrate(&mut c, None, 0).unwrap();
+        let ids: Vec<String> = pending(&c).unwrap().iter().map(|p| p.id().to_owned()).collect();
+        assert_eq!(
+            ids,
+            ICON_MIGRATIONS.iter().map(|m| m.id).collect::<Vec<_>>()
+        );
     }
 }

@@ -10,7 +10,7 @@ import { GainLoss } from "@/ui/DeltaPill";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { daysBetween, dayLabel, fmtMoney, fmtPct, fmtPrice, fmtQty, num, todayIso } from "../finance/shared/format";
+import { daysBetween, dayLabel, fmtPct, fmtPrice, fmtQty, num, todayIso, fmtWhole } from "../finance/shared/format";
 import { useFlip } from "../finance/shared/hooks";
 import { disclose, Section } from "../finance/shared/ui";
 import { ticker } from "../markets/data";
@@ -25,7 +25,7 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
   if (!s) return <Skeleton height={420} radius={14} />;
   const totalCost = s.holdings.reduce((a, h) => a + num(h.costBasis.amount), 0);
   return (
-    <Section title="All holdings" subtitle={<>Cost basis <Sensitive>{fmtMoney(totalCost, "USD", { noCents: true })}</Sensitive> · lots matched first-in, first-out</>} pad={false}>
+    <Section title="All holdings" subtitle={<>Cost basis <Sensitive>{fmtWhole(totalCost)}</Sensitive> · lots matched first-in, first-out</>} pad={false}>
       <div className="overflow-x-auto">
         <table className="fh-table" style={{ minWidth: 760 }}>
         <thead>
@@ -70,10 +70,10 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
                   <td className="num">
                     <PriceFlash value={price} symbol={h.symbol}>{fmtPrice(price)}</PriceFlash>
                   </td>
-                  <td className="num font-medium"><Sensitive align="end">{fmtMoney(q ? q.price * num(h.qty) : h.value.amount, "USD", { noCents: true })}</Sensitive></td>
-                  <td className="num text-secondary"><Sensitive align="end">{fmtMoney(h.costBasis.amount, "USD", { noCents: true })}</Sensitive></td>
+                  <td className="num font-medium"><Sensitive align="end">{fmtWhole(q ? q.price * num(h.qty) : h.value.amount)}</Sensitive></td>
+                  <td className="num text-secondary"><Sensitive align="end">{fmtWhole(h.costBasis.amount, { currency: h.costBasis.currency })}</Sensitive></td>
                   <td className="num">
-                    <GainLoss value={num(h.gain.amount)}><Sensitive align="end">{fmtMoney(h.gain.amount, "USD", { noCents: true, signed: true })}</Sensitive></GainLoss>
+                    <GainLoss value={num(h.gain.amount)}><Sensitive align="end">{fmtWhole(h.gain.amount, { signed: true, currency: h.gain.currency })}</Sensitive></GainLoss>
                     <div className="text-caption text-tertiary">{fmtPct(h.gainPct, 1, true)}</div>
                   </td>
                   <td className="num text-secondary">{(h.weight * 100).toFixed(1)}%</td>
@@ -111,8 +111,8 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
                                       <td className="text-secondary">{dayLabel(l.acquired, true)}</td>
                                       <td className="num"><Sensitive align="end">{fmtQty(l.qty)}</Sensitive></td>
                                       <td className="num text-secondary">{fmtPrice(l.costPerUnit)}</td>
-                                      <td className="num"><Sensitive align="end">{fmtMoney(l.costPerUnit * l.qty, "USD", { noCents: true })}</Sensitive></td>
-                                      <td className="num"><GainLoss value={gain}><Sensitive align="end">{fmtMoney(gain, "USD", { noCents: true, signed: true })}</Sensitive></GainLoss></td>
+                                      <td className="num"><Sensitive align="end">{fmtWhole(l.costPerUnit * l.qty)}</Sensitive></td>
+                                      <td className="num"><GainLoss value={gain}><Sensitive align="end">{fmtWhole(gain, { signed: true })}</Sensitive></GainLoss></td>
                                       <td>{l.taxTreatment === "taxable" ? <Badge tone={long ? "neutral" : "warning"}>{long ? "Long-term" : "Short-term"}</Badge> : <span className="text-tertiary text-caption">Sheltered</span>}</td>
                                     </tr>
                                   );

@@ -7,14 +7,10 @@ import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type D
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  CalendarDays,
   CandlestickChart,
   Check,
   ChevronDown,
   ChevronsUpDown,
-  CircleHelp,
-  Eye,
-  EyeOff,
   FileDown,
   House,
   LayoutTemplate,
@@ -23,11 +19,8 @@ import {
   Plus,
   Search,
   Settings,
-  Sparkles,
   SquarePen,
   Trash2,
-  Wifi,
-  WifiOff,
   Calendar,
 } from "lucide-react";
 import { AnimatePresence, LayoutGroup, m } from "motion/react";
@@ -40,7 +33,6 @@ import { api } from "@/backend";
 import type { Id, PageMeta, Workspace } from "@/backend/types";
 import { cn } from "@/lib/cn";
 import { isMac, isTauri } from "@/lib/platform";
-import { usePrivacy } from "@/stores/privacy";
 import { useSettings } from "@/stores/settings";
 import { notify } from "@/stores/toasts";
 import { useTree } from "@/stores/tree";
@@ -237,7 +229,7 @@ function EmptyPagesHint() {
       <span className="ico">
         <Plus aria-hidden />
       </span>
-      <span className="label">Add your first page</span>
+      <span className="label">New page</span>
     </button>
   );
 }
@@ -293,11 +285,7 @@ function PrimaryRows() {
         }}
       />
       <NavRow icon={House} label="Home" route={{ t: "home" }} />
-      <NavRow icon={CalendarDays} label="Today" route={{ t: "today" }} />
-      <NavRow icon={Sparkles} label="Life apps" route={{ t: "lifeapps" }} match={(r) => r.t === "lifeapps"} />
-      <NavRow icon={CandlestickChart} label="Markets" route={{ t: "markets" }} match={(r) => r.t === "markets"} />
       <NavRow icon={Calendar} label="Calendar" route={{ t: "calendar" }} />
-      <NavRow icon={Settings} label="Settings" route={{ t: "settings", section: "general" }} match={(r) => r.t === "settings"} />
     </nav>
   );
 }
@@ -485,12 +473,30 @@ function FavoriteRow({ meta, ctxOpen }: { meta: PageMeta; ctxOpen: boolean }) {
   );
 }
 
+/** Markets is listed with the life apps once Portfolio is installed or a watchlist exists. */
+function useShowMarkets(hasPortfolio: boolean): boolean {
+  const [watchlist, setWatchlist] = useState(false);
+  useEffect(() => {
+    if (hasPortfolio) return;
+    let live = true;
+    api.watchlist
+      .list({})
+      .then((lists) => live && setWatchlist(lists.some((l) => l.symbols.length > 0)))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [hasPortfolio]);
+  return hasPortfolio || watchlist;
+}
+
 function LifeAppsSection() {
   const apps = useWorkspace((s) => s.lifeapps);
   const titles = useTree(useShallow((s) => apps.map((a) => s.byId.get(a.rootPageId)?.title ?? "")));
   const route = useRoute();
+  const markets = useShowMarkets(apps.some((a) => a.appId === "portfolio" && !a.detached));
   return (
-    <Section id="lifeapps" title="Life Apps" onAdd={() => navigate({ t: "lifeapps" })} addLabel="Add a life app">
+    <Section id="lifeapps" title="Life apps" onAdd={() => navigate({ t: "lifeapps" })} addLabel="Add a life app">
       {apps.map((inst, i) => {
         const id = lifeAppIdentity(inst.appId);
         const Icon = id.icon;
@@ -506,23 +512,15 @@ function LifeAppsSection() {
             onPointerEnter={() => preloadRoute(r)}
           >
             <span className="ico">
-              <span className="emp-app-tile" style={{ background: id.color }}>
-                <Icon aria-hidden strokeWidth={2.25} />
-              </span>
+              <Icon aria-hidden />
             </span>
             <span className="label">{titles[i] || id.name}</span>
             {inst.upgradeAvailable ? <span className="h-1.5 w-1.5 flex-none rounded-full bg-accent" aria-label="Update available" /> : null}
           </button>
         );
       })}
-      {!apps.length ? (
-        <button type="button" className="emp-sb-row" onClick={() => navigate({ t: "lifeapps" })}>
-          <span className="ico">
-            <Sparkles aria-hidden />
-          </span>
-          <span className="label text-tertiary">Browse life apps</span>
-        </button>
-      ) : null}
+      {markets ? <NavRow icon={CandlestickChart} label="Markets" route={{ t: "markets" }} match={(r) => r.t === "markets"} /> : null}
+      {!apps.length ? <NavRow icon={Plus} label="Add a life app" route={{ t: "lifeapps" }} match={(r) => r.t === "lifeapps"} /> : null}
     </Section>
   );
 }
@@ -530,11 +528,11 @@ function LifeAppsSection() {
 // ───────────────────────────────────────────────────────────────────────────── workspace row
 
 function WorkspaceGlyph({ ws, size = 22 }: { ws: Pick<Workspace, "name" | "icon"> | null; size?: number }) {
-  const emoji = ws?.icon?.t === "emoji" ? ws.icon.v : null;
-  const letter = (ws?.name.trim()[0] ?? "E").toUpperCase();
+  // The workspace's initial (an emoji icon from an older vault is not shown: no emoji in the app's chrome).
+  const letter = (ws?.name.trim()[0] ?? "U").toUpperCase();
   return (
-    <span className="emp-ws-glyph" data-emoji={emoji ? "" : undefined} style={{ width: size, height: size, fontSize: emoji ? size * 0.64 : size * 0.5 }} aria-hidden>
-      {emoji ?? letter}
+    <span className="emp-ws-glyph" style={{ width: size, height: size, fontSize: size * 0.5 }} aria-hidden>
+      {letter}
     </span>
   );
 }
@@ -664,7 +662,6 @@ function WorkspaceNameDialog({ mode, onClose, current }: { mode: null | "new" | 
 
 function SidebarFooter() {
   const encrypted = useVault((s) => !!s.status?.encrypted);
-  const hidden = usePrivacy((s) => s.hidden);
   const offline = useSettings((s) => s.vault?.offline ?? false);
   const pulse = useUi((s) => s.netPulse?.at);
   const [pulsing, setPulsing] = useState(false);
@@ -676,24 +673,20 @@ function SidebarFooter() {
   }, [pulse]);
   return (
     <footer className="emp-sb-footer">
-      <Tooltip content={encrypted ? "Your workspace is encrypted on this device" : "Turn on encryption in Settings → Security"}>
+      <Tooltip content={encrypted ? "Encrypted on this device" : "Turn on encryption in Settings, Security"}>
         <button type="button" className="flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left text-caption text-tertiary hover:text-secondary" onClick={() => navigate({ t: "settings", section: "security" })}>
           <span className="emp-status-dot" data-tone={offline ? "off" : undefined} data-pulse={pulsing ? "" : undefined} aria-hidden />
-          <span className="truncate" style={{ fontWeight: 500 }}>
+          <span className="truncate">
             {offline ? "Offline" : "Local"} · {encrypted ? "Encrypted" : "Not encrypted"}
           </span>
         </button>
       </Tooltip>
-      <IconButton
-        size="xs"
-        icon={hidden ? EyeOff : Eye}
-        active={hidden}
-        label={hidden ? "Show numbers" : "Hide numbers"}
-        shortcut="mod+shift+h"
-        onClick={() => runCommand("privacy.toggle")}
-      />
-      <IconButton size="xs" icon={offline ? WifiOff : Wifi} active={offline} label={offline ? "Go online" : "Go offline"} shortcut="mod+shift+o" onClick={() => runCommand("network.offline")} />
-      <IconButton size="xs" icon={CircleHelp} label="Keyboard shortcuts" shortcut="mod+/" onClick={() => useUi.getState().setShortcutsOpen(true)} />
+      <IconButton size="xs" icon={Settings} label="Settings" shortcut="mod+," onClick={() => navigate({ t: "settings", section: "general" })} />
+      {encrypted ? (
+        <IconButton size="xs" icon={Lock} label="Lock Ultra Note" shortcut="mod+shift+l" onClick={() => runCommand("vault.lock")} />
+      ) : (
+        <IconButton size="xs" icon={LockOpen} label="Turn on encryption" onClick={() => navigate({ t: "settings", section: "security" })} />
+      )}
     </footer>
   );
 }

@@ -2,6 +2,8 @@
  * Lucide icons addressable by their kebab-case name (page icons `{ t:'lucide', v }`, palette command icons). Imported
  * individually (§12) — a curated set rather than the whole library, with a document icon as the fallback.
  */
+import { useEffect, useState } from "react";
+import emojiMap from "@/ui/icons/emoji-map.json";
 import {
   Archive,
   ArrowLeft,
@@ -162,5 +164,52 @@ const ICONS: Record<string, LucideIcon> = {
 
 export function lucideByName(name: string | undefined): LucideIcon | null {
   if (!name) return null;
-  return ICONS[name] ?? null;
+  return ICONS[name] ?? loaded?.[name] ?? null;
+}
+
+// ── the full page-icon set (iconSet.ts), loaded once on demand
+
+let loaded: Record<string, LucideIcon> | null = null;
+let loading: Promise<Record<string, LucideIcon>> | null = null;
+const waiters = new Set<() => void>();
+
+/** Loads the full glyph set (one chunk). Resolves immediately once loaded. */
+export function loadIconSet(): Promise<Record<string, LucideIcon>> {
+  if (loaded) return Promise.resolve(loaded);
+  loading ??= import("./iconSet").then((m) => {
+    loaded = m.ICON_SET;
+    waiters.forEach((w) => w());
+    waiters.clear();
+    return loaded;
+  });
+  return loading;
+}
+
+/** True until the full glyph set has loaded (a named glyph may still arrive). */
+export function iconSetPending(): boolean {
+  return !loaded;
+}
+
+/** The glyph for a lucide name: synchronous for the boot set, otherwise null until the full set has loaded. */
+export function useLucide(name: string | undefined): LucideIcon | null {
+  const [, bump] = useState(0);
+  const hit = lucideByName(name);
+  useEffect(() => {
+    if (hit || !name || loaded) return;
+    const w = () => bump((n) => n + 1);
+    waiters.add(w);
+    void loadIconSet();
+    return () => void waiters.delete(w);
+  }, [hit, name]);
+  return hit;
+}
+
+// ── emoji → glyph (no emoji in the app's own chrome; PROGRAMME-v3 owner ruling)
+
+const EMOJI = emojiMap as Record<string, string>;
+
+/** The lucide name an emoji maps to (src/ui/icons/emoji-map.json), or null when it isn't mapped. */
+export function glyphForEmoji(emoji: string): string | null {
+  const bare = emoji.replace(/[\uFE0E\uFE0F]/g, "").replace(/\u200D.*$/u, "");
+  return EMOJI[bare] ?? EMOJI[emoji] ?? null;
 }

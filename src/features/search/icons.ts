@@ -5,8 +5,9 @@
 import {
   ALargeSmall, ArrowLeft, ArrowRight, Calendar, CalendarDays, CandlestickChart, ChevronsUpDown, Copy, CornerLeftUp, Command,
   EyeOff, FileDown, FilePlus, FilePlus2, History, House, Keyboard, LayoutTemplate, Link, Lock, MoveHorizontal, PanelLeft,
-  PanelRight, Replace, Save, Search, Settings, ShieldCheck, Sparkles, Star, StarOff, SunMoon, Trash2, Type, WifiOff, ZoomIn,
-  ZoomOut, Palette, Printer, Download, Upload, Archive, Moon, Sun, Monitor, Rows3, CaseSensitive, Activity, Eye,
+  PanelRight, Replace, Save, Search, Settings, ShieldCheck, Star, StarOff, SunMoon, Trash2, Type, WifiOff, ZoomIn,
+  ZoomOut, Palette, Printer, Download, Upload, Archive, Moon, Sun, Monitor, Rows3, CaseSensitive, Activity, Eye, Database, Sheet,
+  ListTodo, Receipt, Landmark, HeartPulse, LayoutGrid, Wallet, Kanban, ReceiptText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -40,7 +41,6 @@ const MAP: Record<string, LucideIcon> = {
   search: Search,
   settings: Settings,
   "shield-check": ShieldCheck,
-  sparkles: Sparkles,
   star: Star,
   "star-off": StarOff,
   "sun-moon": SunMoon,
@@ -60,6 +60,16 @@ const MAP: Record<string, LucideIcon> = {
   rows: Rows3,
   "case-sensitive": CaseSensitive,
   activity: Activity,
+  database: Database,
+  sheet: Sheet,
+  "list-todo": ListTodo,
+  receipt: Receipt,
+  landmark: Landmark,
+  "heart-pulse": HeartPulse,
+  "layout-grid": LayoutGrid,
+  wallet: Wallet,
+  kanban: Kanban,
+  "receipt-text": ReceiptText,
 };
 
 export function commandIcon(name: string | undefined): LucideIcon {

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/backend";
 import type { Icon, Id, PageKind } from "@/backend/types";
 import { cn } from "@/lib/cn";
-import { lucideByName } from "./icons";
+import { glyphForEmoji, iconSetPending, lucideByName, useLucide } from "./icons";
 
 const assetUrls = new Map<Id, string>();
 const pending = new Map<Id, Promise<string | null>>();
@@ -61,14 +61,10 @@ export interface PageIconProps {
 }
 
 export function PageIcon({ icon, kind = "doc", size = 18, className }: PageIconProps) {
-  const box = { width: size, height: size, fontSize: Math.round(size * 0.86), lineHeight: `${size}px` };
-  if (icon?.t === "emoji") {
-    return (
-      <span className={cn("emp-page-icon inline-flex flex-none items-center justify-center", className)} style={box} aria-hidden>
-        {icon.v}
-      </span>
-    );
-  }
+  const box = { width: size, height: size };
+  // Emoji icons (older vaults, imports) render as their mapped glyph: the app's own chrome shows no emoji.
+  const name = icon?.t === "lucide" ? icon.v : icon?.t === "emoji" ? glyphForEmoji(icon.v) ?? undefined : undefined;
+  const Named = useLucide(name);
   if (icon?.t === "asset") {
     return (
       <span className={cn("emp-page-icon inline-flex flex-none", className)} style={box} aria-hidden>
@@ -76,7 +72,8 @@ export function PageIcon({ icon, kind = "doc", size = 18, className }: PageIconP
       </span>
     );
   }
-  const L = (icon?.t === "lucide" ? lucideByName(icon.v) : null) ?? KIND_ICON[kind] ?? FileText;
+  // A named glyph that is still loading keeps its box empty rather than flashing the kind glyph.
+  const L = Named ?? (name && !lucideByName(name) && iconSetPending() ? null : KIND_ICON[kind] ?? FileText);
   const color =
     icon?.t === "lucide" && icon.color
       ? icon.color === "accent"
@@ -85,7 +82,7 @@ export function PageIcon({ icon, kind = "doc", size = 18, className }: PageIconP
       : undefined;
   return (
     <span className={cn("emp-page-icon inline-flex flex-none items-center justify-center text-tertiary", className)} style={{ ...box, color }} aria-hidden>
-      <L size={Math.round(size * 0.86)} strokeWidth={1.75} />
+      {L ? <L size={Math.round(size * 0.86)} strokeWidth={1.75} /> : null}
     </span>
   );
 }

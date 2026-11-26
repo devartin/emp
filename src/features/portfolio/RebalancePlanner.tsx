@@ -20,7 +20,7 @@ import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { Switch } from "@/ui/Switch";
-import { assignColors, fmtMoney, fmtPp, fmtQty, num } from "../finance/shared/format";
+import { assignColors, fmtPp, fmtQty, num, fmtWhole } from "../finance/shared/format";
 import { Quiet, Section } from "../finance/shared/ui";
 import { ticker } from "../markets/data";
 import { CLASS_ORDER, usePortfolioBook } from "./data";
@@ -60,7 +60,7 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
   const sells = plan?.trades.filter((x) => x.side === "sell").reduce((a, x) => a + num(x.amount), 0) ?? 0;
   const copy = async () => {
     if (!plan) return;
-    const lines = plan.trades.map((x) => `${x.side.toUpperCase()} ${fmtQty(x.qty)} ${ticker(x.symbol)} (~${fmtMoney(x.amount, "USD", { noCents: true })}) in ${book.accounts.get(x.accountId)?.name ?? "account"}`);
+    const lines = plan.trades.map((x) => `${x.side.toUpperCase()} ${fmtQty(x.qty)} ${ticker(x.symbol)} (~${fmtWhole(x.amount)}) in ${book.accounts.get(x.accountId)?.name ?? "account"}`);
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
       notify.success("Trade list copied", { description: "Paste it next to your broker's order screen." });
@@ -83,7 +83,7 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
             <Switch checked={fractional} onCheckedChange={setFractional} label="Fractional shares" description="Off rounds to whole shares (crypto stays fractional)." />
           </div>
         </Section>
-        <Section className="fh-span-8" title="Before and after" subtitle={plan ? `${plan.trades.length} trades · buys ${fmtMoney(buys, "USD", { noCents: true })} · sells ${fmtMoney(sells, "USD", { noCents: true })}` : null}>
+        <Section className="fh-span-8" title="Before and after" subtitle={plan ? `${plan.trades.length} trades · buys ${fmtWhole(buys)} · sells ${fmtWhole(sells)}` : null}>
           <div className="pf-ba">
             {classes.map((c, i) => (
               <div key={c.assetClass} className="pf-ba-row">
@@ -135,7 +135,7 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
                 </m.span>
               ) : null}
             </AnimatePresence>
-            {plan && num(plan.estRealizedGain) !== 0 ? <Badge tone="warning">Est. realised gain <Sensitive>{fmtMoney(plan.estRealizedGain, "USD", { noCents: true, signed: true })}</Sensitive></Badge> : null}
+            {plan && num(plan.estRealizedGain) !== 0 ? <Badge tone="warning">Est. realised gain <Sensitive>{fmtWhole(plan.estRealizedGain, { signed: true })}</Sensitive></Badge> : null}
             <Button size="xs" variant="secondary" icon={ClipboardCopy} onClick={copy} disabled={!plan?.trades.length}>
               Copy list
             </Button>
@@ -183,9 +183,9 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
                       </td>
                       <td className="num"><Sensitive align="end">{fmtQty(x.qty)}</Sensitive></td>
                       <td className="num font-medium" data-sensitive="">
-                        <RollingNumber value={num(x.amount)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive />
+                        <RollingNumber value={num(x.amount)} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive />
                       </td>
-                      <td className="num text-secondary">{x.estRealizedGain ? <Sensitive align="end">{fmtMoney(x.estRealizedGain, "USD", { noCents: true, signed: true })}</Sensitive> : "—"}</td>
+                      <td className="num text-secondary">{x.estRealizedGain ? <Sensitive align="end">{fmtWhole(x.estRealizedGain, { signed: true })}</Sensitive> : "—"}</td>
                     </m.tr>
                   );
                 })}

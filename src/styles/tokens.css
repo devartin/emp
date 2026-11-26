@@ -1,130 +1,156 @@
 /*
- * EMP design tokens (SPEC §3). Pure CSS custom properties; Tailwind mapping lives in theme.css.
- * Variant attributes on <html>: data-theme (light|dark|midnight), data-accent (graphite default + 6 spec accents),
- * data-density, data-motion, data-contrast, data-effects, data-numbers, data-privacy, data-text-size.
+ * Ultra Note design tokens — Design Language v3 "Paper, ink and keys" (docs/DESIGN.md §2). Pure CSS custom properties;
+ * the Tailwind mapping lives in theme.css. Token NAMES are the SPEC §3 names (CLAUDE.md override 5); the VALUES are v3:
+ *   warm paper surfaces, graphite ink as the only accent, hairlines at 7–11% ink, four weights, radii {4, 6, 10, 12},
+ *   flat by default — shadows only on things that float (menus, dialogs) and on keys.
+ * Variant attributes on <html>: data-theme (light|dark|midnight), data-accent (graphite default + 6 accents that
+ * re-derive only focus / selection / the primary key), data-density, data-motion, data-contrast, data-effects,
+ * data-numbers, data-privacy, data-text-size.
  */
 
-/* ─── 3.1 Neutrals · light (default) ─────────────────────────────────────────── */
+/* ─── Neutrals · light (default): warm paper ─────────────────────────────────── */
 :root {
   color-scheme: light;
-  --bg-window: #f7f7f8;
-  --bg-canvas: #ffffff;
-  --bg-surface-1: #ffffff;
-  --bg-surface-2: #f4f4f5;
-  --bg-surface-3: #ebebee;
+  --bg-window: #f7f6f4;
+  --bg-canvas: #fdfdfc;
+  --bg-surface-1: #fdfdfc;
+  --bg-surface-2: #f1f0ed;
+  --bg-surface-3: #e8e7e3;
   --bg-overlay: #ffffff;
-  --bg-inverse: #18181b;
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
-  --text-tertiary: #6b6b74;
-  --text-disabled: #a1a1aa;
-  --text-on-inverse: #ffffff;
-  --border-subtle: rgba(24, 24, 27, 0.06);
-  --border: rgba(24, 24, 27, 0.1);
-  --border-strong: rgba(24, 24, 27, 0.18);
-  --state-hover: rgba(24, 24, 27, 0.05);
-  --state-active: rgba(24, 24, 27, 0.08);
-  --state-selected: color-mix(in oklab, var(--accent-solid) 10%, transparent);
-  --text-selection: color-mix(in oklab, var(--accent-solid) 20%, transparent);
-  --scrim: rgba(9, 9, 11, 0.32);
+  --bg-inverse: #262624;
+  --text-primary: #262624;
+  --text-secondary: #67645e;
+  --text-tertiary: #87847e;
+  --text-disabled: #b3b0aa;
+  --text-on-inverse: #fdfdfc;
+  /* hairlines: 1px at 6–9% warm ink; --border-strong is the control boundary (checkbox, focused field) at ≥ 3:1 */
+  --border-subtle: rgba(40, 30, 10, 0.07);
+  --border: rgba(40, 30, 10, 0.09);
+  --border-strong: rgba(40, 34, 24, 0.5);
+  --border-field: rgba(40, 30, 10, 0.14);
+  --border-field-hover: rgba(40, 30, 10, 0.24);
+  --state-hover: rgba(40, 34, 24, 0.05);
+  --state-active: rgba(40, 34, 24, 0.08);
+  --state-selected: rgba(40, 34, 24, 0.06);
+  --text-selection: rgba(40, 34, 24, 0.14);
+  --scrim: rgba(15, 15, 15, 0.4);
   /* rgb triplet of primary text, for rgba(text, a) recipes (skeleton, gridlines, scrollbars) */
-  --text-rgb: 24, 24, 27;
-  --ink: 16, 16, 24;
+  --text-rgb: 38, 38, 36;
+  --ink: 25, 25, 25;
 
-  /* control skins that differ per theme (§5.1, §5.2, §5.4, §5.5, §5.7) */
-  --control-bg: var(--bg-surface-1);
+  /* control skins that differ per theme */
+  --control-bg: var(--bg-canvas);
   --control-bg-readonly: var(--bg-surface-2);
-  --btn-primary-border: rgba(0, 0, 0, 0.08);
-  --btn-secondary-bg: var(--bg-surface-1);
-  --btn-secondary-shadow: var(--elev-1);
-  --btn-destructive: #c9302c;
+  --btn-primary-border: transparent;
+  --btn-secondary-bg: var(--bg-overlay);
+  --btn-secondary-shadow: var(--key-paper-shadow);
+  --btn-destructive: #b8382f;
   --switch-off: var(--bg-surface-3);
-  --segmented-indicator: var(--bg-surface-1);
-  --tooltip-bg: #18181b;
-  --tooltip-fg: #ffffff;
+  --segmented-indicator: var(--bg-overlay);
+  --tooltip-bg: #262624;
+  --tooltip-fg: #fdfdfc;
   --tooltip-border: transparent;
-  --kbd-bg: var(--bg-surface-2);
+  --kbd-bg: var(--bg-canvas);
 
-  /* ─── 3.3 Semantic & finance ─── */
-  --gain: #12a150;
-  --gain-text: #0b7f45;
-  --gain-soft: rgba(18, 161, 80, 0.1);
-  --loss: #e5484d;
-  --loss-text: #c9302c;
-  --loss-soft: rgba(229, 72, 77, 0.1);
-  --warning: #f5a524;
-  --warning-text: #a15c00;
-  --warning-soft: rgba(245, 165, 36, 0.14);
-  --info: #3b82f6;
-  --info-text: #1f6fd1;
-  --info-soft: rgba(59, 130, 246, 0.1);
+  /* ─── Semantic & finance: colour only on deltas and over-budget amounts ─── */
+  --gain: #1d7a45;
+  --gain-text: #1d7a45;
+  --gain-soft: rgba(29, 122, 69, 0.09);
+  --loss: #b8382f;
+  --loss-text: #b8382f;
+  --loss-soft: rgba(184, 56, 47, 0.08);
+  --warning: #b87a1e;
+  --warning-text: #8f5800;
+  --warning-soft: rgba(184, 122, 30, 0.1);
+  --info: #4f6f92;
+  --info-text: #3d5f84;
+  --info-soft: rgba(79, 111, 146, 0.09);
 
-  /* ─── 3.4 Block / tag colours ─── */
+  /* ─── Block / tag colours (user content; Notion-style tint ladder) ─── */
   --block-default-text: var(--text-primary);
   --block-default-bg: transparent;
-  --block-gray-text: #6f6e69;
-  --block-gray-bg: #f1f1f0;
-  --block-brown-text: #8a5a3f;
-  --block-brown-bg: #f5eeea;
-  --block-orange-text: #b85a00;
-  --block-orange-bg: #fcebdc;
-  --block-yellow-text: #9a6700;
-  --block-yellow-bg: #fbf3d9;
-  --block-green-text: #2f7a4f;
-  --block-green-bg: #eaf4ec;
-  --block-blue-text: #1f6fa8;
-  --block-blue-bg: #e6f1f9;
-  --block-purple-text: #7e4fa8;
-  --block-purple-bg: #f3eef9;
-  --block-pink-text: #b03a78;
-  --block-pink-bg: #fbeef4;
-  --block-red-text: #c23b36;
-  --block-red-bg: #fdecec;
+  --block-gray-text: #5f5d58;
+  --block-gray-bg: rgba(40, 30, 10, 0.07);
+  --block-brown-text: #7a5236;
+  --block-brown-bg: #f3ece6;
+  --block-orange-text: #9a5418;
+  --block-orange-bg: #f8eadc;
+  --block-yellow-text: #866114;
+  --block-yellow-bg: #f6efd8;
+  --block-green-text: #2f6b47;
+  --block-green-bg: #e6f0e8;
+  --block-blue-text: #2f5878;
+  --block-blue-bg: #e4eef5;
+  --block-purple-text: #674a86;
+  --block-purple-bg: #efe9f4;
+  --block-pink-text: #8f3c65;
+  --block-pink-bg: #f7e8ef;
+  --block-red-text: #9e3a33;
+  --block-red-bg: #f9e7e5;
 
-  /* ─── 3.5 Data-vis categorical ─── */
-  --cat-1: #5e5ce6;
-  --cat-2: #0ea5e9;
-  --cat-3: #14b8a6;
-  --cat-4: #f59e0b;
-  --cat-5: #ec4899;
-  --cat-6: #a855f7;
-  --cat-7: #65a30d;
-  --cat-8: #ea580c;
-  --cat-other: #a1a1aa;
+  /* ─── Data-vis: six muted hues, used only inside multi-series charts and as 6px category dots ─── */
+  --cat-1: #5b7fa8;
+  --cat-2: #5d8c6a;
+  --cat-3: #b08a3e;
+  --cat-4: #b0574e;
+  --cat-5: #8a6b9e;
+  --cat-6: #4f8a8b;
+  --cat-7: #7d8a96;
+  --cat-8: #9a948a;
+  --cat-other: #b3b0aa;
   --chart-grid: rgba(var(--text-rgb), 0.06);
-  --chart-area-top: 0.22;
+  --chart-area-top: 0;
 
-  /* ─── 3.8 Elevation ─── */
-  --elev-1: 0 0 0 1px rgba(var(--ink), 0.06), 0 1px 2px rgba(var(--ink), 0.04), 0 1px 1px rgba(var(--ink), 0.03);
-  --elev-2: 0 0 0 1px rgba(var(--ink), 0.06), 0 4px 8px -2px rgba(var(--ink), 0.08), 0 12px 24px -6px rgba(var(--ink), 0.1);
-  --elev-3: 0 0 0 1px rgba(var(--ink), 0.06), 0 8px 16px -4px rgba(var(--ink), 0.1), 0 24px 48px -12px rgba(var(--ink), 0.18);
-  --elev-4: 0 0 0 1px rgba(var(--ink), 0.06), 0 16px 32px -8px rgba(var(--ink), 0.14), 0 40px 80px -16px rgba(var(--ink), 0.24);
-  --elev-primary-btn: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(0, 0, 0, 0.14);
+  /* ─── Elevation: E0 flat · E1 warm ring · E2 menus · E3 dialogs/palette/toasts · E4 full sheets ─── */
+  --ring-warm: rgba(42, 28, 0, 0.07);
+  --elev-1: 0 0 0 1px var(--ring-warm);
+  --elev-2: 0 8px 12px rgba(25, 25, 25, 0.03), 0 2px 6px rgba(25, 25, 25, 0.03), 0 0 0 1px var(--ring-warm);
+  --elev-3: 0 20px 24px rgba(25, 25, 25, 0.05), 0 5px 8px rgba(25, 25, 25, 0.03), 0 0 0 1px var(--ring-warm);
+  --elev-4: 0 24px 48px rgba(25, 25, 25, 0.16), 0 4px 12px rgba(25, 25, 25, 0.08), 0 0 0 1px var(--ring-warm);
+  /* keys: the only raised objects. Ink key (primary) and paper key (secondary, Kbd, thumbs) */
+  --key-ink-a: #3b3b38;
+  --key-ink-b: #262624;
+  --key-ink-fg: #fdfdfc;
+  --key-ink-edge: rgba(0, 0, 0, 0.38);
+  --key-ink-drop: rgba(30, 25, 10, 0.22);
+  --key-paper: #ffffff;
+  --key-paper-ring: rgba(40, 30, 10, 0.13);
+  --key-paper-edge: rgba(40, 30, 10, 0.13);
+  --key-paper-drop: rgba(30, 25, 10, 0.06);
+  --key-paper-shadow: inset 0 0 0 1px var(--key-paper-ring), inset 0 -1px 0 var(--key-paper-edge), 0 1px 1px var(--key-paper-drop);
+  --key-ink-shadow: inset 0 -1.5px 0 var(--key-ink-edge), 0 1px 1.5px var(--key-ink-drop);
+  --elev-primary-btn: var(--key-ink-shadow);
 
-  /* ─── 3.6 Typography ─── */
-  --font-ui: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* ─── Typography: IBM Plex Sans (tabular figures by default), JetBrains Mono for code ─── */
+  --font-ui: "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif-page: "Newsreader Variable", "Newsreader", ui-serif, Georgia, serif;
   --font-mono-code: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-readable: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", var(--font-ui);
   --ui-base: 14px;
   --editor-body: 16px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
 
-  /* ─── 3.7 Sizes ─── */
+  /* ─── Sizes ─── */
   --control-xs: 24px;
   --control-sm: 28px;
   --control-md: 32px;
-  --control-lg: 40px;
-  --control-xl: 48px;
+  --control-lg: 36px;
+  --control-xl: 40px;
   --row-sidebar: 28px;
   --row-table: 36px;
-  --row-menu: 32px;
+  --row-menu: 28px;
+  --row-list: 36px;
   --card-pad: 16px;
+  /* radii: 4 (pills, inline code, kbd) · 6 (controls, rows) · 10 (callouts, cards, menus) · 12 (dialogs) · full */
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 8px;
+  --radius-md: 6px;
   --radius-lg: 10px;
-  --radius-xl: 14px;
-  --radius-2xl: 20px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
   --radius-full: 9999px;
   --z-base: 0;
   --z-sticky: 10;
@@ -139,150 +165,163 @@
   --z-drag: 95;
   --z-lock: 100;
 
-  /* ─── 4.1 Motion mirrors ─── */
-  --dur-micro: 80ms;
-  --dur-fast: 120ms;
-  --dur-base: 160ms;
-  --dur-moderate: 220ms;
-  --dur-slow: 320ms;
-  --dur-press: 70ms;
-  --dur-hover: 180ms;
-  --dur-deliberate: 480ms;
-  --dur-chart: 700ms;
-  --dur-draw: 1100ms;
-  --dur-cinematic: 2000ms;
+  /* ─── Motion register mirrors (src/ui/motion/register.ts): C0 instant · C1 feedback · C2 continuity · C3 moment ─── */
+  --dur-micro: 60ms;
+  --dur-fast: 100ms;
+  --dur-base: 140ms;
+  --dur-moderate: 200ms;
+  --dur-slow: 240ms;
+  --dur-press: 60ms;
+  --dur-hover: 0ms;
+  --dur-hover-out: 120ms;
+  --dur-deliberate: 220ms;
+  --dur-chart: 300ms;
+  --dur-draw: 300ms;
+  --dur-cinematic: 600ms;
   --ease-press: cubic-bezier(0.3, 0, 0.6, 1);
-  --ease-sheen: cubic-bezier(0.3, 0.7, 0.2, 1);
+  --ease-sheen: cubic-bezier(0.2, 0, 0, 1);
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --ease-spring-ui: var(--ease-out-expo);
+  --ease-spring-ui: var(--ease-out);
 
-  /* focus */
+  /* focus: 2px ink at ~50%, 1px offset */
   --focus-width: 2px;
-  --focus-ring: 0 0 0 3px color-mix(in oklab, var(--accent-solid) 22%, transparent);
+  --focus-offset: 1px;
+  --focus-ring: 0 0 0 2px var(--ring);
 }
-/* --ease-spring-ui is redefined in material.css as the `glide` spring (§5.2). */
 
-/* ─── Dark ─── */
+/* ─── Dark: warm graphite ─── */
 :root[data-theme="dark"],
 :root[data-theme="midnight"] {
   color-scheme: dark;
-  --bg-window: #0b0b0e;
-  --bg-canvas: #111114;
-  --bg-surface-1: #17171b;
-  --bg-surface-2: #1d1d22;
-  --bg-surface-3: #25252b;
-  --bg-overlay: #1b1b20;
-  --bg-inverse: #f4f4f5;
-  --text-primary: #ededf0;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #8a8a94;
-  --text-disabled: #5a5a63;
-  --text-on-inverse: #09090b;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --state-hover: rgba(255, 255, 255, 0.06);
-  --state-active: rgba(255, 255, 255, 0.1);
-  --state-selected: color-mix(in oklab, var(--accent-solid) 16%, transparent);
-  --text-selection: color-mix(in oklab, var(--accent-solid) 32%, transparent);
+  --bg-window: #1f1f1e;
+  --bg-canvas: #1a1a19;
+  --bg-surface-1: #1a1a19;
+  --bg-surface-2: #252524;
+  --bg-surface-3: #2e2e2c;
+  --bg-overlay: #252524;
+  --bg-inverse: #ecebe8;
+  --text-primary: #ecebe8;
+  --text-secondary: #a8a59f;
+  --text-tertiary: #8a8781;
+  --text-disabled: #5f5d59;
+  --text-on-inverse: #1a1a19;
+  --border-subtle: rgba(255, 255, 240, 0.07);
+  --border: rgba(255, 255, 240, 0.09);
+  --border-strong: rgba(255, 255, 240, 0.36);
+  --border-field: rgba(255, 255, 240, 0.14);
+  --border-field-hover: rgba(255, 255, 240, 0.24);
+  --state-hover: rgba(255, 255, 240, 0.055);
+  --state-active: rgba(255, 255, 240, 0.09);
+  --state-selected: rgba(255, 255, 240, 0.08);
+  --text-selection: rgba(255, 255, 240, 0.2);
   --scrim: rgba(0, 0, 0, 0.56);
-  --text-rgb: 237, 237, 240;
+  --text-rgb: 236, 235, 232;
 
-  --control-bg: rgba(255, 255, 255, 0.03);
-  --btn-primary-border: rgba(255, 255, 255, 0.1);
-  --btn-secondary-bg: rgba(255, 255, 255, 0.04);
-  --btn-secondary-shadow: none;
-  --btn-destructive: #e5484d;
-  --switch-off: rgba(255, 255, 255, 0.16);
-  --segmented-indicator: rgba(255, 255, 255, 0.1);
-  --tooltip-bg: #2a2a30;
-  --tooltip-fg: #ededf0;
-  --tooltip-border: rgba(255, 255, 255, 0.1);
+  --control-bg: var(--bg-canvas);
+  --btn-secondary-bg: var(--bg-surface-2);
+  --btn-destructive: #f0776c;
+  --switch-off: var(--bg-surface-3);
+  --segmented-indicator: var(--bg-surface-3);
+  --tooltip-bg: #ecebe8;
+  --tooltip-fg: #1a1a19;
+  --tooltip-border: transparent;
+  --kbd-bg: var(--bg-surface-2);
 
-  --gain: #3dd68c;
-  --gain-text: #3dd68c;
-  --gain-soft: rgba(61, 214, 140, 0.14);
-  --loss: #ff6b6b;
-  --loss-text: #ff6b6b;
-  --loss-soft: rgba(255, 107, 107, 0.14);
-  --warning: #ffc65c;
-  --warning-text: #ffc65c;
-  --warning-soft: rgba(245, 165, 36, 0.16);
-  --info: #6cb4ff;
-  --info-text: #6cb4ff;
-  --info-soft: rgba(108, 180, 255, 0.14);
+  --gain: #4cc38a;
+  --gain-text: #5ccb94;
+  --gain-soft: rgba(76, 195, 138, 0.12);
+  --loss: #f0776c;
+  --loss-text: #f2837a;
+  --loss-soft: rgba(240, 119, 108, 0.12);
+  --warning: #e0a84a;
+  --warning-text: #e3b05a;
+  --warning-soft: rgba(224, 168, 74, 0.13);
+  --info: #8fb3d9;
+  --info-text: #9dbcdd;
+  --info-soft: rgba(143, 179, 217, 0.12);
 
-  --block-gray-text: #a3a3a3;
-  --block-gray-bg: #26262a;
-  --block-brown-text: #ba8b6e;
-  --block-brown-bg: #2e2621;
-  --block-orange-text: #f0954a;
-  --block-orange-bg: #36261a;
-  --block-yellow-text: #e6be58;
-  --block-yellow-bg: #342d18;
-  --block-green-text: #5fb98a;
-  --block-green-bg: #1c2e24;
-  --block-blue-text: #5aa7e0;
-  --block-blue-bg: #182a38;
-  --block-purple-text: #b28bde;
-  --block-purple-bg: #2a2236;
-  --block-pink-text: #e07fb2;
-  --block-pink-bg: #33202b;
-  --block-red-text: #f07a72;
-  --block-red-bg: #3a2022;
+  --block-gray-text: #b2afa9;
+  --block-gray-bg: rgba(255, 255, 240, 0.08);
+  --block-brown-text: #c49d82;
+  --block-brown-bg: #2f2823;
+  --block-orange-text: #e2a06a;
+  --block-orange-bg: #352a20;
+  --block-yellow-text: #d9bb6a;
+  --block-yellow-bg: #332e1e;
+  --block-green-text: #82bd96;
+  --block-green-bg: #1f2b23;
+  --block-blue-text: #8ab4d6;
+  --block-blue-bg: #1e2a33;
+  --block-purple-text: #b9a0d3;
+  --block-purple-bg: #2a2431;
+  --block-pink-text: #d796b6;
+  --block-pink-bg: #31232a;
+  --block-red-text: #e5928a;
+  --block-red-bg: #352222;
 
-  --cat-1: #7d7bf5;
-  --cat-2: #38bdf8;
-  --cat-3: #2dd4bf;
-  --cat-4: #fbbf24;
-  --cat-5: #f472b6;
-  --cat-6: #c084fc;
-  --cat-7: #a3e635;
-  --cat-8: #fb923c;
-  --cat-other: #71717a;
-  --chart-grid: rgba(255, 255, 255, 0.07);
-  --chart-area-top: 0.3;
+  --cat-1: #86a6cc;
+  --cat-2: #84b392;
+  --cat-3: #d0aa5c;
+  --cat-4: #d4796f;
+  --cat-5: #b394c4;
+  --cat-6: #6fb0b0;
+  --cat-7: #a3afba;
+  --cat-8: #b5afa5;
+  --cat-other: #6d6a65;
+  --chart-grid: rgba(255, 255, 240, 0.07);
+  --chart-area-top: 0;
 
-  --elev-1: 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.4);
-  --elev-2: 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px -6px rgba(0, 0, 0, 0.55);
-  --elev-3: 0 0 0 1px rgba(255, 255, 255, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 56px -12px rgba(0, 0, 0, 0.65);
-  --elev-4: 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 40px 80px -16px rgba(0, 0, 0, 0.75);
+  --ring-warm: rgba(255, 255, 240, 0.09);
+  --elev-1: 0 0 0 1px var(--ring-warm);
+  --elev-2: 0 8px 16px rgba(0, 0, 0, 0.24), 0 2px 6px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--ring-warm);
+  --elev-3: 0 20px 32px rgba(0, 0, 0, 0.36), 0 5px 10px rgba(0, 0, 0, 0.22), 0 0 0 1px var(--ring-warm);
+  --elev-4: 0 24px 48px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--ring-warm);
+  --key-ink-a: #f4f3f0;
+  --key-ink-b: #dcdad5;
+  --key-ink-fg: #1a1a19;
+  --key-ink-edge: rgba(0, 0, 0, 0.3);
+  --key-ink-drop: rgba(0, 0, 0, 0.55);
+  --key-paper: #2e2e2c;
+  --key-paper-ring: rgba(255, 255, 240, 0.1);
+  --key-paper-edge: rgba(0, 0, 0, 0.45);
+  --key-paper-drop: rgba(0, 0, 0, 0.35);
 }
 
-/* ─── Midnight ─── */
+/* ─── Midnight: true black for OLED, same rules ─── */
 :root[data-theme="midnight"] {
   --bg-window: #000000;
   --bg-canvas: #000000;
-  --bg-surface-1: #0a0a0c;
-  --bg-surface-2: #121215;
-  --bg-surface-3: #1a1a1e;
-  --bg-overlay: #111114;
-  --text-disabled: #55555e;
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border: rgba(255, 255, 255, 0.11);
-  --border-strong: rgba(255, 255, 255, 0.2);
-  --state-hover: rgba(255, 255, 255, 0.07);
-  --state-active: rgba(255, 255, 255, 0.11);
-  --state-selected: color-mix(in oklab, var(--accent-solid) 18%, transparent);
-  --text-selection: color-mix(in oklab, var(--accent-solid) 36%, transparent);
+  --bg-surface-1: #000000;
+  --bg-surface-2: #141413;
+  --bg-surface-3: #1e1e1d;
+  --bg-overlay: #161615;
+  --text-tertiary: #84817b;
+  --text-disabled: #575550;
+  --border-subtle: rgba(255, 255, 240, 0.08);
+  --border: rgba(255, 255, 240, 0.1);
+  --border-strong: rgba(255, 255, 240, 0.38);
+  --state-hover: rgba(255, 255, 240, 0.065);
+  --state-active: rgba(255, 255, 240, 0.1);
+  --state-selected: rgba(255, 255, 240, 0.09);
   --scrim: rgba(0, 0, 0, 0.64);
+  --ring-warm: rgba(255, 255, 240, 0.11);
+  --key-paper: #222221;
 }
 
-/* ─── 3.2 Accents · light ─── (graphite is the default when no attribute is set) */
+/* ─── Accents · light. Graphite (the default) is ink. Other accents re-derive only focus, selection and the primary key. ─── */
 :root {
-  --accent-solid: #18181b;
-  --accent-solid-hover: #2a2a2f;
-  --accent-contrast: #ffffff;
-  --accent-text: #18181b;
-  --accent-soft: rgba(24, 24, 27, 0.07);
-  --accent-border: rgba(24, 24, 27, 0.3);
-  --accent-ring: #18181b;
-  /* soft alpha multipliers for the soft button (§5.1: hover 1.6×, pressed 2×) */
-  --accent-soft-hover: rgba(24, 24, 27, 0.112);
-  --accent-soft-press: rgba(24, 24, 27, 0.14);
+  --accent-solid: #262624;
+  --accent-solid-hover: #3b3b38;
+  --accent-contrast: #fdfdfc;
+  --accent-text: #262624;
+  --accent-soft: rgba(40, 34, 24, 0.06);
+  --accent-border: rgba(40, 34, 24, 0.3);
+  --accent-ring: #8e8b86;
+  --accent-soft-hover: rgba(40, 34, 24, 0.09);
+  --accent-soft-press: rgba(40, 34, 24, 0.12);
 }
 :root[data-accent="iris"] {
   --accent-solid: #5e5ce6; --accent-solid-hover: #4f4dd4; --accent-contrast: #ffffff; --accent-text: #4b49c8;
@@ -315,11 +354,11 @@
   --accent-soft-hover: rgba(169, 59, 189, 0.16); --accent-soft-press: rgba(169, 59, 189, 0.2);
 }
 
-/* ─── 3.2 Accents · dark + midnight ─── */
+/* ─── Accents · dark + midnight ─── */
 :root:is([data-theme="dark"], [data-theme="midnight"]) {
-  --accent-solid: #ededf0; --accent-solid-hover: #ffffff; --accent-contrast: #09090b; --accent-text: #ededf0;
-  --accent-soft: rgba(255, 255, 255, 0.1); --accent-border: rgba(255, 255, 255, 0.36); --accent-ring: #ededf0;
-  --accent-soft-hover: rgba(255, 255, 255, 0.16); --accent-soft-press: rgba(255, 255, 255, 0.2);
+  --accent-solid: #ecebe8; --accent-solid-hover: #ffffff; --accent-contrast: #1a1a19; --accent-text: #ecebe8;
+  --accent-soft: rgba(255, 255, 240, 0.08); --accent-border: rgba(255, 255, 240, 0.32); --accent-ring: #8a8883;
+  --accent-soft-hover: rgba(255, 255, 240, 0.12); --accent-soft-press: rgba(255, 255, 240, 0.16);
 }
 :root:is([data-theme="dark"], [data-theme="midnight"])[data-accent="iris"] {
   --accent-solid: #5e5ce6; --accent-solid-hover: #6e6cf0; --accent-contrast: #ffffff; --accent-text: #a5a4ff;
@@ -351,23 +390,32 @@
   --accent-soft: rgba(220, 130, 240, 0.16); --accent-border: rgba(220, 130, 240, 0.45); --accent-ring: #d985ee;
   --accent-soft-hover: rgba(220, 130, 240, 0.256); --accent-soft-press: rgba(220, 130, 240, 0.32);
 }
+/* A non-graphite accent tints selection and the hover-selected wash; links and chart lines stay ink. */
+:root[data-accent]:not([data-accent="graphite"]) {
+  --state-selected: color-mix(in oklab, var(--accent-solid) 10%, transparent);
+  --text-selection: color-mix(in oklab, var(--accent-solid) 20%, transparent);
+}
+:root:is([data-theme="dark"], [data-theme="midnight"])[data-accent]:not([data-accent="graphite"]) {
+  --state-selected: color-mix(in oklab, var(--accent-solid) 16%, transparent);
+  --text-selection: color-mix(in oklab, var(--accent-solid) 30%, transparent);
+}
 
-/* ─── data-numbers (§3.3) ─── */
+/* ─── data-numbers ─── */
 :root[data-numbers="cvd"] {
-  --gain: #1f77e5; --gain-text: #1f77e5; --gain-soft: rgba(31, 119, 229, 0.1);
-  --loss: #e8740c; --loss-text: #c25f06; --loss-soft: rgba(232, 116, 12, 0.1);
+  --gain: #1f6fd1; --gain-text: #1f66c2; --gain-soft: rgba(31, 111, 209, 0.09);
+  --loss: #c25f06; --loss-text: #ad5405; --loss-soft: rgba(194, 95, 6, 0.09);
 }
 :root:is([data-theme="dark"], [data-theme="midnight"])[data-numbers="cvd"] {
   --gain: #5aa9ff; --gain-text: #5aa9ff; --gain-soft: rgba(90, 169, 255, 0.14);
   --loss: #ff9f45; --loss-text: #ff9f45; --loss-soft: rgba(255, 159, 69, 0.14);
 }
 :root[data-numbers="eastasian"] {
-  --gain: #e5484d; --gain-text: #c9302c; --gain-soft: rgba(229, 72, 77, 0.1);
-  --loss: #12a150; --loss-text: #0b7f45; --loss-soft: rgba(18, 161, 80, 0.1);
+  --gain: #b8382f; --gain-text: #b8382f; --gain-soft: rgba(184, 56, 47, 0.08);
+  --loss: #1d7a45; --loss-text: #1d7a45; --loss-soft: rgba(29, 122, 69, 0.09);
 }
 :root:is([data-theme="dark"], [data-theme="midnight"])[data-numbers="eastasian"] {
-  --gain: #ff6b6b; --gain-text: #ff6b6b; --gain-soft: rgba(255, 107, 107, 0.14);
-  --loss: #3dd68c; --loss-text: #3dd68c; --loss-soft: rgba(61, 214, 140, 0.14);
+  --gain: #f0776c; --gain-text: #f2837a; --gain-soft: rgba(240, 119, 108, 0.12);
+  --loss: #4cc38a; --loss-text: #5ccb94; --loss-soft: rgba(76, 195, 138, 0.12);
 }
 :root[data-numbers="mono"] {
   --gain: var(--text-primary); --gain-text: var(--text-primary); --gain-soft: var(--state-hover);
@@ -384,24 +432,27 @@
   --danger-soft: var(--loss-soft);
 }
 
-/* ─── Contrast: more (§3.1) ─── */
+/* ─── Contrast: more ─── */
 :root[data-contrast="more"] {
   --border-subtle: rgba(var(--text-rgb), 0.24);
-  --border: rgba(var(--text-rgb), 0.24);
-  --border-strong: rgba(var(--text-rgb), 0.32);
+  --border: rgba(var(--text-rgb), 0.28);
+  --border-strong: rgba(var(--text-rgb), 0.6);
+  --border-field: rgba(var(--text-rgb), 0.5);
+  --border-field-hover: rgba(var(--text-rgb), 0.6);
   --text-tertiary: var(--text-secondary);
   --focus-width: 3px;
 }
 
-/* ─── Text size (§3.6) ─── */
+/* ─── Text size ─── */
 :root[data-text-size="s"] { --ui-base: 13px; --editor-body: 15px; }
 :root[data-text-size="l"] { --ui-base: 15px; --editor-body: 17.5px; }
 
-/* ─── Density (§3.7) ─── */
+/* ─── Density ─── */
 :root[data-density="compact"] {
   --row-sidebar: 24px;
   --row-table: 32px;
-  --row-menu: 28px;
+  --row-menu: 26px;
+  --row-list: 32px;
   --card-pad: 12px;
 }
 

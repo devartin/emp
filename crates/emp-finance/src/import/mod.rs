@@ -249,6 +249,92 @@ impl ParsedStatement {
     }
 }
 
+/// Where a [`ClosingBalance`] came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BalanceSource {
+    /// OFX/QFX `<LEDGERBAL>`.
+    Ofx,
+    /// The mapped CSV balance column.
+    Csv,
+}
+
+/// The closing balance a statement file itself reports (`FinanceImportPreview.statement`, PROGRAMME-v3 K5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClosingBalance {
+    /// Balance.
+    pub balance: Decimal,
+    /// As-of date (OFX `DTASOF`, else the latest transaction date).
+    pub as_of: Option<NaiveDate>,
+    /// Currency the file states (OFX `CURDEF`).
+    pub currency: Option<String>,
+    /// Format it came from.
+    pub source: BalanceSource,
+}
+
+/// `true` for QIF cleared-status text that means the bank has cleared the row (`*`, `c`, `X`, `R`).
+#[must_use]
+pub fn qif_cleared(flag: Option<&str>) -> bool {
+    matches!(flag.map(str::trim), Some("*" | "c" | "C" | "x" | "X" | "R" | "r"))
+}
+
+impl ParsedStatement {
+    /// The statement's closing balance for the account named `account_name`, if the file reports one.
+    ///
+    /// - OFX/QFX: the `<LEDGERBAL>` of the section whose account number's last four digits appear in
+    ///   `account_name`, else of the only section that has one.
+    /// - CSV: the balance-column value on the latest-dated row; for equal dates the last such row in file order.
+    /// - QIF: none (the format carries no statement balance).
+    #[must_use]
+    pub fn closing_balance(&self, account_name: &str) -> Option<ClosingBalance> {
+        match self.format {
+            ImportFormat::Ofx | ImportFormat::Qfx => {
+                let with: Vec<&StatementSection> = self
+                    .sections
+                    .iter()
+                    .filter(|s| s.ledger_balance.is_some())
+                    .collect();
+                let section = with
+                    .iter()
+                    .find(|s| {
+                        s.account
+                            .as_ref()
+                            .and_then(StatementAccount::last4)
+                            .is_some_and(|l4| !l4.is_empty() && account_name.contains(&l4))
+                    })
+                    .or_else(|| (with.len() == 1).then(|| &with[0]))?;
+                let lb = section.ledger_balance.as_ref()?;
+                Some(ClosingBalance {
+                    balance: lb.amount,
+                    as_of: lb
+                        .date
+                        .or_else(|| section.transactions.iter().map(|t| t.date).max()),
+                    currency: section.account.as_ref().and_then(|a| a.currency.clone()),
+                    source: BalanceSource::Ofx,
+                })
+            }
+            ImportFormat::Csv => {
+                let mut best: Option<(NaiveDate, Decimal)> = None;
+                for t in self.transactions() {
+                    if let Some(b) = t.balance
+                        && best.is_none_or(|(d, _)| t.date >= d)
+                    {
+                        best = Some((t.date, b));
+                    }
+                }
+                best.map(|(d, b)| ClosingBalance {
+                    balance: b,
+                    as_of: Some(d),
+                    currency: None,
+                    source: BalanceSource::Csv,
+                })
+            }
+            ImportFormat::Qif => None,
+        }
+    }
+}
+
 /// Column mapping for CSV imports (IPC `ImportMapping`). Column indexes are 0-based.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

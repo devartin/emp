@@ -8,8 +8,7 @@ import {
   Palmtree, PiggyBank, Plane, Percent, Receipt, ReceiptText, Repeat, Shield, ShoppingBag, ShoppingBasket, Sofa, Sparkle, Sparkles, Target,
   TrainFront, TrendingUp, Umbrella, Utensils, Wallet, Wifi, Zap, ChevronRight, X,
 } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { Freshness, Insight, MarketState } from "@/backend/types";
 import { navigate } from "@/app/router";
 import { cn } from "@/lib/cn";
@@ -17,9 +16,8 @@ import { Badge } from "@/ui/Badge";
 import { Button, type IconComponent } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { Tabs, type TabItem } from "@/ui/Tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
 import { Tooltip } from "@/ui/Tooltip";
-import { spring } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { blockBg, blockText } from "./format";
 import "./finance.css";
 
@@ -84,14 +82,7 @@ export interface HubPageProps<T extends string> {
 
 export function HubPage<T extends string>({ icon: I, tone, title, subtitle, actions, tabs, tab, onTab, children, footer, wide }: HubPageProps<T>) {
   const c = TONE[tone];
-  // Lateral tab transitions (§5.4.3): the incoming panel slides from the side of travel.
-  const idx = tabs && tab !== undefined ? tabs.findIndex((t) => t.value === tab) : -1;
-  const prevIdx = useRef(idx);
-  const dir = idx === prevIdx.current ? 0 : idx > prevIdx.current ? 1 : -1;
-  useEffect(() => {
-    prevIdx.current = idx;
-  }, [idx]);
-  const reduced = useReducedMotionPref();
+  // Tab changes are constant-class (K3 C0): the new panel is present at frame 1, no slide or fade.
   return (
     <div className={cn("fh-page", wide && "fh-page-wide")}>
       <header className="fh-head">
@@ -105,23 +96,9 @@ export function HubPage<T extends string>({ icon: I, tone, title, subtitle, acti
         {actions ? <div className="fh-head-actions">{actions}</div> : null}
       </header>
       {tabs && tab !== undefined && onTab ? <Tabs value={tab} onValueChange={onTab} items={tabs} className="fh-tabs" aria-label="Sections" /> : null}
-      <AnimatePresence mode="wait" initial={false} custom={dir}>
-        <m.div
-          key={String(tab ?? "")}
-          className="fh-body"
-          custom={dir}
-          variants={{
-            enter: (d: number) => (reduced ? { opacity: 0 } : { opacity: 0, x: d * 16, y: d === 0 ? 6 : 0 }),
-            show: { opacity: 1, x: 0, y: 0, transition: reduced ? { duration: 0.14 } : { duration: 0.22, ease: [0.2, 0, 0, 1] } },
-            exit: (d: number) => (reduced ? { opacity: 0, transition: { duration: 0.08 } } : { opacity: 0, x: d * -12, transition: { duration: 0.09, ease: [0.4, 0, 1, 1] } }),
-          }}
-          initial="enter"
-          animate="show"
-          exit="exit"
-        >
-          {children}
-        </m.div>
-      </AnimatePresence>
+      <div key={String(tab ?? "")} className="fh-body">
+        {children}
+      </div>
       {footer}
     </div>
   );
@@ -216,50 +193,64 @@ const SEV: Record<Insight["severity"], { icon: IconComponent; tone: "info" | "ac
   critical: { icon: BellRing, tone: "loss", label: "Act now" },
 };
 
+/**
+ * An insight: its title is the fact, and the title itself discloses the "why" (inputs and the reasoning) in a kit
+ * Popover — no separate "Show math" button (N-MO3).
+ */
 export function InsightCard({ insight, onMute, compact }: { insight: Insight; onMute?: (i: Insight) => void; compact?: boolean }) {
-  const [math, setMath] = useState(false);
   const s = SEV[insight.severity];
   const I = s.icon;
+  const hasWhy = !!(insight.math?.length || insight.body);
   return (
-    <m.article layout transition={spring.layout} className="fh-insight" data-sev={insight.severity} data-compact={compact ? "" : undefined}>
+    <article className="fh-insight" data-sev={insight.severity} data-compact={compact ? "" : undefined}>
       <span className="fh-insight-icon" aria-hidden>
         <I size={15} strokeWidth={2} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
-          <h3 className="fh-insight-title flex-1">{insight.title}</h3>
+          <h3 className="fh-insight-title flex-1">
+            {hasWhy ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="fh-figure text-left" aria-haspopup="dialog">
+                    {insight.title}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="bottom" align="start" className="fh-figure-pop">
+                  <div className="fh-figure-title">{insight.title}</div>
+                  {insight.body ? <p className="fh-figure-def">{insight.body}</p> : null}
+                  {insight.math?.length ? (
+                    <dl className="fh-figure-inputs">
+                      {insight.math.map((x) => (
+                        <div key={x.label}>
+                          <dt>{x.label}</dt>
+                          <dd className="tabular" data-sensitive="">
+                            {x.value}
+                            {x.source ? <span className="text-tertiary font-normal ml-1.5">· {x.source}</span> : null}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                </PopoverContent>
+              </Popover>
+            ) : (
+              insight.title
+            )}
+          </h3>
           {onMute ? <IconButton icon={X} size="xs" label="Hide for 30 days" onClick={() => onMute(insight)} /> : null}
         </div>
-        <p className="fh-insight-body">{insight.body}</p>
-        <div className="flex flex-wrap items-center gap-1.5 mt-2">
-          {insight.actions.slice(0, 2).map((a) => (
-            <Button key={a.label} size="xs" variant="secondary" iconRight={ChevronRight} onClick={() => navigate(a.route)}>
-              {a.label}
-            </Button>
-          ))}
-          {insight.math?.length ? (
-            <Button size="xs" variant="ghost" onClick={() => setMath((v) => !v)} aria-expanded={math}>
-              {math ? "Hide math" : "Show math"}
-            </Button>
-          ) : null}
-        </div>
-        <AnimatePresence initial={false} mode="popLayout">
-          {math && insight.math ? (
-            <m.dl className="fh-insight-math" {...disclose}>
-              {insight.math.map((x) => (
-                <div key={x.label} className="flex items-baseline justify-between gap-3 py-1">
-                  <dt className="text-secondary">{x.label}</dt>
-                  <dd className="tabular font-medium" data-sensitive="">
-                    {x.value}
-                    {x.source ? <span className="text-tertiary font-normal ml-1.5">· {x.source}</span> : null}
-                  </dd>
-                </div>
-              ))}
-            </m.dl>
-          ) : null}
-        </AnimatePresence>
+        {insight.actions.length ? (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {insight.actions.slice(0, 2).map((a) => (
+              <Button key={a.label} size="xs" variant="secondary" iconRight={ChevronRight} onClick={() => navigate(a.route)}>
+                {a.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
       </div>
-    </m.article>
+    </article>
   );
 }
 

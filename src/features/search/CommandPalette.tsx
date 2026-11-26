@@ -19,7 +19,7 @@ import {
   LineChart, Search, Sparkles, TextSearch,
 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { getCommands, isAvailable, openTodayNote, runCommand, subscribeCommands, type AppCommand } from "@/app/commands";
 import { navigate, useRoute, type AppRoute } from "@/app/router";
 import { preloadRoute } from "@/app/routes";
@@ -50,8 +50,12 @@ import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { calc, calcSync, type CalcResult } from "./calc";
 import { fuzzy, fuzzyAny } from "./fuzzy";
 import { commandIcon } from "./icons";
+import { captureAccount, describeCapture, loadMoneyTarget, parseCapture, type MoneyTarget } from "./capture";
+import { takeHeldKeys } from "./keyBuffer";
 import { NESTED, type NestedPage, type NestedId } from "./nested";
 import { takePaletteOrigin } from "./origin";
+import { placesFor } from "./places";
+import { runCapture } from "./runCapture";
 import "./palette.css";
 
 // ───────────────────────────────────────────────────────────────────────────── model
@@ -308,9 +312,9 @@ export default function CommandPalette() {
             <m.div
               className="cmdk-scrim"
               aria-hidden
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: { duration: duration.fast, ease: ease.out } }}
-              exit={{ opacity: 0, transition: { duration: 0.1, ease: ease.in } }}
+              initial={grow ? { opacity: 0 } : false}
+              animate={{ opacity: 1, transition: { duration: grow ? duration.fast : 0, ease: ease.out } }}
+              exit={{ opacity: 0, transition: { duration: grow ? 0.1 : 0, ease: ease.in } }}
             />
             <div className="cmdk-pos">
               <RD.Content
@@ -350,16 +354,16 @@ export default function CommandPalette() {
                   }}
                   className="cmdk-panel glass-2"
                   style={grow && !reduced ? { transformOrigin: `${grow.ox}px ${grow.oy}px` } : undefined}
-                  // Opacity + scale on the settle spring only: a content blur on top of the glass backdrop blur made
-                  // the browser recomposite both every frame (416ms first frame at 4× CPU).
-                  initial={reduced ? { opacity: 0 } : grow ? { opacity: 0, scale: grow.s } : { opacity: 0, scale: 0.965, y: -10 }}
+                  // Opened by keyboard (no origin) the palette is C0: present at its first frame, gone at once. Opened
+                  // by pointer it is C1: a short scale from the control that opened it.
+                  initial={!grow ? false : reduced ? { opacity: 0 } : { opacity: 0, scale: grow.s }}
                   animate={{
                     opacity: 1,
                     scale: 1,
                     y: 0,
-                    transition: reduced ? { duration: 0.12 } : { ...spring.settle, opacity: { duration: 0.12, ease: ease.out } },
+                    transition: !grow ? { duration: 0 } : reduced ? { duration: 0.12 } : { duration: 0.15, ease: ease.out },
                   }}
-                  exit={reduced ? { opacity: 0, transition: { duration: 0.08 } } : { opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: ease.in } }}
+                  exit={!grow || reduced ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scale: 0.98, transition: { duration: 0.1, ease: ease.in } }}
                 >
                   <RD.Title className="sr-only">Command palette</RD.Title>
                   <Palette initialScope={modeToScope(mode)} initialQuery={initialQuery} onClose={close} escRef={escRef} />
@@ -379,18 +383,15 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
     return p && initialScope === "all" ? p : initialScope;
   });
   const [input, setInput] = useState(() => (PREFIX[initialQuery.charAt(0)] && initialScope === "all" ? initialQuery.slice(1) : initialQuery));
+  // Keys typed between ⌘K and this mount (keyBuffer.ts) are replayed into the input before the first paint.
+  const held = useRef<string | null>(null);
   const [stack, setStack] = useState<NestedId[]>([]);
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<(() => void) | null>(null);
   const reduced = useReducedMotionPref();
-  // Rows rise at 16ms on first open only (cap 12), never while typing.
-  const [entering, setEntering] = useState(!reduced);
-  useEffect(() => {
-    const t = window.setTimeout(() => setEntering(false), 420);
-    return () => window.clearTimeout(t);
-  }, []);
+  const entering = false;
 
   // Re-sync when the store asks for another mode while open (⌘P while ⌘K is open).
   useEffect(() => {
@@ -398,10 +399,12 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
     setStack([]);
   }, [initialScope]);
 
-  useEffect(() => {
-    const t = window.setTimeout(() => inputRef.current?.focus(), 0);
+  useLayoutEffect(() => {
+    held.current = takeHeldKeys();
+    inputRef.current?.focus();
+    if (held.current) onInput(input + held.current);
     void useSearch.getState().load();
-    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Restore any live preview when unmounting without a choice.
@@ -428,20 +431,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
   const finish = useCallback(
     (fn: () => void | Promise<void>) => {
       restoreRef.current = null;
-      // S7: the highlighted row presses like a keycap for 70ms, then the palette shrinks away.
-      const row = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]');
-      if (row && !reduced && !row.hasAttribute("data-pressing")) {
-        row.setAttribute("data-pressing", "");
-        window.setTimeout(() => {
-          onClose();
-          window.setTimeout(() => {
-            Promise.resolve()
-              .then(fn)
-              .catch((e) => notify.fromError(e, "That didn’t work"));
-          }, 0);
-        }, 70);
-        return;
-      }
+      // Input never waits on motion: the palette closes and the choice runs at once.
       onClose();
       // Let the panel start its exit before heavy navigation work.
       window.setTimeout(() => {
@@ -450,7 +440,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
           .catch((e) => notify.fromError(e, "That didn’t work"));
       }, 0);
     },
-    [onClose, reduced],
+    [onClose],
   );
 
   const openRoute = useCallback(
@@ -992,7 +982,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
   // The rows render from a deferred copy of the results: the palette's opening frame paints just the panel and the
   // input (the rows rise in on the next, interruptible render, inside the S7 grow), and fast typing never blocks
   // the input on rendering a list that is about to be replaced.
-  const listItems = useDeferredValue(items, NO_ITEMS);
+  const listItems = useDeferredValue(items);
   const listPending = listItems !== items;
   const groups = useMemo(() => {
     const g: { name: string; items: Item[] }[] = [];

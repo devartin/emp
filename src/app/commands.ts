@@ -15,6 +15,7 @@ import { useUndo } from '@/stores/undo';
 import { useVault } from '@/stores/vault';
 import { useWorkspace } from '@/stores/workspace';
 import { switchThemeWithReveal } from '@/ui/motion/themeTransition';
+import { holdKeys } from '@/features/search/keyBuffer';
 import { navigate, routePageId, type AppRoute } from './router';
 
 export type CommandSection = 'Navigation' | 'Create' | 'Page' | 'View' | 'Privacy & security' | 'Go to' | 'Help' | string;
@@ -114,6 +115,44 @@ export async function createPageAndOpen(parentId: Id | null = null): Promise<voi
   navigate({ t: 'page', id: meta.id });
 }
 
+/** Focus the first element matching `selector` once the new route has rendered it (gives up after 2 s). */
+function focusWhenReady(selector: string): void {
+  const t0 = performance.now();
+  const tick = () => {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (el) el.focus({ preventScroll: true });
+    else if (performance.now() - t0 < 2000) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+/** A full-page database, opened with its title focused. */
+export async function createDatabaseAndOpen(): Promise<void> {
+  const ws = useWorkspace.getState().workspace;
+  if (!ws) return;
+  const res = await api.db.create({ workspaceId: ws.id, parentId: null, title: '', inline: false });
+  useTree.getState().upsert([res.page]);
+  navigate({ t: 'db', id: res.page.id });
+  focusWhenReady('.edb-page-title');
+}
+
+export async function createSheetAndOpen(): Promise<void> {
+  const ws = useWorkspace.getState().workspace;
+  if (!ws) return;
+  const res = await api.sheet.workbookCreate({ workspaceId: ws.id, parentId: null, title: 'Untitled sheet' });
+  useTree.getState().upsert([res.page]);
+  navigate({ t: 'sheet', id: res.page.id });
+}
+
+/** Open the palette, holding any keys typed before its input mounts (0 lost keystrokes). */
+export function openPaletteHeld(mode: 'all' | 'pages' | 'commands' = 'all', query = ''): void {
+  const ui = useUi.getState();
+  if (!ui.paletteOpen) holdKeys();
+  ui.openPalette(mode, query);
+}
+
+const app = (appId: string) => useWorkspace.getState().lifeapps.find((i) => i.appId === appId && !i.detached);
+
 function regions(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>('[data-region]')).filter((el) => el.offsetParent !== null);
 }
@@ -129,12 +168,18 @@ function cycleRegion(dir: 1 | -1) {
 
 const go = (route: AppRoute) => () => navigate(route);
 
+function togglePalette(mode: 'all' | 'pages' | 'commands') {
+  const ui = useUi.getState();
+  if (ui.paletteOpen && ui.paletteMode === mode) ui.closePalette();
+  else openPaletteHeld(mode);
+}
+
 export function registerAppCommands(): () => void {
   return registerCommands([
     // Palette
-    { id: 'palette.open', title: 'Search or run a command', section: 'Navigation', shortcut: 'mod+k', hidden: true, run: () => useUi.getState().togglePalette('all'), when: inShell },
-    { id: 'palette.pages', title: 'Quick find', section: 'Navigation', shortcut: 'mod+p', hidden: true, run: () => useUi.getState().togglePalette('pages'), when: inShell },
-    { id: 'palette.commands', title: 'Run a command', section: 'Navigation', shortcut: 'mod+shift+p', hidden: true, run: () => useUi.getState().togglePalette('commands'), when: inShell },
+    { id: 'palette.open', title: 'Search or run a command', section: 'Navigation', shortcut: 'mod+k', hidden: true, run: () => togglePalette('all'), when: inShell },
+    { id: 'palette.pages', title: 'Quick find', section: 'Navigation', shortcut: 'mod+p', hidden: true, run: () => togglePalette('pages'), when: inShell },
+    { id: 'palette.commands', title: 'Run a command', section: 'Navigation', shortcut: 'mod+shift+p', hidden: true, run: () => togglePalette('commands'), when: inShell },
 
     // Create
     { id: 'page.new', title: 'New page', section: 'Create', icon: 'file-plus', keywords: ['create', 'add', 'document'], shortcut: 'mod+n', when: inShell, run: () => createPageAndOpen(null) },
@@ -147,7 +192,40 @@ export function registerAppCommands(): () => void {
       when: () => inShell() && useNav.getState().route.t === 'page',
       run: () => createPageAndOpen(currentPageId()),
     },
-    { id: 'daily.today', title: 'Open today’s daily note', section: 'Create', icon: 'calendar-days', keywords: ['journal', 'daily', 'today'], shortcut: 'mod+alt+d', when: inShell, run: openTodayNote },
+    { id: 'db.new', title: 'New database', section: 'Create', icon: 'database', keywords: ['table', 'tracker', 'create'], when: inShell, run: createDatabaseAndOpen },
+    { id: 'sheet.new', title: 'New sheet', section: 'Create', icon: 'sheet', keywords: ['spreadsheet', 'workbook', 'excel', 'create'], when: inShell, run: createSheetAndOpen },
+    { id: 'task.add', title: 'Add task', section: 'Create', icon: 'list-todo', keywords: ['todo', 'to-do', 'remind'], when: inShell, run: () => openPaletteHeld('all', 't ') },
+    {
+      id: 'txn.add',
+      title: 'Add transaction',
+      section: 'Create',
+      icon: 'receipt',
+      keywords: ['expense', 'spent', 'payment', 'money'],
+      when: () => inShell() && !!app('money-hq'),
+      run: () => openPaletteHeld('all', '-'),
+    },
+    {
+      id: 'import.statement',
+      title: 'Import bank statement',
+      section: 'Create',
+      icon: 'landmark',
+      keywords: ['ofx', 'qfx', 'csv', 'bank', 'statement', 'money'],
+      when: () => inShell() && !!app('money-hq'),
+      run: () => useUi.getState().setImportOpen(true),
+    },
+    {
+      id: 'habit.checkin',
+      title: 'Check in habits',
+      section: 'Create',
+      icon: 'heart-pulse',
+      keywords: ['habits', 'streak', 'check-in'],
+      when: () => inShell() && !!app('habits'),
+      run: () => {
+        const h = app('habits');
+        if (h) navigate({ t: 'app', instanceId: h.id, tab: 'checkin' });
+      },
+    },
+    { id: 'daily.today', title: 'Open today’s note', section: 'Create', icon: 'calendar-days', keywords: ['journal', 'daily', 'today', '@today'], shortcut: 'mod+alt+d', when: inShell, run: openTodayNote },
     { id: 'templates.open', title: 'Browse templates', section: 'Create', icon: 'layout-template', keywords: ['template', 'gallery'], when: inShell, run: () => useUi.getState().setTemplatesOpen(true) },
     { id: 'import.open', title: 'Import…', section: 'Create', icon: 'file-down', keywords: ['notion', 'markdown', 'csv', 'xlsx', 'import'], when: inShell, run: () => useUi.getState().setImportOpen(true) },
 
@@ -173,10 +251,10 @@ export function registerAppCommands(): () => void {
     { id: 'go.home', title: 'Home', section: 'Go to', icon: 'house', keywords: ['dashboard', 'start'], when: inShell, run: go({ t: 'home' }) },
     { id: 'go.calendar', title: 'Calendar', section: 'Go to', icon: 'calendar', keywords: ['events', 'schedule'], when: inShell, run: go({ t: 'calendar' }) },
     { id: 'go.markets', title: 'Markets', section: 'Go to', icon: 'candlestick-chart', keywords: ['stocks', 'quotes', 'watchlist'], when: inShell, run: go({ t: 'markets' }) },
-    { id: 'go.lifeapps', title: 'Life apps', section: 'Go to', icon: 'sparkles', keywords: ['apps', 'gallery', 'money', 'habits'], when: inShell, run: go({ t: 'lifeapps' }) },
+    { id: 'go.lifeapps', title: 'Life apps', section: 'Go to', icon: 'layout-grid', keywords: ['apps', 'gallery', 'add a life app', 'money', 'habits'], when: inShell, run: go({ t: 'lifeapps' }) },
     { id: 'go.trash', title: 'Trash', section: 'Go to', icon: 'trash-2', keywords: ['deleted', 'restore'], when: inShell, run: go({ t: 'trash' }) },
     { id: 'settings.open', title: 'Settings', section: 'Go to', icon: 'settings', keywords: ['preferences', 'options'], shortcut: 'mod+,', when: inShell, run: go({ t: 'settings', section: 'general' }) },
-    { id: 'settings.security', title: 'Security Center', section: 'Privacy & security', icon: 'shield-check', keywords: ['encryption', 'password', 'recovery', 'backup'], when: inShell, run: go({ t: 'settings', section: 'security' }) },
+    { id: 'settings.security', title: 'Security center', section: 'Privacy & security', icon: 'shield-check', keywords: ['encryption', 'password', 'recovery', 'backup'], when: inShell, run: go({ t: 'settings', section: 'security' }) },
 
     // Page
     {
@@ -316,5 +394,5 @@ export function registerAppCommands(): () => void {
 
 /** True when a lock is impossible (unencrypted vault) — the UI explains instead of failing. */
 export function lockUnavailableReason(e: unknown): string | null {
-  return hasCode(e, 'UNSUPPORTED') ? 'Turn on encryption in Settings → Security to lock Ultra Note.' : null;
+  return hasCode(e, 'UNSUPPORTED') ? 'Turn on encryption in Settings, Security to lock Ultra Note.' : null;
 }

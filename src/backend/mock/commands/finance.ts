@@ -770,7 +770,20 @@ interface ImportSession {
   fileName: string;
   /** FITID column index for OFX/QFX. */
   fitid?: number;
+  /** OFX/QFX `<LEDGERBAL>` per statement section (mirrors Rust `ParsedStatement::closing_balance`). */
+  ledger?: OfxLedger[];
+  /** QIF `C` (cleared status) text per row, aligned with `rows`. */
+  qifCleared?: string[];
   createdAt: number;
+}
+
+interface OfxLedger {
+  acctId: string;
+  /** cents */
+  balance: number;
+  asOf?: string;
+  currency?: string;
+  maxDate?: string;
 }
 
 interface ProfileRec {
@@ -843,20 +856,62 @@ function parseOfx(textS: string): { columns: string[]; rows: string[][] } {
   return { columns: ['Date', 'Amount', 'Payee', 'Memo', 'FITID', 'Type'], rows };
 }
 
-function parseQif(textS: string): { columns: string[]; rows: string[][] } {
+/** `<LEDGERBAL>` of each statement section (`<STMTRS>` / `<CCSTMTRS>`), with the section's account and currency. */
+function parseOfxLedgers(textS: string): OfxLedger[] {
+  const tag = (b: string, name: string) => {
+    const m = new RegExp(`<${name}>([^<\\r\\n]*)`, 'i').exec(b);
+    return m ? m[1].trim() : '';
+  };
+  const ymd = (dt: string) => (/^\d{8}/.test(dt) ? `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)}` : undefined);
+  const out: OfxLedger[] = [];
+  for (const sec of textS.split(/<(?:CC)?STMTRS>/i).slice(1)) {
+    const lb = /<LEDGERBAL>([\s\S]*?)(?:<\/LEDGERBAL>|<AVAILBAL>|<\/(?:CC)?STMTRS>|$)/i.exec(sec);
+    if (!lb) continue;
+    const bal = parseAmount(tag(lb[1], 'BALAMT'), false);
+    if (bal === null) continue;
+    const dates = sec
+      .split(/<STMTTRN>/i)
+      .slice(1)
+      .map((b) => ymd(tag(b, 'DTPOSTED')))
+      .filter((d): d is string => !!d)
+      .sort();
+    out.push({ acctId: tag(sec, 'ACCTID'), balance: bal, asOf: ymd(tag(lb[1], 'DTASOF')), currency: tag(sec, 'CURDEF') || undefined, maxDate: dates[dates.length - 1] });
+  }
+  return out;
+}
+
+/** Whether row `idx` of an import is cleared at the bank (see `finance_import_commit`). */
+function importCleared(s: ImportSession, idx: number): boolean {
+  if (s.format === 'ofx' || s.format === 'qfx') return true;
+  if (s.format === 'qif') return qifCleared(s.qifCleared?.[idx]);
+  return false;
+}
+
+/** QIF cleared-status text the bank has cleared (`*`, `c`, `X`, `R`); mirrors Rust `import::qif_cleared`. */
+function qifCleared(flag: string | undefined): boolean {
+  return ['*', 'c', 'C', 'x', 'X', 'R', 'r'].includes((flag ?? '').trim());
+}
+
+function parseQif(textS: string): { columns: string[]; rows: string[][]; cleared: string[] } {
   const rows: string[][] = [];
+  const cleared: string[] = [];
   let cur: Record<string, string> = {};
+  const push = () => {
+    if (!(cur.D || cur.T)) return;
+    rows.push([cur.D ?? '', cur.T ?? cur.U ?? '', cur.P ?? '', cur.M ?? '', cur.N ?? '']);
+    cleared.push(cur.C ?? '');
+  };
   for (const line of textS.split(/\r?\n/)) {
     if (!line || line.startsWith('!')) continue;
     if (line.startsWith('^')) {
-      if (cur.D || cur.T) rows.push([cur.D ?? '', cur.T ?? cur.U ?? '', cur.P ?? '', cur.M ?? '', cur.N ?? '']);
+      push();
       cur = {};
       continue;
     }
     cur[line[0]] = line.slice(1).trim();
   }
-  if (cur.D || cur.T) rows.push([cur.D ?? '', cur.T ?? cur.U ?? '', cur.P ?? '', cur.M ?? '', cur.N ?? '']);
-  return { columns: ['Date', 'Amount', 'Payee', 'Memo', 'Number'], rows };
+  push();
+  return { columns: ['Date', 'Amount', 'Payee', 'Memo', 'Number'], rows, cleared };
 }
 
 function fingerprintOf(cols: string[]): string {
@@ -1055,18 +1110,24 @@ interface ParsedRow {
   fitid?: string;
 }
 
+/** Signed amount of one raw row under `mapping`, in cents (after `invert`). */
+function rowAmount(r: string[], mapping: ImportMapping): number | null {
+  let amount: number | null = null;
+  if (mapping.amount !== undefined) amount = parseAmount(r[mapping.amount] ?? '', mapping.decimalComma);
+  else if (mapping.debit !== undefined || mapping.credit !== undefined) {
+    const d = mapping.debit !== undefined ? parseAmount(r[mapping.debit] ?? '', mapping.decimalComma) : null;
+    const c = mapping.credit !== undefined ? parseAmount(r[mapping.credit] ?? '', mapping.decimalComma) : null;
+    amount = d || c ? (c ? Math.abs(c) : 0) - (d ? Math.abs(d) : 0) : null;
+  }
+  if (amount !== null && mapping.invert) amount = -amount;
+  return amount;
+}
+
 function parseRows(s: ImportSession, mapping: ImportMapping): ParsedRow[] {
   const fmt = mapping.dateFormat ?? 'YYYY-MM-DD';
   return s.rows.map((r, idx) => {
     const date = mapping.date !== undefined ? parseDate(r[mapping.date] ?? '', fmt) : null;
-    let amount: number | null = null;
-    if (mapping.amount !== undefined) amount = parseAmount(r[mapping.amount] ?? '', mapping.decimalComma);
-    else if (mapping.debit !== undefined || mapping.credit !== undefined) {
-      const d = mapping.debit !== undefined ? parseAmount(r[mapping.debit] ?? '', mapping.decimalComma) : null;
-      const c = mapping.credit !== undefined ? parseAmount(r[mapping.credit] ?? '', mapping.decimalComma) : null;
-      amount = d || c ? (c ? Math.abs(c) : 0) - (d ? Math.abs(d) : 0) : null;
-    }
-    if (amount !== null && mapping.invert) amount = -amount;
+    const amount = rowAmount(r, mapping);
     const rawPayee = mapping.payee !== undefined ? (r[mapping.payee] ?? '') : '';
     return { idx, date, amount, rawPayee, payee: normalizePayee(rawPayee || 'Unknown payee'), memo: mapping.memo !== undefined ? (r[mapping.memo] ?? '') : '', fitid: s.fitid !== undefined ? r[s.fitid] : undefined };
   });
@@ -1451,10 +1512,13 @@ export const handlers: MockHandlers = {
     let columns: string[];
     let rows: string[][];
     let fitid: number | undefined;
+    let ledger: OfxLedger[] | undefined;
+    let qifC: string[] | undefined;
     if (format === 'ofx' || format === 'qfx') {
       ({ columns, rows } = parseOfx(buf));
       fitid = 4;
-    } else if (format === 'qif') ({ columns, rows } = parseQif(buf));
+      ledger = parseOfxLedgers(buf);
+    } else if (format === 'qif') ({ columns, rows, cleared: qifC } = parseQif(buf));
     else {
       const all = parseCsv(buf);
       if (!all.length) ctx.fail('INVALID', 'That file has no rows');
@@ -1474,7 +1538,7 @@ export const handlers: MockHandlers = {
       l.accounts.find((a) => lower.includes(a.name.toLowerCase().split(' ')[0]) || lower.includes(a.type.replace('_', '')) || (a.type === 'credit_card' && /card|visa|amex|master/.test(lower)))?.id ??
       l.accounts.find((a) => a.type === 'checking')?.id;
     const id = ctx.id();
-    sessionsOf(ctx).set(id, { id, setId: set.id, format, columns, rows, fingerprint, fileName: file.name, fitid, createdAt: ctx.clock.now() });
+    sessionsOf(ctx).set(id, { id, setId: set.id, format, columns, rows, fingerprint, fileName: file.name, fitid, ledger, qifCleared: qifC, createdAt: ctx.clock.now() });
     return {
       importId: id,
       format,
@@ -1533,10 +1597,14 @@ export const handlers: MockHandlers = {
         [R['txn.amount']]: V.money(strToCents(pr.amount), acct!.currency),
         [R['txn.account']]: V.rel([acct!.id]),
         [R['txn.raw']]: V.text(pr.rawPayee),
-        [R['txn.cleared']]: V.status('cleared'),
-        [R['txn.source']]: V.sel(pr.ruleId ? 'rule' : 'import'),
+        // Same rule as Rust `finance_import_commit`: OFX/QFX rows are bank-posted (cleared); QIF follows its `C`
+        // field; CSV carries no status, so rows stay uncleared until the user reconciles. Source is always
+        // "import" (a rule's category is provenance, not source) and every imported row starts unreviewed.
         [R['txn.import_id']]: V.text(keys.get(pr.idx) ?? `import:${s!.id}:${pr.idx}`),
       };
+      if (R['txn.cleared']) values[R['txn.cleared']] = V.status(importCleared(s!, pr.idx) ? 'cleared' : 'uncleared');
+      if (R['txn.source']) values[R['txn.source']] = V.sel('import');
+      if (R['txn.reviewed']) values[R['txn.reviewed']] = V.check(false);
       if (raw?.memo) values[R['txn.memo']] = V.text(raw.memo);
       const cat = o.categoryId ?? pr.categoryId;
       if (cat && l.catById.has(cat)) values[R['txn.category']] = V.rel([cat]);
@@ -1792,7 +1860,38 @@ function previewRows(ctx: MockCtx, l: Ledger, s: ImportSession, mapping: ImportM
       transferPair,
     });
   }
-  return { result: { rows: out, newCount: out.filter((r) => !r.duplicateOf).length, duplicates, categorized }, keys };
+  const statement = closingBalance(s, mapping, acct.name);
+  return { result: { rows: out, newCount: out.filter((r) => !r.duplicateOf).length, duplicates, categorized, ...(statement ? { statement } : {}) }, keys };
+}
+
+/**
+ * `FinanceImportPreview.statement`: the closing balance the file reports. Mirrors Rust
+ * `ParsedStatement::closing_balance` — OFX: the section whose account number's last four digits appear in the
+ * account name, else the only section with a balance; CSV: the balance column on the latest-dated row (last in file
+ * order on ties); QIF: none.
+ */
+function closingBalance(s: ImportSession, mapping: ImportMapping, accountName: string): import('../../types').FinanceImportStatement | undefined {
+  if (s.format === 'ofx' || s.format === 'qfx') {
+    const with_ = s.ledger ?? [];
+    const sec = with_.find((l) => l.acctId.length > 0 && accountName.includes(l.acctId.slice(-4))) ?? (with_.length === 1 ? with_[0] : undefined);
+    if (!sec) return undefined;
+    const asOf = sec.asOf ?? sec.maxDate;
+    return { balance: centsToStr(sec.balance), ...(asOf ? { asOf } : {}), ...(sec.currency ? { currency: sec.currency } : {}), source: 'ofx' };
+  }
+  if (s.format === 'csv' && mapping.balance !== undefined) {
+    const fmt = mapping.dateFormat ?? 'YYYY-MM-DD';
+    let best: { date: string; bal: number } | undefined;
+    for (const r of s.rows) {
+      const date = mapping.date !== undefined ? parseDate(r[mapping.date] ?? '', fmt) : null;
+      const bal = parseAmount(r[mapping.balance] ?? '', mapping.decimalComma);
+      if (!date || bal === null) continue;
+      // Rust drops rows without a valid amount before it looks at balances; do the same.
+      if (rowAmount(r, mapping) === null) continue;
+      if (!best || date >= best.date) best = { date, bal };
+    }
+    return best ? { balance: centsToStr(best.bal), asOf: best.date, source: 'csv' } : undefined;
+  }
+  return undefined;
 }
 
 const CADENCES: { cadence: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly'; days: number; tol: number }[] = [

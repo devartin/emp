@@ -8,6 +8,7 @@ import { api, errorMessage, listen } from "@/backend";
 import type { CellValue, DbSchema, Id, RowDTO } from "@/backend/types";
 import { useTree } from "@/stores/tree";
 import { isReducedMotion } from "@/ui/motion/useReducedEffects";
+import { baseCurrency } from "./currency";
 
 export interface AsyncState<T> {
   data: T | undefined;
@@ -185,7 +186,7 @@ export const cell = {
 
 export const V = {
   text: (s: string): CellValue => ({ t: "text", v: s ? [{ text: s }] : [] }),
-  money: (amount: string, cur = "USD"): CellValue => ({ t: "money", v: amount, cur }),
+  money: (amount: string, cur = baseCurrency()): CellValue => ({ t: "money", v: amount, cur }),
   num: (n: number | null): CellValue => ({ t: "number", v: n }),
   date: (d: string): CellValue => ({ t: "date", v: { start: d, time: false } }),
   rel: (ids: Id[]): CellValue => ({ t: "relation", v: ids }),

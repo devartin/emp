@@ -14,7 +14,7 @@ import { Button } from "@/ui/Button";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
-import { dayLabel, fmtMoney, fmtPct, relDays, toMoney, todayIso } from "../shared/format";
+import { dayLabel, fmtMoney, fmtPct, relDays, toMoney, todayIso, fmtWhole } from "../shared/format";
 import { useAsync, useDbChanged } from "../shared/hooks";
 import { Glyph, Quiet, Section } from "../shared/ui";
 import { useLedgerCtx, type RecurringRow } from "./ledger";
@@ -37,10 +37,10 @@ export default function Recurring() {
   return (
     <div className="flex flex-col gap-4">
       <div className="fh-kpis">
-        <Tile label="Scheduled income" value={fmtMoney(monthlyIn, "USD", { noCents: true })} sub="per month" />
-        <Tile label="Bills & transfers" value={fmtMoney(monthlyOut - subsYear / 12, "USD", { noCents: true })} sub="per month" />
-        <Tile label="Subscriptions" value={fmtMoney(subsYear, "USD", { noCents: true })} sub={`a year · ${subs.length} active`} />
-        <Tile label="Left after schedule" value={fmtMoney(monthlyIn - monthlyOut, "USD", { noCents: true })} sub="per month, before everyday spending" />
+        <Tile label="Scheduled income" value={fmtWhole(monthlyIn)} sub="per month" />
+        <Tile label="Bills & transfers" value={fmtWhole(monthlyOut - subsYear / 12)} sub="per month" />
+        <Tile label="Subscriptions" value={fmtWhole(subsYear)} sub={`a year · ${subs.length} active`} />
+        <Tile label="Left after schedule" value={fmtWhole(monthlyIn - monthlyOut)} sub="per month, before everyday spending" />
       </div>
       <CashCalendar items={l.recurring} />
       {detected.data?.length ? <Detected list={detected.data} onAccepted={() => { detected.reload(); l.reload(); }} /> : null}
@@ -54,7 +54,7 @@ export default function Recurring() {
           </Section>
         </div>
         <div className="fh-span-5">
-          <Section title="Subscriptions" subtitle={<><Sensitive>{fmtMoney(subsYear, "USD", { noCents: true })}</Sensitive> a year</>} pad={false}>
+          <Section title="Subscriptions" subtitle={<><Sensitive>{fmtWhole(subsYear)}</Sensitive> a year</>} pad={false}>
             {subs.length ? (
               <div className="pb-1">
                 {subs.map(({ r, next }) => (
@@ -158,7 +158,7 @@ function SubRow({ r, next, share }: { r: RecurringRow; next: string | null; shar
           <span className="text-tertiary font-normal">/mo</span>
         </div>
         <div className="text-caption text-tertiary tabular" style={{ fontWeight: 400 }}>
-          <Sensitive>{fmtMoney(annual, "USD", { noCents: true })}</Sensitive>/yr{next ? ` · ${dayLabel(next)}` : ""}
+          <Sensitive>{fmtWhole(annual)}</Sensitive>/yr{next ? ` · ${dayLabel(next)}` : ""}
         </div>
       </div>
       {r.cancelUrl ? (
@@ -198,7 +198,7 @@ function CashCalendar({ items }: { items: RecurringRow[] }) {
           const dt = new Date(`${d.day}T12:00:00`);
           const weekend = dt.getDay() === 0 || dt.getDay() === 6;
           return (
-            <Tooltip key={d.day} content={d.flows.length ? <div className="flex flex-col gap-0.5"><b>{dayLabel(d.day)}</b>{d.flows.map((f, k) => <span key={k}>{f.name} · {fmtMoney(f.amount, "USD", { signed: true })}</span>)}</div> : `${dayLabel(d.day)} · nothing scheduled`}>
+            <Tooltip key={d.day} content={d.flows.length ? <div className="flex flex-col gap-0.5"><b>{dayLabel(d.day)}</b>{d.flows.map((f, k) => <span key={k}>{f.name} · {fmtMoney(f.amount, undefined, { signed: true })}</span>)}</div> : `${dayLabel(d.day)} · nothing scheduled`}>
               <div className="fh-cal-day" data-weekend={weekend ? "" : undefined} data-today={i === 0 ? "" : undefined} tabIndex={0}>
                 <div className="fh-cal-bars">
                   {inn ? <m.span className="fh-cal-in" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 0.5, delay: Math.min(0.3, i * 0.01), ease: [0.16, 1, 0.3, 1] }} style={{ height: `${Math.sqrt(inn / max) * 100}%` }} /> : null}

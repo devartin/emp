@@ -9,7 +9,7 @@ import { BarChart } from "@/charts/Bar";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { DeltaPill } from "@/ui/DeltaPill";
-import { fmtMoney, monthLabel } from "../shared/format";
+import { monthLabel, fmtWhole } from "../shared/format";
 import { useAsync, useDbChanged } from "../shared/hooks";
 import { Section } from "../shared/ui";
 import { useLedgerCtx } from "./ledger";
@@ -38,8 +38,8 @@ export default function NetWorth() {
   return (
     <div className="flex flex-col gap-4">
       <Section
-        title="Assets, liabilities and net worth"
-        subtitle={first && lastPt ? <span className="inline-flex items-center gap-2"><Sensitive>{fmtMoney(lastPt.net - first.net, "USD", { noCents: true, signed: true })}</Sensitive><DeltaPill value={first.net ? (lastPt.net - first.net) / Math.abs(first.net) : 0} plain /> over this period</span> : null}
+        title="Net worth history"
+        subtitle={first && lastPt ? <span className="inline-flex items-center gap-2"><Sensitive>{fmtWhole(lastPt.net - first.net, { signed: true })}</Sensitive><DeltaPill value={first.net ? (lastPt.net - first.net) / Math.abs(first.net) : 0} plain /> over this period</span> : null}
         actions={<Segmented size="sm" value={range} onValueChange={setRange} aria-label="Range" options={[{ value: "1y", label: "1Y" }, { value: "3y", label: "3Y" }, { value: "5y", label: "5Y" }, { value: "all", label: "All" }]} />}
       >
         <LineChart
@@ -48,7 +48,7 @@ export default function NetWorth() {
           series={[
             { key: "net", label: "Net worth", color: "var(--accent-solid)", area: true },
             { key: "assets", label: "Assets", color: "var(--gain)" },
-            { key: "liabilities", label: "Liabilities", color: "var(--loss)", dashed: true },
+            { key: "liabilities", label: "Debts", color: "var(--loss)", dashed: true },
           ]}
           colorBySign={false}
           startReference={false}
@@ -84,13 +84,13 @@ export default function NetWorth() {
                     <tr key={r.m}>
                       <td>{monthLabel(r.m)}</td>
                       <td className="num text-secondary">
-                        <Sensitive align="end">{fmtMoney(r.assets, "USD", { noCents: true })}</Sensitive>
+                        <Sensitive align="end">{fmtWhole(r.assets)}</Sensitive>
                       </td>
                       <td className="num text-secondary">
-                        <Sensitive align="end">{fmtMoney(r.liabilities, "USD", { noCents: true })}</Sensitive>
+                        <Sensitive align="end">{fmtWhole(r.liabilities)}</Sensitive>
                       </td>
                       <td className="num font-medium">
-                        <Sensitive align="end">{fmtMoney(r.net, "USD", { noCents: true })}</Sensitive>
+                        <Sensitive align="end">{fmtWhole(r.net)}</Sensitive>
                       </td>
                     </tr>
                   ))}

@@ -18,7 +18,7 @@ import { MoneyField } from "@/ui/MoneyField";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { daysBetween, dayLabel, fmtMoney, num, todayIso } from "../finance/shared/format";
+import { daysBetween, dayLabel, num, todayIso, fmtWhole } from "../finance/shared/format";
 import { useAsync } from "../finance/shared/hooks";
 import { Section } from "../finance/shared/ui";
 import { useTax } from "./data";
@@ -72,7 +72,7 @@ export default function QuarterlyPlan() {
             <span className="text-caption text-secondary" style={{ fontWeight: 500 }}>Next payment</span>
             {next ? (
               <>
-                <span className="tabular" style={{ fontSize: 22, fontWeight: 640 }}>{num(next.suggested) === 0 ? <span className="text-gain-text">Covered</span> : <Sensitive>{fmtMoney(next.suggested, "USD", { noCents: true })}</Sensitive>}</span>
+                <span className="tabular" style={{ fontSize: 22, fontWeight: 640 }}>{num(next.suggested) === 0 ? <span className="text-gain-text">Covered</span> : <Sensitive>{fmtWhole(next.suggested)}</Sensitive>}</span>
                 <span className="text-caption text-tertiary">{next.period} · due {dayLabel(next.date, true)} · in {daysBetween(todayIso(), next.date)} days</span>
               </>
             ) : (
@@ -95,7 +95,7 @@ export default function QuarterlyPlan() {
                   <div className="text-body font-semibold">{d.period}</div>
                   <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>Due {dayLabel(d.date, true)}</div>
                   <div className="tabular mt-2" style={{ fontSize: 18, fontWeight: 620 }}>
-                    <Sensitive>{isPaid ? fmtMoney(d.paid, "USD", { noCents: true }) : fmtMoney(d.suggested, "USD", { noCents: true })}</Sensitive>
+                    <Sensitive>{isPaid ? fmtWhole(d.paid) : fmtWhole(d.suggested)}</Sensitive>
                   </div>
                   <div className="mt-1">
                     {isPaid ? (

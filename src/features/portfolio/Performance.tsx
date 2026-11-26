@@ -7,7 +7,7 @@ import { Badge } from "@/ui/Badge";
 import { GainLoss } from "@/ui/DeltaPill";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
-import { dayLabel, fmtMoney, fmtPct, fmtQty, num } from "../finance/shared/format";
+import { dayLabel, fmtPct, fmtQty, num, fmtWhole } from "../finance/shared/format";
 import { useAsync } from "../finance/shared/hooks";
 import { Quiet, Section, Stat } from "../finance/shared/ui";
 import { ticker } from "../markets/data";
@@ -58,9 +58,9 @@ export default function Performance({ instanceId, summary: s }: { instanceId: Id
       <div className="fh-grid">
         <Section className="fh-span-4" title={`Realised in ${year}`} subtitle="Taxable and sheltered accounts">
           <div className="flex flex-col gap-4">
-            <Stat label="Short-term (held ≤ 1 year)" value={realized.data ? <GainLoss value={num(realized.data.totals.short)}><Sensitive>{fmtMoney(realized.data.totals.short, "USD", { noCents: true, signed: true })}</Sensitive></GainLoss> : "—"} />
-            <Stat label="Long-term" value={realized.data ? <GainLoss value={num(realized.data.totals.long)}><Sensitive>{fmtMoney(realized.data.totals.long, "USD", { noCents: true, signed: true })}</Sensitive></GainLoss> : "—"} />
-            <Stat label="Unrealised today" value={s ? <GainLoss value={num(s.unrealized.amount)}><Sensitive>{fmtMoney(s.unrealized.amount, "USD", { noCents: true, signed: true })}</Sensitive></GainLoss> : "—"} />
+            <Stat label="Short-term (held ≤ 1 year)" value={realized.data ? <GainLoss value={num(realized.data.totals.short)}><Sensitive>{fmtWhole(realized.data.totals.short, { signed: true })}</Sensitive></GainLoss> : "—"} />
+            <Stat label="Long-term" value={realized.data ? <GainLoss value={num(realized.data.totals.long)}><Sensitive>{fmtWhole(realized.data.totals.long, { signed: true })}</Sensitive></GainLoss> : "—"} />
+            <Stat label="Unrealised today" value={s ? <GainLoss value={num(s.unrealized.amount)}><Sensitive>{fmtWhole(s.unrealized.amount, { signed: true, currency: s.unrealized.currency })}</Sensitive></GainLoss> : "—"} />
           </div>
         </Section>
         <Section className="fh-span-8" title="Sales this year" pad={false}>
@@ -85,9 +85,9 @@ export default function Performance({ instanceId, summary: s }: { instanceId: Id
                     <td className="text-secondary">{dayLabel(l.acquired, true)}</td>
                     <td className="text-secondary">{dayLabel(l.sold, true)}</td>
                     <td className="num"><Sensitive align="end">{fmtQty(l.qty)}</Sensitive></td>
-                    <td className="num"><Sensitive align="end">{fmtMoney(l.proceeds, "USD", { noCents: true })}</Sensitive></td>
-                    <td className="num text-secondary"><Sensitive align="end">{fmtMoney(l.basis, "USD", { noCents: true })}</Sensitive></td>
-                    <td className="num"><GainLoss value={num(l.gain)}><Sensitive align="end">{fmtMoney(l.gain, "USD", { noCents: true, signed: true })}</Sensitive></GainLoss></td>
+                    <td className="num"><Sensitive align="end">{fmtWhole(l.proceeds)}</Sensitive></td>
+                    <td className="num text-secondary"><Sensitive align="end">{fmtWhole(l.basis)}</Sensitive></td>
+                    <td className="num"><GainLoss value={num(l.gain)}><Sensitive align="end">{fmtWhole(l.gain, { signed: true })}</Sensitive></GainLoss></td>
                     <td><Badge tone={l.term === "long" ? "neutral" : "warning"}>{l.term === "long" ? "Long" : "Short"}</Badge></td>
                   </tr>
                 ))}

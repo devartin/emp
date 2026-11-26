@@ -255,6 +255,8 @@ export function provisionMoneyHq(ctx: MockCtx, o: ProvisionOpts): FinSet {
     { name: 'Tags', type: 'multi_select', role: 'txn.tags', config: { options: [{ id: 'tax', name: 'Tax', color: 'yellow' }, { id: 'reimbursable', name: 'Reimbursable', color: 'blue' }, { id: 'trip', name: 'Trip', color: 'purple' }, { id: 'work', name: 'Work', color: 'gray' }] } },
     { name: 'Source', type: 'select', role: 'txn.source', config: { options: [{ id: 'manual', name: 'Manual', color: 'gray' }, { id: 'import', name: 'Import', color: 'blue' }, { id: 'rule', name: 'Rule', color: 'purple' }] } },
     { name: 'Import ID', type: 'text', role: 'txn.import_id', hidden: true },
+    // §16 role table: `txn.reviewed` (PROGRAMME-v3 K5). Imports write false; the review lane ticks it.
+    { name: 'Reviewed', type: 'checkbox', role: 'txn.reviewed' },
   ];
   const tx = createDatabase(ctx, { ...common, title: 'Transactions', icon: lucide('arrow-left-right', 'green'), description: 'Signed amounts: money in is positive, money out is negative.', properties: txProps, views: [{ name: 'All transactions', layout: 'table' }, { name: 'Spending by month', layout: 'chart' }] });
   // Self relations need the database to exist first.
@@ -537,6 +539,8 @@ function seedMoneySample(ctx: MockCtx, set: FinSet): void {
     const occ = (counters.get(key) ?? 0) + 1;
     counters.set(key, occ);
     const cleared = d.date < addDays(today, -41) ? 'reconciled' : d.date < addDays(today, -3) ? 'cleared' : 'uncleared';
+    // Everything is reviewed except the uncategorised inbox rows and the last three days' imports.
+    const reviewed = !uncategorised.has(d) && d.date < addDays(today, -3);
     const values: Record<Id, CellValue> = {
       [txPrimary]: V.text(d.payee),
       [T['txn.date']]: V.date(d.date),
@@ -546,6 +550,7 @@ function seedMoneySample(ctx: MockCtx, set: FinSet): void {
       [T['txn.cleared']]: V.status(cleared),
       [T['txn.source']]: V.sel('import'),
       [T['txn.import_id']]: V.text(`sample:${d.account}:${d.date}:${d.amount}:${occ}`),
+      [T['txn.reviewed']]: V.check(reviewed),
     };
     if (d.memo) values[T['txn.memo']] = V.text(d.memo);
     if (d.tags?.length) values[T['txn.tags']] = V.multi(...d.tags);
@@ -566,6 +571,7 @@ function seedMoneySample(ctx: MockCtx, set: FinSet): void {
             [T['txn.split_parent']]: V.rel([row.id]),
             [T['txn.cleared']]: V.status(cleared),
             [T['txn.source']]: V.sel('manual'),
+            [T['txn.reviewed']]: V.check(reviewed),
           },
         });
       }
@@ -585,6 +591,7 @@ function seedMoneySample(ctx: MockCtx, set: FinSet): void {
           [T['txn.source']]: V.sel('import'),
           [T['txn.transfer']]: V.rel([row.id]),
           [T['txn.import_id']]: V.text(`sample:${d.transferTo}:${d.date}:${-d.amount}:${occ}`),
+          [T['txn.reviewed']]: V.check(reviewed),
         },
       });
       ctx.db.table<RowRecord>('db_rows').update(row.id, (r) => void (r.values[T['txn.transfer']] = V.rel([twin.id])));
@@ -605,6 +612,7 @@ function seedMoneySample(ctx: MockCtx, set: FinSet): void {
       [T['txn.cleared']]: V.status('uncleared'),
       [T['txn.source']]: V.sel('import'),
       [T['txn.import_id']]: V.text(`sample:savings:${pending}:25000:1`),
+      [T['txn.reviewed']]: V.check(false),
     },
   });
 
@@ -946,7 +954,7 @@ export function provisionTax(ctx: MockCtx, o: ProvisionOpts & { year?: number })
     properties: [
       { name: 'Description', type: 'title', role: 'taxded.desc' },
       { name: 'Date', type: 'date', role: 'taxded.date' },
-      { name: 'Category', type: 'select', role: 'taxded.category', config: { options: [{ id: 'charity', name: 'Charitable gifts', color: 'pink' }, { id: 'medical', name: 'Medical & dental', color: 'red' }, { id: 'salt', name: 'State & local taxes', color: 'blue' }, { id: 'mortgage', name: 'Mortgage interest', color: 'brown' }, { id: 'home_office', name: 'Home office', color: 'purple' }, { id: 'business', name: 'Business expense', color: 'orange' }, { id: 'education', name: 'Education', color: 'green' }, { id: 'hsa', name: 'HSA contribution', color: 'yellow' }, { id: 'ira', name: 'IRA contribution', color: 'gray' }] } },
+      { name: 'Category', type: 'select', role: 'taxded.category', config: { options: [{ id: 'charity', name: 'Charitable gifts', color: 'pink' }, { id: 'medical', name: 'Medical & dental', color: 'red' }, { id: 'salt', name: 'State & local taxes', color: 'blue' }, { id: 'mortgage', name: 'Mortgage interest', color: 'brown' }, { id: 'home_office', name: 'Home office', color: 'purple' }, { id: 'business', name: 'Business expense', color: 'orange' }, { id: 'education', name: 'Education', color: 'green' }, { id: 'hsa', name: 'HSA contribution', color: 'yellow' }, { id: 'ira', name: 'Traditional IRA contribution', color: 'gray' }] } },
       { name: 'Amount', type: 'money', role: 'taxded.amount', config: { currency: 'USD' } },
       { name: 'Deductible %', type: 'number', role: 'taxded.pct', config: { format: 'percent' } },
       { name: 'Payee', type: 'text', role: 'taxded.payee' },
@@ -1002,7 +1010,6 @@ function seedTaxSample(ctx: MockCtx, set: TaxSet): void {
     ['Design software subscription', `${y}-03-01`, 'business', 659_88, 1, 'Studio Suite', true],
     ['Co-working day passes', `${y}-07-14`, 'business', 340_00, 1, 'Commons Workspace', false],
     ['HSA contributions (payroll)', `${y}-10-31`, 'hsa', 2_400_00, 1, 'Acme Studio', true],
-    ['Roth IRA contribution', `${y}-04-01`, 'ira', 2_000_00, 0, 'Harbor Brokerage', true],
   ];
   for (const [desc, date, cat, amt, pct, payee, receipt] of ded) {
     createRow(ctx, set.dbs.deductions, { silent: true, sample: true, values: { [P(set.dbs.deductions)]: V.text(desc), [X['taxded.date']]: V.date(date), [X['taxded.category']]: V.sel(cat), [X['taxded.amount']]: V.money(amt), [X['taxded.pct']]: V.num(pct), [X['taxded.payee']]: V.text(payee), [X['taxded.receipt']]: V.check(receipt), [X['taxded.year']]: V.num(y) } });

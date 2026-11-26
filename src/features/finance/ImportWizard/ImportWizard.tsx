@@ -4,7 +4,6 @@
  * categorisation (rule / learned / none, overridable) → rules & profile → import with progress.
  */
 import { AlertTriangle, ArrowLeftRight, ArrowRight, Check, ChevronLeft, Copy, FileSpreadsheet, FileUp, Sparkles, Wand2 } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
@@ -17,10 +16,7 @@ import { Button } from "@/ui/Button";
 import { Checkbox } from "@/ui/Checkbox";
 import { FileDropZone } from "@/ui/FileDropZone";
 import { Input } from "@/ui/Input";
-import { celebrate } from "@/ui/motion/Celebrate";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
-import { spring } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { SlabGlyph } from "@/ui/SlabGlyph";
 import { Progress, Stepper } from "@/ui/Progress";
 import { Segmented } from "@/ui/Segmented";
@@ -29,7 +25,10 @@ import { Sheet } from "@/ui/Sheet";
 import { Spinner } from "@/ui/Spinner";
 import { Switch } from "@/ui/Switch";
 import { Tooltip } from "@/ui/Tooltip";
-import { dayLabel, num, toMoney } from "../shared/format";
+import { dayLabel, fmtMoney, num, toMoney, todayIso } from "../shared/format";
+import { useStatements } from "../shared/statements";
+import type { FinanceImportFile } from "./request";
+import { Sensitive } from "@/ui/Sensitive";
 import { Glyph } from "../shared/ui";
 import { useLedgerCtx, type Ledger } from "../MoneyHQ/ledger";
 import { CategoryPicker } from "../MoneyHQ/Transactions";
@@ -41,7 +40,7 @@ type Role = "date" | "amount" | "debit" | "credit" | "payee" | "memo" | "balance
 const ROLE_LABEL: Record<Role, string> = { date: "Date", amount: "Amount", debit: "Money out", credit: "Money in", payee: "Payee", memo: "Memo", balance: "Balance", ignore: "Ignore" };
 const DATE_FORMATS = ["YYYY-MM-DD", "MM/DD/YYYY", "DD/MM/YYYY", "DD.MM.YYYY", "D MMM YYYY", "MM/DD'YY", "excel"];
 
-export default function ImportWizard({ instanceId, open, onOpenChange }: { instanceId: Id; open: boolean; onOpenChange: (o: boolean) => void }) {
+export default function ImportWizard({ instanceId, open, onOpenChange, initialFile }: { instanceId: Id; open: boolean; onOpenChange: (o: boolean) => void; initialFile?: FinanceImportFile }) {
   const l = useLedgerCtx();
   const [step, setStep] = useState<Step>("file");
   const [start, setStart] = useState<FinanceImportStart | null>(null);
@@ -58,27 +57,19 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
   const [result, setResult] = useState<{ inserted: number; skipped: number; transfersLinked: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const doneRef = useRef<HTMLDivElement>(null);
-  const doneBadgeRef = useRef<HTMLSpanElement>(null);
-  // lateral step transitions in the direction of travel (§5.4.3)
-  const stepIdx = STEPS.indexOf(step);
-  const prevStep = useRef(stepIdx);
-  const stepDir = stepIdx === prevStep.current ? 1 : stepIdx > prevStep.current ? 1 : -1;
-  useEffect(() => {
-    prevStep.current = stepIdx;
-  }, [stepIdx]);
-  const reduced = useReducedMotionPref();
 
-  const pick = async () => {
+  const [fileName, setFileName] = useState<string | undefined>(initialFile?.displayName);
+  const rememberStatement = useStatements((st) => st.remember);
+  const startWith = async (file: FinanceImportFile) => {
     setError(null);
+    setBusy(true);
     try {
-      const grants = await api.file.pick({ purpose: "import", filters: [{ name: "Bank statements", extensions: ["csv", "tsv", "txt", "ofx", "qfx", "qif"] }], multiple: false });
-      if (!grants.length) return;
-      setBusy(true);
-      const s = await api.finance.importStart({ instanceId, grantId: grants[0].grantId });
+      const s = await api.finance.importStart({ instanceId, grantId: file.grantId });
       setStart(s);
       setMapping(s.mappingGuess);
       setAccountId(s.accountGuess ?? null);
-      setProfileName(s.profileMatch?.name ?? grants[0].displayName.replace(/\.[a-z]+$/i, ""));
+      setFileName(file.displayName);
+      setProfileName(s.profileMatch?.name ?? file.displayName.replace(/\.[a-z]+$/i, ""));
       setStep(s.profileMatch ? "review" : "map");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't read that file");
@@ -86,6 +77,24 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
       setBusy(false);
     }
   };
+  const pick = async () => {
+    setError(null);
+    try {
+      const grants = await api.file.pick({ purpose: "import", filters: [{ name: "Bank statements", extensions: ["csv", "tsv", "txt", "ofx", "qfx", "qif"] }], multiple: false });
+      if (!grants.length) return;
+      await startWith({ grantId: grants[0].grantId, displayName: grants[0].displayName });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't read that file");
+    }
+  };
+  // Opened from the shell's Import (or ⌘K) with a file already chosen: start from it.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!initialFile || started.current) return;
+    started.current = true;
+    void startWith(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   // Live preview whenever the mapping or account changes (debounced).
   const key = JSON.stringify({ mapping, accountId, id: start?.importId });
@@ -132,9 +141,10 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
       });
       const r = await job.result;
       setResult(r);
-      // the check pops (pop spring), then the mini-slabs burst from it and the toast drains at +400ms (S8 timing)
-      window.setTimeout(() => doneBadgeRef.current && celebrate(doneBadgeRef.current, { badge: false, particles: 18 }), 240);
-      window.setTimeout(() => notify.success(`${r.inserted.toLocaleString()} ${r.inserted === 1 ? "row" : "rows"} imported`, { description: l.acct.get(accountId)?.name }), 640);
+      // The file's own closing balance, kept for the reconcile dialog (labelled with its source and date there).
+      if (preview?.statement) rememberStatement(accountId, { ...preview.statement, fileName, importedOn: todayIso() });
+      // A chore, not a moment: no confetti (K3). The result line below is the confirmation.
+      notify.success(`${r.inserted.toLocaleString()} ${r.inserted === 1 ? "row" : "rows"} imported`, { description: l.acct.get(accountId)?.name });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed");
       setStep("rules");
@@ -180,19 +190,8 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
             <span className="text-body-sm">{error}</span>
           </div>
         ) : null}
-        <AnimatePresence mode="wait" initial={false} custom={stepDir}>
-          <m.div
-            key={step}
-            custom={stepDir}
-            variants={{
-              in: (d: number) => (reduced ? { opacity: 0 } : { opacity: 0, x: d * 24 }),
-              at: { opacity: 1, x: 0, transition: reduced ? { duration: 0.14 } : { duration: 0.24, ease: [0.2, 0, 0, 1] } },
-              out: (d: number) => (reduced ? { opacity: 0, transition: { duration: 0.08 } } : { opacity: 0, x: d * -16, transition: { duration: 0.1, ease: [0.4, 0, 1, 1] } }),
-            }}
-            initial="in"
-            animate="at"
-            exit="out"
-          >
+        {/* Steps swap at once (K3 C0): input never waits on a transition. */}
+        <div key={step}>
             {step === "file" ? (
               <div className="flex flex-col gap-4">
                 <FileDropZone title={busy ? "Reading the statement…" : "Drop a bank statement or click to choose"} hint="CSV, OFX, QFX or QIF · nothing leaves this device" progress={busy ? null : undefined} onBrowse={() => void pick()} onFiles={() => void pick()} disabled={busy} />
@@ -249,17 +248,22 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
               <div className="flex flex-col items-center text-center gap-4 py-10" ref={doneRef}>
                 {result ? (
                   <>
-                    <m.span ref={doneBadgeRef} initial={reduced ? { opacity: 0 } : { scale: 0.2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={reduced ? { duration: 0.14 } : spring.pop} className="fh-done-badge">
+                    <span className="fh-done-badge">
                       <Check size={30} strokeWidth={3} />
-                    </m.span>
+                    </span>
                     <div className="text-h3 tabular fh-baseline">
-                      Imported <RollingNumber value={result.inserted} format={(n) => Math.round(n).toLocaleString()} countUp countUpDuration={0.9} /> transactions
+                      Imported {result.inserted.toLocaleString()} {result.inserted === 1 ? "transaction" : "transactions"}
                     </div>
                     <div className="text-body text-secondary max-w-[420px]">
                       {result.skipped ? `${result.skipped} skipped as duplicates. ` : ""}
-                      {result.transfersLinked ? `${result.transfersLinked} linked as transfers between your accounts. ` : ""}
-                      Your budget, charts and forecast are already up to date.
+                      {result.transfersLinked ? `${result.transfersLinked} linked as transfers between your accounts.` : ""}
                     </div>
+                    {preview?.statement && accountId ? (
+                      <div className="text-body-sm text-secondary tabular">
+                        Statement balance <Sensitive>{fmtMoney(preview.statement.balance, preview.statement.currency)}</Sensitive>
+                        {preview.statement.asOf ? ` on ${dayLabel(preview.statement.asOf, true)}` : ""} · ready to reconcile in Accounts
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -281,8 +285,7 @@ export default function ImportWizard({ instanceId, open, onOpenChange }: { insta
                 )}
               </div>
             ) : null}
-          </m.div>
-        </AnimatePresence>
+        </div>
       </div>
     </Sheet>
   );

@@ -8,6 +8,7 @@ import { MARGIN, X_AXIS_HEIGHT, niceDomain, tickFormatter, tickStyle, valueForma
 import { ChartFrame } from "@/charts/ChartFrame";
 import { ChartTooltip } from "@/charts/Tooltip";
 import { seriesColor, useChartTheme } from "@/charts/theme";
+import { baseCurrency } from "./currency";
 
 export interface StackSeries {
   key: string;
@@ -56,7 +57,7 @@ export function StackedAreaChart<T extends Record<string, unknown>>({
     >
       {(size) => {
         const { domain, ticks } = niceDomain([0, ...totals], { includeZero: true });
-        const tf = tickFormatter(format, "USD", t.privacy);
+        const tf = tickFormatter(format, baseCurrency(), t.privacy);
         const yW = Math.max(28, Math.max(...ticks.map((v) => tf(v).length)) * 6.6 + 10);
         return (
           <AreaChart width={size.width} height={size.height} data={data} margin={MARGIN} accessibilityLayer>

@@ -25,7 +25,7 @@ import { Skeleton } from "@/ui/Skeleton";
 import { Slider } from "@/ui/Slider";
 import { Switch } from "@/ui/Switch";
 import { Tooltip } from "@/ui/Tooltip";
-import { fmtMoney, fmtPct, num } from "../finance/shared/format";
+import { fmtMoney, fmtPct, num, fmtWhole } from "../finance/shared/format";
 import { useAsync } from "../finance/shared/hooks";
 import { disclose, Section } from "../finance/shared/ui";
 import { STATUS_LABEL, useTax } from "./data";
@@ -128,7 +128,7 @@ export default function Estimator() {
                       <span className="block text-body-sm text-secondary">{x.label}</span>
                       <span className="block text-caption text-tertiary truncate" style={{ fontWeight: 400 }}>{x.source}</span>
                     </span>
-                    <span className="tabular font-medium text-body-sm"><Sensitive>{fmtMoney(x.amount, "USD", { noCents: true, signed: x.amount < 0 })}</Sensitive></span>
+                    <span className="tabular font-medium text-body-sm"><Sensitive>{fmtWhole(x.amount, { signed: x.amount < 0 })}</Sensitive></span>
                   </div>
                 ))}
               </div>
@@ -166,7 +166,7 @@ export default function Estimator() {
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-body-sm font-medium">If your wages change by</span>
                 <span className="tabular text-body-sm font-semibold" data-sensitive="">
-                  <RollingNumber value={wageDelta} format={(n) => (Math.round(n) === 0 ? "$0" : fmtMoney(Math.round(n), "USD", { noCents: true, signed: true }))} scrubbing={dragging} countUp={false} sensitive />
+                  <RollingNumber value={wageDelta} format={(n) => (Math.round(n) === 0 ? "$0" : fmtWhole(Math.round(n), { signed: true }))} scrubbing={dragging} countUp={false} sensitive />
                 </span>
               </div>
               <div className="mt-3" onPointerUp={() => setDragging(false)} onBlur={() => setDragging(false)}>
@@ -180,7 +180,7 @@ export default function Estimator() {
                     setWageDelta(v[0]);
                   }}
                   onValueCommit={() => setDragging(false)}
-                  formatValue={(n) => fmtMoney(n, "USD", { noCents: true, signed: true })}
+                  formatValue={(n) => fmtWhole(n, { signed: true })}
                   aria-label="Change in wages"
                 />
               </div>
@@ -209,9 +209,9 @@ export default function Estimator() {
                   <div className="tx-delta">
                     <span className="text-body-sm text-secondary">With these changes, estimated total tax</span>
                     <span className="tabular font-semibold" style={{ color: num(alt.data.totalTax) > num(est.totalTax) ? "var(--loss-text)" : "var(--gain-text)" }}>
-                      <Sensitive>{fmtMoney(num(alt.data.totalTax) - num(est.totalTax), "USD", { noCents: true, signed: true })}</Sensitive>
+                      <Sensitive>{fmtWhole(num(alt.data.totalTax) - num(est.totalTax), { signed: true })}</Sensitive>
                     </span>
-                    <span className="text-caption text-tertiary">→ {num(alt.data.balance) >= 0 ? "balance due" : "refund"} <Sensitive>{fmtMoney(Math.abs(num(alt.data.balance)), "USD", { noCents: true })}</Sensitive></span>
+                    <span className="text-caption text-tertiary">→ {num(alt.data.balance) >= 0 ? "balance due" : "refund"} <Sensitive>{fmtWhole(Math.abs(num(alt.data.balance)))}</Sensitive></span>
                   </div>
                 </m.div>
               ) : null}
@@ -268,13 +268,13 @@ export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxE
           </m.div>
           {est.range ? (
             <div className="text-body-sm text-secondary">
-              Likely between <Sensitive>{fmtMoney(est.range.low, "USD", { noCents: true })}</Sensitive> and <Sensitive>{fmtMoney(est.range.high, "USD", { noCents: true })}</Sensitive> (±10% income)
+              Likely between <Sensitive>{fmtWhole(est.range.low)}</Sensitive> and <Sensitive>{fmtWhole(est.range.high)}</Sensitive> (±10% income)
             </div>
           ) : null}
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 flex-none">
-          <Fig label="Total tax" value={fmtMoney(est.totalTax, "USD", { noCents: true })} />
-          <Fig label="Taxable income" value={fmtMoney(est.taxable, "USD", { noCents: true })} />
+          <Fig label="Total tax" value={fmtWhole(est.totalTax)} />
+          <Fig label="Taxable income" value={fmtWhole(est.taxable)} />
           <Fig label="Effective rate" value={fmtPct(est.effectiveRate, 1)} plain />
           <Fig label="Marginal rate" value={fmtPct(est.marginalRate, 0)} plain />
         </div>
@@ -282,10 +282,10 @@ export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxE
       {compact ? (
         <div className="tx-deduction">
           <span className="text-body-sm">
-            {est.deduction.kind === "itemized" ? "Itemising" : "Standard deduction"} · <b className="tabular"><Sensitive>{fmtMoney(est.deduction.amount, "USD", { noCents: true })}</Sensitive></b>
+            {est.deduction.kind === "itemized" ? "Itemising" : "Standard deduction"} · <b className="tabular"><Sensitive>{fmtWhole(est.deduction.amount)}</Sensitive></b>
           </span>
           <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-            AGI <Sensitive>{fmtMoney(est.agi, "USD", { noCents: true })}</Sensitive> · SE tax <Sensitive>{fmtMoney(est.seTax, "USD", { noCents: true })}</Sensitive>
+            AGI <Sensitive>{fmtWhole(est.agi)}</Sensitive> · SE tax <Sensitive>{fmtWhole(est.seTax)}</Sensitive>
           </span>
         </div>
       ) : null}
@@ -293,10 +293,10 @@ export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxE
         <>
           <div className="tx-deduction">
             <span className="text-body-sm">
-              {est.deduction.kind === "itemized" ? "Itemising" : "Standard deduction"} · <b className="tabular"><Sensitive>{fmtMoney(est.deduction.amount, "USD", { noCents: true })}</Sensitive></b>
+              {est.deduction.kind === "itemized" ? "Itemising" : "Standard deduction"} · <b className="tabular"><Sensitive>{fmtWhole(est.deduction.amount)}</Sensitive></b>
             </span>
             <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-              {est.deduction.kind === "itemized" ? `beats the standard ${fmtMoney(est.deduction.standardWouldBe, "USD", { noCents: true })}` : `standard ${fmtMoney(est.deduction.standardWouldBe, "USD", { noCents: true })} is the better choice`}
+              {est.deduction.kind === "itemized" ? `beats the standard ${fmtWhole(est.deduction.standardWouldBe)}` : `standard ${fmtWhole(est.deduction.standardWouldBe)} is the better choice`}
             </span>
           </div>
           <button type="button" className="tx-math-toggle" onClick={() => setMath((v) => !v)} aria-expanded={math}>
@@ -361,7 +361,7 @@ export function Brackets({ est, scrubbing }: { est: TaxEstimate; scrubbing?: boo
   const ordinaryTaxable = bands.reduce((a, b) => a + num(b.taxed), 0);
   return (
     <Section title="Where your income lands" subtitle={`Ordinary taxable income across the ${bands.length} lowest brackets${pref ? " · qualified dividends and long-term gains are stacked on top at lower rates" : ""}`}>
-      <div className="tx-brackets" role="img" aria-label={`Taxable income of ${fmtMoney(taxable, "USD", { noCents: true })} reaches the ${fmtPct(est.marginalRate, 0)} bracket`}>
+      <div className="tx-brackets" role="img" aria-label={`Taxable income of ${fmtWhole(taxable)} reaches the ${fmtPct(est.marginalRate, 0)} bracket`}>
         {bands.map((b, i) => {
           const w = (Math.max(0, span(b)) / total) * 100;
           const fill = span(b) > 0 ? Math.min(1, num(b.taxed) / span(b)) : 0;
@@ -375,7 +375,7 @@ export function Brackets({ est, scrubbing }: { est: TaxEstimate; scrubbing?: boo
               <span className="tx-br-range tabular">{fmtCompactK(num(b.from))}</span>
               {num(b.taxed) > 0 ? (
                 <span className="tx-br-taxed tabular">
-                  <Sensitive>{w < 18 ? fmtCompactTax(num(b.taxed) * rate) : fmtMoney(num(b.taxed) * rate, "USD", { noCents: true })}</Sensitive> tax
+                  <Sensitive>{w < 18 ? fmtCompactTax(num(b.taxed) * rate) : fmtWhole(num(b.taxed) * rate)}</Sensitive> tax
                 </span>
               ) : (
                 <span className="tx-br-taxed" />
@@ -385,7 +385,7 @@ export function Brackets({ est, scrubbing }: { est: TaxEstimate; scrubbing?: boo
         })}
       </div>
       <div className="flex items-center justify-between mt-3 text-caption text-tertiary" style={{ fontWeight: 400 }}>
-        <span>Taxable ordinary income <b className="text-primary tabular"><Sensitive>{fmtMoney(ordinaryTaxable, "USD", { noCents: true })}</Sensitive></b></span>
+        <span>Taxable ordinary income <b className="text-primary tabular"><Sensitive>{fmtWhole(ordinaryTaxable)}</Sensitive></b></span>
         <span>Each extra dollar is taxed at <b className="text-primary">{fmtPct(est.marginalRate, 0)}</b> — that's your marginal rate, not your average.</span>
       </div>
     </Section>

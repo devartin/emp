@@ -1099,11 +1099,27 @@ export interface FinanceImportPreviewRow {
   transferPair?: Id;
 }
 
+/**
+ * The closing balance the statement file itself reports (PROGRAMME-v3 K5 contract delta, additive). OFX/QFX:
+ * `<LEDGERBAL>` of the statement section; CSV: the mapped balance column on the latest-dated row (last such row in
+ * file order). QIF carries no balance, so it is absent there, as it is when the file has none.
+ */
+export interface FinanceImportStatement {
+  /** Decimal string in the account's currency, e.g. "10900.99" (same format as row amounts). */
+  balance: string;
+  /** YYYY-MM-DD the balance is as of (OFX `DTASOF`, else the latest row date). */
+  asOf?: string;
+  /** ISO 4217 code the file states (OFX `CURDEF`); absent when the file does not say. */
+  currency?: string;
+  source: 'ofx' | 'csv';
+}
+
 export interface FinanceImportPreview {
   rows: FinanceImportPreviewRow[];
   newCount: number;
   duplicates: number;
   categorized: number;
+  statement?: FinanceImportStatement;
 }
 
 export interface RuleCondition {
@@ -1295,7 +1311,11 @@ export interface TaxInput {
 export interface TaxEstimate {
   gross: string;
   agi: string;
-  deduction: { kind: 'standard' | 'itemized'; amount: string; standardWouldBe: string };
+  /**
+   * `itemizedWouldBe` (additive): the itemized total after the pack's floors and caps (medical 7.5% AGI floor,
+   * SALT cap, 0.5% AGI charitable floor), present whenever any itemizable entry exists, whatever the chosen mode.
+   */
+  deduction: { kind: 'standard' | 'itemized'; amount: string; standardWouldBe: string; itemizedWouldBe?: string };
   taxable: string;
   ordinaryTax: string;
   preferentialTax: string;
@@ -1304,6 +1324,7 @@ export interface TaxEstimate {
   credits: string;
   totalTax: string;
   brackets: { rate: string; from: string; to: string | null; taxed: string }[];
+  /** total tax ÷ AGI (0 when AGI ≤ 0), a fraction (0.161 = 16.1%). Same definition in the mock and Rust. */
   effectiveRate: number;
   marginalRate: number;
   /** positive = estimated balance due, negative = estimated refund */

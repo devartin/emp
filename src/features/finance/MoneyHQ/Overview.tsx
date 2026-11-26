@@ -19,7 +19,7 @@ import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { addMonths, assignColors, dayLabel, fmtMoney, fmtPct, monthLabel, num, relDays, toMoney, todayIso } from "../shared/format";
+import { addMonths, assignColors, dayLabel, fmtMoney, fmtPct, monthLabel, num, relDays, toMoney, todayIso, fmtWhole } from "../shared/format";
 import { isIncomeGroup, isSavingGroup, spendingBudget } from "../shared/figures";
 import { useAsync, useDbChanged, useScrubIdx, useScrubStore, type ScrubStore } from "../shared/hooks";
 import { InsightCard, Quiet, Section } from "../shared/ui";
@@ -127,7 +127,7 @@ function NetWorthHero() {
         <span className="ml-auto text-caption text-tertiary" style={{ fontWeight: 400 }}>
           {overview ? (
             <>
-              <Sensitive>{fmtMoney(overview.netWorthDelta30d.amount, "USD", { noCents: true, signed: true })}</Sensitive> in the last 30 days
+              <Sensitive>{fmtWhole(overview.netWorthDelta30d.amount, { signed: true, currency: overview.netWorthDelta30d.currency })}</Sensitive> in the last 30 days
             </>
           ) : null}
         </span>
@@ -154,7 +154,7 @@ function NetWorthReadout({ scrub, data, periodLabel }: { scrub: ScrubStore; data
           <>
             <DeltaPill value={change} />
             <span className="text-caption tabular" style={{ fontWeight: 560, color: delta >= 0 ? "var(--gain-text)" : "var(--loss-text)", transition: "color 200ms var(--ease-out)" }} data-sensitive="">
-              <RollingNumber value={delta} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true, signed: true })} scrubbing={scrubbing} countUp={false} sensitive />
+              <RollingNumber value={delta} format={(n) => fmtWhole(Math.round(n), { signed: true })} scrubbing={scrubbing} countUp={false} sensitive />
             </span>
             <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
               {scrubbing ? dayLabel(cur.t, true) : periodLabel}
@@ -185,7 +185,7 @@ function MiniStat({ label, value, scrubbing }: { label: string; value: number | 
         {label}
       </span>
       <span className="text-body-sm font-medium tabular" data-sensitive="">
-        {value === undefined ? "—" : <RollingNumber value={value} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} scrubbing={scrubbing} countUp={false} sensitive />}
+        {value === undefined ? "—" : <RollingNumber value={value} format={(n) => fmtWhole(Math.round(n))} scrubbing={scrubbing} countUp={false} sensitive />}
       </span>
     </span>
   );
@@ -226,7 +226,7 @@ function SideMetrics() {
         <MetricCard
           label="To be assigned"
           tone={tba < 0 ? "warn" : undefined}
-          value={<RollingNumber value={tba} format={(n) => fmtMoney(n, "USD")} countUpKey="money:tba" sensitive />}
+          value={<RollingNumber value={tba} format={(n) => fmtMoney(n)} countUpKey="money:tba" sensitive />}
           sub={tba > 0.005 ? "Give every dollar a job" : tba < -0.005 ? "Assigned more than you have" : "Every dollar has a job"}
           onClick={tba > 0.005 ? undefined : () => go("budget")}
           visual={
@@ -269,7 +269,7 @@ function SideMetrics() {
   );
 }
 
-const fmtCompact = (v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : fmtMoney(v, "USD", { noCents: true }));
+const fmtCompact = (v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : fmtWhole(v));
 const efColor = (months: number) => (months >= 6 ? "var(--gain)" : months >= 3 ? "var(--chart-line)" : "var(--warning)");
 
 /** Month-by-month figures from the ledger (non-transfer flows; splits counted by their parts). */
@@ -323,9 +323,9 @@ function MetricDetail({ id, onClose }: { id: string; onClose: () => void }) {
         onClose={onClose}
         aside={
           <>
-            <div className="fh-kv">Avg income <b data-sensitive="">{fmtMoney(inc, "USD", { noCents: true })}</b></div>
-            <div className="fh-kv">Avg spending <b data-sensitive="">{fmtMoney(sp, "USD", { noCents: true })}</b></div>
-            <div className="fh-kv">Kept <b data-sensitive="">{fmtMoney(inc - sp, "USD", { noCents: true })}/mo</b></div>
+            <div className="fh-kv">Avg income <b data-sensitive="">{fmtWhole(inc)}</b></div>
+            <div className="fh-kv">Avg spending <b data-sensitive="">{fmtWhole(sp)}</b></div>
+            <div className="fh-kv">Kept <b data-sensitive="">{fmtWhole(inc - sp)}/mo</b></div>
             <Button size="sm" variant="secondary" iconRight={ArrowRight} iconMotion="arrow" className="mt-auto" onClick={() => go("transactions")}>
               See transactions
             </Button>
@@ -353,9 +353,9 @@ function MetricDetail({ id, onClose }: { id: string; onClose: () => void }) {
       onClose={onClose}
       aside={
         <>
-          <div className="fh-kv">Essentials / month <b data-sensitive="">{fmtMoney(ess, "USD", { noCents: true })}</b></div>
-          <div className="fh-kv">Covered today <b data-sensitive="">{fmtMoney(covered, "USD", { noCents: true })}</b></div>
-          <div className="fh-kv">To 6 months <b data-sensitive="">{months >= 6 ? "Funded" : fmtMoney(Math.max(0, ess * 6 - covered), "USD", { noCents: true })}</b></div>
+          <div className="fh-kv">Essentials / month <b data-sensitive="">{fmtWhole(ess)}</b></div>
+          <div className="fh-kv">Covered today <b data-sensitive="">{fmtWhole(covered)}</b></div>
+          <div className="fh-kv">To 6 months <b data-sensitive="">{months >= 6 ? "Funded" : fmtWhole(Math.max(0, ess * 6 - covered))}</b></div>
           <Button size="sm" variant="secondary" iconRight={ArrowRight} iconMotion="arrow" className="mt-auto" onClick={() => go("goals")}>
             Open goals
           </Button>
@@ -391,7 +391,7 @@ function Envelopes() {
       subtitle={
         ov ? (
           <>
-            <Sensitive>{fmtMoney(totalSpent, "USD", { noCents: true })}</Sensitive> of <Sensitive>{fmtMoney(totalAssigned, "USD", { noCents: true })}</Sensitive> spent · {Math.round(pace * 100)}% through {monthLabel(month, true)} · dot = where you should be today
+            <Sensitive>{fmtWhole(totalSpent)}</Sensitive> of <Sensitive>{fmtWhole(totalAssigned)}</Sensitive> spent · {Math.round(pace * 100)}% through {monthLabel(month, true)} · dot = where you should be today
           </>
         ) : (
           "\u00a0"
@@ -464,13 +464,13 @@ function SpendingDonut() {
             onActive={setActive}
             onSelect={(id) => go("transactions", id === "uncategorized" ? { filter: "uncategorized" } : undefined)}
             centerLabel="Spent"
-            format={(n) => fmtMoney(n, "USD", { noCents: true })}
+            format={(n) => fmtWhole(n)}
             total={total}
-            summary={`Spending by category, ${monthLabel(month)}: ${slices.map((x) => `${x.label} ${fmtMoney(x.value, "USD", { noCents: true })}`).join(", ")}`}
+            summary={`Spending by category, ${monthLabel(month)}: ${slices.map((x) => `${x.label} ${fmtWhole(x.value)}`).join(", ")}`}
           />
           <ul className="m-0 p-0 list-none flex-1 min-w-0 flex flex-col gap-0.5">
             {slices.map((x) => (
-              <WheelLegendRow key={x.id} slice={x} active={active} onActive={setActive} onClick={() => go("transactions", x.id === "uncategorized" ? { filter: "uncategorized" } : undefined)} value={fmtMoney(x.value, "USD", { noCents: true })} />
+              <WheelLegendRow key={x.id} slice={x} active={active} onActive={setActive} onClick={() => go("transactions", x.id === "uncategorized" ? { filter: "uncategorized" } : undefined)} value={fmtWhole(x.value)} />
             ))}
           </ul>
         </div>
@@ -520,7 +520,7 @@ function CashFlow() {
       subtitle={
         s.data && income ? (
           <>
-            <Sensitive>{fmtMoney(income, "USD", { noCents: true })}</Sensitive> in · <Sensitive>{fmtMoney(saved, "USD", { noCents: true })}</Sensitive> saved or paid down ({fmtPct(saved / income, 0)})
+            <Sensitive>{fmtWhole(income)}</Sensitive> in · <Sensitive>{fmtWhole(saved)}</Sensitive> saved or paid down ({fmtPct(saved / income, 0)})
           </>
         ) : (
           monthLabel(month)
@@ -627,7 +627,7 @@ function Upcoming() {
   return (
     <Section
       title="Upcoming bills"
-      subtitle={ov ? <><Sensitive>{fmtMoney(-total, "USD", { noCents: true })}</Sensitive> due in the next 7 days</> : null}
+      subtitle={ov ? <><Sensitive>{fmtWhole(-total)}</Sensitive> due in the next 7 days</> : null}
       actions={
         <Button size="xs" variant="ghost" iconRight={ArrowRight} onClick={() => go("recurring")}>
           Recurring

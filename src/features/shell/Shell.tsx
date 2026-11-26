@@ -13,6 +13,7 @@ import { useUi } from "@/stores/ui";
 import { useWorkspace } from "@/stores/workspace";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
+import { loadIconSet } from "./icons";
 import { ImportDialog } from "./ImportDialog";
 import { OpenExternalPrompt } from "./OpenExternalPrompt";
 import { RightPanel } from "./RightPanel";
@@ -77,6 +78,18 @@ export default function Shell() {
     setScrolled(false);
     const id = routePageId(r);
     if (id) useWorkspace.getState().touchRecent(id);
+    // Focus follows the route (N-FL4): when the element that had focus left with the old route, the content region
+    // takes it, so the keyboard keeps working. A route that focuses its own input (Life OS) keeps that focus.
+    requestAnimationFrame(() => {
+      const ae = document.activeElement;
+      if (!ae || ae === document.body || !ae.isConnected) el?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  // The full glyph set (page and app icons) loads once the shell is idle.
+  useEffect(() => {
+    const ric = window.requestIdleCallback ?? ((fn: () => void) => window.setTimeout(fn, 300));
+    ric(() => void loadIconSet());
   }, []);
 
   return (

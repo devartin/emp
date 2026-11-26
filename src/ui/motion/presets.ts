@@ -1,101 +1,97 @@
 /**
- * Reusable motion presets built from the tokens (docs/DESIGN.md §5.3). Use with `m.*` components:
- *   <m.div {...presets.rise} />        <m.div variants={staggerList()} initial="hidden" animate="show">
+ * Reusable motion presets built from the tokens (docs/DESIGN.md §7, register.ts). Use with `m.*` components:
+ *   <m.div {...presets.fade} />
  * Under MotionConfig reducedMotion, motion drops transforms automatically; opacity remains.
  *
- * Timing grammar: exits run at ~0.65× the entrance with `ease.in` and no spring; press is pure CSS (`.slab:active`),
- * so `pressMd` / `pressSm` / `pressCard` are deprecated no-ops kept for API compatibility.
+ * v3 rules: content is present at frame 1. Arrival presets (`rise`, `riseBlur`, `cardEnter`, `page`, `staggerItem`)
+ * are kept for API compatibility but no longer move anything. Overlays use C1 (menus, 120ms) or C2 (dialogs and
+ * sheets, ≤ 220ms). Nothing blurs, nothing overshoots, nothing staggers.
  */
 import type { Transition, Variants } from "motion/react";
-import { duration, ease, spring, stagger } from "./tokens";
+import { duration, ease, spring } from "./tokens";
 
 const t = (d: number, e: readonly [number, number, number, number]): Transition => ({ duration: d, ease: e });
+/** "Already there": the initial state equals the final one, so mounting animates nothing. */
+const still = { opacity: 1, x: 0, y: 0, scale: 1 };
 
 export const transitions = {
-  hoverIn: t(duration.fast, ease.out),
-  hoverOut: t(duration.base, ease.out),
-  menuIn: spring.glide,
-  menuOut: t(0.1, ease.in),
-  tooltipIn: t(duration.fast, ease.out),
-  tooltipOut: t(duration.micro, ease.in),
-  crossfade: t(duration.base, ease.out),
-  pageIn: t(0.22, ease.out),
-  pageOut: t(0.09, ease.in),
-  dialogOut: t(0.15, ease.in),
-  sheetOut: t(0.18, ease.in),
-  toastOut: t(duration.base, ease.in),
-  chartMorph: { duration: 0.62, ease: ease.outExpo } as Transition,
-  chartEntry: t(duration.chart, ease.outExpo),
-  countUp: t(1.3, ease.outExpo),
+  hoverIn: t(0, ease.out),
+  hoverOut: t(0.12, ease.out),
+  menuIn: t(0.12, ease.out),
+  menuOut: t(0.08, ease.in),
+  tooltipIn: t(0.08, ease.out),
+  tooltipOut: t(0.06, ease.in),
+  crossfade: t(duration.fast, ease.out),
+  pageIn: t(0, ease.out),
+  pageOut: t(0, ease.in),
+  dialogOut: t(0.1, ease.in),
+  sheetOut: t(0.14, ease.in),
+  toastOut: t(0.1, ease.in),
+  chartMorph: t(0.2, ease.out),
+  chartEntry: t(duration.chart, ease.out),
+  /** @deprecated count-up is retired (register.ts); kept for API compatibility. */
+  countUp: t(0, ease.out),
 } as const;
 
 export const presets = {
   fade: {
     initial: { opacity: 0 },
     animate: { opacity: 1, transition: transitions.crossfade },
-    exit: { opacity: 0, transition: t(0.11, ease.in) },
+    exit: { opacity: 0, transition: t(0.08, ease.in) },
   },
-  /** Scrim: opacity only, 300ms in / 150ms out, never blurred (§6.3). */
+  /** Scrim: opacity only, 150ms in / 100ms out, never blurred. */
   scrim: {
     initial: { opacity: 0 },
-    animate: { opacity: 1, transition: t(0.3, ease.out) },
-    exit: { opacity: 0, transition: t(0.15, ease.in) },
+    animate: { opacity: 1, transition: t(0.15, ease.out) },
+    exit: { opacity: 0, transition: t(0.1, ease.in) },
   },
-  /** `drop` (§5.4): used when a dialog has no pointer origin. */
+  /** Dialog (C2): 160ms fade + .98 → 1. */
   dialogPanel: {
-    initial: { opacity: 0, scale: 0.955, y: 14, filter: "blur(6px)" },
-    animate: { opacity: 1, scale: 1, y: 0, filter: "blur(0px)", transition: { ...spring.settle, opacity: t(0.12, ease.out), filter: t(0.2, ease.out) } },
-    exit: { opacity: 0, scale: 0.97, filter: "blur(0px)", transition: transitions.dialogOut },
+    initial: { opacity: 0, scale: 0.98 },
+    animate: { opacity: 1, scale: 1, transition: t(0.16, ease.out) },
+    exit: { opacity: 0, scale: 0.99, transition: transitions.dialogOut },
   },
+  /** Side sheet / peek (C2): slides in 200ms, critically damped. */
   sheetPanel: {
     initial: { x: "100%" },
     animate: { x: 0, transition: spring.settle },
     exit: { x: "100%", transition: transitions.sheetOut },
   },
+  /** Mouse-opened menu (C1): .97 → 1 in 120ms. Keyboard-opened menus should pass `initial={false}`. */
   menu: {
-    initial: { opacity: 0, scale: 0.96, y: -4 },
-    animate: { opacity: 1, scale: 1, y: 0, transition: spring.glide },
-    exit: { opacity: 0, scale: 0.98, transition: transitions.menuOut },
+    initial: { opacity: 0, scale: 0.97 },
+    animate: { opacity: 1, scale: 1, transition: transitions.menuIn },
+    exit: { opacity: 0, transition: transitions.menuOut },
   },
-  page: {
-    initial: { opacity: 0, x: 12 },
-    animate: { opacity: 1, x: 0, transition: transitions.pageIn },
-    exit: { opacity: 0, x: -8, transition: transitions.pageOut },
-  },
-  /** `rise` entrance (§5.3). */
-  rise: {
-    initial: { opacity: 0, y: 8 },
-    animate: { opacity: 1, y: 0, transition: spring.settle },
-  },
-  /** `rise-blur` entrance (overlays and hero only). */
-  riseBlur: {
-    initial: { opacity: 0, y: 10, scale: 0.985, filter: "blur(4px)" },
-    animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", transition: { ...spring.settle, filter: t(0.26, ease.out), opacity: t(0.2, ease.out) } },
-  },
-  cardEnter: {
-    initial: { opacity: 0, y: 8 },
-    animate: { opacity: 1, y: 0, transition: spring.settle },
-  },
+  /** @deprecated route changes are instant (C0). Kept as a no-op. */
+  page: { initial: still, animate: still, exit: { opacity: 1 } },
+  /** @deprecated arrival choreography is retired. Kept as a no-op. */
+  rise: { initial: still, animate: still },
+  /** @deprecated arrival choreography is retired. Kept as a no-op. */
+  riseBlur: { initial: still, animate: still },
+  /** @deprecated arrival choreography is retired. Kept as a no-op. */
+  cardEnter: { initial: still, animate: still },
   /** @deprecated press is CSS (`.slab:active`); kept as a no-op for API compatibility. */
   pressMd: {},
   /** @deprecated press is CSS. */
   pressSm: {},
-  /** @deprecated press is CSS (`.panel[data-raise]:active`). */
+  /** @deprecated press is CSS. */
   pressCard: {},
 } as const;
 
-/** Stagger children (cards 40ms, rows 16ms — §5.3). Pair with `staggerItem`. */
-export const staggerList = (step: number = stagger.cards): Variants => ({
-  hidden: {},
-  show: { transition: { staggerChildren: step } },
-});
+/** @deprecated stagger is 0 in v3. Kept so existing variants compile; children appear together. */
+export const staggerList = (_step = 0): Variants => {
+  void _step;
+  return { hidden: {}, show: {} };
+};
+/** @deprecated arrival choreography is retired: items are visible in both states. */
 export const staggerItem: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  show: { opacity: 1, y: 0, transition: spring.settle },
+  hidden: still,
+  show: still,
 };
 
-/** Wrong-password shake (§4.2). */
+/** Wrong-password shake (feedback, C1). */
 export const shake = {
-  x: [0, -8, 8, -6, 6, -3, 3, 0],
-  transition: t(0.4, ease.out),
+  x: [0, -6, 6, -3, 3, 0],
+  transition: t(0.3, ease.out),
 };

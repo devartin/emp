@@ -18,7 +18,7 @@ import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
-import { fmtMoney, monthLabel, num, toMoney, todayIso } from "../shared/format";
+import { fmtMoney, monthLabel, num, toMoney, todayIso, fmtWhole } from "../shared/format";
 import { useAsync, useDbChanged, useFlip } from "../shared/hooks";
 import { disclose, Glyph } from "../shared/ui";
 import { useLedgerCtx } from "./ledger";
@@ -197,7 +197,7 @@ export default function Budget() {
                               {c.target > 0 && Math.abs(c.assigned - c.target) > 0.004 ? (
                                 <Tooltip content={`Target ${fmtMoney(c.target)} a month`}>
                                   <button type="button" className="fh-target-hint" onClick={() => void assign(c.id, c.target.toFixed(2))}>
-                                    Target {fmtMoney(c.target, "USD", { noCents: true })}
+                                    Target {fmtWhole(c.target)}
                                   </button>
                                 </Tooltip>
                               ) : null}
@@ -234,7 +234,7 @@ function Fig({ label, value }: { label: string; value: number }) {
         {label}
       </span>
       <span className="text-title tabular" style={{ fontWeight: 620 }} data-sensitive="">
-        <RollingNumber value={value} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive />
+        <RollingNumber value={value} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive />
       </span>
     </div>
   );

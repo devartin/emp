@@ -49,6 +49,7 @@ pub mod codec;
 pub mod db;
 pub mod doc;
 pub mod error;
+pub mod icons;
 pub mod manifest;
 pub mod model;
 pub mod repo;

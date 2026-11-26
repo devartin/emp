@@ -205,13 +205,14 @@ struct Builder<'r> {
     unresolved: Vec<String>,
 }
 
+/// GitHub alert → callout icon (Lucide, as the emoji map names them) and colour.
 fn alert_icon(k: BlockQuoteKind) -> (String, String) {
     let (i, c) = match k {
-        BlockQuoteKind::Note => ("ℹ️", "blue"),
-        BlockQuoteKind::Tip => ("💡", "green"),
-        BlockQuoteKind::Important => ("❗", "purple"),
-        BlockQuoteKind::Warning => ("⚠️", "yellow"),
-        BlockQuoteKind::Caution => ("🛑", "red"),
+        BlockQuoteKind::Note => ("info", "blue"),
+        BlockQuoteKind::Tip => ("lightbulb", "green"),
+        BlockQuoteKind::Important => ("circle-alert", "purple"),
+        BlockQuoteKind::Warning => ("triangle-alert", "yellow"),
+        BlockQuoteKind::Caution => ("octagon-x", "red"),
     };
     (i.to_owned(), c.to_owned())
 }
@@ -307,7 +308,7 @@ impl Builder<'_> {
                     }
                     let mut n = match callout {
                         Some((icon, color)) => TipTapNode::new("callout")
-                            .with_attr("icon", json!(icon))
+                            .with_attr("icon", crate::icons::lucide_attr(&icon))
                             .with_attr("color", json!(color)),
                         None => TipTapNode::new("quote"),
                     };
@@ -416,7 +417,7 @@ impl Builder<'_> {
             Kind::Quote { callout } => {
                 let content = f.content.unwrap_or_else(|| match callout {
                     Some((i, c)) => TipTapNode::new("callout")
-                        .with_attr("icon", json!(i))
+                        .with_attr("icon", crate::icons::lucide_attr(&i))
                         .with_attr("color", json!(c)),
                     None => TipTapNode::new("quote"),
                 });
@@ -868,7 +869,7 @@ pub fn convert(md: &str, opts: MdOptions, r: &mut dyn Resolve) -> Result<MdResul
             0,
             container(
                 TipTapNode::new("callout")
-                    .with_attr("icon", json!("📋"))
+                    .with_attr("icon", crate::icons::lucide_attr("clipboard-list"))
                     .with_attr("color", json!("gray"))
                     .with_content(inl),
                 None,

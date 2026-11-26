@@ -27,7 +27,7 @@ import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import type { TabItem } from "@/ui/Tabs";
 import { DivergingBars } from "../finance/shared/charts";
-import { assignColors, fmtMoney, fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney } from "../finance/shared/format";
+import { assignColors, fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney, fmtWhole } from "../finance/shared/format";
 import { useAsync, useScrubIdx, useScrubStore, type ScrubStore } from "../finance/shared/hooks";
 import { Disclaimer, HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
 import { HeroMoney, MetricCard } from "../finance/MoneyHQ/widgets";
@@ -127,10 +127,10 @@ function Overview({ instanceId, summary: s, go }: { instanceId: Id; summary?: Po
         <ValueHero instanceId={instanceId} summary={s} />
       </m.div>
       <m.div variants={staggerItem} className="fh-span-4 flex flex-col gap-3">
-        <Kpi label="Unrealised gain" value={s ? <GainLoss value={num(s.unrealized.amount)}><span data-sensitive=""><RollingNumber value={num(s.unrealized.amount)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true, signed: true })} countUpKey="pf:unrealised" sensitive /></span></GainLoss> : null} sub={s ? `${fmtPct(s.unrealizedPct, 1, true)} on cost` : ""} />
+        <Kpi label="Unrealised gain" value={s ? <GainLoss value={num(s.unrealized.amount)}><span data-sensitive=""><RollingNumber value={num(s.unrealized.amount)} format={(n) => fmtWhole(Math.round(n), { signed: true })} countUpKey="pf:unrealised" sensitive /></span></GainLoss> : null} sub={s ? `${fmtPct(s.unrealizedPct, 1, true)} on cost` : ""} />
         <Kpi label="Money-weighted return" value={s ? <span>{s.xirrAll !== undefined ? fmtPct(s.xirrAll, 1, true) : "—"}<span className="text-tertiary text-body-sm font-medium"> /yr</span></span> : null} sub={s?.xirrYtd !== undefined ? `${fmtPct(s.xirrYtd, 1, true)} year to date (XIRR)` : ""} />
-        <Kpi label="Dividends" value={s ? <span data-sensitive=""><RollingNumber value={num(s.divTtm.amount)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUpKey="pf:div" sensitive /></span> : null} sub={s ? <>last 12 months · <Sensitive>{fmtMoney(s.divFwd12m.amount, "USD", { noCents: true })}</Sensitive> expected next 12</> : ""} onClick={() => go("dividends")} />
-        <Kpi label="Fees" value={s ? <Sensitive>{fmtMoney(s.feesPerYear.amount, "USD", { noCents: true })}</Sensitive> : null} sub={s ? `a year · ${fmtPct(num(s.feesPerYear.amount) / Math.max(1, num(s.totalValue.amount)), 2)} of the portfolio` : ""} />
+        <Kpi label="Dividends" value={s ? <span data-sensitive=""><RollingNumber value={num(s.divTtm.amount)} format={(n) => fmtWhole(Math.round(n))} countUpKey="pf:div" sensitive /></span> : null} sub={s ? <>last 12 months · <Sensitive>{fmtWhole(s.divFwd12m.amount, { currency: s.divFwd12m.currency })}</Sensitive> expected next 12</> : ""} onClick={() => go("dividends")} />
+        <Kpi label="Fees" value={s ? <Sensitive>{fmtWhole(s.feesPerYear.amount, { currency: s.feesPerYear.currency })}</Sensitive> : null} sub={s ? `a year · ${fmtPct(num(s.feesPerYear.amount) / Math.max(1, num(s.totalValue.amount)), 2)} of the portfolio` : ""} />
       </m.div>
       <m.div variants={staggerItem} className="fh-span-7">
         <Allocation summary={s} onRebalance={() => go("rebalance")} />
@@ -174,7 +174,6 @@ const HERO_SERIES = [
   { key: "value", label: "Value", color: "var(--chart-line)", area: true },
   { key: "contributions", label: "Contributed", color: "var(--text-tertiary)", dashed: true },
 ];
-const fmtWhole = (n: number) => fmtMoney(Math.round(n), "USD", { noCents: true });
 
 type HeroPoint = { t: number; value: number; contributions: number };
 
@@ -234,7 +233,7 @@ function HeroReadout({ scrub, data, summary: s, xf }: { scrub: ScrubStore; data:
         {cur && first ? (
           <>
             <span className="text-caption tabular font-semibold whitespace-nowrap" style={{ color: (growth ?? 0) >= 0 ? "var(--gain-text)" : "var(--loss-text)" }} data-sensitive="">
-              <RollingNumber value={growth ?? 0} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true, signed: true })} scrubbing countUp={false} sensitive /> market growth
+              <RollingNumber value={growth ?? 0} format={(n) => fmtWhole(Math.round(n), { signed: true })} scrubbing countUp={false} sensitive /> market growth
             </span>
             <span className="text-caption text-tertiary whitespace-nowrap" style={{ fontWeight: 400 }}>
               since {xf(first.t)} · {fmtFull(cur.t)}
@@ -244,7 +243,7 @@ function HeroReadout({ scrub, data, summary: s, xf }: { scrub: ScrubStore; data:
           <>
             <DeltaPill value={s.dayChangePct} digits={2} />
             <span className="text-caption tabular font-semibold" style={{ color: num(s.dayChange.amount) >= 0 ? "var(--gain-text)" : "var(--loss-text)" }}>
-              <Sensitive>{fmtMoney(s.dayChange.amount, "USD", { noCents: true, signed: true })}</Sensitive>
+              <Sensitive>{fmtWhole(s.dayChange.amount, { signed: true, currency: s.dayChange.currency })}</Sensitive>
             </span>
             <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
               today
@@ -393,7 +392,7 @@ function TopHoldings({ instanceId, summary: s }: { instanceId: Id; summary?: Por
                   </td>
                   <td className="num">
                     <GainLoss value={num(h.gain.amount)}>
-                      <Sensitive align="end">{fmtMoney(h.gain.amount, "USD", { noCents: true, signed: true })}</Sensitive>
+                      <Sensitive align="end">{fmtWhole(h.gain.amount, { signed: true, currency: h.gain.currency })}</Sensitive>
                     </GainLoss>
                     <span className="text-tertiary text-caption ml-1.5">{fmtPct(h.gainPct, 0, true)}</span>
                   </td>
@@ -427,7 +426,7 @@ function PfInsights({ instanceId, summary: s }: { instanceId: Id; summary?: Port
       out.push({ id: `drift:${a.assetClass}`, appInstanceId: instanceId, ruleId: "drift-band", severity: "warn", title: `${a.assetClass} is ${fmtPp(a.drift)} from target`, body: `Now ${a.current.toFixed(1)}% against a ${a.target}% target. New contributions can close most of the gap without selling.`, math: [{ label: "Current", value: `${a.current.toFixed(1)}%` }, { label: "Target", value: `${a.target}%` }, { label: "Band", value: "±5 pp or 25% of target" }], actions: [{ label: "Plan a rebalance", route: tab("rebalance") }] });
     }
     for (const h of s.holdings.filter((x) => x.weight > 0.1 && !/ETF|Fund/i.test(x.name)).slice(0, 1)) {
-      out.push({ id: `conc:${h.symbol}`, appInstanceId: instanceId, ruleId: "concentration-10", severity: "tip", title: `${ticker(h.symbol)} is ${(h.weight * 100).toFixed(0)}% of the portfolio`, body: "A single company above 10% adds risk that diversification usually removes. Consider whether that's intentional.", math: [{ label: "Value", value: fmtMoney(h.value.amount, "USD", { noCents: true }) }, { label: "Share", value: fmtPct(h.weight, 1) }], actions: [{ label: "Open holding", route: tab(`holding:${h.symbol}`) }] });
+      out.push({ id: `conc:${h.symbol}`, appInstanceId: instanceId, ruleId: "concentration-10", severity: "tip", title: `${ticker(h.symbol)} is ${(h.weight * 100).toFixed(0)}% of the portfolio`, body: "A single company above 10% adds risk that diversification usually removes. Consider whether that's intentional.", math: [{ label: "Value", value: fmtWhole(h.value.amount, { currency: h.value.currency }) }, { label: "Share", value: fmtPct(h.weight, 1) }], actions: [{ label: "Open holding", route: tab(`holding:${h.symbol}`) }] });
     }
     out.push({ id: "ips", appInstanceId: instanceId, ruleId: "ips-review", severity: "tip", title: "Write down your investment policy", body: "An IPS records your targets and the rules you follow when markets fall — so decisions in a downturn are already made.", actions: [{ label: "Open IPS", route: tab("ips") }] });
     if (total > 0 && s.allocation.find((a) => a.assetClass === "Cash" && a.current > 5)) out.push({ id: "cash", appInstanceId: instanceId, ruleId: "cash-drag", severity: "info", title: "Cash is above 5%", body: "Uninvested cash earns less over time. Consider putting it to work toward your targets.", actions: [{ label: "Plan a rebalance", route: tab("rebalance") }] });

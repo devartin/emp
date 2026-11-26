@@ -115,7 +115,8 @@ fn money_hq(r: &mut Rows, rng: &mut Rng, today: NaiveDate) {
                    account: &str,
                    category: Option<&str>| {
         n += 1;
-        let mut v = json!({"desc": desc, "date": day(date), "amount": amount, "account": [format!("sample:{account}")], "cleared": "cleared", "source": "import"});
+        let mut v = json!({"desc": desc, "date": day(date), "amount": amount, "account": [format!("sample:{account}")], "cleared": "cleared", "source": "import",
+                           "reviewed": date < today - Duration::days(3)});
         if let Some(c) = category {
             v["category"] = json!([c]);
         }
@@ -169,7 +170,8 @@ fn money_hq(r: &mut Rows, rng: &mut Rng, today: NaiveDate) {
                     "transactions",
                     &format!("tr{back}{side}"),
                     json!({"desc": "Transfer to savings", "date": day(x), "amount": sign * amt, "account": [format!("sample:{account}")],
-                           "transfer": [format!("sample:tr{back}{other}")], "cleared": "cleared", "source": "import"}),
+                           "transfer": [format!("sample:tr{back}{other}")], "cleared": "cleared", "source": "import",
+                           "reviewed": x < today - Duration::days(3)}),
                 );
             }
         }

@@ -2297,6 +2297,9 @@ pub struct PreviewRowDto {
     import_key: String,
     #[serde(skip)]
     memo: String,
+    /// The bank has cleared this row: every OFX/QFX row (posted), QIF rows whose `C` field says so; never CSV.
+    #[serde(skip)]
+    cleared: bool,
 }
 
 /// `finance_import_preview` result.
@@ -2307,6 +2310,35 @@ pub struct PreviewDto {
     new_count: usize,
     duplicates: usize,
     categorized: usize,
+    /// The closing balance the file reports (OFX `<LEDGERBAL>`, CSV balance column); absent for QIF.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    statement: Option<StatementDto>,
+}
+
+/// `FinanceImportPreview.statement` (PROGRAMME-v3 K5 contract delta; see `src/backend/types.ts`).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatementDto {
+    balance: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    as_of: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    currency: Option<String>,
+    source: emp_finance::import::BalanceSource,
+}
+
+impl From<emp_finance::import::ClosingBalance> for StatementDto {
+    fn from(c: emp_finance::import::ClosingBalance) -> Self {
+        // Two decimals, like the mock's `centsToStr` ("3495.50"), so both sides send the same string.
+        let mut balance = c.balance.round_dp(2);
+        balance.rescale(2);
+        Self {
+            balance: balance.to_string(),
+            as_of: c.as_of.map(|d| d.to_string()),
+            currency: c.currency,
+            source: c.source,
+        }
+    }
 }
 
 fn rules_of(store: &Store, instance_id: &str) -> ApiResult<Vec<Rule>> {
@@ -2347,9 +2379,14 @@ fn run_preview(
 ) -> ApiResult<(String, PreviewDto, Ledger, Option<String>)> {
     let (instance_id, name, bytes, format, fingerprint) = staged_import(import_id)?;
     let l = Ledger::load(store, &instance_id)?;
-    if !l.accounts.iter().any(|a| a.id == account_id) {
+    let Some(account_name) = l
+        .accounts
+        .iter()
+        .find(|a| a.id == account_id)
+        .map(|a| a.name.clone())
+    else {
         return Err(ApiError::invalid("accountId", "unknown account"));
-    }
+    };
     let opts = ImportOptions {
         confirmed_large: true,
         ..ImportOptions::default()
@@ -2360,6 +2397,7 @@ fn run_preview(
     .map_err(|_| ApiError::invalid("mapping", "This statement could not be read"))?
     .map_err(fin_err)?;
     let rows: Vec<StatementTxn> = parsed.transactions().cloned().collect();
+    let statement = parsed.closing_balance(&account_name).map(StatementDto::from);
     let existing: Vec<emp_finance::dedupe::Existing> = l
         .txns
         .iter()
@@ -2408,12 +2446,24 @@ fn run_preview(
         .iter()
         .map(|r| (r.idx, r.memo.clone().unwrap_or_default()))
         .collect();
+    let cleared: HashMap<usize, bool> = rows
+        .iter()
+        .map(|r| {
+            let c = match format {
+                ImportFormat::Ofx | ImportFormat::Qfx => true,
+                ImportFormat::Qif => emp_finance::import::qif_cleared(r.cleared.as_deref()),
+                ImportFormat::Csv => false,
+            };
+            (r.idx, c)
+        })
+        .collect();
     let dto = PreviewDto {
         rows: p
             .rows
             .into_iter()
             .map(|r| PreviewRowDto {
                 memo: memos.get(&r.idx).cloned().unwrap_or_default(),
+                cleared: cleared.get(&r.idx).copied().unwrap_or(false),
                 idx: r.idx,
                 date: r.date.to_string(),
                 payee: r.payee,
@@ -2431,6 +2481,7 @@ fn run_preview(
         new_count: p.new_count,
         duplicates: p.duplicates,
         categorized: p.categorized,
+        statement,
     };
     Ok((instance_id, dto, l, fingerprint))
 }
@@ -2533,103 +2584,196 @@ pub async fn finance_import_commit(
     let cell = super::import::import_cell();
     let out = Arc::clone(&cell);
     let job = state.jobs.spawn("finance_import_commit", true, store.now(), sink, move |ctx| {
-        ctx.report(0, 3, Some("Checking"));
-        let (_, preview, l, fingerprint) = run_preview(&store, &req.import_id, &req.mapping, &req.account_id)?;
-        ctx.check_cancelled()?;
-        let d = l.db("transactions")?;
-        let c = |role: &str, n: &str| d.col_id(role, &[n]);
-        let (dt, am, acct, cat, memo, imp, tr) = (
-            c("txn.date", "Date"),
-            c("txn.amount", "Amount"),
-            c("txn.account", "Account"),
-            c("txn.category", "Category"),
-            c("txn.memo", "Memo"),
-            c("txn.import_id", "Import ID"),
-            c("txn.transfer", "Transfer"),
-        );
-        let raw = d.col_id("txn.raw", &[]).unwrap_or_else(|| d.title_id().to_owned());
-        let cur = l
-            .accounts
-            .iter()
-            .find(|a| a.id == req.account_id)
-            .map_or_else(|| l.currency.clone(), |a| a.currency.code().to_owned());
-        let skip: HashSet<usize> = req.skip.into_iter().collect();
-        let mut rows = Vec::new();
-        let mut pairs = Vec::new();
-        let mut skipped = 0usize;
-        for r in &preview.rows {
-            if skip.contains(&r.idx) || r.duplicate_of.is_some() {
-                skipped += 1;
-                continue;
-            }
-            let o = overrides.get(&r.idx);
-            let mut v = BTreeMap::new();
-            let title = o.and_then(|o| o.payee.clone()).unwrap_or_else(|| r.raw_payee.clone());
-            v.insert(raw.clone(), CellValue::text(&title));
-            if let Some(p) = &dt {
-                v.insert(
-                    p.clone(),
-                    CellValue::Date {
-                        v: Some(emp_store::dbmodel::DateValue { start: r.date.clone(), end: None, time: false, tz: None }),
-                    },
-                );
-            }
-            if let Some(p) = &am {
-                v.insert(p.clone(), CellValue::Money { v: Some(r.amount.clone()), cur: cur.clone() });
-            }
-            if let Some(p) = &acct {
-                v.insert(p.clone(), CellValue::Relation { v: vec![req.account_id.clone()] });
-            }
-            let category = o.and_then(|o| o.category_id.clone()).or_else(|| r.category_id.clone());
-            if let (Some(p), Some(cid)) = (&cat, category) {
-                v.insert(p.clone(), CellValue::Relation { v: vec![cid] });
-            }
-            if let (Some(p), false) = (&memo, r.memo.is_empty()) {
-                v.insert(p.clone(), CellValue::text(&r.memo));
-            }
-            if let Some(p) = &imp {
-                v.insert(p.clone(), CellValue::text(&r.import_key));
-            }
-            pairs.push(r.transfer_pair.clone());
-            rows.push(v);
-        }
-        ctx.report(1, 3, Some("Saving"));
-        let mut ids = Vec::new();
-        for chunk in rows.chunks(1_000) {
-            ctx.check_cancelled()?;
-            ids.extend(store.db_rows_insert_bulk(d.id(), chunk.to_vec(), None)?);
-        }
-        ctx.report(2, 3, Some("Linking transfers"));
-        let mut linked = 0usize;
-        if let Some(tp) = &tr {
-            let mut updates = Vec::new();
-            for (id, pair) in ids.iter().zip(&pairs) {
-                if let Some(other) = pair {
-                    updates.push(RowUpdate::one(id, tp, Some(CellValue::Relation { v: vec![other.clone()] })));
-                    updates.push(RowUpdate::one(other, tp, Some(CellValue::Relation { v: vec![id.clone()] })));
-                    linked += 1;
-                }
-            }
-            for chunk in updates.chunks(1_000) {
-                store.db_rows_update(chunk.to_vec())?;
-            }
-        }
-        if let (Some(name), Some(fp)) = (&req.save_profile_as, &fingerprint) {
-            let profile = ImportProfile {
-                id: emp_store::model::ids::new_id(),
-                name: name.trim().to_owned(),
-                mapping: req.mapping.clone(),
-            };
-            store.kv_set_any(PROFILES_NS, fp, json!(profile), None)?;
-        }
-        let import_id = emp_store::model::ids::new_id();
-        super::ics::save_row_undo(&store, &import_id, &ids)?;
-        *out.lock() = Some(import_id.clone());
-        ctx.report(3, 3, Some("Done"));
-        Ok(json!({ "inserted": ids.len(), "skipped": skipped, "transfersLinked": linked, "importId": import_id }))
+        let (undo_id, result) = commit_import(
+            &store,
+            ctx,
+            &req.import_id,
+            &req.mapping,
+            &req.account_id,
+            &req.skip,
+            &overrides,
+            req.save_profile_as.as_deref(),
+        )?;
+        *out.lock() = Some(undo_id);
+        Ok(result)
     });
     super::import::remember_job(&job, cell);
     Ok(job)
+}
+
+/// The body of `finance_import_commit` (also called directly by tests): writes the previewed rows, links transfers,
+/// saves the CSV profile and records undo. Returns `(undo import id, result json)`.
+///
+/// Every inserted row carries `txn.cleared` (OFX/QFX rows are bank-posted, so cleared; QIF follows its `C`
+/// field; CSV has no status, so uncleared), `txn.source = import` and `txn.reviewed = false` — the same as the
+/// mock (`src/backend/mock/commands/finance.ts`). Dedupe is unchanged: exact duplicates are always skipped.
+#[allow(clippy::too_many_arguments)]
+fn commit_import(
+    store: &Store,
+    ctx: &crate::jobs::JobCtx,
+    import_id: &str,
+    mapping: &ImportMapping,
+    account_id: &str,
+    skip: &[usize],
+    overrides: &HashMap<usize, RowOverride>,
+    save_profile_as: Option<&str>,
+) -> ApiResult<(String, Value)> {
+    ctx.report(0, 3, Some("Checking"));
+    let (_, preview, l, fingerprint) = run_preview(store, import_id, mapping, account_id)?;
+    ctx.check_cancelled()?;
+    let d = l.db("transactions")?;
+    let c = |role: &str, n: &str| d.col_id(role, &[n]);
+    let (dt, am, acct, cat, memo, imp, tr) = (
+        c("txn.date", "Date"),
+        c("txn.amount", "Amount"),
+        c("txn.account", "Account"),
+        c("txn.category", "Category"),
+        c("txn.memo", "Memo"),
+        c("txn.import_id", "Import ID"),
+        c("txn.transfer", "Transfer"),
+    );
+    let raw = d
+        .col_id("txn.raw", &[])
+        .unwrap_or_else(|| d.title_id().to_owned());
+    // Status/select cells hold option ids; resolve them once by option name.
+    let cleared_col = d.col("txn.cleared", &["Cleared"]);
+    let cleared_opt = |want: &str| cleared_col.and_then(|p| InstanceDb::option_id(p, want));
+    let (opt_cleared, opt_uncleared) = (cleared_opt("cleared"), cleared_opt("uncleared"));
+    let source = d.col("txn.source", &["Source"]).and_then(|p| {
+        InstanceDb::option_id(p, "import").map(|o| (p.id.clone(), o))
+    });
+    let reviewed = d.col_id("txn.reviewed", &["Reviewed"]);
+    let cur = l
+        .accounts
+        .iter()
+        .find(|a| a.id == account_id)
+        .map_or_else(|| l.currency.clone(), |a| a.currency.code().to_owned());
+    let skip: HashSet<usize> = skip.iter().copied().collect();
+    let mut rows = Vec::new();
+    let mut pairs = Vec::new();
+    let mut skipped = 0usize;
+    for r in &preview.rows {
+        if skip.contains(&r.idx) || r.duplicate_of.is_some() {
+            skipped += 1;
+            continue;
+        }
+        let o = overrides.get(&r.idx);
+        let mut v = BTreeMap::new();
+        let title = o
+            .and_then(|o| o.payee.clone())
+            .unwrap_or_else(|| r.raw_payee.clone());
+        v.insert(raw.clone(), CellValue::text(&title));
+        if let Some(p) = &dt {
+            v.insert(
+                p.clone(),
+                CellValue::Date {
+                    v: Some(emp_store::dbmodel::DateValue {
+                        start: r.date.clone(),
+                        end: None,
+                        time: false,
+                        tz: None,
+                    }),
+                },
+            );
+        }
+        if let Some(p) = &am {
+            v.insert(
+                p.clone(),
+                CellValue::Money {
+                    v: Some(r.amount.clone()),
+                    cur: cur.clone(),
+                },
+            );
+        }
+        if let Some(p) = &acct {
+            v.insert(
+                p.clone(),
+                CellValue::Relation {
+                    v: vec![account_id.to_owned()],
+                },
+            );
+        }
+        let category = o
+            .and_then(|o| o.category_id.clone())
+            .or_else(|| r.category_id.clone());
+        if let (Some(p), Some(cid)) = (&cat, category) {
+            v.insert(p.clone(), CellValue::Relation { v: vec![cid] });
+        }
+        if let (Some(p), false) = (&memo, r.memo.is_empty()) {
+            v.insert(p.clone(), CellValue::text(&r.memo));
+        }
+        if let Some(p) = &imp {
+            v.insert(p.clone(), CellValue::text(&r.import_key));
+        }
+        let status = if r.cleared { &opt_cleared } else { &opt_uncleared };
+        if let (Some(p), Some(opt)) = (cleared_col, status) {
+            v.insert(
+                p.id.clone(),
+                CellValue::Status {
+                    v: Some(opt.clone()),
+                },
+            );
+        }
+        if let Some((p, opt)) = &source {
+            v.insert(
+                p.clone(),
+                CellValue::Select {
+                    v: Some(opt.clone()),
+                },
+            );
+        }
+        if let Some(p) = &reviewed {
+            v.insert(p.clone(), CellValue::Check { v: false });
+        }
+        pairs.push(r.transfer_pair.clone());
+        rows.push(v);
+    }
+    ctx.report(1, 3, Some("Saving"));
+    let mut ids = Vec::new();
+    for chunk in rows.chunks(1_000) {
+        ctx.check_cancelled()?;
+        ids.extend(store.db_rows_insert_bulk(d.id(), chunk.to_vec(), None)?);
+    }
+    ctx.report(2, 3, Some("Linking transfers"));
+    let mut linked = 0usize;
+    if let Some(tp) = &tr {
+        let mut updates = Vec::new();
+        for (id, pair) in ids.iter().zip(&pairs) {
+            if let Some(other) = pair {
+                updates.push(RowUpdate::one(
+                    id,
+                    tp,
+                    Some(CellValue::Relation {
+                        v: vec![other.clone()],
+                    }),
+                ));
+                updates.push(RowUpdate::one(
+                    other,
+                    tp,
+                    Some(CellValue::Relation {
+                        v: vec![id.clone()],
+                    }),
+                ));
+                linked += 1;
+            }
+        }
+        for chunk in updates.chunks(1_000) {
+            store.db_rows_update(chunk.to_vec())?;
+        }
+    }
+    if let (Some(name), Some(fp)) = (save_profile_as, &fingerprint) {
+        let profile = ImportProfile {
+            id: emp_store::model::ids::new_id(),
+            name: name.trim().to_owned(),
+            mapping: mapping.clone(),
+        };
+        store.kv_set_any(PROFILES_NS, fp, json!(profile), None)?;
+    }
+    let undo_id = emp_store::model::ids::new_id();
+    super::ics::save_row_undo(store, &undo_id, &ids)?;
+    ctx.report(3, 3, Some("Done"));
+    let out = json!({ "inserted": ids.len(), "skipped": skipped, "transfersLinked": linked, "importId": undo_id });
+    Ok((undo_id, out))
 }
 
 // ───────────────────────────────────────────────────────────────────────────── rules

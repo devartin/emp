@@ -22,7 +22,8 @@ import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { fmtMoney, fmtPrice, fmtQty } from "../finance/shared/format";
+import { fmtPrice, fmtQty, fmtWhole } from "../finance/shared/format";
+import { baseCurrency } from "../finance/shared/currency";
 import { useAsync } from "../finance/shared/hooks";
 import { FreshnessBadge, HubPage, MarketStateChip } from "../finance/shared/ui";
 import "./markets.css";
@@ -152,7 +153,7 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
       </div>
 
       <div className="mt-4">
-        <PriceChart symbol={symbol} currency={q?.currency ?? "USD"} height={330} />
+        <PriceChart symbol={symbol} currency={q?.currency ?? baseCurrency()} height={330} />
       </div>
 
       <div className="mk-stats">
@@ -184,10 +185,10 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
           </span>
           <span className="flex items-baseline gap-4 tabular">
             <span className="text-body font-semibold">
-              <Sensitive>{fmtQty(holding.qty)} sh · {fmtMoney(holding.value.amount, "USD", { noCents: true })}</Sensitive>
+              <Sensitive>{fmtQty(holding.qty)} sh · {fmtWhole(holding.value.amount, { currency: holding.value.currency })}</Sensitive>
             </span>
             <span className={Number(holding.gain.amount) >= 0 ? "emp-gain text-body-sm font-semibold" : "emp-loss text-body-sm font-semibold"}>
-              <Sensitive>{fmtMoney(holding.gain.amount, "USD", { noCents: true, signed: true })}</Sensitive> ({holding.gainPct >= 0 ? "+" : "−"}
+              <Sensitive>{fmtWhole(holding.gain.amount, { signed: true, currency: holding.gain.currency })}</Sensitive> ({holding.gainPct >= 0 ? "+" : "−"}
               {Math.abs(holding.gainPct * 100).toFixed(1)}%)
             </span>
             <span className="text-caption text-tertiary">{(holding.weight * 100).toFixed(1)}% of portfolio · open in Portfolio →</span>

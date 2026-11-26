@@ -237,7 +237,7 @@ describe('guard matchers', () => {
     ]);
     // The live token map resolves too (theme.css / tokens.css).
     expect(radiusTokens().get('--radius-lg')).toBe('10px');
-    expect(cssStyleCounts('src/x.css', '.a{border-radius:var(--r,16px)} .b{border-radius:var(--radius-xl)} .c{border-radius:var(--radius-lg)} .d{border-radius:var(--unknown)}')).toEqual({ radius_off_scale: 2 });
+    expect(cssStyleCounts('src/x.css', '.a{border-radius:var(--r,16px)} .b{border-radius:var(--radius-legacy, 14px)} .c{border-radius:var(--radius-lg)} .d{border-radius:var(--unknown)}')).toEqual({ radius_off_scale: 2 });
     const tsx = `export const X = () => <div className="rounded-2xl md:rounded-t-xl rounded-lg rounded-full rounded-none rounded-[10px]" />;`;
     expect(tsStyleCounts('src/features/x/X.tsx', collectTs('X.tsx', tsx), tokens)).toEqual({ radius_off_scale: 2 });
   });

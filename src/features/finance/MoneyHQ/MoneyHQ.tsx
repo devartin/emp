@@ -1,30 +1,33 @@
 /**
- * Money HQ (§16.2): the personal-finance hub. Tabs: Overview · Transactions · Budget · Accounts · Recurring · Debt ·
- * Forecast · Goals · Net worth. The import wizard and rules editor open as sheets from the header.
+ * Money HQ (§16.2; PROGRAMME-v3 K4): the personal-finance hub. Five tabs — Overview · Transactions · Budget ·
+ * Accounts (net worth inside) · Plan (Recurring, Debt, Forecast, Goals). It always lands on Overview; the old tab
+ * routes still work: `recurring`, `debt`, `forecast` and `goals` open Plan at that section, `networth` redirects to
+ * Accounts. The import wizard (the one finance import entry, see ImportWizard/request.ts) and the rules editor open
+ * as sheets from the header.
  */
 import { ChevronLeft, ChevronRight, FileUp, ListFilter, Wallet } from "lucide-react";
-import { createContext, lazy, Suspense, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { FinanceOverview, Id } from "@/backend/types";
 import { navigate } from "@/app/router";
 import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
-import { Skeleton } from "@/ui/Skeleton";
 import type { TabItem } from "@/ui/Tabs";
 import { addMonths, monthLabel, todayIso } from "../shared/format";
 import { useAsync, useDbChanged } from "../shared/hooks";
 import { Disclaimer, HubPage, Quiet } from "../shared/ui";
+import { useFinanceImportRequest, type FinanceImportFile } from "../ImportWizard/request";
 import { LedgerContext, useLedger } from "./ledger";
 import { Overview } from "./Overview";
 
-const Transactions = lazy(() => import("./Transactions"));
-const Budget = lazy(() => import("./Budget"));
-const Accounts = lazy(() => import("./Accounts"));
-const Recurring = lazy(() => import("./Recurring"));
-const DebtPlanner = lazy(() => import("../DebtPlanner"));
-const Forecast = lazy(() => import("../Forecast"));
-const Goals = lazy(() => import("./Goals"));
-const NetWorth = lazy(() => import("./NetWorth"));
+const loadTransactions = () => import("./Transactions");
+const loadBudget = () => import("./Budget");
+const loadAccounts = () => import("./Accounts");
+const loadPlan = () => import("./Plan");
+const Transactions = lazy(loadTransactions);
+const Budget = lazy(loadBudget);
+const Accounts = lazy(loadAccounts);
+const Plan = lazy(loadPlan);
 const ImportWizard = lazy(() => import("../ImportWizard/ImportWizard"));
 const RulesEditor = lazy(() => import("../Rules/RulesEditor"));
 
@@ -33,9 +36,21 @@ export interface MoneyHQProps {
   tab?: string;
 }
 
-export type MoneyTab = "overview" | "transactions" | "budget" | "accounts" | "recurring" | "debt" | "forecast" | "goals" | "networth";
+export type MoneyTab = "overview" | "transactions" | "budget" | "accounts" | "plan";
+export type PlanSection = "recurring" | "debt" | "forecast" | "goals";
+/** Anything `go()` accepts: a tab, a Plan section, or the old Net worth tab (now inside Accounts). */
+export type MoneyDest = MoneyTab | PlanSection | "networth";
 
-const TABS: MoneyTab[] = ["overview", "transactions", "budget", "accounts", "recurring", "debt", "forecast", "goals", "networth"];
+const TABS: MoneyTab[] = ["overview", "transactions", "budget", "accounts", "plan"];
+export const PLAN_SECTIONS: PlanSection[] = ["recurring", "debt", "forecast", "goals"];
+
+/** Where a route's `tab` lands: old tabs map to their new homes. Unknown tabs land on Overview. */
+export function resolveMoneyTab(tab: string | undefined): { tab: MoneyTab; section: PlanSection; redirect?: MoneyTab } {
+  if (tab === "networth") return { tab: "accounts", section: "recurring", redirect: "accounts" };
+  if (PLAN_SECTIONS.includes(tab as PlanSection)) return { tab: "plan", section: tab as PlanSection };
+  if (tab === "plan") return { tab: "plan", section: "recurring" };
+  return { tab: TABS.includes(tab as MoneyTab) ? (tab as MoneyTab) : "overview", section: "recurring" };
+}
 
 interface MoneyCtx {
   instanceId: Id;
@@ -44,12 +59,14 @@ interface MoneyCtx {
   overview: FinanceOverview | undefined;
   overviewLoading: boolean;
   reloadOverview: () => void;
-  go: (tab: MoneyTab, opts?: { filter?: string }) => void;
+  go: (tab: MoneyDest, opts?: { filter?: string }) => void;
   openImport: () => void;
   openRules: () => void;
-  /** One-shot filter handed to the Transactions tab (e.g. 'uncategorized'). */
+  /** One-shot filter handed to the Transactions tab (e.g. 'uncategorized', 'review'). */
   txnFilter: string | null;
   clearTxnFilter: () => void;
+  /** The Plan tab's open section. */
+  planSection: PlanSection;
 }
 
 const Ctx = createContext<MoneyCtx | null>(null);
@@ -60,19 +77,37 @@ export function useMoney(): MoneyCtx {
 }
 
 export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
-  const current = (TABS.includes(tab as MoneyTab) ? tab : "overview") as MoneyTab;
+  const resolved = resolveMoneyTab(tab);
+  const current = resolved.tab;
   const [month, setMonth] = useState(() => todayIso().slice(0, 7));
-  const [importOpen, setImportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState<{ file?: FinanceImportFile } | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
   const ledger = useLedger(instanceId);
   const overview = useAsync(() => api.finance.overview({ instanceId, month }), [instanceId, month]);
   useDbChanged([ledger.schemas.txns?.database.id, ledger.schemas.recurring?.database.id, ledger.schemas.goals?.database.id, ledger.schemas.accounts?.database.id], overview.reload, 260);
 
+  // Old routes: the Net worth tab now lives in Accounts.
+  useEffect(() => {
+    if (resolved.redirect) navigate({ t: "app", instanceId, tab: resolved.redirect }, { replace: true });
+  }, [resolved.redirect, instanceId]);
+  // Tab panels are code-split; fetch them with the hub so switching tabs never shows a placeholder.
+  useEffect(() => {
+    void Promise.all([loadTransactions(), loadBudget(), loadAccounts(), loadPlan()]).catch(() => undefined);
+  }, []);
+  // A finance import requested from elsewhere (shell Import, ⌘K, first run) opens the wizard here.
+  const pendingImport = useFinanceImportRequest((s) => (s.pending?.instanceId === instanceId ? s.pending : null));
+  useEffect(() => {
+    if (!pendingImport) return;
+    const req = useFinanceImportRequest.getState().take(instanceId);
+    if (req) setImportOpen({ file: req.file });
+  }, [pendingImport, instanceId]);
+
   const go = useCallback(
-    (t: MoneyTab, opts?: { filter?: string }) => {
+    (t: MoneyDest, opts?: { filter?: string }) => {
       if (opts?.filter) setTxnFilter(opts.filter);
-      navigate({ t: "app", instanceId, tab: t === "overview" ? undefined : t });
+      const dest = t === "networth" ? "accounts" : t;
+      navigate({ t: "app", instanceId, tab: dest === "overview" ? undefined : dest });
     },
     [instanceId],
   );
@@ -85,25 +120,26 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
       overviewLoading: overview.loading && !overview.data,
       reloadOverview: overview.reload,
       go,
-      openImport: () => setImportOpen(true),
+      openImport: () => setImportOpen({}),
       openRules: () => setRulesOpen(true),
       txnFilter,
       clearTxnFilter: () => setTxnFilter(null),
+      planSection: resolved.section,
     }),
-    [instanceId, month, overview.data, overview.loading, overview.reload, go, txnFilter],
+    [instanceId, month, overview.data, overview.loading, overview.reload, go, txnFilter, resolved.section],
   );
 
-  const uncategorized = overview.data?.uncategorized ?? 0;
+  // `review.count` when the Reviewed property exists, else `uncat.count` (definitions.ts). Unknown until loaded.
+  const loaded = !ledger.loading;
+  const toReview = ledger.hasReviewed ? ledger.txns.filter((t) => t.reviewed === false).length : null;
+  const uncategorized = overview.data?.uncategorized ?? null;
+  const tabCount = toReview ?? uncategorized ?? 0;
   const tabs: TabItem<MoneyTab>[] = [
     { value: "overview", label: "Overview" },
-    { value: "transactions", label: "Transactions", count: uncategorized || undefined },
+    { value: "transactions", label: "Transactions", count: loaded && tabCount ? tabCount : undefined },
     { value: "budget", label: "Budget" },
     { value: "accounts", label: "Accounts" },
-    { value: "recurring", label: "Recurring" },
-    { value: "debt", label: "Debt" },
-    { value: "forecast", label: "Forecast" },
-    { value: "goals", label: "Goals" },
-    { value: "networth", label: "Net worth" },
+    { value: "plan", label: "Plan" },
   ];
   const isThisMonth = month === todayIso().slice(0, 7);
   const monthSwitcher = (
@@ -115,6 +151,8 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
       <IconButton icon={ChevronRight} size="xs" label="Next month" disabled={isThisMonth} onClick={() => setMonth((m) => addMonths(m, 1))} />
     </div>
   );
+  // Facts only, and only once known: zero parts are omitted (never "All caught up" before the data arrives).
+  const status = [toReview ? `${toReview} to review` : null, uncategorized ? `${uncategorized} uncategorised` : null].filter(Boolean).join(" · ");
 
   if (ledger.error && !ledger.loading && !ledger.schemas.txns) {
     return (
@@ -134,7 +172,7 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
           subtitle={
             <>
               {monthSwitcher}
-              <span className="text-tertiary">{uncategorized ? `${uncategorized} to categorise` : "All caught up"}</span>
+              {status ? <span className="text-tertiary">{status}</span> : null}
             </>
           }
           actions={
@@ -142,7 +180,7 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
               <Button variant="ghost" size="sm" icon={ListFilter} onClick={() => setRulesOpen(true)}>
                 Rules
               </Button>
-              <Button variant="secondary" size="sm" icon={FileUp} onClick={() => setImportOpen(true)}>
+              <Button variant="secondary" size="sm" icon={FileUp} onClick={() => setImportOpen({})}>
                 Import
               </Button>
             </>
@@ -152,33 +190,20 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
           onTab={(t) => go(t)}
           footer={<Disclaimer />}
         >
-          <Suspense fallback={<TabSkeleton />}>
+          {/* Panels are preloaded above; a null fallback never paints placeholder content over real data. */}
+          <Suspense fallback={null}>
             {current === "overview" ? <Overview /> : null}
             {current === "transactions" ? <Transactions /> : null}
             {current === "budget" ? <Budget /> : null}
             {current === "accounts" ? <Accounts /> : null}
-            {current === "recurring" ? <Recurring /> : null}
-            {current === "debt" ? <DebtPlanner /> : null}
-            {current === "forecast" ? <Forecast instanceId={instanceId} /> : null}
-            {current === "goals" ? <Goals /> : null}
-            {current === "networth" ? <NetWorth /> : null}
+            {current === "plan" ? <Plan /> : null}
           </Suspense>
         </HubPage>
         <Suspense fallback={null}>
-          {importOpen ? <ImportWizard instanceId={instanceId} open={importOpen} onOpenChange={setImportOpen} /> : null}
+          {importOpen ? <ImportWizard instanceId={instanceId} open onOpenChange={(o) => !o && setImportOpen(null)} initialFile={importOpen.file} /> : null}
           {rulesOpen ? <RulesEditor instanceId={instanceId} open={rulesOpen} onOpenChange={setRulesOpen} /> : null}
         </Suspense>
       </LedgerContext.Provider>
     </Ctx.Provider>
-  );
-}
-
-function TabSkeleton() {
-  return (
-    <div className="fh-grid" aria-busy>
-      <Skeleton height={280} radius={14} className="fh-span-8" />
-      <Skeleton height={280} radius={14} className="fh-span-4" />
-      <Skeleton height={220} radius={14} className="fh-span-12" />
-    </div>
   );
 }

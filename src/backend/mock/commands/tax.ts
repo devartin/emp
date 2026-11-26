@@ -1,263 +1,393 @@
 /**
- * Mock `tax_*` commands (§11.3 Portfolio and tax, §15.6): pack listing, the estimator engine (SE tax, AGI,
- * standard vs itemised, ordinary brackets with LTCG/qualified dividends stacked on top, NIIT, additional Medicare,
- * credits with phase-outs, pack rounding) and the quarterly plan (safe harbor, 90% of current year, even split).
+ * Mock `tax_*` commands (§11.3 Portfolio and tax, §15.6): pack listing, the estimator engine and the quarterly plan
+ * (safe harbor, 90% of current year, even split).
  *
- * The US pack values below exist only so the browser preview behaves realistically. The desktop app reads the
- * authoritative `crates/emp-store/packs/tax/us-federal-2026.json`, transcribed and verified from IRS publications
- * (§15.6); this mock pack is versioned `-preview` so it can never be mistaken for it.
+ * The estimator is a step-for-step port of `crates/emp-finance/src/tax/engine.rs` (`compute`) over the **same**
+ * pack files the desktop app embeds (`crates/emp-finance/packs/tax/*.json`), so the demo and desktop produce the
+ * same figures for the same input (PROGRAMME-v3 K5 parity; `src/backend/mock/parity.test.ts`). Only the "Show math"
+ * `lines` keep the mock's summing layout (the finance UI test sums them to `totalTax`).
+ *
+ * Definitions shared with Rust:
+ *   - `effectiveRate` = total tax ÷ AGI (N-MO3 `tax.effective`; IRS SOI "average tax rate" uses AGI:
+ *     https://www.irs.gov/statistics/soi-tax-stats-individual-income-tax-rates-and-tax-shares).
+ *   - `deduction`: with itemisable entries, the larger of the itemised total after floors and caps
+ *     (`itemizedWouldBe`) and the standard deduction plus the 2026 non-itemiser charitable deduction
+ *     ($1,000 / $2,000 MFJ, cash; IRS Pub 505 (2026) What's New, https://www.irs.gov/publications/p505).
+ *   - Itemised charitable gifts count only above 0.5% of AGI from 2026 (same source).
  */
 import type { TaxEstimate, TaxInput, TaxPackInfo } from '../../types';
 import type { MockCtx, MockHandlers } from '../ctx';
+import usFederal2026 from '../../../../crates/emp-finance/packs/tax/us-federal-2026.json';
+import genericPack from '../../../../crates/emp-finance/packs/tax/generic.json';
 
-type Status = 'single' | 'mfj' | 'mfs' | 'hoh' | 'qss';
+type StatusMap<T> = Record<string, T>;
+type Dec = string | number;
 
-interface Pack {
-  info: Omit<TaxPackInfo, 'stale'>;
-  brackets: Record<Status, { upTo: number | null; rate: number }[]>;
-  standard: Record<Status, number>;
-  addl65: Record<Status, number>;
-  ltcg: { upTo: Record<Status, number | null>; rate: number }[];
-  se: { factor: number; ss: number; medicare: number; wageBase: number; addl: number; addlThreshold: Record<Status, number> };
-  niit: { rate: number; threshold: Record<Status, number> };
-  ctc: { amount: number; start: Record<Status, number>; per1000: number };
-  periods: { id: string; due: string }[];
-  safeHarbor: { prior: number; high: number; highAgi: Record<string, number>; current: number };
-  deadlines: { name: string; date: string }[];
+interface PackJson {
+  id: string;
+  name: string;
+  year: number;
+  tier: 'estimator' | 'organizer' | 'custom';
+  version: string;
+  verifiedOn: string | null;
+  filingStatuses: string[];
+  brackets: StatusMap<{ upTo: Dec | null; rate: Dec }[]>;
+  standardDeduction: StatusMap<Dec>;
+  additionalStdDeduction65OrBlind?: StatusMap<Dec>;
+  preferentialRates?: { ltcgQualifiedDiv: { upTo: StatusMap<Dec | null>; rate: Dec }[] };
+  seTax?: SeTax;
+  niit?: { rate: Dec; threshold: StatusMap<Dec> };
+  credits?: { id: string; label?: string; kind: 'per_dependent' | 'user_amount'; amount?: Dec; phaseout?: { start: StatusMap<Dec>; per1000: Dec }; refundablePerDependent?: Dec; refundableEarnedThreshold?: Dec; refundableEarnedRate?: Dec }[];
+  capitalLossLimit?: StatusMap<Dec>;
+  socialSecurity?: { base1: StatusMap<Dec>; base2: StatusMap<Dec> };
+  itemizedRules?: { kind: string; cap?: StatusMap<Dec>; capPhasedown?: { start: StatusMap<Dec>; rate: Dec; floor: StatusMap<Dec> }; agiFloorPct?: Dec }[];
+  nonItemizerCharity?: { kinds: string[]; cap: StatusMap<Dec> };
+  estimated?: { periods: { id: string; due: string }[]; safeHarbor: { priorYearPct: Dec; highIncomePct: Dec; highIncomeAgi: StatusMap<Dec>; currentYearPct: Dec } };
+  rounding: 'whole_dollar_half_up' | 'cents_half_up';
 }
 
-const S = (single: number, mfj: number, mfs: number, hoh: number, qss = mfj): Record<Status, number> => ({ single, mfj, mfs, hoh, qss });
-
-function brackets(rows: [number | null, number | null, number | null, number | null, number][]): Pack['brackets'] {
-  const pick = (i: number) => rows.map((r) => ({ upTo: r[i] as number | null, rate: r[4] }));
-  return { single: pick(0), mfj: pick(1), mfs: pick(2), hoh: pick(3), qss: pick(1) };
+interface SeTax {
+  netEarningsFactor: Dec;
+  ssRate: Dec;
+  medicareRate: Dec;
+  ssWageBase?: Dec | null;
+  deductibleShare: Dec;
+  minimumNetEarnings?: Dec | null;
+  addlMedicare?: { rate: Dec; threshold: StatusMap<Dec> } | null;
 }
 
-const US_2026: Pack = {
-  info: { id: 'us-federal-2026', name: 'US Federal', year: 2026, tier: 'estimator', version: '1.0.0-preview', verifiedOn: '2026-01-12' },
-  brackets: brackets([
-    [12_400, 24_800, 12_400, 17_700, 0.1],
-    [50_400, 100_800, 50_400, 67_450, 0.12],
-    [105_700, 211_400, 105_700, 105_700, 0.22],
-    [201_775, 403_550, 201_775, 201_750, 0.24],
-    [256_225, 512_450, 256_225, 256_200, 0.32],
-    [640_600, 768_700, 384_350, 640_600, 0.35],
-    [null, null, null, null, 0.37],
-  ]),
-  standard: S(16_100, 32_200, 16_100, 24_150),
-  addl65: S(2_050, 1_650, 1_650, 2_050),
-  ltcg: [
-    { upTo: S(49_450, 98_900, 49_450, 66_200), rate: 0 },
-    { upTo: S(545_500, 613_700, 306_850, 579_600), rate: 0.15 },
-    { upTo: { single: null, mfj: null, mfs: null, hoh: null, qss: null }, rate: 0.2 },
-  ],
-  se: { factor: 0.9235, ss: 0.124, medicare: 0.029, wageBase: 184_500, addl: 0.009, addlThreshold: S(200_000, 250_000, 125_000, 200_000) },
-  niit: { rate: 0.038, threshold: S(200_000, 250_000, 125_000, 200_000) },
-  ctc: { amount: 2_200, start: S(200_000, 400_000, 200_000, 200_000), per1000: 50 },
-  periods: [
-    { id: 'Q1', due: '2026-04-15' },
-    { id: 'Q2', due: '2026-06-15' },
-    { id: 'Q3', due: '2026-09-15' },
-    { id: 'Q4', due: '2027-01-15' },
-  ],
-  safeHarbor: { prior: 1, high: 1.1, highAgi: { single: 150_000, mfs: 75_000, '*': 150_000 }, current: 0.9 },
-  deadlines: [{ name: 'Federal return due', date: '2027-04-15' }],
-};
+const PACKS: PackJson[] = [usFederal2026 as unknown as PackJson, genericPack as unknown as PackJson];
 
-const GENERIC: Pack = {
-  ...US_2026,
-  info: { id: 'generic', name: 'Generic / custom', year: 2026, tier: 'custom', version: '1.0.0', verifiedOn: '2026-01-12' },
-};
-
-const PACKS = [US_2026, GENERIC];
-
-function packFor(id: string): Pack | undefined {
-  return PACKS.find((p) => p.info.id === id);
+function packFor(id: string): PackJson | undefined {
+  return PACKS.find((p) => p.id === id);
 }
 
-function isStale(p: Pack, year: number, today: string): boolean {
-  if (p.info.tier !== 'custom' && p.info.year !== year) return true;
-  const v = new Date(`${p.info.verifiedOn}T12:00:00`);
-  v.setMonth(v.getMonth() + 13);
-  return v.toISOString().slice(0, 10) < today;
+function infoOf(p: PackJson, selectedYear: number, today: string): TaxPackInfo {
+  return { id: p.id, name: p.name, year: p.year, tier: p.tier as TaxPackInfo['tier'], version: p.version, verifiedOn: p.verifiedOn ?? '', stale: isStale(p, selectedYear, today) };
 }
 
-const n = (s: string | number | undefined | null) => {
+/** Rust `TaxPack::is_stale`: another year, unverified, or verified more than 13 months before today. */
+function isStale(p: PackJson, year: number, today: string): boolean {
+  if (p.tier === 'custom') return false;
+  if (p.year !== year) return true;
+  if (!p.verifiedOn) return true;
+  const [y, m, d] = p.verifiedOn.split('-').map(Number);
+  const lim = new Date(Date.UTC(y, m - 1 + 13, 1));
+  // chrono's checked_add_months clamps the day to the target month's length.
+  const last = new Date(Date.UTC(lim.getUTCFullYear(), lim.getUTCMonth() + 1, 0)).getUTCDate();
+  lim.setUTCDate(Math.min(d, last));
+  return today > lim.toISOString().slice(0, 10);
+}
+
+/** Parses an IPC decimal string (or a pack value); bad input reads as 0, like the mock always has. */
+const n = (s: Dec | undefined | null) => {
   const x = typeof s === 'number' ? s : Number(String(s ?? '0').replace(/[−]/g, '-').replace(/[, $]/g, ''));
   return Number.isFinite(x) ? x : 0;
 };
-const r0 = (x: number) => Math.round(x); // whole_dollar_half_up for positives
-const money = (x: number) => (Math.round(x * 100) / 100).toFixed(2);
+const get = (m: StatusMap<Dec> | undefined, status: string) => n(m ? (m[status] ?? m['*']) : 0);
+/** Half away from zero at `dp` decimals (rust_decimal `MidpointAwayFromZero`), robust to binary float noise. */
+function roundHalfUp(x: number, dp: number): number {
+  const f = 10 ** dp;
+  const v = Math.abs(x) * f;
+  const r = Math.round(v + 1e-7 * Math.max(1, v / 1e6)) / f;
+  return x < 0 ? -r : r === 0 ? 0 : r;
+}
+const money = (x: number) => roundHalfUp(x, 2).toFixed(2);
+/** Rust renders `Decimal` without trailing zeros (`normalize`); keep strings comparable. */
+const dec = (x: number) => String(Number(roundHalfUp(x, 8).toFixed(8)));
 
-function customOverrides(p: Pack, input: TaxInput): Pack {
-  const c = input.custom as { brackets?: { upTo: number | null; rate: number }[]; standard?: number; seRate?: number } | undefined;
-  if (p.info.tier !== 'custom' || !c) return p;
-  const st = input.filingStatus as Status;
-  return {
-    ...p,
-    brackets: c.brackets?.length ? { ...p.brackets, [st]: c.brackets } : p.brackets,
-    standard: c.standard !== undefined ? { ...p.standard, [st]: c.standard } : p.standard,
-    se: c.seRate !== undefined ? { ...p.se, ss: c.seRate * 0.8, medicare: c.seRate * 0.2 } : p.se,
-  };
+function customOverrides(p: PackJson, input: TaxInput): PackJson {
+  if (p.tier !== 'custom') return p;
+  const c = (input.custom ?? {}) as { brackets?: { upTo: Dec | null; rate: Dec }[]; standardDeduction?: Dec; seRate?: Dec };
+  const out: PackJson = { ...p };
+  if (c.brackets?.length) out.brackets = { '*': c.brackets };
+  if (c.standardDeduction !== undefined) out.standardDeduction = { '*': c.standardDeduction };
+  if (c.seRate !== undefined) out.seTax = { netEarningsFactor: 1, ssRate: c.seRate, medicareRate: 0, ssWageBase: null, deductibleShare: 0, minimumNetEarnings: null, addlMedicare: null };
+  return out;
 }
 
-export function estimate(input: TaxInput, today: string, scale = 1): TaxEstimate {
-  const base = packFor(input.packId) ?? US_2026;
-  const p = customOverrides(base, input);
-  const st = (['single', 'mfj', 'mfs', 'hoh', 'qss'].includes(input.filingStatus) ? input.filingStatus : 'single') as Status;
-  const inc = (k: string) => input.incomes.filter((i) => i.kind === k).reduce((s, i) => s + n(i.amount), 0) * scale;
-  const wages = inc('wages');
-  const se = Math.max(0, inc('self_employment'));
-  const interest = inc('interest');
-  const ordDiv = inc('ordinary_dividends');
-  const qualDiv = Math.min(inc('qualified_dividends'), ordDiv || inc('qualified_dividends'));
-  const stcg = inc('stcg');
-  const ltcg = inc('ltcg');
-  const other = inc('retirement') + inc('unemployment') + inc('rental') + inc('other') + inc('social_security') * 0.85;
-  // Qualified dividends are a subset of ordinary dividends; count dividends once.
-  const dividends = Math.max(ordDiv, qualDiv);
-  const netCap = stcg + ltcg;
-  const capForIncome = Math.max(-3_000, netCap);
-  const gross = wages + se + interest + dividends + capForIncome + other;
+interface Core {
+  gross: number;
+  agi: number;
+  deduction: TaxEstimate['deduction'];
+  taxable: number;
+  ordinaryTax: number;
+  preferentialTax: number;
+  seTax: number;
+  addlMedicare: number;
+  niit: number;
+  nonrefundable: number;
+  refundable: number;
+  totalTax: number;
+  brackets: TaxEstimate['brackets'];
+  marginal: number;
+}
 
-  // 1. Self-employment tax
-  const netSe = se * p.se.factor;
-  const ssRoom = Math.max(0, p.se.wageBase - wages);
-  const seSs = Math.min(netSe, ssRoom) * p.se.ss;
-  const seMed = netSe * p.se.medicare;
-  const addlMedBase = Math.max(0, wages + netSe - p.se.addlThreshold[st]);
-  const addlMed = addlMedBase * p.se.addl;
-  const seTax = se > 400 ? seSs + seMed : 0;
-  const seHalf = seTax * 0.5;
+function bracketsFor(p: PackJson, status: string) {
+  return p.brackets[status] ?? p.brackets['*'];
+}
 
-  // 2. AGI
-  const adj = input.adjustments.reduce((s, a) => s + Math.max(0, n(a.amount)), 0);
-  const agi = Math.max(0, gross - adj - seHalf);
-
-  // 3. Deduction
-  const std = p.standard[st] + (input.age65OrBlind ?? 0) * p.addl65[st];
-  const itemized = typeof input.deductions === 'object' ? input.deductions.itemized.reduce((s, d) => s + Math.max(0, n(d.amount)), 0) : 0;
-  const useItemized = typeof input.deductions === 'object' && itemized > std;
-  const deduction = useItemized ? itemized : std;
-
-  // 4. Taxable
-  const taxable = Math.max(0, agi - deduction);
-  const pref = Math.min(taxable, Math.max(0, qualDiv + Math.max(0, ltcg + Math.min(0, stcg))));
-  const ordinaryTaxable = Math.max(0, taxable - pref);
-
-  // 5. Ordinary brackets, then preferential stacked on top
-  const bands: TaxEstimate['brackets'] = [];
-  let prev = 0;
-  let ordinaryTax = 0;
-  for (const b of p.brackets[st]) {
-    const top = b.upTo ?? Infinity;
-    const taxed = Math.max(0, Math.min(ordinaryTaxable, top) - prev);
-    ordinaryTax += taxed * b.rate;
-    bands.push({ rate: String(b.rate), from: money(prev), to: b.upTo === null ? null : money(b.upTo), taxed: money(taxed) });
-    prev = top;
-    if (top === Infinity) break;
-  }
-  let preferentialTax = 0;
-  let stackFrom = ordinaryTaxable;
-  let left = pref;
-  for (const b of p.ltcg) {
-    if (left <= 0) break;
-    const top = b.upTo[st] ?? Infinity;
-    const room = Math.max(0, top - stackFrom);
-    const take = Math.min(room, left);
-    preferentialTax += take * b.rate;
-    stackFrom += take;
-    left -= take;
-  }
-  const marginal = (() => {
-    let m = p.brackets[st][0].rate;
-    let lo = 0;
-    for (const b of p.brackets[st]) {
-      if (ordinaryTaxable > lo) m = b.rate;
-      lo = b.upTo ?? Infinity;
+/** Port of Rust `itemized_amount`: per kind, minus the AGI floor, then capped (with the SALT-style phase-down). */
+function itemizedAmount(p: PackJson, entries: { kind: string; amount: string }[], agi: number, status: string): number {
+  let total = 0;
+  for (const k of [...new Set(entries.map((e) => e.kind))].sort()) {
+    let amt = entries.filter((e) => e.kind === k).reduce((s, e) => s + Math.max(0, n(e.amount)), 0);
+    const rule = p.itemizedRules?.find((r) => r.kind === k);
+    if (rule) {
+      if (rule.agiFloorPct !== undefined) amt = Math.max(0, amt - agi * n(rule.agiFloorPct));
+      if (rule.cap) {
+        let cap = get(rule.cap, status);
+        const ph = rule.capPhasedown;
+        if (ph) cap = Math.max(cap - Math.max(0, agi - get(ph.start, status)) * n(ph.rate), get(ph.floor, status));
+        amt = Math.min(amt, cap);
+      }
     }
-    return m;
-  })();
-  // NIIT
-  const nii = Math.max(0, interest + dividends + Math.max(0, netCap) + inc('rental'));
-  const niit = Math.min(nii, Math.max(0, agi - p.niit.threshold[st])) * p.niit.rate;
-
-  // 6. Credits with phase-outs
-  let credits = 0;
-  if (input.dependents > 0) {
-    const over = Math.max(0, agi - p.ctc.start[st]);
-    credits += Math.max(0, input.dependents * p.ctc.amount - Math.ceil(over / 1000) * p.ctc.per1000);
+    total += amt;
   }
-  for (const c of input.credits) credits += Math.max(0, n(c.amount));
-  const preCredit = ordinaryTax + preferentialTax;
-  const creditsUsed = Math.min(credits, preCredit);
+  return total;
+}
 
-  // 7. Rounding (whole dollars)
-  const R = { ordinaryTax: r0(ordinaryTax), preferentialTax: r0(preferentialTax), seTax: r0(seTax), addlMed: r0(addlMed), niit: r0(niit), credits: r0(creditsUsed) };
-  const totalTax = Math.max(0, R.ordinaryTax + R.preferentialTax - R.credits) + R.seTax + R.addlMed + R.niit;
-  const paid = n(input.withheld) + n(input.estimatedPaid);
-  const balance = totalTax - paid;
+/** Port of Rust `compute` (crates/emp-finance/src/tax/engine.rs). */
+function compute(p: PackJson, input: TaxInput, scale: number): Core {
+  const status = input.filingStatus;
+  const rd = (d: number) => roundHalfUp(d, p.rounding === 'whole_dollar_half_up' ? 0 : 2);
+  const sum = (k: string) => input.incomes.filter((i) => i.kind === k).reduce((s, i) => s + n(i.amount) * scale, 0);
+  const wages = sum('wages');
+  const seProfit = sum('self_employment');
+  const interest = sum('interest');
+  const odiv = sum('ordinary_dividends');
+  const qdiv = sum('qualified_dividends');
+  const stcg = sum('stcg');
+  const ltcg = sum('ltcg');
+  const retirement = sum('retirement');
+  const ss = sum('social_security');
+  const unemployment = sum('unemployment');
+  const rental = sum('rental');
+  const other = sum('other');
+
+  // 1. Self-employment tax.
+  let seTax = 0;
+  let seDeductible = 0;
+  let netSe = 0;
+  const se = p.seTax;
+  if (se) {
+    netSe = Math.max(0, seProfit * n(se.netEarningsFactor));
+    if (se.minimumNetEarnings != null && netSe < n(se.minimumNetEarnings)) netSe = 0;
+    const ssBase = se.ssWageBase != null ? Math.min(netSe, Math.max(0, n(se.ssWageBase) - wages)) : netSe;
+    const ssPart = ssBase * n(se.ssRate);
+    const medPart = netSe * n(se.medicareRate);
+    seTax = rd(ssPart + medPart);
+    seDeductible = roundHalfUp((ssPart + medPart) * n(se.deductibleShare), 2);
+  }
+  const am = se?.addlMedicare;
+  const addlMedicare = am ? rd(Math.max(0, wages + netSe - get(am.threshold, status)) * n(am.rate)) : 0;
+
+  // Capital gains netting.
+  const netCap = stcg + ltcg;
+  let capInIncome: number;
+  let prefCap: number;
+  if (netCap < 0) {
+    const limit = p.capitalLossLimit ? get(p.capitalLossLimit, status) : 3000;
+    capInIncome = Math.max(netCap, -limit);
+    prefCap = 0;
+  } else {
+    capInIncome = netCap;
+    prefCap = Math.max(0, Math.min(ltcg, netCap));
+  }
+  const adjustments = input.adjustments.reduce((s, a) => s + Math.max(0, n(a.amount)), 0);
+  const nonSs = wages + seProfit + interest + odiv + qdiv + capInIncome + retirement + unemployment + rental + other;
+
+  // Taxable Social Security (provisional income method).
+  let taxableSs = ss;
+  if (p.socialSecurity) {
+    if (ss > 0) {
+      const provisional = nonSs - adjustments - seDeductible + ss * 0.5;
+      const b1 = get(p.socialSecurity.base1, status);
+      const b2 = get(p.socialSecurity.base2, status);
+      if (provisional <= b1) taxableSs = 0;
+      else if (provisional <= b2) taxableSs = Math.min(ss * 0.5, (provisional - b1) * 0.5);
+      else taxableSs = Math.min(ss * 0.85, 0.85 * (provisional - b2) + Math.min(ss * 0.5, (b2 - b1) * 0.5));
+    } else taxableSs = 0;
+  }
+  const gross = rd(nonSs + taxableSs);
+  // 2. AGI.
+  const agi = rd(gross - adjustments - seDeductible);
+
+  // 3. Deduction: the larger of itemised (after floors/caps) and standard + the non-itemiser charitable deduction.
+  const standard = rd(get(p.standardDeduction, status) + get(p.additionalStdDeduction65OrBlind, status) * (input.age65OrBlind ?? 0));
+  const entries = typeof input.deductions === 'object' && input.deductions ? input.deductions.itemized : [];
+  const itemizedWouldBe = entries.length ? rd(itemizedAmount(p, entries, agi, status)) : undefined;
+  const nc = p.nonItemizerCharity;
+  const charityNi = nc ? rd(Math.min(entries.filter((e) => nc.kinds.includes(e.kind)).reduce((s, e) => s + Math.max(0, n(e.amount)), 0), get(nc.cap, status))) : 0;
+  const useItemized = itemizedWouldBe !== undefined && itemizedWouldBe > standard + charityNi;
+  const deductionAmount = useItemized ? itemizedWouldBe! : standard + charityNi;
+  const deduction: TaxEstimate['deduction'] = {
+    kind: useItemized ? 'itemized' : 'standard',
+    amount: dec(deductionAmount),
+    standardWouldBe: dec(standard),
+    ...(itemizedWouldBe !== undefined ? { itemizedWouldBe: dec(itemizedWouldBe) } : {}),
+  };
+  // 4. Taxable income.
+  const taxable = Math.max(0, agi - deductionAmount);
+
+  // 5. Ordinary + preferential stacking.
+  const brackets = bracketsFor(p, status) ?? [];
+  const prefIncome = p.preferentialRates ? Math.min(Math.max(0, qdiv + prefCap), taxable) : 0;
+  const ordinaryTaxable = taxable - prefIncome;
+  let ordExact = 0;
+  const bands: TaxEstimate['brackets'] = [];
+  let from = 0;
+  for (const b of brackets) {
+    const to = b.upTo === null ? null : n(b.upTo);
+    const top = to === null ? ordinaryTaxable : Math.min(to, ordinaryTaxable);
+    const taxed = Math.max(0, top - from);
+    ordExact += taxed * n(b.rate);
+    bands.push({ rate: dec(n(b.rate)), from: dec(from), to: to === null ? null : dec(to), taxed: dec(taxed) });
+    if (to !== null && to < ordinaryTaxable) from = to;
+    else break;
+  }
+  const ordinaryTax = rd(ordExact);
+  const marginal = n(brackets.find((b) => b.upTo === null || ordinaryTaxable <= n(b.upTo))?.rate ?? 0);
+  let prefExact = 0;
+  if (p.preferentialRates) {
+    let lo = ordinaryTaxable;
+    const hi = taxable;
+    for (const band of p.preferentialRates.ltcgQualifiedDiv) {
+      if (lo >= hi) break;
+      const capRaw = band.upTo[status] !== undefined ? band.upTo[status] : band.upTo['*'];
+      const top = capRaw == null ? hi : Math.min(n(capRaw), hi);
+      if (top > lo) {
+        prefExact += (top - lo) * n(band.rate);
+        lo = top;
+      }
+    }
+  }
+  const preferentialTax = rd(prefExact);
+
+  // NIIT.
+  const niit = p.niit ? rd(Math.min(Math.max(0, interest + odiv + qdiv + Math.max(0, netCap) + Math.max(0, rental)), Math.max(0, agi - get(p.niit.threshold, status))) * n(p.niit.rate)) : 0;
+
+  // 6. Credits.
+  const incomeTax = ordinaryTax + preferentialTax;
+  let nonref = 0;
+  let refundable = 0;
+  const earned = wages + seProfit - seDeductible;
+  for (const c of p.credits ?? []) {
+    if (c.kind !== 'per_dependent' || input.dependents === 0) continue;
+    const deps = input.dependents;
+    let amt = n(c.amount) * deps;
+    if (c.phaseout) {
+      const over = Math.max(0, agi - get(c.phaseout.start, status));
+      amt = Math.max(0, amt - Math.ceil(over / 1000) * n(c.phaseout.per1000));
+    }
+    const room = Math.max(0, incomeTax - nonref);
+    const used = Math.min(amt, room);
+    nonref += used;
+    const leftover = amt - used;
+    if (leftover > 0 && c.refundablePerDependent !== undefined) {
+      const earnedCap = c.refundableEarnedRate !== undefined ? Math.max(0, earned - n(c.refundableEarnedThreshold)) * n(c.refundableEarnedRate) : Infinity;
+      refundable += Math.min(leftover, n(c.refundablePerDependent) * deps, earnedCap);
+    }
+  }
+  for (const claim of input.credits) {
+    const inPack = p.credits?.find((c) => c.id === claim.id);
+    if (inPack?.kind === 'per_dependent') continue;
+    const a = n(claim.amount);
+    if (a > 0) nonref += Math.min(a, Math.max(0, incomeTax - nonref));
+  }
+  const nonrefundable = rd(nonref);
+  const refundableR = rd(refundable);
+  const totalTax = Math.max(0, incomeTax - nonrefundable) + seTax + addlMedicare + niit;
+  return { gross, agi, deduction, taxable: rd(taxable), ordinaryTax, preferentialTax, seTax, addlMedicare, niit, nonrefundable, refundable: refundableR, totalTax, brackets: bands, marginal };
+}
+
+/** Port of Rust `validate_input`; failures surface as `INVALID` (the mock's `ctx.fail`). */
+function validate(p: PackJson, input: TaxInput): string | null {
+  if (!p.filingStatuses.includes(input.filingStatus)) return `filing status ${JSON.stringify(input.filingStatus)} is not in pack ${p.id}`;
+  if (input.dependents > 30 || (input.age65OrBlind ?? 0) > 2) return 'dependents ≤ 30 and age65OrBlind ≤ 2';
+  if (input.incomes.some((i) => n(i.amount) < 0 && !['stcg', 'ltcg', 'rental', 'self_employment', 'other'].includes(i.kind))) return 'only gains, rental, self-employment and other income may be negative';
+  return null;
+}
+
+export function estimate(input: TaxInput, today: string): TaxEstimate {
+  const base = packFor(input.packId) ?? PACKS[0];
+  const p = customOverrides(base, input);
+  const c = compute(p, input, 1);
+  const withheld = n(input.withheld);
+  const estimatedPaid = n(input.estimatedPaid);
+  const balance = c.totalTax - c.refundable - withheld - estimatedPaid;
+  const unsure = (input.custom as { unsure?: boolean } | undefined)?.unsure;
+  let range: TaxEstimate['range'];
+  if (unsure) {
+    const b = (x: Core) => x.totalTax - x.refundable - withheld - estimatedPaid;
+    const lo = b(compute(p, input, 0.9));
+    const hi = b(compute(p, input, 1.1));
+    range = { low: dec(Math.min(lo, hi)), high: dec(Math.max(lo, hi)) };
+  }
   const lines: TaxEstimate['lines'] = [
-    { label: 'Ordinary income tax', value: money(R.ordinaryTax), packRef: 'brackets' },
-    { label: 'Tax on qualified dividends & long-term gains', value: money(R.preferentialTax), packRef: 'preferentialRates.ltcgQualifiedDiv' },
-    { label: 'Credits', value: money(-R.credits), packRef: 'credits' },
-    { label: 'Self-employment tax', value: money(R.seTax), packRef: 'seTax' },
-    ...(R.addlMed ? [{ label: 'Additional Medicare tax', value: money(R.addlMed), packRef: 'seTax.addlMedicare' }] : []),
-    ...(R.niit ? [{ label: 'Net investment income tax', value: money(R.niit), packRef: 'niit' }] : []),
-    { label: 'Estimated total tax', value: money(totalTax) },
-    { label: 'Withholding', value: money(-n(input.withheld)) },
-    { label: 'Estimated payments made', value: money(-n(input.estimatedPaid)) },
+    { label: 'Ordinary income tax', value: money(c.ordinaryTax), packRef: 'brackets' },
+    { label: 'Tax on qualified dividends & long-term gains', value: money(c.preferentialTax), packRef: 'preferentialRates.ltcgQualifiedDiv' },
+    { label: 'Credits', value: money(-c.nonrefundable), packRef: 'credits' },
+    { label: 'Self-employment tax', value: money(c.seTax), packRef: 'seTax' },
+    ...(c.addlMedicare ? [{ label: 'Additional Medicare tax', value: money(c.addlMedicare), packRef: 'seTax.addlMedicare' }] : []),
+    ...(c.niit ? [{ label: 'Net investment income tax', value: money(c.niit), packRef: 'niit' }] : []),
+    { label: 'Estimated total tax', value: money(c.totalTax) },
+    ...(c.refundable ? [{ label: 'Refundable credits', value: money(-c.refundable), packRef: 'credits' }] : []),
+    { label: 'Withholding', value: money(-withheld) },
+    { label: 'Estimated payments made', value: money(-estimatedPaid) },
     { label: balance >= 0 ? 'Estimated balance due' : 'Estimated refund', value: money(balance) },
   ];
-  const stale = isStale(base, input.year, today);
   return {
-    gross: money(gross),
-    agi: money(agi),
-    deduction: { kind: useItemized ? 'itemized' : 'standard', amount: money(deduction), standardWouldBe: money(std) },
-    taxable: money(taxable),
-    ordinaryTax: money(R.ordinaryTax),
-    preferentialTax: money(R.preferentialTax),
-    seTax: money(R.seTax + R.addlMed),
-    niit: money(R.niit),
-    credits: money(R.credits),
-    totalTax: money(totalTax),
-    brackets: bands,
-    effectiveRate: gross > 0 ? totalTax / gross : 0,
-    marginalRate: marginal,
-    balance: money(balance),
+    gross: dec(c.gross),
+    agi: dec(c.agi),
+    deduction: c.deduction,
+    taxable: dec(c.taxable),
+    ordinaryTax: dec(c.ordinaryTax),
+    preferentialTax: dec(c.preferentialTax),
+    seTax: dec(c.seTax),
+    niit: dec(c.niit),
+    credits: dec(c.nonrefundable + c.refundable),
+    totalTax: dec(c.totalTax),
+    brackets: c.brackets,
+    // Total tax ÷ AGI — the same definition as Rust (see the header).
+    effectiveRate: c.agi > 0 ? c.totalTax / c.agi : 0,
+    marginalRate: c.marginal,
+    balance: dec(balance),
+    ...(range ? { range } : {}),
     lines,
-    packVersion: base.info.version,
-    verifiedOn: base.info.verifiedOn,
-    stale,
-    disclaimer: `Estimates for planning only, based on ${base.info.name} ${base.info.year} v${base.info.version} verified ${base.info.verifiedOn}. Not tax advice. Verify with official sources or a qualified professional.`,
+    packVersion: p.version,
+    verifiedOn: p.verifiedOn ?? '',
+    stale: isStale(p, input.year, today),
+    disclaimer: `Estimates for planning only, based on ${p.name} v${p.version} verified ${p.verifiedOn ?? 'unverified'}. Not tax advice. Verify with official sources or a qualified professional.`,
   };
 }
 
 export const handlers: MockHandlers = {
   tax_packs: (_req, ctx) => {
     const today = ctx.clock.today();
-    return PACKS.map((p) => ({ ...p.info, stale: isStale(p, p.info.year, today) }));
+    const year = Number(today.slice(0, 4));
+    return PACKS.map((p) => infoOf(p, Math.max(year, p.year), today));
   },
 
   tax_estimate: (req, ctx) => {
     if (!req || !Array.isArray(req.incomes)) ctx.fail('INVALID', 'Add at least one income', { field: 'incomes' });
-    if (!packFor(req.packId)) ctx.fail('NOT_FOUND', `Unknown tax pack ${req.packId}`, { field: 'packId' });
-    const today = ctx.clock.today();
-    const est = estimate(req, today);
-    const unsure = (req.custom as { unsure?: boolean } | undefined)?.unsure;
-    if (unsure) {
-      const lo = estimate(req, today, 0.9);
-      const hi = estimate(req, today, 1.1);
-      est.range = { low: lo.balance, high: hi.balance };
-    }
-    return est;
+    const p = packFor(req.packId);
+    if (!p) ctx.fail('NOT_FOUND', `Unknown tax pack ${req.packId}`, { field: 'packId' });
+    const bad = validate(p!, req);
+    if (bad) ctx.fail('INVALID', bad);
+    return estimate(req, ctx.clock.today());
   },
 
   tax_quarterly_plan: (req, ctx) => {
-    const p = packFor(req.packId) ?? US_2026;
+    const pk = packFor(req.packId) ?? PACKS[0];
+    const est0 = (pk.estimated ?? PACKS[0].estimated)!;
+    const p = {
+      periods: est0.periods,
+      safeHarbor: { prior: n(est0.safeHarbor.priorYearPct), high: n(est0.safeHarbor.highIncomePct), highAgi: { '*': get(est0.safeHarbor.highIncomeAgi, '*') }, current: n(est0.safeHarbor.currentYearPct) },
+    };
     const today = ctx.clock.today();
-    const year = req.year || p.info.year;
-    const shift = (d: string) => d.replace(/^\d{4}/, (y) => String(Number(y) + (year - p.info.year)));
+    const year = req.year || pk.year;
+    const shift = (d: string) => d.replace(/^\d{4}/, (y) => String(Number(y) + (year - pk.year)));
     const periods = p.periods.map((x) => ({ id: x.id, due: shift(x.due) }));
     const paidList = (req.paid ?? []).map((x) => ({ date: x.date, amount: n(x.amount) })).sort((a, b) => (a.date < b.date ? -1 : 1));
     // Allocate payments to periods in order (each payment covers the earliest period whose due date it precedes).

@@ -1,188 +1,129 @@
-/* Home (§6.4) in the Slab language (docs/DESIGN.md §8.1): widgets are machined panels with pointer edge light, figures
-   sit in recessed wells, quick actions are keycaps. Tokens only. */
-.hm-page { width: 100%; max-width: 1120px; margin: 0 auto; padding: 52px 40px 96px; }
-.hm-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 26px; }
+/* Home = the day (PROGRAMME-v3 K4): one 720px column, ruled not boxed, no containers, no motion on arrival (C0).
+   Tokens only; Phase 2 polishes the values. */
+.hm-page { width: 100%; max-width: 720px; margin: 0 auto; padding: 56px 24px 96px; }
 
-/* ── greeting moment ── */
-.hm-greeting { min-width: 0; }
-.hm-hello {
+.hm-head { margin-bottom: 20px; }
+.hm-date {
   margin: 0;
-  font-size: calc(34rem / 14);
-  line-height: 1.12;
-  font-weight: 680;
-  letter-spacing: -0.032em;
+  font-size: calc(30rem / 14);
+  line-height: calc(39 / 30);
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
 }
-.hm-word { display: inline-block; }
-.hm-date {
-  margin-top: 8px;
+.hm-sub { margin-top: 4px; font-size: calc(14rem / 14); line-height: calc(20 / 14); color: var(--text-secondary); }
+.hm-dot { color: var(--text-tertiary); }
+
+.hm-quiet-link {
+  font: inherit;
+  font-size: calc(13rem / 14);
+  color: var(--text-secondary);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.hm-quiet-link:hover { color: var(--text-primary); }
+.hm-sub .hm-quiet-link { font-size: inherit; }
+.hm-quiet-link.is-underlined { text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+.hm-quiet-link:focus-visible,
+.hm-row:focus-visible,
+.hm-money-part:focus-visible,
+.hm-todo-title:focus-visible { outline: var(--focus-width, 2px) solid var(--focus-ring); outline-offset: 1px; border-radius: var(--radius-xs); }
+
+/* ── capture ── */
+.hm-capture { margin-bottom: 28px; }
+.hm-capture-field { position: relative; display: flex; align-items: center; }
+.hm-capture-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: calc(14rem / 14);
+}
+.hm-capture-input::placeholder { color: var(--text-tertiary); }
+.hm-capture-input:hover { border-color: var(--border-strong); }
+.hm-capture-input:focus { outline: var(--focus-width, 2px) solid var(--focus-ring); outline-offset: 1px; border-color: var(--border-strong); }
+.hm-capture-hint {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  font-size: calc(12rem / 14);
+  color: var(--text-tertiary);
+}
+.hm-capture-preview {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  font-size: 1rem;
+  min-height: 20px;
+  margin-top: 6px;
+  padding-inline: 2px;
+  font-size: calc(12rem / 14);
+  line-height: calc(16 / 12);
   color: var(--text-secondary);
 }
-.hm-date::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
-}
+.hm-capture-preview.is-error .hm-capture-what { color: var(--loss-text); }
+.hm-capture-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); }
+.hm-capture-chip { color: var(--text-secondary); }
+.hm-capture-chip::before { content: "·"; margin-right: 8px; color: var(--text-tertiary); }
+.hm-capture-enter { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--text-tertiary); }
 
-/* ── grid ── */
-.hm-grid { position: relative; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; align-items: stretch; border-radius: 18px; }
-.hm-grid.is-editing::before {
-  content: ""; position: absolute; inset: -12px; border-radius: 20px; pointer-events: none;
-  background-image: radial-gradient(circle, rgba(var(--text-rgb), 0.16) 1px, transparent 1.4px);
-  background-size: calc((100% - 24px + 16px) / 12) 24px; background-position: 12px 12px;
-  background-color: var(--well-bg);
-  box-shadow: inset 0 1px 3px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
-}
-@media (max-width: 1000px) { .hm-grid > .hm-slot { grid-column: span 12 / span 12 !important; } }
-.hm-slot { position: relative; min-width: 0; display: flex; }
-.hm-slot.is-dragging { z-index: 5; }
-.hm-widget { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; border-radius: 16px; contain: layout style; }
-.hm-widget.panel { border-radius: 16px; }
-.hm-widget.is-bare { background: transparent; box-shadow: none; }
-.hm-widget.is-editing { box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--well-rim-state), var(--panel-shadow); }
-.hm-slot.is-dragging .hm-widget { box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), var(--panel-raise); transform: scale(1.02) rotate(0.4deg); transition: transform var(--dur-release) var(--spring-release); }
-.hm-widget-body { flex: 1; min-height: 0; padding: 18px 20px 20px; display: flex; flex-direction: column; }
-.hm-widget-body > * { flex: 1; }
-.hm-widget.is-bare .hm-widget-body { padding: 0; }
-.hm-edit-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px 0 10px; }
-/* Customize mode: the edit controls take over the widget's own header row instead of stacking a second title above it. */
-.hm-widget.is-editing:has([data-widget-head]) .hm-edit-bar { position: absolute; z-index: 2; top: 14px; left: 0; right: 0; height: 32px; padding: 0 14px 0 12px; }
-.hm-widget.is-editing [data-widget-head] { visibility: hidden; }
-.hm-grip { width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); cursor: grab; touch-action: none; transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out), transform var(--dur-release) var(--spring-release); }
-.hm-grip:hover { background: var(--ghost-hover); color: var(--text-primary); }
-.hm-grip:active { cursor: grabbing; background: var(--ghost-press); transform: scale(0.94); transition: transform var(--dur-press) var(--ease-press); }
-.hm-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -8px 0 20px; padding: 8px 10px 10px; border-radius: 12px; }
-.hm-title { display: flex; align-items: center; gap: 8px; font-size: calc(13.5rem / 14); font-weight: 650; letter-spacing: -0.005em; color: var(--text-primary); }
-.hm-title svg { color: var(--text-tertiary); }
-.hm-label { font-size: calc(12rem / 14); font-weight: 550; color: var(--text-secondary); }
-.hm-big { font-size: calc(26rem / 14); font-weight: 660; letter-spacing: -0.025em; color: var(--text-primary); line-height: 1.12; }
+/* ── sections: a heading and ruled rows ── */
+.hm-section { margin-top: 28px; }
+.hm-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.hm-section-title { margin: 0; font-size: calc(14rem / 14); line-height: calc(20 / 14); font-weight: 600; color: var(--text-primary); }
 
-/* ── quick actions: a row of keycaps (4px room below for the slab edge) ── */
-.hm-quick-wrap { container-type: inline-size; }
-.hm-quick { display: flex; flex-wrap: wrap; gap: 10px; padding-bottom: 4px; }
-/* Narrow: shortcut hints drop out of the keycaps, then Search (it lives in the sidebar and on ⌘K) — no orphaned key. */
-@container (max-width: 900px) { .hm-quick .emp-btn-kbd { display: none; } }
-@container (max-width: 760px) { .hm-quick [data-qa="search"] { display: none; } }
-.hm-quick .emp-btn { padding-inline: 13px 14px; }
-
-/* ── today ── */
-.hm-event {
-  position: relative; isolation: isolate;
-  display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 5px 10px; margin: 0 -10px; border-radius: 10px; text-align: left;
-  transform: scale(1);
-  transition: transform var(--dur-release) var(--spring-release);
-}
-.hm-event::before,
-.hm-wl-row::before,
-.hm-task::before {
-  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
-  background: var(--ghost-hover); opacity: 0; transform: scale(0.96);
-  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
-}
-.hm-event:hover::before,
-.hm-wl-row:hover::before,
-.hm-task:hover::before { opacity: 1; transform: scale(1); transition-duration: 140ms; }
-.hm-event:active, .hm-wl-row:active { transform: scale(0.985); transition: transform var(--dur-press) var(--ease-press); }
-.hm-event:active::before, .hm-wl-row:active::before { background: var(--ghost-press); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12); }
-.hm-event:focus-visible, .hm-wl-row:focus-visible, .hm-recent-card:focus-visible, .hm-cell:focus-visible, .hm-habits:focus-visible { outline: 1.5px solid var(--ring); outline-offset: 2px; }
-.hm-event-time { width: 66px; flex: none; white-space: nowrap; font-size: calc(12rem / 14); color: var(--text-secondary); font-weight: 560; }
-.hm-event-time[data-next] {
-  position: relative; width: auto; min-width: 58px; margin-right: 8px; padding: 2px 7px; border-radius: 6px;
+.hm-list { list-style: none; margin: 0; padding: 0; }
+.hm-list > li { border-bottom: 1px solid var(--border-subtle); }
+.hm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  font-size: calc(14rem / 14);
+  line-height: calc(20 / 14);
   color: var(--text-primary);
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
-  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 1px 0 var(--slab-s-side-b), 0 1px 2px var(--slab-s-contact);
+  cursor: default;
 }
-/* the next event's time chip pulses once on arrival (S19) */
-.hm-event-time[data-next]::after {
-  content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
-  box-shadow: 0 0 0 1.5px var(--text-tertiary);
-  opacity: 0;
-  animation: hm-pulse-once 1100ms var(--ease-out) 700ms 1 both;
-}
-@keyframes hm-pulse-once {
-  0% { opacity: 0.7; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.35, 1.6); }
-}
-:root:is([data-motion="reduced"], [data-effects="reduced"]) .hm-event-time[data-next]::after { animation: none; }
-.hm-event-bar { width: 4px; align-self: stretch; margin: 5px 0; border-radius: 4px; flex: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.15); }
-.hm-live {
-  position: relative; flex: none; height: 20px; padding: 0 8px 0 18px; border-radius: 999px; font-size: 11px; font-weight: 650;
-  display: inline-flex; align-items: center; color: var(--loss-text);
-  background: var(--loss-soft);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 0 0 1px color-mix(in oklab, var(--loss) 26%, transparent);
-}
-.hm-live::before {
-  content: ""; position: absolute; left: 8px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 999px;
-  background: var(--loss); box-shadow: 0 0 6px color-mix(in oklab, var(--loss) 60%, transparent);
-}
-.hm-task { position: relative; isolation: isolate; display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 2px 8px; margin: 0 -8px; border-radius: 9px; }
-.hm-task .emp-check-row { flex: 1; min-width: 0; align-items: center; }
-.hm-task .emp-check-row > span { padding-top: 0 !important; }
-.hm-task .emp-check-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(13rem / 14); color: var(--text-primary); }
-.hm-section-label { font-size: calc(11rem / 14); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-tertiary); }
+button.hm-row { cursor: pointer; }
+button.hm-row:hover .hm-row-title { text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+.hm-row-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-row-meta { flex: none; font-size: calc(12rem / 14); color: var(--text-tertiary); }
+.hm-row-meta.is-late { color: var(--loss-text); }
+.hm-row-icon { color: var(--text-tertiary); }
 
-/* habits strip: a recessed band with domes; done habits are lit */
-.hm-habits {
-  position: relative; display: flex; align-items: center; gap: 12px; margin-top: auto; padding: 8px 10px 8px 14px; border-radius: 14px; text-align: left;
-  transform: scale(1);
-  transition: box-shadow 160ms var(--ease-out), transform var(--dur-release) var(--spring-release);
-}
-.hm-habits:active { transform: scale(0.99); transition: transform var(--dur-press) var(--ease-press); }
-.hm-habit {
-  width: 28px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px;
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
-  filter: grayscale(0.7); opacity: 0.7;
-  transition: transform var(--dur-release) var(--spring-release);
-}
-.hm-habit.is-done {
-  filter: none; opacity: 1;
-  background: linear-gradient(180deg, var(--thumb-a), var(--thumb-b));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1.5px var(--app), 0 1px 0 rgba(0, 0, 0, 0.12), 0 2px 5px -1px color-mix(in oklab, var(--app) 45%, transparent);
-}
-.hm-habits:hover .hm-habit { transform: translateY(-1px); }
-.hm-habits:hover .hm-habit:nth-child(2) { transition-delay: 20ms; }
-.hm-habits:hover .hm-habit:nth-child(3) { transition-delay: 40ms; }
-.hm-habits:hover .hm-habit:nth-child(4) { transition-delay: 60ms; }
-.hm-habits:hover .hm-habit:nth-child(5) { transition-delay: 80ms; }
-.hm-habits:hover .hm-habit:nth-child(n + 6) { transition-delay: 100ms; }
+.hm-time { flex: none; width: 72px; color: var(--text-secondary); }
+.hm-event.is-past { color: var(--text-tertiary); }
+.hm-event.is-past .hm-time { color: var(--text-tertiary); }
+/* The now line: a 1px ink rule between what's done and what's next. */
+.hm-list > li.hm-now { height: 0; border-bottom: 1px solid var(--text-primary); }
 
-/* ── money: four instrument wells ── */
-.hm-money { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 1100px) { .hm-money { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.hm-cell {
-  position: relative; display: flex; flex-direction: column; gap: 8px; min-height: 132px; padding: 14px 15px; border-radius: 13px; text-align: left;
-}
-.hm-cell.is-link { cursor: pointer; transform: scale(1); transition: box-shadow 160ms var(--ease-out), background-color 160ms var(--ease-out), transform var(--dur-release) var(--spring-release); }
-.hm-cell.is-link:active { transform: scale(0.985); transition: transform var(--dur-press) var(--ease-press); }
-.hm-cell .hm-go {
-  position: absolute; top: 12px; right: 12px; color: var(--text-tertiary); opacity: 0; transform: translateX(-3px);
-  transition: opacity 140ms var(--ease-out), transform var(--dur-release) var(--spring-release);
-}
-.hm-cell.is-link:hover .hm-go { opacity: 1; transform: none; }
-.hm-cell .hm-spark { margin: auto -15px -14px; }
+.hm-todo-title { background: none; border: 0; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.hm-todo.is-done .hm-todo-title { color: var(--text-tertiary); text-decoration: line-through; text-decoration-color: var(--text-tertiary); transition: color 150ms var(--ease-out); }
+.hm-habits { color: var(--text-secondary); }
 
-/* ── watchlist ── */
-.hm-wl-row { position: relative; isolation: isolate; display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; margin: 0 -10px; border-radius: 9px; text-align: left; transform: scale(1); transition: transform var(--dur-release) var(--spring-release); }
+/* ── money: one line plus at most one alert ── */
+.hm-money { margin: 4px 0 0; font-size: calc(14rem / 14); line-height: calc(24 / 14); color: var(--text-secondary); }
+.hm-money-part { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.hm-money-part:hover { color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+.hm-num { font-weight: 500; color: var(--text-primary); }
+.hm-num.is-over { color: var(--loss-text); }
+.hm-money-alert { margin: 2px 0 0; font-size: calc(13rem / 14); line-height: calc(20 / 13); color: var(--text-secondary); }
 
-/* ── recent: small machined plates that lift ── */
-.hm-recent { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-.hm-recent > li { display: flex; }
-.hm-recent-card { display: flex; width: 100%; height: 104px; flex-direction: column; justify-content: space-between; padding: 12px 13px; border-radius: 13px !important; text-align: left; }
-.hm-recent-icon {
-  width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
-  transition: transform var(--dur-release) var(--spring-release);
+.hm-apps-line { margin-top: 28px; font-size: calc(13rem / 14); color: var(--text-secondary); }
+
+@media (max-width: 720px) {
+  .hm-page { padding: 32px 16px 64px; }
+  .hm-capture-hint { display: none; }
 }
-.hm-recent-card:hover .hm-recent-icon { transform: translateY(-1px) scale(1.06); }
-
-/* Reduced motion: state swaps only (§5.8) */
-:root[data-motion="reduced"] :is(.hm-event, .hm-wl-row, .hm-cell, .hm-habits, .hm-habit, .hm-recent-icon, .hm-grip, .hm-cell .hm-go) { transition-duration: 0ms !important; }

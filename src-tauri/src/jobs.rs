@@ -171,6 +171,28 @@ impl JobCtx {
     }
 }
 
+#[cfg(test)]
+struct NullSink;
+
+#[cfg(test)]
+impl JobSink for NullSink {
+    fn send(&self, _event: JobEvent) {}
+}
+
+#[cfg(test)]
+impl JobCtx {
+    /// A context outside the registry whose events go nowhere (for calling job bodies directly in tests).
+    pub(crate) fn detached() -> Self {
+        Self {
+            sink: Arc::new(NullSink),
+            done: Arc::default(),
+            total: Arc::default(),
+            cancel: Arc::default(),
+            last_sent: Mutex::new(None),
+        }
+    }
+}
+
 impl emp_store::Progress for JobCtx {
     fn progress(&self, done: u64, total: u64, label: &str) {
         self.report(done, total, Some(label));

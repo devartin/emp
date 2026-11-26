@@ -33,62 +33,63 @@
   --breakpoint-wide: 1280px;
   --breakpoint-ultra: 1680px;
 
-  /* Type scale — rem relative to the UI base (html font-size = --ui-base = 14px default). */
+  /* Type scale (v3, docs/DESIGN.md §2.3) — rem relative to the UI base (html font-size = --ui-base = 14px default).
+     Weights are 400/500/600/700 only. Tracking: 0 below 20px, −0.01em at 20–30px, −0.02em at 40px. */
   --text-display: calc(40rem / 14);
-  --text-display--line-height: 1.2;
-  --text-display--letter-spacing: -0.022em;
+  --text-display--line-height: calc(48 / 40);
+  --text-display--letter-spacing: -0.02em;
   --text-display--font-weight: 700;
-  --text-kpi-xl: calc(44rem / 14);
-  --text-kpi-xl--line-height: calc(48 / 44);
-  --text-kpi-xl--letter-spacing: -0.024em;
+  --text-kpi-xl: calc(32rem / 14);
+  --text-kpi-xl--line-height: calc(38 / 32);
+  --text-kpi-xl--letter-spacing: -0.01em;
   --text-kpi-xl--font-weight: 600;
   --text-h1: calc(30rem / 14);
-  --text-h1--line-height: calc(38 / 30);
-  --text-h1--letter-spacing: -0.021em;
-  --text-h1--font-weight: 650;
-  --text-kpi: 2rem;
-  --text-kpi--line-height: calc(32 / 28);
-  --text-kpi--letter-spacing: -0.02em;
-  --text-kpi--font-weight: 600;
+  --text-h1--line-height: calc(39 / 30);
+  --text-h1--letter-spacing: -0.01em;
+  --text-h1--font-weight: 600;
+  --text-kpi: calc(20rem / 14);
+  --text-kpi--line-height: calc(26 / 20);
+  --text-kpi--letter-spacing: -0.01em;
+  --text-kpi--font-weight: 500;
   --text-h2: calc(24rem / 14);
-  --text-h2--line-height: calc(32 / 24);
-  --text-h2--letter-spacing: -0.019em;
-  --text-h2--font-weight: 620;
+  --text-h2--line-height: calc(31 / 24);
+  --text-h2--letter-spacing: -0.01em;
+  --text-h2--font-weight: 600;
   --text-h3: calc(20rem / 14);
-  --text-h3--line-height: 1.4;
-  --text-h3--letter-spacing: -0.017em;
+  --text-h3--line-height: calc(26 / 20);
+  --text-h3--letter-spacing: -0.01em;
   --text-h3--font-weight: 600;
-  --text-title: calc(17rem / 14);
-  --text-title--line-height: calc(24 / 17);
-  --text-title--letter-spacing: -0.013em;
+  --text-title: calc(16rem / 14);
+  --text-title--line-height: calc(24 / 16);
+  --text-title--letter-spacing: 0;
   --text-title--font-weight: 600;
   --text-body-lg: calc(16rem / 14);
-  --text-body-lg--line-height: calc(26 / 16);
-  --text-body-lg--letter-spacing: -0.011em;
+  --text-body-lg--line-height: calc(24 / 16);
+  --text-body-lg--letter-spacing: 0;
   --text-body: 1rem;
   --text-body--line-height: calc(20 / 14);
-  --text-body--letter-spacing: -0.006em;
+  --text-body--letter-spacing: 0;
   --text-body-sm: calc(13rem / 14);
   --text-body-sm--line-height: calc(18 / 13);
-  --text-body-sm--letter-spacing: -0.003em;
+  --text-body-sm--letter-spacing: 0;
   --text-caption: calc(12rem / 14);
   --text-caption--line-height: calc(16 / 12);
   --text-caption--letter-spacing: 0;
-  --text-caption--font-weight: 500;
+  --text-caption--font-weight: 400;
   --text-micro: calc(11rem / 14);
   --text-micro--line-height: calc(14 / 11);
-  --text-micro--letter-spacing: 0.04em;
-  --text-micro--font-weight: 600;
+  --text-micro--letter-spacing: 0;
+  --text-micro--font-weight: 500;
   --text-mono: calc(13rem / 14);
   --text-mono--line-height: calc(20 / 13);
-  --text-mono--font-weight: 450;
+  --text-mono--font-weight: 400;
 
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 8px;
+  --radius-md: 6px;
   --radius-lg: 10px;
-  --radius-xl: 14px;
-  --radius-2xl: 20px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
   --radius-full: 9999px;
 
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
@@ -101,7 +102,7 @@
 
   --animate-spin: emp-spin 700ms linear infinite;
   --animate-shimmer: emp-shimmer 1.6s linear infinite;
-  --animate-fade-in: emp-fade-in 160ms var(--ease-out) both;
+  --animate-fade-in: emp-fade-in 120ms var(--ease-out) both;
 }
 
 @theme inline {
@@ -271,8 +272,7 @@
     background: var(--bg-window);
     color: var(--text-primary);
     font-family: var(--font-ui);
-    font-feature-settings: "cv05" 1, "cv08" 1, "calt" 1;
-    font-optical-sizing: auto;
+    font-feature-settings: "calt" 1, "tnum" 1;
     font-variant-numeric: tabular-nums;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -291,7 +291,7 @@
     min-height: 100vh;
     font-size: 1rem;
     line-height: calc(20 / 14);
-    letter-spacing: -0.006em;
+    letter-spacing: 0;
     background: var(--bg-window);
     color: var(--text-primary);
   }
@@ -300,7 +300,14 @@
   }
   :focus-visible {
     outline: var(--focus-width) solid var(--accent-ring);
-    outline-offset: 2px;
+    outline-offset: var(--focus-offset, 1px);
+  }
+  /* links are ink with a 40% underline (Notion), never blue */
+  a[href]:not([class]) {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+    text-underline-offset: 3px;
   }
   :focus:not(:focus-visible) {
     outline: none;
@@ -404,47 +411,22 @@
   justify-content: var(--mask-justify, flex-start);
   overflow: hidden;
   padding-inline: 0.2em;
-  border-radius: 6px;
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim);
+  border-radius: 4px;
+  background: var(--bg-surface-2);
   color: var(--text-tertiary);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.06em;
   white-space: nowrap;
-  animation: emp-fade-in 120ms var(--ease-out);
 }
 :root[data-privacy="on"] [data-sensitive][data-align="end"] {
   --mask-justify: flex-end;
 }
 
-/* ─── Aurora + grain (§3.8) — onboarding, lock, empty heroes, about only ─── */
+/* ─── Aurora + grain: retired in v3 (no gradient decoration). The class stays as plain window paper so old markup renders. ─── */
 .emp-aurora {
   position: relative;
   isolation: isolate;
-  background:
-    radial-gradient(60% 50% at 20% 10%, color-mix(in oklab, var(--accent-solid) 38%, transparent), transparent 70%),
-    radial-gradient(50% 45% at 85% 25%, color-mix(in oklab, #a855f7 26%, transparent), transparent 70%),
-    radial-gradient(70% 60% at 50% 100%, color-mix(in oklab, #0ea5e9 18%, transparent), transparent 70%),
-    var(--bg-window);
-}
-.emp-aurora::after {
-  content: "";
-  position: absolute;
-  inset: -64px;
-  z-index: -1;
-  pointer-events: none;
-  background-image: url("./grain.png");
-  background-size: 128px 128px;
-  opacity: 0.025;
-  mix-blend-mode: normal;
-  animation: emp-grain-drift 426s linear infinite;
-}
-:root[data-theme="dark"] .emp-aurora::after,
-:root[data-theme="midnight"] .emp-aurora::after {
-  opacity: 0.04;
-}
-:root[data-motion="reduced"] .emp-aurora::after {
-  animation: none;
+  background: var(--bg-window);
 }
 
 /* ─── Keyframes ─── */
@@ -471,16 +453,10 @@
     opacity: 0;
   }
 }
-@keyframes emp-grain-drift {
-  /* 0.3 px/s → 128px tile in ~426s */
-  to {
-    transform: translate3d(128px, 128px, 0);
-  }
-}
 @keyframes emp-pop-in {
   from {
     opacity: 0;
-    transform: translate3d(var(--pop-x, 0), var(--pop-y, 0), 0) scale(0.96);
+    transform: scale(0.97);
   }
 }
 @keyframes emp-pop-out {

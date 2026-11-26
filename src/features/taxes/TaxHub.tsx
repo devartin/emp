@@ -23,7 +23,7 @@ import { Skeleton } from "@/ui/Skeleton";
 import type { TabItem } from "@/ui/Tabs";
 import { Tooltip } from "@/ui/Tooltip";
 import "../finance/shared/finance.css";
-import { daysBetween, dayLabel, fmtMoney, num, todayIso } from "../finance/shared/format";
+import { daysBetween, dayLabel, fmtMoney, num, todayIso, fmtWhole } from "../finance/shared/format";
 import { HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
 import { BudgetRing } from "../finance/MoneyHQ/widgets";
 import { DOC_FLOW, DOC_LABEL, STATUS_LABEL, TaxCtx, useTax, useTaxData, type DocRow } from "./data";
@@ -110,7 +110,7 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
     if (next && nextDays !== null && nextDays <= 14) out.push({ id: "dl", appInstanceId: instanceId, ruleId: nextDays <= 3 ? "deadline-3" : "deadline-14", severity: nextDays <= 3 ? "warn" : "tip", title: `${next.name} in ${nextDays} days`, body: `Due ${dayLabel(next.date, true)}.`, actions: [{ label: "See plan", route: tab("quarterly") }] });
     const se = tx.input?.incomes.filter((i) => i.kind === "self_employment").reduce((a, i) => a + num(i.amount), 0) ?? 0;
     if (se > 0 && !tx.payments.some((p) => p.paidOn)) out.push({ id: "se", appInstanceId: instanceId, ruleId: "se-no-estimates", severity: "warn", title: "Self-employment income but no estimated payments yet", body: "The US pack expects quarterly payments when you'll owe $1,000 or more beyond withholding.", actions: [{ label: "Plan payments", route: tab("quarterly") }] });
-    if (std && itemized >= std * 0.9 && itemized < std) out.push({ id: "item", appInstanceId: instanceId, ruleId: "itemize-close", severity: "info", title: "Itemised deductions are close to the standard deduction", body: `${fmtMoney(itemized, "USD", { noCents: true })} itemised vs ${fmtMoney(std, "USD", { noCents: true })} standard — a few more gifts or receipts could tip it.`, actions: [{ label: "Open deductions", route: tab("deductions") }] });
+    if (std && itemized >= std * 0.9 && itemized < std) out.push({ id: "item", appInstanceId: instanceId, ruleId: "itemize-close", severity: "info", title: "Itemised deductions are close to the standard deduction", body: `${fmtWhole(itemized)} itemised vs ${fmtWhole(std)} standard — a few more gifts or receipts could tip it.`, actions: [{ label: "Open deductions", route: tab("deductions") }] });
     const noReceipt = tx.deductions.filter((d) => d.amount > 250 && !d.receipt);
     if (noReceipt.length) out.push({ id: "rcpt", appInstanceId: instanceId, ruleId: "receipt-missing", severity: "tip", title: `${noReceipt.length} ${noReceipt.length === 1 ? "deduction over $250 has" : "deductions over $250 have"} no receipt`, body: noReceipt.map((d) => d.desc).slice(0, 3).join(", "), actions: [{ label: "Open deductions", route: tab("deductions") }] });
     const late = tx.docs.filter((d) => d.status === "expected" && d.expected && daysBetween(d.expected, todayIso()) > 14);
@@ -158,7 +158,7 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
                   <span className="tx-mini-dot">{d.status === "paid" ? <Check size={11} strokeWidth={3} /> : null}</span>
                   <span className="text-body-sm font-semibold">{d.period}</span>
                   <span className="text-caption text-tertiary">{dayLabel(d.date)}</span>
-                  <span className="text-caption tabular font-medium">{d.status !== "paid" && num(d.suggested) === 0 ? <span className="text-gain-text">Covered</span> : <Sensitive>{fmtMoney(d.status === "paid" ? d.paid : d.suggested, "USD", { noCents: true })}</Sensitive>}</span>
+                  <span className="text-caption tabular font-medium">{d.status !== "paid" && num(d.suggested) === 0 ? <span className="text-gain-text">Covered</span> : <Sensitive>{fmtWhole(d.status === "paid" ? d.paid : d.suggested)}</Sensitive>}</span>
                 </div>
               ))}
             </div>
@@ -172,7 +172,7 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
               <DedBar label="Itemisable so far" value={itemized} max={Math.max(std, itemized) * 1.08} tone={itemized > std ? "gain" : "neutral"} />
               <DedBar label="Standard deduction" value={std} max={Math.max(std, itemized) * 1.08} tone="accent" />
               <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                {itemized > std ? "Itemising looks better this year." : `${fmtMoney(std - itemized, "USD", { noCents: true })} more in itemised deductions would be needed to beat the standard.`}
+                {itemized > std ? "Itemising looks better this year." : `${fmtWhole(std - itemized)} more in itemised deductions would be needed to beat the standard.`}
               </span>
             </div>
           ) : (
@@ -200,7 +200,7 @@ function DedBar({ label, value, max, tone }: { label: string; value: number; max
     <div>
       <div className="flex items-baseline justify-between text-body-sm mb-1">
         <span className="text-secondary">{label}</span>
-        <span className="tabular font-semibold"><Sensitive>{fmtMoney(value, "USD", { noCents: true })}</Sensitive></span>
+        <span className="tabular font-semibold"><Sensitive>{fmtWhole(value)}</Sensitive></span>
       </div>
       <div className="fh-meter" style={{ height: 10 }}>
         <m.i initial={{ scaleX: 0 }} animate={{ scaleX: max ? value / max : 0 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} style={{ background: tone === "gain" ? "var(--gain)" : tone === "accent" ? "var(--accent-solid)" : "color-mix(in oklab, var(--text-primary) 35%, transparent)" }} />
@@ -307,13 +307,13 @@ function Deductions() {
   const total = tx.deductions.reduce((a, d) => a + d.amount * d.pct, 0);
   return (
     <div className="fh-grid">
-      <Section className="fh-span-4" title="By category" subtitle={<>Total logged <Sensitive>{fmtMoney(total, "USD", { noCents: true })}</Sensitive></>}>
+      <Section className="fh-span-4" title="By category" subtitle={<>Total logged <Sensitive>{fmtWhole(total)}</Sensitive></>}>
         <div className="flex flex-col gap-3">
           {byCat.map(([k, v]) => (
             <div key={k}>
               <div className="flex justify-between text-body-sm mb-1">
                 <span className="text-secondary">{v.name}</span>
-                <span className="tabular font-semibold"><Sensitive>{fmtMoney(v.total, "USD", { noCents: true })}</Sensitive></span>
+                <span className="tabular font-semibold"><Sensitive>{fmtWhole(v.total)}</Sensitive></span>
               </div>
               <div className="fh-meter"><i style={{ transform: `scaleX(${total ? v.total / total : 0})` }} /></div>
             </div>

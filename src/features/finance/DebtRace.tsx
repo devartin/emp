@@ -11,7 +11,7 @@ import type { DebtPlan } from "@/backend/types";
 import { Button } from "@/ui/Button";
 import { spring } from "@/ui/motion/tokens";
 import { isReducedMotion, usePrivacy } from "@/ui/motion/useReducedEffects";
-import { fmtMoney, monthLabel, num } from "./shared/format";
+import { monthLabel, num, fmtWhole } from "./shared/format";
 
 interface DebtIn {
   name: string;
@@ -108,7 +108,7 @@ export function DebtRace({ plans, debts, minimumLabel }: { plans: Record<string,
               <b className="text-primary" style={{ fontWeight: 600 }}>
                 {lanes[winner].title}
               </b>{" "}
-              saves <span data-sensitive="">{fmtMoney(diff, "USD", { noCents: true })}</span> in interest
+              saves <span data-sensitive="">{fmtWhole(diff)}</span> in interest
               {lanes[0].months !== lanes[1].months ? ` and finishes ${Math.abs(lanes[0].months - lanes[1].months)} months ${lanes[winner].months < lanes[1 - winner].months ? "sooner" : "later"}` : ", same finish month"}
               {minimumLabel ? ` · minimums alone: ${minimumLabel}` : ""}
             </>
@@ -143,7 +143,7 @@ function RaceLane({ lane, clock, maxMonths, won, lost }: { lane: Lane; clock: Mo
     const i = Math.min(lane.interest.length - 1, Math.max(0, Math.floor(v)));
     const a = lane.interest[i] ?? 0;
     const b = lane.interest[Math.min(lane.interest.length - 1, i + 1)] ?? a;
-    return privacy ? "•••" : fmtMoney(a + (b - a) * (v - Math.floor(v)), "USD", { noCents: true });
+    return privacy ? "•••" : fmtWhole(a + (b - a) * (v - Math.floor(v)));
   });
   const [passed, setPassed] = useState(0);
   useMotionValueEvent(t, "change", (v) => {

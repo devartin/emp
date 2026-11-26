@@ -4,7 +4,7 @@
   "country": "US",
   "year": 2026,
   "tier": "estimator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "verifiedOn": "2026-11-26",
   "sources": [
     { "label": "IRS Rev. Proc. 2025-32 (TY2026 inflation adjustments: brackets §4.01, capital gains §4.03, child tax credit §4.05, standard deduction §4.14)", "url": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf" },
@@ -15,11 +15,15 @@
     { "label": "IRC §164(b)(7) as amended by P.L. 119-21 (SALT limitation $40,400 / phase-down above $505,000 MAGI for 2026)", "url": "https://www.irs.gov/newsroom/one-big-beautiful-bill-provisions" },
     { "label": "IRS Publication 915 (taxable Social Security base amounts)", "url": "https://www.irs.gov/publications/p915" },
     { "label": "IRS Publication 505 (estimated tax, safe harbor)", "url": "https://www.irs.gov/publications/p505" },
-    { "label": "IRS: How long should I keep records?", "url": "https://www.irs.gov/businesses/small-businesses-self-employed/how-long-should-i-keep-records" }
+    { "label": "IRS: How long should I keep records?", "url": "https://www.irs.gov/businesses/small-businesses-self-employed/how-long-should-i-keep-records" },
+    { "label": "IRS Publication 505 (2026), What's New: non-itemizer cash charitable deduction up to $1,000 ($2,000 MFJ); itemizers deduct only gifts above 0.5% of AGI", "url": "https://www.irs.gov/publications/p505" },
+    { "label": "IRS reminder: permanent charitable contribution deduction for taxpayers who do not itemize begins with tax year 2026 (cash only; not donor-advised funds or supporting organizations)", "url": "https://www.irs.gov/newsroom/irs-reminder-permanent-charitable-contribution-deduction-begins-for-returns-filed-next-year-for-taxpayers-who-do-not-itemize" },
+    { "label": "IRS: Roth IRAs (\"You cannot deduct contributions to a Roth IRA.\")", "url": "https://www.irs.gov/retirement-plans/roth-iras" }
   ],
   "notes": [
-    "Estimator scope: wages, self-employment, interest, dividends, capital gains, retirement, Social Security, unemployment, net rental and other income; standard or itemized deduction (SALT cap and medical floor applied); child tax credit; SE tax, additional Medicare tax and NIIT.",
-    "Not modelled: AMT, QBI deduction, EITC, education and other credits, the 2025–2028 senior/tips/overtime/car-loan deductions, passive-loss limits, credit for other dependents. Enter other credits as user amounts.",
+    "Estimator scope: wages, self-employment, interest, dividends, capital gains, retirement, Social Security, unemployment, net rental and other income; standard or itemized deduction (SALT cap, medical 7.5% floor and charitable 0.5% floor applied; the larger of the two is used); the non-itemizer charitable deduction (charity entries are treated as cash gifts to qualifying charities); child tax credit; SE tax, additional Medicare tax and NIIT.",
+    "Not modelled: AMT, QBI deduction, EITC, education and other credits, the 2025–2028 senior/tips/overtime/car-loan deductions, passive-loss limits, credit for other dependents, the 2026 overall limitation on itemized deductions for the top bracket, the 60%/30% AGI limits on charitable gifts. Enter other credits as user amounts.",
+    "Roth IRA contributions are not deductible and are not an itemized or adjustment kind; traditional IRA contributions are adjustments (ira).",
     "Tax is computed with the Rev. Proc. 2025-32 rate schedules (the Tax Computation Worksheet method); the IRS tax tables for income under $100,000 use $50 bands and can differ by a few dollars.",
     "ordinary_dividends means non-qualified ordinary dividends (box 1a minus box 1b).",
     "All results are estimates."
@@ -76,8 +80,10 @@
   "itemizedRules": [
     { "kind": "salt", "cap": { "mfs": "20200", "*": "40400" },
       "capPhasedown": { "start": { "mfs": "252500", "*": "505000" }, "rate": "0.30", "floor": { "mfs": "5000", "*": "10000" } } },
-    { "kind": "medical", "agiFloorPct": "0.075" }
+    { "kind": "medical", "agiFloorPct": "0.075" },
+    { "kind": "charity", "agiFloorPct": "0.005" }
   ],
+  "nonItemizerCharity": { "kinds": ["charity"], "cap": { "mfj": "2000", "*": "1000" } },
   "estimated": {
     "periods": [ { "id": "Q1", "due": "2026-04-15" }, { "id": "Q2", "due": "2026-06-15" }, { "id": "Q3", "due": "2026-09-15" }, { "id": "Q4", "due": "2027-01-15" } ],
     "safeHarbor": { "priorYearPct": "1.00", "highIncomePct": "1.10", "highIncomeAgi": { "single": "150000", "mfs": "75000", "*": "150000" }, "currentYearPct": "0.90" },
@@ -149,6 +155,14 @@
       "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "single", "dependents": 0,
                  "incomes": [{ "kind": "wages", "amount": "40000" }, { "kind": "ltcg", "amount": "20000" }],
                  "deductions": "standard", "credits": [], "withheld": "0", "estimatedPaid": "0" },
-      "expect": { "taxable": "43900", "tax": "2620" } }
+      "expect": { "taxable": "43900", "tax": "2620" } },
+    { "name": "single wages 80,000, 1,500 cash to charity, standard deduction", "source": "IRS Pub 505 (2026) What's New: non-itemizer deduction capped at $1,000; Rev. Proc. 2025-32 Table 3: 5,800 + 22% × (62,900 − 50,400)",
+      "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "single", "dependents": 0, "incomes": [{ "kind": "wages", "amount": "80000" }],
+                 "deductions": { "itemized": [{ "kind": "charity", "amount": "1500" }] }, "credits": [], "withheld": "0", "estimatedPaid": "0" },
+      "expect": { "taxable": "62900", "tax": "8550" } },
+    { "name": "single wages 200,000 itemizing: SALT 15,000 + mortgage 12,000 + charity 5,000 above a 1,000 floor", "source": "IRS Pub 505 (2026) What's New: 0.5% of AGI charitable floor; Rev. Proc. 2025-32 Table 3: 22,566 + 24% × (169,000 − 105,700)",
+      "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "single", "dependents": 0, "incomes": [{ "kind": "wages", "amount": "200000" }],
+                 "deductions": { "itemized": [{ "kind": "salt", "amount": "15000" }, { "kind": "mortgage", "amount": "12000" }, { "kind": "charity", "amount": "5000" }] }, "credits": [], "withheld": "0", "estimatedPaid": "0" },
+      "expect": { "taxable": "169000", "tax": "33158" } }
   ]
 }

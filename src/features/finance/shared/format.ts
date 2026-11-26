@@ -1,8 +1,10 @@
 /** Display helpers shared by Money HQ, Portfolio, Markets and Taxes. Money stays decimal strings until display. */
 import { formatCompact, formatNumber, formatPercent, getFormatLocale, MINUS } from "@/lib/format";
 import { currencyDecimals, formatMoney, moneyParts, type Money } from "@/lib/money";
+import { baseCurrency } from "./currency";
 
-export const toMoney = (amount: string | number, currency = "USD"): Money => ({
+/** A UI-computed amount as `Money`, in the workspace base currency unless the figure has its own. */
+export const toMoney = (amount: string | number, currency = baseCurrency()): Money => ({
   amount: typeof amount === "number" ? (Number.isFinite(amount) ? amount.toFixed(2) : "0") : amount,
   currency,
 });
@@ -28,7 +30,7 @@ function moneyShape(currency: string) {
 }
 
 /** $1,234.56 · −$12.00 */
-export function fmtMoney(v: string | number, currency = "USD", opts: { noCents?: boolean; signed?: boolean } = {}): string {
+export function fmtMoney(v: string | number, currency = baseCurrency(), opts: { noCents?: boolean; signed?: boolean } = {}): string {
   // Strings keep the exact decimal path; numbers (UI maths, animated readouts) take the cached fast path below, which
   // matches formatMoney's output: cents first, then half-up to the shown digits.
   if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) >= 1e15) return formatMoney(toMoney(v, currency), opts);
@@ -43,8 +45,16 @@ export function fmtMoney(v: string | number, currency = "USD", opts: { noCents?:
   return sign + (sh.prefix ? sh.symbol + body : body + sh.symbol);
 }
 
+/**
+ * Whole units, no cents (N-MO4: summaries ≥ 1,000 and headline figures carry no cents). Base currency unless the
+ * figure has its own (`currency`: pass `m.currency` for backend `Money`).
+ */
+export function fmtWhole(v: string | number, opts: { signed?: boolean; currency?: string } = {}): string {
+  return fmtMoney(v, opts.currency ?? baseCurrency(), { noCents: true, signed: opts.signed });
+}
+
 /** $12.4k · −$340 */
-export function fmtCompact(v: number, currency = "USD", signed = false): string {
+export function fmtCompact(v: number, currency = baseCurrency(), signed = false): string {
   return formatCompact(v, { currency, signed });
 }
 
@@ -52,17 +62,21 @@ export function fmtPct(fraction: number, digits = 1, signed = false): string {
   return formatPercent(fraction, { digits, signed });
 }
 
-/** Percentage points: "+3.4 pp" */
+/**
+ * Percentage points (N-MO4 rule 5): a difference between two rates, or an allocation drift — "+3.4 pts", with a
+ * no-break space. A change *of* a value is a percent (`fmtPct`), never points.
+ */
 export function fmtPp(pp: number, digits = 1): string {
   const s = formatNumber(Math.abs(pp), { minimumFractionDigits: digits, maximumFractionDigits: digits });
-  return `${pp > 0 ? "+" : pp < 0 ? MINUS : ""}${s} pp`;
+  const zero = Number(s.replace(/[^0-9]/g, "")) === 0;
+  return `${pp > 0 && !zero ? "+" : pp < 0 && !zero ? MINUS : ""}${s}\u00a0pts`;
 }
 
 export function fmtQty(q: number | string, max = 4): string {
   return formatNumber(num(q), { maximumFractionDigits: max });
 }
 
-export function fmtPrice(p: number | null | undefined, currency = "USD"): string {
+export function fmtPrice(p: number | null | undefined, currency = baseCurrency()): string {
   if (p === null || p === undefined || !Number.isFinite(p)) return "—";
   const digits = Math.abs(p) < 2 ? 4 : 2;
   return formatNumber(p, { style: "currency", currency, currencyDisplay: "narrowSymbol", minimumFractionDigits: digits, maximumFractionDigits: digits });

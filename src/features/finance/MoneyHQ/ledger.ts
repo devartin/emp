@@ -16,6 +16,8 @@ export interface Account {
   name: string;
   type: string;
   institution: string;
+  /** ISO 4217 code from `acct.currency`; "" means the base currency. */
+  currency: string;
   opening: number;
   apr: number | null;
   minPayment: number;
@@ -52,6 +54,10 @@ export interface Txn {
   transferId: Id | null;
   splitParent: Id | null;
   cleared: string;
+  /** `txn.reviewed` (SPEC §16): null when the Transactions database has no Reviewed property yet. */
+  reviewed: boolean | null;
+  /** `txn.source` option name ("Import", "Manual", "Rule", …) when the property exists, else "". */
+  source: string;
   tags: string[];
   splits: Txn[];
 }
@@ -100,7 +106,9 @@ export interface Ledger {
   error: string | null;
   reload: () => void;
   /** Optimistic transaction edit. */
-  updateTxn: (id: Id, patch: Partial<Pick<Txn, "categoryId" | "payee" | "memo" | "date" | "amount" | "cleared">>) => Promise<void>;
+  updateTxn: (id: Id, patch: Partial<Pick<Txn, "categoryId" | "payee" | "memo" | "date" | "amount" | "cleared" | "reviewed">>) => Promise<void>;
+  /** Whether the Transactions database carries the Reviewed property (`txn.reviewed`). */
+  hasReviewed: boolean;
   setSplits: (parent: Txn, parts: { categoryId: Id; amount: number }[]) => Promise<void>;
   addTxn: (t: { date: string; payee: string; amount: number; accountId: Id; categoryId?: Id | null; memo?: string }) => Promise<void>;
   deleteTxns: (ids: Id[]) => Promise<void>;
@@ -125,6 +133,7 @@ function parseAll(schemas: Partial<Record<DbKey, DbSchema>>, rows: Partial<Recor
     name: cell.text(r.values[A!.database.primaryPropId]) || "Untitled account",
     type: cell.sel(r.values[roleOf(A, "acct.type")!]) ?? "other_asset",
     institution: inst ? cell.text(r.values[inst]) : "",
+    currency: (cell.text(r.values[roleOf(A, "acct.currency")!]) || cell.sel(r.values[roleOf(A, "acct.currency")!]) || "").trim().toUpperCase(),
     // Card and loan openings are amounts owed, whichever sign they were entered with (Rust `opening_as_counted`).
     opening: openingAsCounted(cell.sel(r.values[roleOf(A, "acct.type")!]) ?? "other_asset", num(cell.money(r.values[roleOf(A, "acct.opening")!]))),
     apr: cell.num(r.values[roleOf(A, "acct.apr")!]),
@@ -160,6 +169,8 @@ function parseAll(schemas: Partial<Record<DbKey, DbSchema>>, rows: Partial<Recor
     transferId: cell.rel(r.values[roleOf(X, "txn.transfer")!]),
     splitParent: cell.rel(r.values[roleOf(X, "txn.split_parent")!]),
     cleared: cell.sel(r.values[roleOf(X, "txn.cleared")!]) ?? "uncleared",
+    reviewed: roleOf(X, "txn.reviewed") ? cell.check(r.values[roleOf(X, "txn.reviewed")!]) : null,
+    source: roleOf(X, "txn.source") ? opt(X, "txn.source", r.values[roleOf(X, "txn.source")!]) : "",
     tags: cell.multi(r.values[roleOf(X, "txn.tags")!]),
     splits: [],
   }));
@@ -237,6 +248,7 @@ export function useLedger(instanceId: Id): Ledger {
       if (patch.date !== undefined) values[r["txn.date"]] = V.date(patch.date);
       if (patch.amount !== undefined) values[r["txn.amount"]] = V.money(patch.amount.toFixed(2));
       if (patch.cleared !== undefined) values[r["txn.cleared"]] = V.status(patch.cleared);
+      if (patch.reviewed !== undefined && patch.reviewed !== null && r["txn.reviewed"]) values[r["txn.reviewed"]] = V.check(patch.reviewed);
       state.set((prev) => (prev ? { ...prev, txns: prev.txns.map((t) => (t.id === id ? { ...t, ...patch } : t)) } : prev));
       try {
         await api.db.rowsUpdate({ updates: [{ id, values }] });
@@ -294,6 +306,8 @@ export function useLedger(instanceId: Id): Ledger {
             ...(t.memo ? { [r["txn.memo"]]: V.text(t.memo) } : {}),
             [r["txn.cleared"]]: V.status("uncleared"),
             ...(r["txn.source"] ? { [r["txn.source"]]: V.sel("manual") } : {}),
+            // Entered by hand, field by field: nothing left to review.
+            ...(r["txn.reviewed"] ? { [r["txn.reviewed"]]: V.check(true) } : {}),
           },
         } as Parameters<typeof api.db.rowCreate>[0]);
         state.reload();
@@ -334,6 +348,7 @@ export function useLedger(instanceId: Id): Ledger {
       loading: !ready || (state.loading && !d),
       error: dbErr ?? state.error,
       reload: state.reload,
+      hasReviewed: !!schemas.txns?.database.roles["txn.reviewed"],
       updateTxn,
       setSplits,
       addTxn,

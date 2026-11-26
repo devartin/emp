@@ -1,21 +1,21 @@
 /**
- * Motion tokens (docs/DESIGN.md §5.1–§5.2). Durations are seconds (motion's unit).
- * The spring table is shared with CSS: `material.css` holds the same springs as `linear()` curves (`--spring-*`),
- * generated from these parameters by docs/design/springs.py. Change both together.
+ * Motion tokens (docs/DESIGN.md §7). Durations are seconds (motion's unit). Every animation belongs to a frequency
+ * class in register.ts; these tokens are its building blocks. CSS mirrors live in tokens.css / material.css
+ * (`--dur-*`, `--spring-*`, all ease-out without overshoot). Change both together.
  */
 export const duration = {
   instant: 0,
-  press: 0.07,
-  micro: 0.08,
-  fast: 0.12,
-  base: 0.16,
-  hover: 0.18,
-  moderate: 0.22,
-  slow: 0.32,
-  deliberate: 0.48,
-  chart: 0.7,
-  draw: 1.1,
-  cinematic: 2.0,
+  press: 0.06,
+  micro: 0.06,
+  fast: 0.1,
+  base: 0.14,
+  hover: 0,
+  moderate: 0.2,
+  slow: 0.24,
+  deliberate: 0.22,
+  chart: 0.3,
+  draw: 0.3,
+  cinematic: 0.6,
 } as const;
 
 export const ease = {
@@ -28,30 +28,32 @@ export const ease = {
   linear: [0, 0, 1, 1],
 } as const;
 
-const s = (stiffness: number, damping: number, mass = 1) => ({ type: "spring" as const, stiffness, damping, mass });
+/** A tween on the v3 ease-out: critically damped feel, no overshoot (register.ts). */
+const tw = (d: number) => ({ type: "tween" as const, duration: d, ease: [0.2, 0, 0, 1] as [number, number, number, number] });
 
 /**
- * One spring table (§5.2). New names first; legacy names stay as aliases so every existing import keeps working.
- *   release  slab release, Kbd release, icon nudges           (11.5% overshoot, 490ms)
- *   thumb    switch thumb, checkbox pop, radio dot, toast in   (11.3%, 490ms)
- *   pop      success moments only                             (21.6%, 710ms)
- *   glide    indicators: segmented, tabs, sidebar, highlight   (0.9%, 440ms)
- *   settle   dialogs, sheets, cards entering                   (2.3%, 460ms)
- *   morph    shared-element morphs, reorder, layout shifts     (0%, 380ms)
- *   roll     odometer digits                                   (0.6%, 600ms)
- *   magnet   tilt return, magnet CTA                           (10.8%, 630ms)
- *   drag     drag release with velocity                        (1.3%, 520ms)
+ * One curve table. v3 retires overshooting springs outside the three C3 moments (register.ts): every name is now a
+ * short ease-out tween, so existing imports keep working and nothing bounces.
+ *   release  key release, Kbd release                         C1 100ms
+ *   thumb    switch thumb, checkbox, radio, toast in            C1 140ms
+ *   pop      confirmations                                     C2 180ms
+ *   glide    indicators (kept for API; v3 selection is instant) C1 140ms
+ *   settle   dialogs, sheets, peeks                            C2 200ms
+ *   morph    shared-element morphs, reorder, layout shifts     C2 220ms
+ *   roll     digits after the user's own edit                  C2 240ms
+ *   magnet   retired (tilt / magnet)                           0
+ *   drag     drop after a drag                                 C2 200ms
  */
 const table = {
-  release: s(700, 30),
-  thumb: s(520, 26),
-  pop: s(520, 20),
-  glide: s(420, 34),
-  settle: s(380, 30),
-  morph: s(380, 36),
-  roll: s(200, 24),
-  magnet: s(240, 16, 0.8),
-  drag: s(300, 28),
+  release: tw(0.1),
+  thumb: tw(0.14),
+  pop: tw(0.18),
+  glide: tw(0.14),
+  settle: tw(0.2),
+  morph: tw(0.22),
+  roll: tw(0.24),
+  magnet: tw(0),
+  drag: tw(0.2),
 } as const;
 
 export const spring = {
@@ -85,8 +87,8 @@ export const css = {
   spring: (name: SpringName) => `var(--dur-${name === "drag" || name === "magnet" ? "release" : name}) var(--spring-${name === "drag" || name === "magnet" ? "release" : name})`,
 } as const;
 
-/** Stagger steps (§5.3) in seconds, and the caps. */
-export const stagger = { cards: 0.04, rows: 0.016, digits: 0.028, bars: 0.024, maxCards: 8, maxRows: 12, maxTotal: 0.32 } as const;
+/** Stagger steps in seconds: all 0 in v3 (no arrival choreography). Kept so existing imports compile. */
+export const stagger = { cards: 0, rows: 0, digits: 0, bars: 0, maxCards: 0, maxRows: 0, maxTotal: 0 } as const;
 
 /** Tooltip delay group (§4.2). */
 export const tooltipDelay = { open: 500, skip: 300 } as const;

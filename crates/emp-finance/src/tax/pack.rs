@@ -187,6 +187,18 @@ pub struct ItemizedRule {
     pub agi_floor_pct: Option<Decimal>,
 }
 
+/// A deduction for charitable gifts allowed to people who take the standard deduction (US, from tax year 2026:
+/// IRC §170(p) as added by P.L. 119-21 §70424; IRS Pub 505 (2026) "What's New",
+/// <https://www.irs.gov/publications/p505>). It is taken on top of the standard deduction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NonItemizerCharity {
+    /// Itemised entry kinds that count (the pack treats them as cash gifts to qualifying charities).
+    pub kinds: Vec<String>,
+    /// Maximum deduction per status.
+    pub cap: StatusMap<Decimal>,
+}
+
 /// SALT-style cap phase-down.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -376,6 +388,9 @@ pub struct TaxPack {
     /// Itemised deduction rules.
     #[serde(default)]
     pub itemized_rules: Vec<ItemizedRule>,
+    /// Charitable deduction for non-itemisers (added on top of the standard deduction).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub non_itemizer_charity: Option<NonItemizerCharity>,
     /// Estimated payments.
     #[serde(default)]
     pub estimated: Option<Estimated>,

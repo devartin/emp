@@ -18,7 +18,7 @@ import { PriceFlash } from "@/ui/PriceFlash";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { Textarea } from "@/ui/Textarea";
-import { daysBetween, dayLabel, fmtMoney, fmtPct, fmtPrice, fmtQty, num, todayIso } from "../finance/shared/format";
+import { daysBetween, dayLabel, fmtPct, fmtPrice, fmtQty, num, todayIso, fmtWhole } from "../finance/shared/format";
 import { Disclaimer, FreshnessBadge, MarketStateChip, Section, Stat } from "../finance/shared/ui";
 import PriceChart from "../markets/CandleChart";
 import { ticker, useSymbolInfo } from "../markets/data";
@@ -92,7 +92,7 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
           <div className="fh-card">
             <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>Your position</div>
             <div className="tabular mt-1" style={{ fontSize: 26, lineHeight: "32px", fontWeight: 640, letterSpacing: "-0.022em" }}>
-              <Sensitive>{h ? fmtMoney(value, "USD", { noCents: true }) : "—"}</Sensitive>
+              <Sensitive>{h ? fmtWhole(value) : "—"}</Sensitive>
             </div>
             {h ? (
               <div className="text-body-sm text-secondary">
@@ -103,10 +103,10 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
             )}
             {h ? (
               <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-subtle">
-                <Stat label="Cost basis" value={<Sensitive>{fmtMoney(h.costBasis.amount, "USD", { noCents: true })}</Sensitive>} size="sm" />
-                <Stat label="Unrealised" value={<GainLoss value={value - num(h.costBasis.amount)}><Sensitive>{fmtMoney(value - num(h.costBasis.amount), "USD", { noCents: true, signed: true })}</Sensitive></GainLoss>} sub={fmtPct(num(h.costBasis.amount) ? (value - num(h.costBasis.amount)) / num(h.costBasis.amount) : 0, 1, true)} size="sm" />
+                <Stat label="Cost basis" value={<Sensitive>{fmtWhole(h.costBasis.amount, { currency: h.costBasis.currency })}</Sensitive>} size="sm" />
+                <Stat label="Unrealised" value={<GainLoss value={value - num(h.costBasis.amount)}><Sensitive>{fmtWhole(value - num(h.costBasis.amount), { signed: true })}</Sensitive></GainLoss>} sub={fmtPct(num(h.costBasis.amount) ? (value - num(h.costBasis.amount)) / num(h.costBasis.amount) : 0, 1, true)} size="sm" />
                 <Stat label="Avg cost" value={fmtPrice(num(h.costBasis.amount) / Math.max(1e-9, num(h.qty)))} size="sm" />
-                <Stat label="Dividends received" value={<Sensitive>{fmtMoney(divTotal, "USD", { noCents: true })}</Sensitive>} sub={`${divs.length} payments`} size="sm" />
+                <Stat label="Dividends received" value={<Sensitive>{fmtWhole(divTotal)}</Sensitive>} sub={`${divs.length} payments`} size="sm" />
               </div>
             ) : null}
           </div>
@@ -139,9 +139,9 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
                       <td className="text-secondary">{l.accountName}</td>
                       <td className="num"><Sensitive align="end">{fmtQty(l.qty)}</Sensitive></td>
                       <td className="num text-secondary">{fmtPrice(l.costPerUnit)}</td>
-                      <td className="num"><Sensitive align="end">{fmtMoney(l.costPerUnit * l.qty, "USD", { noCents: true })}</Sensitive></td>
-                      <td className="num"><Sensitive align="end">{fmtMoney(price * l.qty, "USD", { noCents: true })}</Sensitive></td>
-                      <td className="num"><GainLoss value={g}><Sensitive align="end">{fmtMoney(g, "USD", { noCents: true, signed: true })}</Sensitive></GainLoss></td>
+                      <td className="num"><Sensitive align="end">{fmtWhole(l.costPerUnit * l.qty)}</Sensitive></td>
+                      <td className="num"><Sensitive align="end">{fmtWhole(price * l.qty)}</Sensitive></td>
+                      <td className="num"><GainLoss value={g}><Sensitive align="end">{fmtWhole(g, { signed: true })}</Sensitive></GainLoss></td>
                       <td>
                         {l.taxTreatment !== "taxable" ? (
                           <span className="text-caption text-tertiary">Sheltered account</span>

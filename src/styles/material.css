@@ -1,940 +1,509 @@
 /*
- * EMP Design Language v2 — "Slab" (docs/DESIGN.md §3–§5).
- * Material tokens, spring curves and the shared recipes every surface is built from:
+ * Ultra Note Design Language v3 — "Paper, ink and keys" (docs/DESIGN.md §3–§4).
+ * v2's material vocabulary survives as NAMES only (features reference --panel-*, --well-*, --slab-*, --glass-* …);
+ * every value now resolves to the v3 rules:
  *
- *   .slab        raised keycap (buttons, chips, kbd, thumbs, indicators) — ::before = side, ::after = face
- *   .keycap      20px Kbd keycap (.slab sibling with its own sizing)
- *   .well        recessed bed (inputs, tracks, segmented beds, checkboxes at rest)
- *   .panel       machined plate (cards, tiles, sidebars) + grain; [data-raise] lifts; [data-light] edge light
- *   .glass-1/2/3 floating layers (menus · dialogs · veils)
- *   .groove-h/v  engraved 2px line          .dome  thumb / dot                 .canvas-halo  page background
+ *   paper   surfaces are flat. No grain, halo, gradient wash, edge light, specular, sheen, tilt or glow.
+ *   ink     one ink colour does text, links, focus, selection, checked fills and the chart line.
+ *   keys    the only raised objects: the ink key (primary action, ≤ 1 per view), the paper key (secondary buttons),
+ *           Kbd hints and the thumbs of switches / segmented / sliders. A key has a quiet bevel (1px ring + 1–1.5px
+ *           bottom edge + 1px contact shadow) and presses in 0.5px on :active. No pseudo-element layers.
+ *   float   menus and popovers (E2) and dialogs, palette, toasts (E3) get a 1px warm ring plus a soft layer. Opaque.
  *
- * Additive only: no existing token is renamed. `--elev-*` are now derived from panel/glass shadows.
+ *   .slab        a key (buttons, chips)              .keycap      a Kbd chip (flat outline, 1px bottom edge)
+ *   .well        a flat field / bed (inputs, tracks) .panel       a quiet container: hairline, no shadow; never nested
+ *   .glass-1/2/3 opaque floating layers / scrim      .groove-h/v  a 1px hairline
+ *   .dome        a paper thumb                       .canvas-halo the canvas colour (no halo)
  * Imported by index.css right after tokens.css.
  */
 
-/* ════════ 4.1 Tokens · light (default) ════════ */
+/* ════════ Material tokens · light (default) ════════ */
 :root {
-  /* panel (machined plate) */
-  --panel-top: #ffffff;
-  --panel-bot: #fafafb;
-  --panel-rim: rgba(16, 16, 24, 0.075);
-  --panel-hl: #ffffff;
-  --panel-lo: rgba(16, 16, 24, 0.03);
-  --panel-shadow: 0 1px 1px rgba(16, 16, 24, 0.035), 0 2px 5px -1px rgba(16, 16, 24, 0.05), 0 14px 32px -14px rgba(16, 16, 24, 0.16);
-  --panel-raise: 0 1px 1px rgba(16, 16, 24, 0.04), 0 4px 10px -2px rgba(16, 16, 24, 0.08), 0 28px 60px -18px rgba(16, 16, 24, 0.28);
-  --grain-op: 0.022;
-  --grain-blend: multiply;
-  --edge-light: rgba(16, 16, 24, 0.2);
-  --specular: rgba(255, 255, 255, 0.55);
+  /* panel: a flat sheet of paper */
+  --panel-top: var(--bg-canvas);
+  --panel-bot: var(--bg-canvas);
+  --panel-rim: var(--border);
+  --panel-hl: transparent;
+  --panel-lo: transparent;
+  --panel-shadow: 0 0 0 0 transparent;
+  --panel-raise: var(--elev-2);
+  --grain-op: 0;
+  --grain-blend: normal;
+  --edge-light: transparent;
+  --specular: transparent;
 
-  /* well (recessed) */
-  --well-bg: #f0f0f3;
-  --well-in: rgba(16, 16, 24, 0.085);
-  --well-rim: rgba(16, 16, 24, 0.085);
-  --well-lip: #ffffff;
-  --well-rim-state: rgba(16, 16, 24, 0.42);
+  /* well: a flat field. Inputs draw a hairline, tracks and beds a surface fill */
+  --well-bg: var(--bg-surface-2);
+  --well-in: transparent;
+  --well-rim: var(--border);
+  --well-lip: transparent;
+  --well-rim-state: var(--border-strong);
 
-  /* groove */
-  --groove-dark: rgba(16, 16, 24, 0.09);
-  --groove-lite: rgba(255, 255, 255, 0.95);
+  /* groove: a hairline */
+  --groove-dark: var(--border);
+  --groove-lite: transparent;
 
-  /* secondary slab */
-  --slab-s-face-a: #ffffff;
-  --slab-s-face-b: #f1f1f4;
-  --slab-s-hl: #ffffff;
-  --slab-s-lo: rgba(16, 16, 24, 0.05);
-  --slab-s-rim: rgba(16, 16, 24, 0.12);
-  --slab-s-side-a: #cdcdd4;
-  --slab-s-side-b: #b9b9c3;
-  --slab-s-side-rim: rgba(16, 16, 24, 0.1);
-  --slab-s-contact: rgba(16, 16, 24, 0.18);
-  --slab-s-ambient: rgba(16, 16, 24, 0.14);
+  /* secondary key: paper */
+  --slab-s-face-a: var(--key-paper);
+  --slab-s-face-b: var(--key-paper);
+  --slab-s-hl: transparent;
+  --slab-s-lo: var(--key-paper-edge);
+  --slab-s-rim: var(--key-paper-ring);
+  --slab-s-side-a: var(--key-paper-edge);
+  --slab-s-side-b: var(--key-paper-edge);
+  --slab-s-side-rim: transparent;
+  --slab-s-contact: var(--key-paper-drop);
+  --slab-s-ambient: transparent;
   --slab-s-fg: var(--text-primary);
-  --slab-s-press: brightness(0.955);
-  --slab-s-hover: brightness(1.035);
+  --slab-s-press: none;
+  --slab-s-hover: none;
 
-  /* primary slab — graphite */
-  --slab-p-face-a: #4b4b53;
-  --slab-p-face-b: #222226;
-  --slab-p-hl: rgba(255, 255, 255, 0.26);
-  --slab-p-lo: rgba(0, 0, 0, 0.3);
-  --slab-p-rim: rgba(0, 0, 0, 0.6);
-  --slab-p-side-a: #141417;
-  --slab-p-side-b: #050506;
-  --slab-p-side-rim: rgba(0, 0, 0, 0.35);
-  --slab-p-contact: rgba(16, 16, 24, 0.32);
-  --slab-p-ambient: rgba(16, 16, 24, 0.3);
-  --slab-p-fg: #ffffff;
-  --slab-p-press: brightness(0.86);
-  --slab-p-hover: brightness(1.06);
-  --slab-p-sheen: rgba(255, 255, 255, 0.1);
+  /* primary key: ink */
+  --slab-p-face-a: var(--key-ink-a);
+  --slab-p-face-b: var(--key-ink-b);
+  --slab-p-hl: transparent;
+  --slab-p-lo: var(--key-ink-edge);
+  --slab-p-rim: transparent;
+  --slab-p-side-a: var(--key-ink-edge);
+  --slab-p-side-b: var(--key-ink-edge);
+  --slab-p-side-rim: transparent;
+  --slab-p-contact: var(--key-ink-drop);
+  --slab-p-ambient: transparent;
+  --slab-p-fg: var(--key-ink-fg);
+  --slab-p-press: none;
+  --slab-p-hover: none;
+  --slab-p-sheen: transparent;
 
-  /* destructive slab (≥4.9:1 at label centre) */
-  --slab-d-face-a: #e0474b;
-  --slab-d-face-b: #bb2c2c;
-  --slab-d-hl: rgba(255, 255, 255, 0.3);
-  --slab-d-lo: rgba(80, 0, 0, 0.22);
-  --slab-d-rim: rgba(110, 10, 8, 0.5);
-  --slab-d-side-a: #8e211e;
-  --slab-d-side-b: #6c1513;
-  --slab-d-side-rim: rgba(80, 0, 0, 0.25);
-  --slab-d-contact: rgba(120, 20, 16, 0.3);
-  --slab-d-ambient: rgba(160, 30, 26, 0.26);
-  --slab-d-fg: #ffffff;
-  --slab-d-press: brightness(0.88);
+  /* destructive key: loss ink, flat face */
+  --slab-d-face-a: var(--btn-destructive);
+  --slab-d-face-b: var(--btn-destructive);
+  --slab-d-hl: transparent;
+  --slab-d-lo: rgba(0, 0, 0, 0.28);
+  --slab-d-rim: transparent;
+  --slab-d-side-a: rgba(0, 0, 0, 0.28);
+  --slab-d-side-b: rgba(0, 0, 0, 0.28);
+  --slab-d-side-rim: transparent;
+  --slab-d-contact: rgba(60, 10, 0, 0.2);
+  --slab-d-ambient: transparent;
+  --slab-d-fg: #fdfdfc;
+  --slab-d-press: none;
 
-  /* ghost / plate states */
-  --ghost-hover: rgba(16, 16, 24, 0.05);
-  --ghost-press: rgba(16, 16, 24, 0.085);
+  /* ghost / plate states: ink washes */
+  --ghost-hover: var(--state-hover);
+  --ghost-press: var(--state-active);
 
-  /* thumbs and lit fills */
-  --thumb-a: #ffffff;
-  --thumb-b: #ececf0;
-  --thumb-off-a: #ffffff;
-  --thumb-off-b: #ececf0;
-  --lit-a: #2c2c31;
-  --lit-b: #45454c;
-  --lit-fg: #ffffff;
+  /* thumbs (paper) and lit fills (ink) */
+  --thumb-a: var(--key-paper);
+  --thumb-b: var(--key-paper);
+  --thumb-off-a: var(--key-paper);
+  --thumb-off-b: var(--key-paper);
+  --lit-a: var(--text-primary);
+  --lit-b: var(--text-primary);
+  --lit-fg: var(--bg-canvas);
   --lit-glow: transparent;
-  --switch-track: #e2e2e7;
-  --dome-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 1px 0 rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.22), 0 3px 6px -1px rgba(0, 0, 0, 0.18);
+  --switch-track: var(--bg-surface-3);
+  --dome-shadow: 0 0 0 1px var(--key-paper-ring), 0 1px 1px var(--key-paper-drop);
 
-  /* glass */
-  --glass-fill-a: rgba(255, 255, 255, 0.86);
-  --glass-fill-b: rgba(250, 250, 251, 0.82);
-  --glass-solid: #ffffff;
-  --glass-blur: blur(24px) saturate(1.8);
-  --glass-blur-1: blur(20px) saturate(1.6);
-  --glass-shadow: 0 0 0 0.5px rgba(16, 16, 24, 0.1), 0 10px 24px -8px rgba(16, 16, 24, 0.14), 0 40px 90px -20px rgba(16, 16, 24, 0.28);
-  --glass-1-shadow: 0 0 0 0.5px rgba(16, 16, 24, 0.12), 0 2px 4px -1px rgba(16, 16, 24, 0.06), 0 12px 32px -10px rgba(16, 16, 24, 0.22);
-  --glass-rim: rgba(255, 255, 255, 0.9);
-  --chart-tip-fill: rgba(255, 255, 255, 0.96);
+  /* floating layers: opaque paper with a warm ring. No backdrop blur at rest. */
+  --glass-fill-a: var(--bg-overlay);
+  --glass-fill-b: var(--bg-overlay);
+  --glass-solid: var(--bg-overlay);
+  --glass-blur: none;
+  --glass-blur-1: none;
+  --glass-shadow: var(--elev-3);
+  --glass-1-shadow: var(--elev-2);
+  --glass-rim: transparent;
+  --chart-tip-fill: var(--bg-overlay);
 
-  /* focus */
-  --ring: #3a3a41; /* opaque: ≥3:1 on canvas and on the slab face */
-  --ring-halo: rgba(16, 16, 24, 0.1);
+  /* focus: 2px ink at ~50% */
+  --ring: var(--accent-ring);
+  --ring-halo: transparent;
 
-  /* glow (by name only, §4.8) */
-  --glow-loss: 0 0 0 4px color-mix(in oklab, var(--loss) 16%, transparent), 0 8px 26px -8px color-mix(in oklab, var(--loss) 45%, transparent);
-  --glow-gain: 0 0 24px 2px color-mix(in oklab, var(--gain) 30%, transparent);
-  --glow-pool: 0 0 0 transparent;
+  /* glows are retired; the names resolve to nothing */
+  --glow-loss: 0 0 0 0 transparent;
+  --glow-gain: 0 0 0 0 transparent;
+  --glow-pool: 0 0 0 0 transparent;
 
-  /* charts */
-  --chart-line: #131317;
-  --chart-fill-top: rgba(16, 16, 24, 0.13);
+  /* charts: one ink line on nothing */
+  --chart-line: var(--text-primary);
+  --chart-fill-top: transparent;
 
-  /* canvas (§3) — apply with `.canvas-halo` or `background: var(--canvas-bg)` */
-  --canvas-bg: radial-gradient(1200px 600px at 50% -220px, #ffffff, transparent 70%), var(--bg-canvas);
+  /* canvas: just paper */
+  --canvas-bg: var(--bg-canvas);
   --halo-tint: transparent;
 }
 
-/* ════════ dark ════════ */
+/* dark / midnight: the same rules on warm graphite. Only values that differ from the derived ones are set here. */
 :root[data-theme="dark"],
 :root[data-theme="midnight"] {
-  --panel-top: #1b1b20;
-  --panel-bot: #141418;
-  --panel-rim: rgba(255, 255, 255, 0.06);
-  --panel-hl: rgba(255, 255, 255, 0.075);
-  --panel-lo: rgba(0, 0, 0, 0.35);
-  --panel-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.35), 0 18px 40px -16px rgba(0, 0, 0, 0.7);
-  --panel-raise: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 6px 14px -2px rgba(0, 0, 0, 0.5), 0 40px 80px -20px rgba(0, 0, 0, 0.85);
-  --grain-op: 0.07;
-  --grain-blend: overlay;
-  --edge-light: rgba(255, 255, 255, 0.22);
-  --specular: rgba(255, 255, 255, 0.07);
-
-  --well-bg: #0c0c0f;
-  --well-in: rgba(0, 0, 0, 0.6);
-  --well-rim: rgba(0, 0, 0, 0.55);
-  --well-lip: rgba(255, 255, 255, 0.055);
-  --well-rim-state: rgba(255, 255, 255, 0.34);
-  --groove-dark: rgba(0, 0, 0, 0.55);
-  --groove-lite: rgba(255, 255, 255, 0.045);
-
-  --slab-s-face-a: #34343b;
-  --slab-s-face-b: #26262c;
-  --slab-s-hl: rgba(255, 255, 255, 0.12);
-  --slab-s-lo: rgba(0, 0, 0, 0.3);
-  --slab-s-rim: rgba(255, 255, 255, 0.045);
-  --slab-s-side-a: #101013;
-  --slab-s-side-b: #070709;
-  --slab-s-side-rim: rgba(0, 0, 0, 0.7);
-  --slab-s-contact: rgba(0, 0, 0, 0.7);
-  --slab-s-ambient: rgba(0, 0, 0, 0.55);
-  --slab-s-press: brightness(0.88);
-  --slab-s-hover: brightness(1.12);
-
-  --slab-p-face-a: #ffffff;
-  --slab-p-face-b: #d2d2d9;
-  --slab-p-hl: #ffffff;
-  --slab-p-lo: rgba(0, 0, 0, 0.14);
-  --slab-p-rim: rgba(0, 0, 0, 0.18);
-  --slab-p-side-a: #8b8b95;
-  --slab-p-side-b: #5b5b64;
-  --slab-p-side-rim: rgba(0, 0, 0, 0.6);
-  --slab-p-contact: rgba(0, 0, 0, 0.7);
-  --slab-p-ambient: rgba(0, 0, 0, 0.6);
-  --slab-p-fg: #0b0b0e;
-  --slab-p-press: brightness(0.88);
-  --slab-p-hover: brightness(1.03);
-  --slab-p-sheen: rgba(255, 255, 255, 0.6);
-
-  --slab-d-face-a: #e5484d;
-  --slab-d-face-b: #b82a2a;
-  --slab-d-hl: rgba(255, 255, 255, 0.28);
-  --slab-d-lo: rgba(60, 0, 0, 0.3);
-  --slab-d-rim: rgba(60, 0, 0, 0.5);
-  --slab-d-side-a: #6e1613;
-  --slab-d-side-b: #4e0e0c;
-  --slab-d-side-rim: rgba(0, 0, 0, 0.6);
-  --slab-d-contact: rgba(0, 0, 0, 0.7);
-  --slab-d-ambient: rgba(0, 0, 0, 0.5);
-
-  --ghost-hover: rgba(255, 255, 255, 0.06);
-  --ghost-press: rgba(255, 255, 255, 0.1);
-  --thumb-a: #3a3a42;
-  --thumb-b: #24242a;
-  --thumb-off-a: #5a5a63;
-  --thumb-off-b: #3e3e46;
-  --lit-a: #f3f3f6;
-  --lit-b: #c9c9d0;
-  --lit-fg: #0b0b0e;
-  --lit-glow: rgba(255, 255, 255, 0.18);
-  --switch-track: var(--well-bg);
-  --dome-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 6px -1px rgba(0, 0, 0, 0.5);
-
-  --glass-fill-a: rgba(30, 30, 36, 0.88);
-  --glass-fill-b: rgba(22, 22, 27, 0.9);
-  --glass-solid: #1c1c21;
-  --glass-blur: blur(28px) saturate(1.7) brightness(0.92);
-  --glass-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.85), 0 10px 24px -8px rgba(0, 0, 0, 0.55), 0 40px 90px -20px rgba(0, 0, 0, 0.85);
-  --glass-1-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.85), 0 4px 10px -2px rgba(0, 0, 0, 0.4), 0 16px 40px -10px rgba(0, 0, 0, 0.7);
-  --glass-rim: rgba(255, 255, 255, 0.1);
-  --chart-tip-fill: rgba(30, 30, 36, 0.96);
-  --scrim: rgba(0, 0, 0, 0.55);
-  --ring: #a6a6ae; /* opaque: ≥3:1 on #111 canvas and the #34343b slab face */
-  --ring-halo: rgba(255, 255, 255, 0.1);
-  --glow-pool: 0 10px 26px -10px rgba(201, 210, 255, 0.22);
-  --chart-line: #f2f2f5;
-  --chart-fill-top: rgba(255, 255, 255, 0.16);
-  --halo-tint: rgba(201, 210, 255, 0.055);
-  --canvas-bg:
-    radial-gradient(1100px 520px at 50% -140px, rgba(201, 210, 255, 0.055), transparent 70%),
-    radial-gradient(1200px 600px at 50% -200px, #17171c, transparent 70%), var(--bg-canvas);
+  --slab-d-fg: #1a1a19;
+  --slab-d-lo: rgba(0, 0, 0, 0.3);
+  --slab-d-side-b: rgba(0, 0, 0, 0.3);
+  --slab-d-contact: rgba(0, 0, 0, 0.5);
+  --lit-fg: var(--bg-canvas);
+  --scrim: rgba(0, 0, 0, 0.56);
 }
 
-/* ════════ midnight (true black, OLED) — reads clearly different from dark ════════ */
-:root[data-theme="midnight"] {
-  --panel-top: #0f0f12;
-  --panel-bot: #0a0a0c;
-  --panel-rim: rgba(255, 255, 255, 0.075);
-  --panel-hl: rgba(255, 255, 255, 0.08);
-  --panel-lo: rgba(0, 0, 0, 0.5);
-  --panel-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 18px 40px -16px rgba(0, 0, 0, 0.9);
-  --panel-raise: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 40px 80px -20px #000;
-  --grain-op: 0.05;
-  --well-bg: #050506;
-  --well-lip: rgba(255, 255, 255, 0.065);
-  --slab-s-face-a: #26262b;
-  --slab-s-face-b: #1a1a1e;
-  --slab-s-hl: rgba(255, 255, 255, 0.11);
-  --slab-s-rim: rgba(255, 255, 255, 0.06);
-  --slab-s-side-a: #050506;
-  --slab-s-side-b: #000000;
-  --glass-fill-a: rgba(18, 18, 22, 0.92);
-  --glass-fill-b: rgba(10, 10, 12, 0.92);
-  --glass-solid: #121215;
-  --chart-tip-fill: rgba(18, 18, 22, 0.96);
-  --scrim: rgba(0, 0, 0, 0.64);
-  --halo-tint: rgba(201, 210, 255, 0.04);
-  --canvas-bg: radial-gradient(1100px 520px at 50% -140px, rgba(201, 210, 255, 0.04), transparent 70%), #000;
-}
-
-/* ════════ Accents: only the primary slab, lit fills, ring and selection re-derive ════════ */
+/* Accents: only the primary key, checked fills, focus and selection re-derive (links and chart lines stay ink) */
 :root[data-accent]:not([data-accent="graphite"]) {
-  --slab-p-face-a: color-mix(in oklab, var(--accent-solid) 84%, white);
-  --slab-p-face-b: color-mix(in oklab, var(--accent-solid) 92%, black);
-  --slab-p-side-a: color-mix(in oklab, var(--accent-solid) 52%, black);
-  --slab-p-side-b: color-mix(in oklab, var(--accent-solid) 38%, black);
-  --slab-p-hl: rgba(255, 255, 255, 0.3);
-  --slab-p-lo: rgba(0, 0, 0, 0.22);
-  --slab-p-rim: rgba(0, 0, 0, 0.35);
-  --slab-p-fg: var(--accent-contrast);
-  --slab-p-sheen: rgba(255, 255, 255, 0.22);
-  --slab-p-press: brightness(0.88);
-  --slab-p-hover: brightness(1.06);
-  --lit-a: color-mix(in oklab, var(--accent-solid) 85%, black);
+  --key-ink-a: color-mix(in oklab, var(--accent-solid) 88%, white);
+  --key-ink-b: var(--accent-solid);
+  --key-ink-fg: var(--accent-contrast);
+  --lit-a: var(--accent-solid);
   --lit-b: var(--accent-solid);
   --lit-fg: var(--accent-contrast);
-  --lit-glow: color-mix(in oklab, var(--accent-solid) 30%, transparent);
   --ring: var(--accent-ring);
-  --ring-halo: color-mix(in oklab, var(--accent-ring) 18%, transparent);
-}
-/* light lit fill runs light→dark so the top edge catches the key light */
-:root:not([data-theme="dark"]):not([data-theme="midnight"])[data-accent]:not([data-accent="graphite"]) {
-  --lit-a: var(--accent-solid);
-  --lit-b: color-mix(in oklab, var(--accent-solid) 85%, black);
 }
 
-/* ════════ Derived legacy elevation (names kept for features) ════════ */
-:root,
-:root[data-theme="dark"],
-:root[data-theme="midnight"] {
-  --elev-1: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim), var(--panel-shadow);
-  --elev-2: var(--glass-1-shadow);
-  --elev-3: inset 0 1px 0 var(--glass-rim), var(--glass-shadow);
-  --elev-4: inset 0 1px 0 var(--glass-rim), var(--glass-shadow);
-  --elev-primary-btn: inset 0 1px 0 var(--slab-p-hl), 0 1px 0 var(--slab-p-side-b), 0 2px 4px -1px var(--slab-p-contact);
-  --btn-secondary-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 1px 0 var(--slab-s-side-b), 0 2px 4px -1px var(--slab-s-contact);
-  --segmented-indicator: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
-  --focus-ring: 0 0 0 4px var(--ring-halo);
-}
-
-/* ════════ 5.2 Springs — one table for JS (motion/tokens.ts) and CSS (generated by docs/design/springs.py) ════════ */
+/* ════════ Motion curves: no overshoot outside the three C3 moments (register.ts). Names kept for features. ════════ */
 :root {
-  --spring-release: linear(0, 0.047, 0.163, 0.316, 0.482, 0.641, 0.783, 0.9, 0.991, 1.053, 1.092, 1.111, 1.114, 1.107, 1.092, 1.074, 1.055, 1.037, 1.021, 1.009, 0.999, 0.993, 0.989, 0.987, 0.987, 0.988, 0.99, 0.992, 0.994, 0.996, 0.998, 0.999, 1, 1.001, 1.001, 1.002, 1.001, 1.001, 1.001, 1.001, 1);
-  --dur-release: 490ms;
-  --spring-thumb: linear(0, 0.036, 0.126, 0.249, 0.389, 0.531, 0.665, 0.785, 0.887, 0.968, 1.03, 1.072, 1.098, 1.111, 1.112, 1.106, 1.095, 1.08, 1.064, 1.048, 1.033, 1.02, 1.01, 1.001, 0.995, 0.991, 0.988, 0.987, 0.987, 0.988, 0.99, 0.992, 0.993, 0.995, 0.997, 0.998, 0.999, 1, 1.001, 1.001, 1);
-  --dur-thumb: 490ms;
-  --spring-pop: linear(0, 0.052, 0.183, 0.36, 0.554, 0.743, 0.908, 1.039, 1.133, 1.19, 1.214, 1.211, 1.188, 1.153, 1.111, 1.07, 1.032, 1.001, 0.978, 0.962, 0.955, 0.954, 0.957, 0.964, 0.973, 0.982, 0.99, 0.998, 1.003, 1.007, 1.009, 1.01, 1.01, 1.008, 1.007, 1.005, 1.003, 1.001, 1, 0.999, 0.998, 0.998, 0.998, 0.998, 0.998, 0.999, 0.999, 1, 1);
-  --dur-pop: 710ms;
-  --spring-glide: linear(0, 0.028, 0.096, 0.187, 0.288, 0.392, 0.491, 0.583, 0.664, 0.736, 0.796, 0.846, 0.887, 0.92, 0.946, 0.965, 0.98, 0.991, 0.999, 1.004, 1.007, 1.009, 1.009, 1.009, 1.009, 1.008, 1.007, 1.006, 1.005, 1.004, 1.003, 1.003, 1.002, 1.002, 1.001, 1.001, 1);
-  --dur-glide: 440ms;
-  --spring-settle: linear(0, 0.025, 0.088, 0.174, 0.272, 0.375, 0.475, 0.569, 0.654, 0.73, 0.795, 0.849, 0.894, 0.931, 0.959, 0.981, 0.997, 1.008, 1.015, 1.02, 1.022, 1.023, 1.022, 1.02, 1.018, 1.016, 1.014, 1.012, 1.009, 1.008, 1.006, 1.004, 1.003, 1.002, 1.001, 1.001, 1, 1, 1);
-  --dur-settle: 460ms;
-  --spring-morph: linear(0, 0.025, 0.086, 0.167, 0.258, 0.35, 0.439, 0.523, 0.598, 0.665, 0.723, 0.774, 0.816, 0.852, 0.882, 0.907, 0.927, 0.943, 0.956, 0.967, 0.975, 0.981, 0.986, 0.99, 0.993, 0.995, 0.997, 0.998, 0.999, 1, 1, 1);
-  --dur-morph: 380ms;
-  --spring-roll: linear(0, 0.014, 0.051, 0.104, 0.168, 0.238, 0.309, 0.382, 0.451, 0.518, 0.58, 0.637, 0.69, 0.737, 0.779, 0.816, 0.848, 0.877, 0.901, 0.921, 0.939, 0.953, 0.965, 0.975, 0.983, 0.989, 0.994, 0.998, 1.001, 1.003, 1.005, 1.006, 1.006, 1.006, 1.006, 1.006, 1.006, 1.006, 1.005, 1.005, 1.004, 1.004, 1.003, 1.003, 1.003, 1.002, 1.002, 1.002, 1);
-  --dur-roll: 600ms;
-  --spring-magnet: var(--spring-release);
-  --dur-magnet: 630ms;
-  --ease-spring-ui: var(--spring-glide);
-}
-@supports not (transition-timing-function: linear(0, 1)) {
-  :root {
-    --spring-release: cubic-bezier(0.34, 1.4, 0.64, 1);
-    --spring-thumb: cubic-bezier(0.34, 1.4, 0.64, 1);
-    --spring-pop: cubic-bezier(0.34, 1.8, 0.64, 1);
-    --spring-glide: var(--ease-out-expo);
-    --spring-settle: var(--ease-out-expo);
-    --spring-morph: var(--ease-out-expo);
-    --spring-roll: var(--ease-out-expo);
-  }
+  --spring-release: var(--ease-out);
+  --dur-release: 120ms;
+  --spring-thumb: var(--ease-out);
+  --dur-thumb: 140ms;
+  --spring-pop: var(--ease-out);
+  --dur-pop: 160ms;
+  --spring-glide: var(--ease-out);
+  --dur-glide: 160ms;
+  --spring-settle: var(--ease-out);
+  --dur-settle: 200ms;
+  --spring-morph: var(--ease-out);
+  --dur-morph: 220ms;
+  --spring-roll: var(--ease-out);
+  --dur-roll: 300ms;
+  --spring-magnet: var(--ease-out);
+  --dur-magnet: 0ms;
 }
 
-/* ════════ 4.11 Higher contrast ════════ */
+/* ════════ Higher contrast ════════ */
 :root[data-contrast="more"] {
-  --panel-rim: rgba(var(--text-rgb), 0.22);
-  --well-rim: rgba(var(--text-rgb), 0.3);
+  --panel-rim: var(--border-strong);
+  --well-rim: var(--border-strong);
   --well-rim-state: var(--text-secondary);
-  --slab-s-rim: rgba(var(--text-rgb), 0.3);
-  --slab-p-rim: rgba(0, 0, 0, 0.75);
-  --slab-d-rim: rgba(80, 0, 0, 0.8);
-  --groove-dark: rgba(var(--text-rgb), 0.28);
-  --glass-fill-a: var(--glass-solid);
-  --glass-fill-b: var(--glass-solid);
-  --grain-op: 0;
-  --edge-light: transparent;
-  --specular: transparent;
-  --slab-p-sheen: transparent;
+  --slab-s-rim: var(--border-strong);
+  --key-paper-ring: var(--border-strong);
+  --groove-dark: var(--border-strong);
   --ring: var(--accent-ring);
-  --ring-halo: transparent;
-  --glow-pool: 0 0 0 transparent;
 }
 
-/* ════════ 4.12 Reduced effects ════════ */
-:root[data-effects="reduced"] {
-  --glass-fill-a: var(--glass-solid);
-  --glass-fill-b: var(--glass-solid);
-  --grain-op: 0;
-  --edge-light: transparent;
-  --specular: transparent;
-  --slab-p-sheen: transparent;
-  --glow-pool: 0 0 0 transparent;
-  --panel-raise: var(--panel-shadow);
-}
-:root[data-effects="reduced"]:not([data-theme="dark"]):not([data-theme="midnight"]) {
-  --panel-shadow: 0 1px 1px rgba(16, 16, 24, 0.035), 0 2px 5px -1px rgba(16, 16, 24, 0.05);
-}
-:root[data-effects="reduced"]:is([data-theme="dark"], [data-theme="midnight"]) {
-  --panel-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.35);
-}
-
-/* Glass off (Linux / WebKitGTK, where backdrop blur is the expensive part): glass turns opaque, every other effect stays */
-:root[data-glass="off"] {
-  --glass-fill-a: var(--glass-solid);
-  --glass-fill-b: var(--glass-solid);
-  --glass-blur: none;
-  --glass-blur-1: none;
-}
+/* Glass off: kept for the WebKitGTK probe (glassProbe.ts). v3 has no backdrop blur, so this only guarantees it. */
 :root[data-glass="off"] * {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
-:root[data-glass="off"] .glass-3 { background: color-mix(in oklab, var(--bg-window) 92%, transparent); }
 
 /* ════════════════════════════════════════════════════════════════════════════
    RECIPES
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── 4.2 slab-raised (the keycap) ──
-   The element is the hit area and carries the label. ::before = SIDE (hangs --edge below the box, layout unchanged),
-   ::after = FACE. Press is pure CSS (:active) so feedback lands within one frame. */
+/* ── key (.slab). Face on the element itself; no ::before / ::after. Press = 0.5px travel, edge collapses in 60ms;
+   release 100ms ease-out, no overshoot. Feature CSS may still set --fa/--fb/--fg/--edge; they are honoured. ── */
 .slab {
-  --edge: 2px;
+  --edge: 1px;
   --fa: var(--slab-s-face-a);
   --fb: var(--slab-s-face-b);
-  --hl: var(--slab-s-hl);
-  --lo: var(--slab-s-lo);
   --rim: var(--slab-s-rim);
+  --lo: var(--slab-s-lo);
+  --contact: var(--slab-s-contact);
+  --fg: var(--slab-s-fg);
   --sa: var(--slab-s-side-a);
   --sb: var(--slab-s-side-b);
-  --srim: var(--slab-s-side-rim);
-  --contact: var(--slab-s-contact);
-  --amb: var(--slab-s-ambient);
-  --pressf: var(--slab-s-press);
-  --hoverf: var(--slab-s-hover);
-  --sheen: transparent;
-  --dish: linear-gradient(transparent, transparent);
-  --fg: var(--slab-s-fg);
-  --pool: 0 0 0 transparent;
-  --press-scale: 0.985;
+  --srim: transparent;
+  --amb: transparent;
+  --pool: 0 0 0 0 transparent;
+  --key-shadow: inset 0 0 0 1px var(--rim), inset 0 calc(var(--edge) * -1) 0 var(--lo), 0 1px 1px var(--contact);
+  --key-shadow-down: inset 0 0 0 1px var(--rim), 0 0 0 0 transparent;
   position: relative;
-  isolation: isolate;
-  background: transparent;
   border: 0;
   color: var(--fg);
-  transform: translateY(0) scale(1);
+  background: var(--fa);
+  box-shadow: var(--key-shadow);
+  transform: translateY(0);
   transition:
-    transform var(--dur-release) var(--spring-release),
-    color var(--dur-fast) var(--ease-out),
-    outline-offset var(--dur-moderate) var(--ease-out),
-    outline-color var(--dur-fast) var(--ease-out);
+    transform 100ms var(--ease-out),
+    box-shadow 100ms var(--ease-out),
+    background-color var(--dur-hover-out) var(--ease-out),
+    color var(--dur-hover-out) var(--ease-out);
+  outline: 2px solid transparent;
+  outline-offset: var(--focus-offset);
 }
-.slab::before,
-.slab::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-}
-.slab::before {
-  z-index: -2;
-  background: linear-gradient(180deg, var(--sa), var(--sb));
-  box-shadow: 0 0 0 1px var(--srim), 0 1px 1.5px var(--contact), 0 6px 12px -5px var(--amb), var(--pool);
-  transform: translateY(var(--edge));
-  transition: transform var(--dur-release) var(--spring-release), opacity var(--dur-fast) var(--ease-out);
-}
-.slab::after {
-  z-index: -1;
-  background:
-    radial-gradient(120% 140% at 50% -40%, var(--sheen), transparent 55%),
-    var(--dish),
-    linear-gradient(180deg, var(--fa), var(--fb));
-  box-shadow: inset 0 1px 0 var(--hl), inset 0 -1px 0 var(--lo), inset 0 0 0 1px var(--rim);
-  transition: filter 220ms var(--ease-out), opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-}
-/* variants */
 .slab:is(.slab-primary, [data-variant="primary"]) {
   --fa: var(--slab-p-face-a);
   --fb: var(--slab-p-face-b);
-  --hl: var(--slab-p-hl);
+  --rim: transparent;
   --lo: var(--slab-p-lo);
-  --rim: var(--slab-p-rim);
-  --sa: var(--slab-p-side-a);
-  --sb: var(--slab-p-side-b);
-  --srim: var(--slab-p-side-rim);
   --contact: var(--slab-p-contact);
-  --amb: var(--slab-p-ambient);
-  --pressf: var(--slab-p-press);
-  --hoverf: var(--slab-p-hover);
-  --sheen: var(--slab-p-sheen);
   --fg: var(--slab-p-fg);
-  --pool: var(--glow-pool);
+  --edge: 1.5px;
+  background: linear-gradient(180deg, var(--fa), var(--fb));
 }
 .slab:is(.slab-danger, [data-variant="destructive"]) {
   --fa: var(--slab-d-face-a);
-  --fb: var(--slab-d-face-b);
-  --hl: var(--slab-d-hl);
+  --rim: transparent;
   --lo: var(--slab-d-lo);
-  --rim: var(--slab-d-rim);
-  --sa: var(--slab-d-side-a);
-  --sb: var(--slab-d-side-b);
-  --srim: var(--slab-d-side-rim);
   --contact: var(--slab-d-contact);
-  --amb: var(--slab-d-ambient);
-  --pressf: var(--slab-d-press);
-  --hoverf: brightness(1.05);
-  --sheen: rgba(255, 255, 255, 0.16);
   --fg: var(--slab-d-fg);
+  --edge: 1.5px;
 }
 .slab:is(.slab-soft, [data-variant="soft"]) {
-  --edge: 1px;
-  /* mix onto the opaque secondary face: --accent-soft is translucent and would let the side show through */
-  --fa: color-mix(in oklab, var(--accent-solid) 4%, var(--slab-s-face-a));
-  --fb: color-mix(in oklab, var(--accent-solid) 7%, var(--slab-s-face-b));
-  --sa: color-mix(in oklab, var(--accent-solid) 30%, var(--slab-s-side-a));
-  --sb: color-mix(in oklab, var(--accent-solid) 30%, var(--slab-s-side-b));
+  --fa: var(--accent-soft);
+  --rim: transparent;
+  --lo: transparent;
+  --contact: transparent;
   --fg: var(--accent-text);
+  box-shadow: none;
 }
-/* ghost: no slab at rest; a flat plate fades/scales in on hover and becomes a well when pressed */
+/* ghost: no key at rest; an ink wash comes in at 0ms and goes out over 120ms */
 .slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]) {
-  --edge: 0px;
+  --fa: transparent;
   --fg: var(--text-secondary);
   --plate: var(--ghost-hover);
   --plate-press: var(--ghost-press);
-  --press-scale: 0.97;
+  background: var(--fa);
+  box-shadow: none;
 }
 .slab[data-variant="destructive-ghost"] {
   --fg: var(--loss-text);
   --plate: var(--loss-soft);
-  --plate-press: color-mix(in oklab, var(--loss) 18%, transparent);
+  --plate-press: color-mix(in oklab, var(--loss) 16%, transparent);
 }
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"])::before { opacity: 0; }
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"])::after {
-  background: var(--plate);
-  box-shadow: none;
-  opacity: 0;
-  transform: scale(0.92);
-  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+.slab::before,
+.slab::after {
+  content: none;
 }
 
-/* hover: whole key lifts 1px, the side counter-moves (stays put in world space) so the visible bevel grows */
+/* hover: instant wash (C0), never a lift */
 .slab:not(:disabled):not([aria-disabled="true"]):hover,
 .slab[data-force="hover"] {
-  transform: translateY(-1px);
-  transition-duration: var(--dur-hover), var(--dur-fast), var(--dur-moderate), var(--dur-fast);
-  transition-timing-function: var(--ease-out);
+  background-color: color-mix(in oklab, var(--fa), var(--text-primary) 4%);
+  transition-duration: 100ms, 100ms, 0ms, 0ms;
 }
-.slab:not(:disabled):not([aria-disabled="true"]):hover::before,
-.slab[data-force="hover"]::before {
-  transform: translateY(calc(var(--edge) + 1px));
-  transition: transform var(--dur-hover) var(--ease-out);
+.slab:is([data-variant="primary"], .slab-primary):not(:disabled):not([aria-disabled="true"]):hover,
+.slab:is([data-variant="primary"], .slab-primary)[data-force="hover"] {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--fa), white 6%), var(--fb));
 }
-.slab:not(:disabled):not([aria-disabled="true"]):hover::after,
-.slab[data-force="hover"]::after { filter: var(--hoverf); }
 .slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:not(:disabled):hover, [data-force="hover"]) {
-  transform: none;
+  background-color: var(--plate);
   --fg: var(--text-primary);
 }
 .slab[data-variant="destructive-ghost"]:not(:disabled):hover { --fg: var(--loss-text); }
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:not(:disabled):hover, [data-force="hover"])::after {
-  opacity: 1;
-  transform: scale(1);
-  filter: none;
-  transition-duration: 140ms;
-}
 
-/* press: the face travels down by --edge onto the side, slight squash, face darkens */
+/* press: 0.5px travel, the bottom edge collapses in 60ms */
 .slab:not(:disabled):not([aria-disabled="true"]):active,
 .slab[data-pressing] {
-  transform: translateY(var(--edge)) scale(var(--press-scale));
-  transition: transform var(--dur-press) var(--ease-press);
+  transform: translateY(0.5px);
+  box-shadow: var(--key-shadow-down);
+  transition-duration: 60ms, 60ms, 0ms, 0ms;
+  transition-timing-function: var(--ease-press);
 }
-.slab:not(:disabled):not([aria-disabled="true"]):active::before,
-.slab[data-pressing]::before {
-  transform: translateY(0);
-  transition: transform var(--dur-press) var(--ease-press);
+.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"], .slab-soft, [data-variant="soft"]):is(:not(:disabled):active, [data-pressing]) {
+  transform: none;
+  box-shadow: none;
+  background-color: var(--plate-press, var(--accent-soft-press));
 }
-.slab:not(:disabled):not([aria-disabled="true"]):active::after,
-.slab[data-pressing]::after {
-  filter: var(--pressf);
-  transition-duration: 60ms;
+/* latched (toolbars, toggles): the key sits down; a ghost holds its press wash */
+.slab:is([data-active], [aria-pressed="true"], [data-state="on"], [data-state="open"], .slab-latched) {
+  transform: translateY(0.5px);
+  box-shadow: var(--key-shadow-down);
 }
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:not(:disabled):active, [data-pressing]) {
-  transform: scale(var(--press-scale));
-}
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:not(:disabled):active, [data-pressing])::after,
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is([data-active], [aria-pressed="true"], [data-state="on"], [data-state="open"], .slab-latched)::after {
-  opacity: 1;
-  transform: scale(1);
-  background: var(--plate-press);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
-  filter: none;
-}
-.slab:is(.slab-ghost, [data-variant="ghost"]):is([data-active], [aria-pressed="true"], [data-state="on"], [data-state="open"], .slab-latched) { --fg: var(--text-primary); }
-
-/* latched: key stays half-down */
-.slab:not(.slab-ghost):not([data-variant="ghost"]):not([data-variant="destructive-ghost"]):is([data-active], [aria-pressed="true"], [data-state="on"], [data-state="open"], .slab-latched) {
-  transform: translateY(calc(var(--edge) - 1px));
-}
-.slab:not(.slab-ghost):not([data-variant="ghost"]):not([data-variant="destructive-ghost"]):is([data-active], [aria-pressed="true"], [data-state="on"], [data-state="open"], .slab-latched)::before {
-  transform: translateY(1px);
-}
-.slab:not(.slab-ghost):not([data-variant="ghost"]):not([data-variant="destructive-ghost"]):is([data-active], [aria-pressed="true"], [data-state="on"], [data-state="open"], .slab-latched)::after {
-  filter: var(--pressf);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18), inset 0 -1px 0 var(--lo), inset 0 0 0 1px var(--rim);
+.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is([data-active], [aria-pressed="true"], [data-state="on"], [data-state="open"], .slab-latched) {
+  transform: none;
+  box-shadow: none;
+  background-color: var(--plate-press);
+  --fg: var(--text-primary);
 }
 
-/* focus: a 2px ring that lands from 7px out (1.5px floors to a 1px hairline at 1x DPR) */
-.slab {
-  outline: 2px solid transparent;
-  outline-offset: 7px;
-}
+/* focus: 2px ink ring, 1px out */
 .slab:focus-visible,
 .slab[data-force="focus"] {
   outline-color: var(--ring);
-  outline-offset: 3px;
 }
 
-/* disabled: no hover or press; the key sinks and desaturates */
+/* disabled: flat, quiet */
 .slab:is(:disabled, [aria-disabled="true"]) {
-  color: color-mix(in oklab, var(--fg) 45%, transparent);
-  cursor: default;
-}
-.slab:is(:disabled, [aria-disabled="true"])::before {
-  transform: translateY(min(var(--edge), 1px));
-  opacity: 0.5;
-  box-shadow: 0 0 0 1px var(--srim);
-}
-.slab:is(:disabled, [aria-disabled="true"])::after { filter: saturate(0.2) opacity(0.6); }
-.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:disabled, [aria-disabled="true"])::before { opacity: 0; }
-.slab:is(.slab-ghost, [data-variant="ghost"]):is(:disabled, [aria-disabled="true"]) { color: var(--text-disabled); }
-/* dark themes: a disabled primary must not be the brightest object on screen — fall back to the secondary face */
-:root:is([data-theme="dark"], [data-theme="midnight"]) .slab:is(.slab-primary, [data-variant="primary"]):is(:disabled, [aria-disabled="true"]) {
-  --fa: var(--slab-s-face-a);
-  --fb: var(--slab-s-face-b);
-  --hl: var(--slab-s-hl);
-  --lo: var(--slab-s-lo);
-  --rim: var(--slab-s-rim);
-  --sheen: transparent;
-  --pool: 0 0 0 transparent;
   color: var(--text-disabled);
+  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--bg-surface-2);
+  transform: none;
 }
-:root:is([data-theme="dark"], [data-theme="midnight"]) .slab:is(.slab-primary, [data-variant="primary"]):is(:disabled, [aria-disabled="true"])::before { opacity: 0; }
-:root:is([data-theme="dark"], [data-theme="midnight"]) .slab:is(.slab-primary, [data-variant="primary"]):is(:disabled, [aria-disabled="true"])::after { filter: none; opacity: 0.7; }
+.slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:disabled, [aria-disabled="true"]) {
+  background: transparent;
+  box-shadow: none;
+}
 
-/* icon-only keycaps get a dished (concave) face */
-.slab[data-icon-only]:not(.slab-ghost):not([data-variant="ghost"]):not([data-variant="destructive-ghost"]) {
-  --press-scale: 0.94;
-  --dish: radial-gradient(80% 70% at 50% 62%, rgba(0, 0, 0, 0.035), transparent 70%);
-}
-:root:is([data-theme="dark"], [data-theme="midnight"]) .slab[data-icon-only]:not([data-variant="ghost"]):not([data-variant="destructive-ghost"]) {
-  --dish: radial-gradient(80% 70% at 50% 65%, rgba(0, 0, 0, 0.22), transparent 70%);
-}
-.slab[data-icon-only]:is([data-variant="ghost"], [data-variant="destructive-ghost"]) { --press-scale: 0.92; }
-
-/* ── 4.3 keycap-kbd ── */
+/* ── Kbd chip (.keycap): flat outlined, 1px bottom edge; depresses only when its shortcut actually fires ── */
 .keycap {
-  --edge: 1.5px;
   position: relative;
-  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 5px;
-  font: 600 11px/1 var(--font-ui);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font: 500 11px/1 var(--font-ui);
   color: var(--text-secondary);
+  background: var(--kbd-bg);
+  box-shadow: inset 0 0 0 1px var(--border-subtle), inset 0 -1px 0 var(--border-subtle), 0 0 0 0.5px var(--border);
   transform: translateY(0);
-  transition: transform 300ms var(--spring-release);
+  transition: transform 100ms var(--ease-out), box-shadow 100ms var(--ease-out);
 }
 .keycap::before,
 .keycap::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-}
-.keycap::before {
-  z-index: -2;
-  background: linear-gradient(180deg, var(--slab-s-side-a), var(--slab-s-side-b));
-  box-shadow: 0 0 0 1px var(--slab-s-side-rim), 0 1px 2px var(--slab-s-contact);
-  transform: translateY(var(--edge));
-  transition: transform 300ms var(--spring-release);
-}
-.keycap::after {
-  z-index: -1;
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
-  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim);
-  transition: filter 120ms var(--ease-out);
+  content: none;
 }
 .keycap[data-down] {
-  transform: translateY(var(--edge));
-  transition: transform 50ms var(--ease-out);
+  transform: translateY(0.5px);
+  box-shadow: inset 0 0 0 1px var(--border), 0 0 0 0.5px var(--border);
+  transition-duration: 40ms;
 }
-.keycap[data-down]::before {
-  transform: translateY(0);
-  transition: transform 50ms var(--ease-out);
-}
-.keycap[data-down]::after { filter: var(--slab-s-press); }
 
-/* ── 4.4 well-recessed ── */
+/* ── well: a flat field / bed ── */
 .well {
   background: var(--well-bg);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
-  transition: box-shadow 160ms var(--ease-out), background-color 160ms var(--ease-out);
-}
-.well:not([data-static]):hover {
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px color-mix(in oklab, var(--well-rim), var(--text-primary) 12%), 0 1px 0 var(--well-lip);
+  box-shadow: none;
+  transition: box-shadow var(--dur-hover-out) var(--ease-out), background-color var(--dur-hover-out) var(--ease-out);
 }
 .well:not([data-static]):focus-within {
-  background: color-mix(in oklab, var(--well-bg), var(--panel-top) 55%);
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-halo), 0 1px 0 var(--well-lip);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 .well:is([aria-invalid="true"], [data-invalid]) {
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--loss), 0 0 0 4px color-mix(in oklab, var(--loss) 18%, transparent);
+  box-shadow: inset 0 0 0 1px var(--loss);
 }
 .well:is(:disabled, [data-disabled]) {
   opacity: 0.55;
-  box-shadow: inset 0 0 0 1px var(--well-rim);
 }
 .well:is([readonly], [data-readonly]) {
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--well-rim);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
-/* a thin recessed groove (tracks) */
 .well-groove {
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  background: var(--bg-surface-3);
 }
 
-/* ── 4.5 panel (machined plate) ── */
+/* ── panel: one quiet container level (hairline, no shadow). A panel inside a panel loses its frame (N-CR5). ── */
 .panel {
   position: relative;
-  isolation: isolate;
-  border-radius: var(--radius-xl);
-  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
-  box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 -1px 0 var(--panel-lo), inset 0 0 0 1px var(--panel-rim), var(--panel-shadow);
+  border-radius: var(--radius-lg);
+  background: var(--bg-canvas);
+  box-shadow: none;
+  border: 1px solid var(--border);
 }
 .panel::before,
 .grain::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: -1;
-  background: url("./grain.png") 0 0 / 180px;
-  mix-blend-mode: var(--grain-blend);
-  opacity: var(--grain-op);
+  content: none;
 }
-.grain { position: relative; isolation: isolate; }
-.panel[data-raise]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: -2;
-  box-shadow: var(--panel-raise);
-  opacity: 0;
-  transition: opacity 220ms var(--ease-out);
-}
-.panel[data-raise] {
-  --lift: 0px;
-  --press: 1;
-  --rx: 0deg;
-  --ry: 0deg;
-  transform: perspective(800px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift)) scale(var(--press));
-  transition: transform var(--dur-magnet) var(--spring-release);
-}
-.panel[data-raise]:hover {
-  --lift: -2px;
-  transition: transform 220ms var(--ease-out);
-}
-.panel[data-raise]:hover::after { opacity: 1; }
-.panel[data-raise]:active {
-  --lift: 0px;
-  --press: 0.99;
-  transition: transform var(--dur-press) var(--ease-press);
-}
-.panel[data-raise][data-tilting] { transition: transform 120ms linear; }
-.panel[data-flat] { box-shadow: inset 0 1px 0 var(--panel-hl), inset 0 0 0 1px var(--panel-rim); }
-.panel[data-latched] {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12), inset 0 0 0 1.5px var(--ring), var(--panel-shadow);
+.grain { position: relative; }
+.panel[data-raise] { transition: background-color var(--dur-hover-out) var(--ease-out); }
+.panel[data-raise]:hover { background: color-mix(in oklab, var(--bg-canvas), var(--text-primary) 2%); transition-duration: 0ms; }
+.panel[data-raise]::after { content: none; }
+.panel[data-flat] { box-shadow: none; }
+.panel[data-latched] { border-color: var(--border-strong); }
+.panel :is(.panel, .emp-card),
+.emp-card :is(.panel, .emp-card) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
 }
 
-/* ── 4.6 edge light + specular (rendered by <EdgeLight/>; pointer tracked by motion/pointerLight.ts) ── */
-/* Tilt angles never inherit: writing them per frame must restyle only the tilting host (§5.9 pointer budget). */
-@property --rx { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-@property --ry { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-[data-light] {
-  --mx: 50%;
-  --my: -40%;
-}
+/* ── edge light + specular: retired. The markup (<EdgeLight/>) renders nothing; old DOM stays invisible. ── */
 [data-light] > .emp-edge,
 [data-light] > .emp-specular {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: -1;
-  opacity: 0;
-  transition: opacity 280ms var(--ease-out);
+  display: none;
 }
-[data-light] > .emp-edge {
-  padding: 1px;
-  background: radial-gradient(260px circle at var(--mx) var(--my), var(--edge-light), transparent 70%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-}
-[data-light] > .emp-specular {
-  background: radial-gradient(420px circle at var(--mx) var(--my), var(--specular), transparent 62%);
-}
-[data-light][data-lit="1"] > .emp-edge,
-[data-light][data-lit="1"] > .emp-specular { opacity: 1; }
 
-/* ── 4.7 glass ── */
+/* ── floating layers: opaque, warm ring + soft layer ── */
 .glass-1,
 .glass-2 {
-  background: linear-gradient(180deg, var(--glass-fill-a), var(--glass-fill-b));
+  background: var(--bg-overlay);
 }
 .glass-1 {
-  box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-1-shadow);
-  -webkit-backdrop-filter: var(--glass-blur-1);
-  backdrop-filter: var(--glass-blur-1);
+  box-shadow: var(--elev-2);
 }
 .glass-2 {
-  box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-shadow);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--elev-3);
 }
 .glass-3 {
-  background: color-mix(in oklab, var(--bg-window) 55%, transparent);
-  -webkit-backdrop-filter: blur(40px) saturate(1.4);
-  backdrop-filter: blur(40px) saturate(1.4);
-}
-/* ≤ 2 backdrop layers: glass opened inside an overlay is opaque */
-:is(.glass-1, .glass-2)[data-opaque],
-:root:is([data-effects="reduced"], [data-contrast="more"]) :is(.glass-1, .glass-2, .glass-3) {
-  background: var(--glass-solid);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  background: var(--scrim);
 }
 .glass-faux {
-  background: var(--chart-tip-fill);
-  box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-1-shadow);
+  background: var(--bg-overlay);
+  box-shadow: var(--elev-2);
 }
 
-/* ── 4.8b keycap-tile: a static keycap for words, tokens and chips that aren't buttons (recovery words, parsed
-   tokens, latched choices). Same faces as the secondary slab; no hover/press. [data-latched] sits half-down,
-   [data-tone="lit"] uses the lit fill. Set --edge (default 1.5px) and the radius on the element. ── */
+/* ── keycap-tile: a static paper chip for words, tokens and latched choices (recovery words, parsed tokens) ── */
 .keycap-tile {
-  --edge: 1.5px;
   position: relative;
-  isolation: isolate;
-  border-radius: 8px;
-  margin-bottom: var(--edge);
+  border-radius: 6px;
   color: var(--text-primary);
-  transition: transform var(--dur-release) var(--spring-release);
+  background: var(--key-paper);
+  box-shadow: var(--key-paper-shadow);
 }
 .keycap-tile::before,
 .keycap-tile::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
+  content: none;
 }
-.keycap-tile::before {
-  z-index: -2;
-  background: linear-gradient(180deg, var(--slab-s-side-a), var(--slab-s-side-b));
-  box-shadow: 0 0 0 1px var(--slab-s-side-rim), 0 1px 1.5px var(--slab-s-contact), 0 4px 8px -4px var(--slab-s-ambient);
-  transform: translateY(var(--edge));
-  transition: transform var(--dur-release) var(--spring-release);
+.keycap-tile[data-latched] {
+  transform: translateY(0.5px);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
-.keycap-tile::after {
-  z-index: -1;
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
-  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 -1px 0 var(--slab-s-lo), inset 0 0 0 1px var(--slab-s-rim);
-}
-.keycap-tile[data-latched] { transform: translateY(calc(var(--edge) - 0.5px)); }
-.keycap-tile[data-latched]::before { transform: translateY(0.5px); }
-.keycap-tile[data-latched]::after {
-  filter: var(--slab-s-press);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14), inset 0 -1px 0 var(--slab-s-lo), inset 0 0 0 1px var(--slab-s-rim);
-}
-.keycap-tile[data-tone="lit"] { color: var(--lit-fg); }
-.keycap-tile[data-tone="lit"]::after {
-  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+.keycap-tile[data-tone="lit"] {
+  color: var(--lit-fg);
+  background: var(--lit-a);
+  box-shadow: none;
 }
 
-/* ── 3b stage canvas: the monochrome "one key light + floor + grain" backdrop for full-screen moments (vault, boot
-   error, crash fallbacks). Static — the stage never animates. ── */
+/* ── stage canvas: the full-screen backdrop for the lock screen and crash fallbacks. Flat window paper. ── */
 .stage-canvas {
-  --stage-base: color-mix(in oklab, var(--bg-window) 70%, #e4e4ea);
-  --stage-key: rgba(255, 255, 255, 0.95);
-  --stage-floor: rgba(16, 16, 24, 0.06);
   position: relative;
-  isolation: isolate;
-  background:
-    radial-gradient(980px 560px at 50% 22%, var(--stage-key), transparent 72%),
-    radial-gradient(760px 280px at 50% 104%, var(--stage-floor), transparent 70%),
-    var(--stage-base);
-}
-:root[data-theme="dark"] .stage-canvas {
-  --stage-base: #09090c;
-  --stage-key: rgba(201, 210, 255, 0.075);
-  --stage-floor: rgba(0, 0, 0, 0.6);
-}
-:root[data-theme="midnight"] .stage-canvas {
-  --stage-base: #000;
-  --stage-key: rgba(201, 210, 255, 0.055);
-  --stage-floor: rgba(0, 0, 0, 0);
+  background: var(--bg-window);
 }
 .stage-canvas::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: url("./grain.png") 0 0 / 180px;
-  mix-blend-mode: var(--grain-blend);
-  opacity: calc(var(--grain-op) * 1.4);
+  content: none;
 }
 
-/* ── 4.9 groove (engraved line) ── */
+/* ── groove: a 1px hairline ── */
 .groove-h {
-  height: 2px;
-  background: linear-gradient(180deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px);
+  height: 1px;
+  background: var(--border);
 }
 .groove-v {
-  width: 2px;
-  background: linear-gradient(90deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px);
+  width: 1px;
+  background: var(--border);
 }
-.groove-top { box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite); }
-.groove-bottom { box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark); }
+.groove-top { box-shadow: inset 0 1px 0 var(--border); }
+.groove-bottom { box-shadow: inset 0 -1px 0 var(--border); }
 
-/* ── 4.10 dome (thumbs, dots) ── */
+/* ── dome: a paper thumb; lit = ink ── */
 .dome {
-  background: linear-gradient(180deg, var(--thumb-a), var(--thumb-b));
+  background: var(--key-paper);
   box-shadow: var(--dome-shadow);
 }
-/* lit dome (selected dots, checkbox fill) */
 .dome-lit {
-  background: linear-gradient(180deg, var(--lit-b), var(--lit-a));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 1px 0 rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.2);
+  background: var(--lit-a);
+  box-shadow: none;
   color: var(--lit-fg);
 }
 
-/* ── 3 canvas ── */
-.canvas-halo { background: var(--canvas-bg); }
+/* ── canvas ── */
+.canvas-halo { background: var(--bg-canvas); }
 
-/* ════════ Reduced motion: state changes stay, travel goes (§5.8) ════════ */
-:root[data-motion="reduced"] :is(.slab, .keycap, .keycap-tile, .panel[data-raise]),
-:root[data-motion="reduced"] :is(.slab, .keycap, .keycap-tile, .panel[data-raise])::before,
-:root[data-motion="reduced"] :is(.slab, .keycap, .keycap-tile, .panel[data-raise])::after {
-  /* pseudo-elements are invalid inside :is() — keep them outside or the whole rule is dropped */
+/* ════════ Reduced motion: state changes stay, travel goes ════════ */
+:root[data-motion="reduced"] :is(.slab, .keycap, .keycap-tile, .panel[data-raise]) {
   transition-duration: 0ms !important;
 }
-:root[data-motion="reduced"] .panel[data-raise] { --lift: 0px !important; --rx: 0deg !important; --ry: 0deg !important; }
-
-/* ════════ Shared-element morphs (View Transitions, §5.4.2) ════════ */
-::view-transition-group(*) {
-  animation-duration: var(--dur-morph);
-  animation-timing-function: var(--spring-morph);
+:root[data-motion="reduced"] :is(.slab, .keycap):is(:active, [data-down], [data-pressing]) {
+  transform: none;
 }
 
-/* Higher contrast focus (§4.11): a 3px accent ring, 2px out, no halo or glow */
+/* ════════ Shared-element morphs (View Transitions): continuity class C2 ════════ */
+::view-transition-group(*) {
+  animation-duration: var(--dur-morph);
+  animation-timing-function: var(--ease-out);
+}
+
+/* Higher contrast focus: a 3px ring, 2px out */
 :root[data-contrast="more"] :is(.slab, .emp-switch, .emp-check, .emp-radio, .emp-slider-thumb, .emp-card, .emp-choice, .emp-swatch, .emp-tab):focus-visible,
 :root[data-contrast="more"] .slab[data-force="focus"] {
   outline: 3px solid var(--accent-ring);

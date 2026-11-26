@@ -31,14 +31,30 @@ pub struct Migration {
 /// Migration 0001: the complete §10.2 DDL (every table of v1, including those other repos own).
 pub const MIGRATION_0001: &str = include_str!("migrations/0001_init.sql");
 
+/// Migration 0002: schedules the deferred emoji → Lucide icon rewrite (owner ruling: no emoji in the app). The icons
+/// live in encrypted payloads, so the rewrite itself runs after unlock ([`super::payload_migrate`]). No schema objects
+/// change.
+fn migration_0002(tx: &Transaction<'_>) -> Result<()> {
+    for m in super::payload_migrate::ICON_MIGRATIONS {
+        super::payload_migrate::schedule(tx, m.id)?;
+    }
+    Ok(())
+}
+
 /// Every migration, in order.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    kind: MigrationKind::Sql(MIGRATION_0001),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        kind: MigrationKind::Sql(MIGRATION_0001),
+    },
+    Migration {
+        version: 2,
+        kind: MigrationKind::Rust(migration_0002),
+    },
+];
 
 /// The newest schema version this build knows.
-pub const LATEST_VERSION: i64 = 1;
+pub const LATEST_VERSION: i64 = 2;
 
 /// Number of pre-migration backups kept.
 pub const KEEP_PRE_MIGRATION_BACKUPS: usize = 3;

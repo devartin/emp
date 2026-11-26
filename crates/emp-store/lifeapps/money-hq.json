@@ -1743,6 +1743,12 @@
             "hidden": true
           },
           {
+            "key": "reviewed",
+            "name": "Reviewed",
+            "type": "checkbox",
+            "role": "txn.reviewed"
+          },
+          {
             "key": "tags",
             "name": "Tags",
             "type": "multi_select",
@@ -1770,6 +1776,7 @@
             "key": "source",
             "name": "Source",
             "type": "select",
+            "role": "txn.source",
             "options": [
               {
                 "key": "manual",

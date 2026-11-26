@@ -23,7 +23,7 @@ import { Slider } from "@/ui/Slider";
 import { Skeleton } from "@/ui/Skeleton";
 import { DebtRace } from "./DebtRace";
 import { StackedAreaChart } from "./shared/charts";
-import { addMonths, fmtMoney, monthLabel, num } from "./shared/format";
+import { addMonths, monthLabel, num, fmtWhole } from "./shared/format";
 import { Quiet, Section } from "./shared/ui";
 import { debtInputs, debtPlanStart, useLedgerCtx } from "./MoneyHQ/ledger";
 
@@ -140,13 +140,13 @@ export default function DebtPlanner() {
             </div>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="tabular" style={{ fontSize: 30, lineHeight: "36px", fontWeight: 640, letterSpacing: "-0.025em" }}>
-                <RollingNumber value={extra} format={(n) => fmtMoney(n, "USD", { noCents: true })} countUp={false} />
+                <RollingNumber value={extra} format={(n) => fmtWhole(n)} countUp={false} />
               </span>
               <span className="text-body-sm text-tertiary">
-                on top of <Sensitive>{fmtMoney(totalMin, "USD", { noCents: true })}</Sensitive> in minimums
+                on top of <Sensitive>{fmtWhole(totalMin)}</Sensitive> in minimums
               </span>
             </div>
-            <Slider className="mt-4" value={[extra]} onValueChange={(v) => setExtra(v[0])} min={0} max={2000} step={25} formatValue={(n) => fmtMoney(n, "USD", { noCents: true })} aria-label="Extra monthly payment" />
+            <Slider className="mt-4" value={[extra]} onValueChange={(v) => setExtra(v[0])} min={0} max={2000} step={25} formatValue={(n) => fmtWhole(n)} aria-label="Extra monthly payment" />
             <div className="flex justify-between text-caption text-tertiary mt-1.5" style={{ fontWeight: 400 }}>
               <span>$0</span>
               <span>$2,000</span>
@@ -177,7 +177,7 @@ export default function DebtPlanner() {
                     <span className="block text-caption text-tertiary tabular" style={{ fontWeight: 400 }}>
                       {r ? (
                         <span data-sensitive="">
-                          <RollingNumber value={num(r.totalInterest)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive /> interest
+                          <RollingNumber value={num(r.totalInterest)} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive /> interest
                         </span>
                       ) : (
                         ""
@@ -192,8 +192,8 @@ export default function DebtPlanner() {
         </section>
         <section className="fh-card fh-span-7 flex flex-col">
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <BigFact label="Debt-free" value={sel ? <SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /> : "—"} sub={sel ? `${sel.months} months · ${extra > 0 ? `${fmtMoney(extra, "USD", { noCents: true })}/mo extra` : "no extra"}` : ""} />
-            <BigFact label="Interest saved" value={sel ? <RollingNumber value={num(sel.interestSavedVsMin)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive /> : "—"} sub="vs minimums only" good sensitive />
+            <BigFact label="Debt-free" value={sel ? <SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /> : "—"} sub={sel ? `${sel.months} months · ${extra > 0 ? `${fmtWhole(extra)}/mo extra` : "no extra"}` : ""} />
+            <BigFact label="Interest saved" value={sel ? <RollingNumber value={num(sel.interestSavedVsMin)} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive /> : "—"} sub="vs minimums only" good sensitive />
             <BigFact label="Months sooner" value={sel && minimum ? <RollingNumber value={Math.max(0, minimum.months - sel.months)} format={(n) => String(Math.round(n))} countUp={false} /> : "—"} sub={minimum ? `minimums: ${minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)}` : ""} good />
           </div>
           {error ? <div className="text-body-sm text-loss-text">{error}</div> : null}
@@ -212,7 +212,7 @@ export default function DebtPlanner() {
             loading={!plans}
           />
           <div className="flex items-center gap-4 mt-2 text-caption text-tertiary" style={{ fontWeight: 400 }}>
-            <TrendingDown size={13} /> Total balance over time · <Sensitive>{fmtMoney(totalDebt, "USD", { noCents: true })}</Sensitive> today
+            <TrendingDown size={13} /> Total balance over time · <Sensitive>{fmtWhole(totalDebt)}</Sensitive> today
           </div>
         </section>
       </div>
@@ -233,7 +233,7 @@ export default function DebtPlanner() {
                 <span className="flex-1 min-w-0">
                   <span className="block truncate text-body-sm font-medium">{d.name}</span>
                   <span className="block text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                    <Sensitive>{fmtMoney(d.balance, "USD", { noCents: true })}</Sensitive> · {num(d.aprPct).toFixed(2)}% APR
+                    <Sensitive>{fmtWhole(d.balance)}</Sensitive> · {num(d.aprPct).toFixed(2)}% APR
                   </span>
                 </span>
                 <span className="text-body-sm font-semibold tabular">{month ? monthLabel(month) : "—"}</span>

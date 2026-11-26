@@ -11,7 +11,8 @@ import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Sensitive } from "@/ui/Sensitive";
 import { Tooltip } from "@/ui/Tooltip";
 import { formatNumber } from "@/lib/format";
-import { dayLabel, fmtMoney, toMoney } from "../shared/format";
+import { dayLabel, toMoney, fmtWhole } from "../shared/format";
+import { baseCurrency } from "../shared/currency";
 import { Glyph } from "../shared/ui";
 import type { Category, Txn } from "./ledger";
 
@@ -84,8 +85,8 @@ export function Envelope({ e, onClick, index = 0 }: { e: EnvelopeData; onClick?:
       <span className="min-w-0 flex-1 text-left">
         <span className="block truncate text-body-sm font-medium text-primary">{e.category.name}</span>
         <span className={cn("block text-caption tabular", over ? "text-loss-text" : "text-tertiary")} style={{ fontWeight: 500 }}>
-          <Sensitive>{over ? `${fmtMoney(-e.available, "USD", { noCents: true })} over` : `${fmtMoney(e.available, "USD", { noCents: true })} left`}</Sensitive>
-          <span className="text-tertiary"> · of <Sensitive>{fmtMoney(e.assigned, "USD", { noCents: true })}</Sensitive></span>
+          <Sensitive>{over ? `${fmtWhole(-e.available)} over` : `${fmtWhole(e.available)} left`}</Sensitive>
+          <span className="text-tertiary"> · of <Sensitive>{fmtWhole(e.assigned)}</Sensitive></span>
         </span>
       </span>
     </button>
@@ -93,7 +94,7 @@ export function Envelope({ e, onClick, index = 0 }: { e: EnvelopeData; onClick?:
 }
 
 /** Large money figure with the currency symbol at 0.6× and dimmed cents; digits roll on change (count up once per session with `countUpKey`). */
-export function HeroMoney({ value, currency = "USD", cents = true, className, countUpKey, scrubbing }: { value: number; currency?: string; cents?: boolean; className?: string; countUpKey?: string; scrubbing?: boolean }) {
+export function HeroMoney({ value, currency = baseCurrency(), cents = true, className, countUpKey, scrubbing }: { value: number; currency?: string; cents?: boolean; className?: string; countUpKey?: string; scrubbing?: boolean }) {
   // Symbol, its position, the decimal mark and the minus glyph depend on the currency only — resolve them once, not
   // on every scrub frame (moneyParts builds Intl formatters).
   const shape = useMemo(() => ({ ...moneyParts(toMoney(-1.5, currency)), digits: currencyDecimals(currency) }), [currency]);

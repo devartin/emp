@@ -615,3 +615,33 @@ button.fh-chip[data-kind="cat"]:active, button.fh-chip[data-kind="cat"][data-sta
 /* Virtual ledger: while a split disclosure resizes a row, the rows below transition their transform (compositor). */
 .fh-txn-virt[data-glide] > div { transition: transform 240ms cubic-bezier(0.2, 0, 0, 1); }
 :root[data-motion="reduced"] .fh-txn-virt[data-glide] > div { transition: none; }
+
+/* ── "Why this number": the figure is the trigger (shared/Figure.tsx). Keeps the number's own type; a dotted
+   underline appears on hover/focus only. */
+.fh-figure { all: unset; display: inline; cursor: help; border-radius: var(--radius-xs); text-decoration-line: none; text-underline-offset: 0.22em; text-decoration-thickness: 1px; }
+.fh-figure-block { display: inline-flex; align-items: baseline; }
+.fh-figure:hover, .fh-figure[data-state="open"] { text-decoration-line: underline; text-decoration-style: dotted; text-decoration-color: var(--text-tertiary); }
+.fh-figure:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.fh-figure-pop { width: 300px; max-width: calc(100vw - 32px); }
+.fh-figure-title { font-size: calc(13rem / 14); font-weight: 600; color: var(--text-primary); }
+.fh-figure-def { margin: 4px 0 0; font-size: calc(12.5rem / 14); line-height: 1.45; color: var(--text-secondary); }
+.fh-figure-inputs { margin: 10px 0 0; padding: 0; border-top: 1px solid var(--border-subtle); }
+.fh-figure-inputs > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 0 0; font-size: calc(12.5rem / 14); }
+.fh-figure-inputs dt { color: var(--text-secondary); }
+.fh-figure-inputs dd { margin: 0; color: var(--text-primary); font-weight: 500; text-align: right; }
+.fh-figure-action { all: unset; display: inline-block; margin-top: 10px; font-size: calc(12.5rem / 14); font-weight: 500; color: var(--accent-text); cursor: pointer; border-radius: var(--radius-xs); }
+.fh-figure-action:hover { text-decoration: underline; }
+.fh-figure-action:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* Reconcile: an empty statement field is neutral, not a warning. */
+.fh-recon[data-empty] { background: var(--bg-surface-2); color: var(--text-secondary); box-shadow: inset 0 0 0 1px var(--border-subtle); }
+/* Reconcile success — the C3 "quiet check" (≤ 600 ms): the ring fades in, the tick draws; reduced motion crossfades. */
+.fh-recon-done { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0 8px; color: var(--gain-text); }
+.fh-recon-ring { stroke: currentColor; opacity: 0.28; animation: fh-recon-ring 240ms var(--ease-out, ease-out) both; }
+.fh-recon-tick { stroke: currentColor; stroke-dasharray: 1; stroke-dashoffset: 1; animation: fh-recon-tick 320ms var(--ease-out, ease-out) 140ms forwards; }
+.fh-recon-done[data-reduced] .fh-recon-ring, .fh-recon-done[data-reduced] .fh-recon-tick { animation: none; stroke-dashoffset: 0; }
+.fh-recon-done[data-reduced] { animation: fh-recon-fade 200ms ease-out both; }
+@keyframes fh-recon-ring { from { opacity: 0; } to { opacity: 0.28; } }
+@keyframes fh-recon-tick { to { stroke-dashoffset: 0; } }
+@keyframes fh-recon-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .fh-recon-ring, .fh-recon-tick { animation: none; stroke-dashoffset: 0; } }

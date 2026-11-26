@@ -19,7 +19,6 @@ import { useTree } from "@/stores/tree";
 import { useWorkspace } from "@/stores/workspace";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
-import { ease } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { isViewTransitionActive } from "@/ui/motion/viewTransition";
 import { useNav } from "@/stores/nav";
@@ -46,7 +45,6 @@ function entry<P>(load: Loader<P>): Entry<P> {
 /* Shell chunk (§12): shell + editor. Shell.tsx itself is loaded by App.tsx through `shellEntry`. */
 export const shellEntry = entry<Record<string, never>>(() => import("@/features/shell/Shell"));
 const PageView = entry<{ pageId: Id; blockId?: string }>(() => import("@/features/editor/PageView"));
-const DailyNote = entry<Record<string, never>>(() => import("@/features/editor/DailyNote"));
 const HomePage = entry<Record<string, never>>(() => import("@/features/home/HomePage"));
 const TrashPage = entry<Record<string, never>>(() => import("@/features/shell/TrashPage"));
 /* Lazy feature chunks. */
@@ -145,8 +143,6 @@ export function preloadRoute(route: AppRoute): void {
       run(TrashPage);
       break;
     case "today":
-      run(DailyNote);
-      break;
     case "home":
       run(HomePage);
       break;
@@ -183,6 +179,12 @@ function usePageMeta(id: Id): MetaState {
     };
   }, [id, fromTree]);
   return fromTree ? { status: "ok", meta: fromTree } : remote;
+}
+
+/** `#/today` is a legacy link: Home is the day, so it redirects there (today's note opens with ⌘⌥D or Home's link). */
+function TodayRedirect() {
+  useEffect(() => navigate({ t: "home" }, { replace: true }), []);
+  return null;
 }
 
 function PageMissing({ deleted }: { deleted?: boolean }) {
@@ -255,7 +257,7 @@ function renderRoute(route: AppRoute): ReactNode {
     case "trash":
       return <TrashPage.C />;
     case "today":
-      return <DailyNote.C />;
+      return <TodayRedirect />;
     case "home":
       return <HomePage.C />;
     default:
@@ -297,21 +299,14 @@ interface DirInfo {
   instant: boolean;
 }
 
-/** Route transitions with direction (docs/DESIGN.md §5.4.3): x offsets per direction, opacity always. */
+/**
+ * Route changes are C0 (PROGRAMME-v3 K3 motion register): the new route is present at its first frame and the old
+ * one leaves at once. The direction is still inferred and mirrored to `:root[data-nav-dir]` for CSS.
+ */
 const routeVariants = {
-  initial: (d: DirInfo) =>
-    d.instant ? { opacity: 1, x: 0 } : d.reduced ? { opacity: 0 } : { opacity: 0, x: d.dir === "lateral" ? d.sign * 16 : d.dir === "back" ? -12 : 12 },
-  enter: (d: DirInfo) => ({
-    opacity: 1,
-    x: 0,
-    transition: d.instant ? { duration: 0 } : { duration: d.reduced ? 0.12 : 0.22, ease: ease.out },
-  }),
-  exit: (d: DirInfo) =>
-    d.instant
-      ? { opacity: 0, transition: { duration: 0 } }
-      : d.reduced
-        ? { opacity: 0, transition: { duration: 0.08, ease: ease.in } }
-        : { opacity: 0, x: d.dir === "lateral" ? d.sign * -16 : d.dir === "back" ? 8 : -8, transition: { duration: 0.09, ease: ease.in } },
+  initial: { opacity: 1, x: 0 },
+  enter: { opacity: 1, x: 0, transition: { duration: 0 } },
+  exit: { opacity: 0, transition: { duration: 0 } },
 };
 
 /** Infer the navigation direction from the nav store and a short local history of route keys. */
@@ -337,12 +332,8 @@ function useNavDirection(key: string): DirInfo {
 }
 
 /**
- * The main pane: the current route with direction-aware transitions (docs/DESIGN.md §5.4.3). Forward: the old route
- * leaves x −8 / 90ms ease-in, the new one arrives from x +12 over 220ms ease-out; back mirrors; lateral (replace,
- * tab-like switches) uses ±16px. Reduced motion crossfades in 120ms. The route is interactive from its first frame.
- * `:root[data-nav-dir]` mirrors the direction for CSS. During a shared-element View Transition
- * (`withViewTransition`) the swap is instant so the browser can morph `view-transition-name` pairs.
- * Sub-target changes (block anchors, tabs) keep the same key and don't remount.
+ * The main pane: the current route, swapped instantly (C0). `:root[data-nav-dir]` mirrors the navigation direction
+ * for CSS. Sub-target changes (block anchors, tabs) keep the same key and don't remount.
  */
 export function RouteOutlet({ onRouteChange }: { onRouteChange?: (route: AppRoute) => void }) {
   const route = useRoute();

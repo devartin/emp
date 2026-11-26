@@ -7,7 +7,7 @@ import { withAlpha } from "@/charts/axis";
 import { useChartTheme } from "@/charts/theme";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
-import { fmtMoney, fmtPct, monthLabel, num } from "../finance/shared/format";
+import { fmtPct, monthLabel, num, fmtWhole } from "../finance/shared/format";
 import { useAsync } from "../finance/shared/hooks";
 import { Section, Stat } from "../finance/shared/ui";
 
@@ -24,10 +24,10 @@ export default function Dividends({ instanceId, summary: s }: { instanceId: Id; 
     <div className="flex flex-col gap-4">
       <div className="fh-kpis">
         {[
-          { l: "Last 12 months", v: s ? fmtMoney(s.divTtm.amount, "USD", { noCents: true }) : "—", sub: s && value ? `${fmtPct(num(s.divTtm.amount) / value, 2)} trailing yield` : "" },
-          { l: "Next 12 months", v: s ? fmtMoney(s.divFwd12m.amount, "USD", { noCents: true }) : "—", sub: "last regular dividend × frequency" },
-          { l: `Paid in ${year}`, v: fmtMoney(paid, "USD", { noCents: true }), sub: `${rows.filter((r) => r.paid > 0).length} months with payouts` },
-          { l: `Still expected in ${year}`, v: fmtMoney(proj, "USD", { noCents: true }), sub: "based on last year's calendar" },
+          { l: "Last 12 months", v: s ? fmtWhole(s.divTtm.amount, { currency: s.divTtm.currency }) : "—", sub: s && value ? `${fmtPct(num(s.divTtm.amount) / value, 2)} trailing yield` : "" },
+          { l: "Next 12 months", v: s ? fmtWhole(s.divFwd12m.amount, { currency: s.divFwd12m.currency }) : "—", sub: "last regular dividend × frequency" },
+          { l: `Paid in ${year}`, v: fmtWhole(paid), sub: `${rows.filter((r) => r.paid > 0).length} months with payouts` },
+          { l: `Still expected in ${year}`, v: fmtWhole(proj), sub: "based on last year's calendar" },
         ].map((k) => (
           <div key={k.l} className="fh-card" style={{ padding: "14px 16px" }}>
             <Stat label={k.l} value={<Sensitive>{k.v}</Sensitive>} sub={k.sub} size="lg" />

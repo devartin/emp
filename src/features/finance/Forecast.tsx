@@ -13,7 +13,7 @@ import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { dayLabel, fmtMoney, todayIso } from "./shared/format";
+import { dayLabel, fmtMoney, todayIso, fmtWhole } from "./shared/format";
 import { useAsync, useDbChanged } from "./shared/hooks";
 import { Section } from "./shared/ui";
 import { useLedgerCtx } from "./MoneyHQ/ledger";
@@ -71,7 +71,7 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
               {checking?.name} may dip to <Sensitive>{fmtMoney(breach.amount)}</Sensitive> around {dayLabel(breach.date)}
             </div>
             <div className="text-caption" style={{ fontWeight: 400 }}>
-              Below your {fmtMoney(fc.data?.threshold ?? 0, "USD", { noCents: true })} low-balance threshold. Biggest outflows before then: {breach.topOutflows.join(", ")}.
+              Below your {fmtWhole(fc.data?.threshold ?? 0)} low-balance threshold. Biggest outflows before then: {breach.topOutflows.join(", ")}.
             </div>
           </div>
         </div>
@@ -79,7 +79,7 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
         <div className="fh-alert" data-tone="ok">
           <ShieldCheck size={18} />
           <div className="flex-1 text-body-sm">
-            <b>No low-balance risk in the next {horizon} days.</b> <span className="text-secondary">Even the cautious path stays above {fmtMoney(fc.data.threshold ?? 0, "USD", { noCents: true })}.</span>
+            <b>No low-balance risk in the next {horizon} days.</b> <span className="text-secondary">Even the cautious path stays above {fmtWhole(fc.data.threshold ?? 0)}.</span>
           </div>
         </div>
       ) : null}
@@ -100,7 +100,7 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
           </div>
         </Section>
         <div className="fh-span-4 flex flex-col gap-3">
-          <Fact label={`In ${horizon} days`} value={fc.data ? end : null} sub={checking ? `from ${fmtMoney(checking.balance, "USD", { noCents: true })} today` : ""} />
+          <Fact label={`In ${horizon} days`} value={fc.data ? end : null} sub={checking ? `from ${fmtWhole(checking.balance)} today` : ""} />
           <Fact label="Lowest point" value={fc.data ? min : null} sub={minIdx >= 0 && fc.data ? `around ${dayLabel(fc.data.t[minIdx])}` : ""} />
           <Fact label="Cautious low (p10)" value={p10min} sub={p10min !== null && fc.data?.threshold !== undefined ? (p10min > fc.data.threshold ? "stays above your threshold" : "touches your threshold") : ""} icon={p10min !== null && fc.data?.threshold !== undefined && p10min > fc.data.threshold ? <CheckCircle2 size={16} className="text-gain" /> : undefined} />
         </div>
@@ -116,7 +116,7 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
               <span className="flex-1 truncate text-body-sm">{f.name}</span>
               {f.amount > 0 ? <Badge tone="gain">Income</Badge> : null}
               <span className="text-body-sm font-semibold tabular w-[110px] text-right" style={{ color: f.amount > 0 ? "var(--gain-text)" : undefined }}>
-                <Sensitive>{fmtMoney(f.amount, "USD", { signed: f.amount > 0 })}</Sensitive>
+                <Sensitive>{fmtMoney(f.amount, undefined, { signed: f.amount > 0 })}</Sensitive>
               </span>
             </div>
           ))}
@@ -147,7 +147,7 @@ function Fact({ label, value, sub, icon }: { label: string; value: number | null
           <Skeleton width={120} height={22} />
         ) : (
           <span data-sensitive="">
-            <RollingNumber value={value} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive />
+            <RollingNumber value={value} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive />
           </span>
         )}
       </div>

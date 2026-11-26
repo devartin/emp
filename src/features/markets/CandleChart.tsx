@@ -8,6 +8,7 @@ import { CandleChart as LwCandles, type CandleMode, type Ohlcv } from "@/charts/
 import { cn } from "@/lib/cn";
 import { Segmented } from "@/ui/Segmented";
 import { fmtPrice } from "../finance/shared/format";
+import { baseCurrency } from "../finance/shared/currency";
 import { type ChartRange, useBars } from "./data";
 
 const RANGES: { value: ChartRange; label: string }[] = [
@@ -30,7 +31,7 @@ export interface PriceChartProps {
   onRangeChange?: (r: ChartRange, bars: Ohlcv[]) => void;
 }
 
-export default function PriceChart({ symbol, currency = "USD", height = 340, defaultRange = "6m", defaultMode = "area", indicators = true }: PriceChartProps) {
+export default function PriceChart({ symbol, currency = baseCurrency(), height = 340, defaultRange = "6m", defaultMode = "area", indicators = true }: PriceChartProps) {
   const [range, setRange] = useState<ChartRange>(defaultRange);
   const [mode, setMode] = useState<CandleMode>(defaultMode);
   const [smas, setSmas] = useState<number[]>([20, 50]);

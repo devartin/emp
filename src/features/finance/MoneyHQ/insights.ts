@@ -3,7 +3,7 @@
  * for this instance the hub derives the same rules locally from the data it already loaded, with "Show math".
  */
 import type { FinanceOverview, Forecast, Id, Insight } from "@/backend/types";
-import { daysBetween, fmtMoney, fmtPct, num, todayIso } from "../shared/format";
+import { daysBetween, fmtMoney, fmtPct, num, todayIso, fmtWhole } from "../shared/format";
 import type { Account, Ledger } from "./ledger";
 
 export function localInsights(instanceId: Id, ov: FinanceOverview | undefined, l: Ledger, fc: Forecast | undefined): Insight[] {
@@ -29,13 +29,13 @@ export function localInsights(instanceId: Id, ov: FinanceOverview | undefined, l
   const breach = fc?.breaches[0];
   if (breach && daysBetween(today, breach.date) <= 30) {
     const acct = l.acct.get(breach.accountId);
-    add({ ruleId: "forecast-breach", severity: "warn", title: `${acct?.name ?? "Checking"} may dip below ${fmtMoney(fc?.threshold ?? 0, "USD", { noCents: true })} around ${breach.date.slice(5)}`, body: `The biggest outflows before then: ${breach.topOutflows.join(", ")}.`, math: [{ label: "Projected balance", value: fmtMoney(breach.amount) }, { label: "Low-balance threshold", value: fmtMoney(fc?.threshold ?? 0) }], actions: [{ label: "See forecast", route: tab("forecast") }] });
+    add({ ruleId: "forecast-breach", severity: "warn", title: `${acct?.name ?? "Checking"} may dip below ${fmtWhole(fc?.threshold ?? 0)} around ${breach.date.slice(5)}`, body: `The biggest outflows before then: ${breach.topOutflows.join(", ")}.`, math: [{ label: "Projected balance", value: fmtMoney(breach.amount) }, { label: "Low-balance threshold", value: fmtMoney(fc?.threshold ?? 0) }], actions: [{ label: "See forecast", route: tab("forecast") }] });
   }
   const ef = l.goals.find((g) => g.kind === "emergency");
   if (ef) {
     const saved = ef.accountId ? (l.acct.get(ef.accountId)?.balance ?? ef.saved) : ef.saved;
     if (saved < ef.target) {
-      add({ ruleId: "ef-below-target", severity: "tip", title: `Emergency fund covers ${ov.efMonths.toFixed(1)} months of essentials`, body: `You're ${fmtPct(saved / ef.target, 0)} of the way to ${fmtMoney(ef.target, "USD", { noCents: true })}. A common guideline is 3–6 months.`, math: [{ label: "Saved", value: fmtMoney(saved) }, { label: "Target", value: fmtMoney(ef.target) }, { label: "Months of essentials", value: ov.efMonths.toFixed(2) }], actions: [{ label: "Open goals", route: tab("goals") }] });
+      add({ ruleId: "ef-below-target", severity: "tip", title: `Emergency fund covers ${ov.efMonths.toFixed(1)} months of essentials`, body: `You're ${fmtPct(saved / ef.target, 0)} of the way to ${fmtWhole(ef.target)}. A common guideline is 3–6 months.`, math: [{ label: "Saved", value: fmtMoney(saved) }, { label: "Target", value: fmtMoney(ef.target) }, { label: "Months of essentials", value: ov.efMonths.toFixed(2) }], actions: [{ label: "Open goals", route: tab("goals") }] });
     }
   }
   for (const r of l.recurring) {

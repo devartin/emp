@@ -193,6 +193,10 @@ pub struct DeductionResult {
     pub amount: Decimal,
     /// What the standard deduction would be.
     pub standard_would_be: Decimal,
+    /// The itemised total after the pack's floors and caps (medical AGI floor, SALT cap, charitable 0.5% AGI floor);
+    /// present whenever itemisable entries were supplied, whichever deduction won (PROGRAMME-v3 K5, additive).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub itemized_would_be: Option<Decimal>,
 }
 
 /// A bracket line in the estimate.
@@ -536,27 +540,70 @@ fn compute(p: &TaxPack, input: &TaxInput, income_scale: Decimal) -> Result<Core>
     let standard = rd(get(&p.standard_deduction, status)
         + get(&p.additional_std_deduction65_or_blind, status)
             * Decimal::from(input.age65_or_blind.unwrap_or(0)));
-    let itemized_total = match &input.deductions {
-        Deductions::Itemized { itemized } => Some(rd(itemized_amount(p, itemized, agi, status))),
-        Deductions::Mode(_) => None,
+    // Entries are itemisable candidates: the deduction is the larger of the itemised total (after floors and caps)
+    // and the standard deduction plus the non-itemiser charitable deduction (§15.6 step 3; same in the mock).
+    let entries: &[ItemizedEntry] = match &input.deductions {
+        Deductions::Itemized { itemized } => itemized,
+        Deductions::Mode(_) => &[],
     };
-    let deduction = match (&input.deductions, itemized_total) {
-        (Deductions::Itemized { .. }, Some(it)) => DeductionResult {
+    let itemized_would_be =
+        (!entries.is_empty()).then(|| rd(itemized_amount(p, entries, agi, status)));
+    let charity_non_itemizer = p
+        .non_itemizer_charity
+        .as_ref()
+        .map_or(Decimal::ZERO, |nc| {
+            let gifts: Decimal = entries
+                .iter()
+                .filter(|e| nc.kinds.iter().any(|k| k == &e.kind))
+                .map(|e| e.amount.max(Decimal::ZERO))
+                .sum();
+            rd(gifts.min(get(&nc.cap, status)))
+        });
+    let deduction = match itemized_would_be {
+        Some(it) if it > standard + charity_non_itemizer => DeductionResult {
             kind: "itemized".into(),
             amount: it,
             standard_would_be: standard,
+            itemized_would_be,
         },
         _ => DeductionResult {
             kind: "standard".into(),
-            amount: standard,
+            amount: standard + charity_non_itemizer,
             standard_would_be: standard,
+            itemized_would_be,
         },
     };
+    if let Some(it) = itemized_would_be {
+        line(
+            &mut lines,
+            "Itemized deductions (after floors and caps)",
+            it,
+            Some("itemizedRules"),
+        );
+    }
+    if deduction.kind == "standard" && charity_non_itemizer > Decimal::ZERO {
+        line(
+            &mut lines,
+            "Standard deduction",
+            standard,
+            Some("standardDeduction"),
+        );
+        line(
+            &mut lines,
+            "Charitable gifts (without itemizing)",
+            charity_non_itemizer,
+            Some("nonItemizerCharity"),
+        );
+    }
     line(
         &mut lines,
         &format!("Deduction ({})", deduction.kind),
         deduction.amount,
-        Some("standardDeduction"),
+        Some(if deduction.kind == "itemized" {
+            "itemizedRules"
+        } else {
+            "standardDeduction"
+        }),
     );
     // 4. Taxable income.
     let taxable = (agi - deduction.amount).max(Decimal::ZERO);
@@ -877,6 +924,9 @@ fn estimate_inner(
         credits: c.nonrefundable + c.refundable,
         total_tax: c.total_tax,
         brackets: c.brackets,
+        // Effective rate = total tax ÷ AGI (PROGRAMME-v3 N-MO3 `tax.effective`; the IRS SOI "average tax rate" uses
+        // AGI as the denominator: https://www.irs.gov/statistics/soi-tax-stats-individual-income-tax-rates-and-tax-shares).
+        // The mock computes the same (`src/backend/mock/commands/tax.ts`).
         effective_rate: if c.agi > Decimal::ZERO {
             to_f64(c.total_tax / c.agi)
         } else {
@@ -1071,14 +1121,62 @@ mod tests {
         }];
         let e = estimate_auto(&us, &base, &small, today()).unwrap();
         assert_eq!(e.deduction.kind, "standard");
-        assert_eq!(e.deduction.amount, dec("32200"));
+        // Standard 32,200 plus the 2026 non-itemiser cash gift deduction (1,000, under the 2,000 MFJ cap).
+        assert_eq!(e.deduction.amount, dec("33200"));
+        assert_eq!(e.deduction.standard_would_be, dec("32200"));
+        // Itemised, the gift only counts above 0.5% × 100,000 = 500.
+        assert_eq!(e.deduction.itemized_would_be, Some(dec("500")));
         let rich = input(
             json!({"deductions":{"itemized":[{"kind":"salt","amount":"50000"}]},"incomes":[{"kind":"wages","amount":"700000"}]}),
         );
-        assert_eq!(
-            estimate(&us, &rich, today()).unwrap().deduction.amount,
-            dec("10000")
-        );
+        // The SALT cap phases down to its 10,000 floor, so the standard deduction wins; itemizedWouldBe still says why.
+        let e = estimate(&us, &rich, today()).unwrap();
+        assert_eq!(e.deduction.itemized_would_be, Some(dec("10000")));
+        assert_eq!(e.deduction.kind, "standard");
+        assert_eq!(e.deduction.amount, dec("16100"));
+        // `standard` mode carries no entries, so no itemizedWouldBe.
+        let plain = estimate(&us, &input(json!({"incomes":[{"kind":"wages","amount":"50000"}]})), today()).unwrap();
+        assert_eq!(plain.deduction.itemized_would_be, None);
+    }
+
+    /// N-MO5: the 2026 charitable rules (IRS Pub 505 (2026) "What's New", https://www.irs.gov/publications/p505;
+    /// https://www.irs.gov/newsroom/irs-reminder-permanent-charitable-contribution-deduction-begins-for-returns-filed-next-year-for-taxpayers-who-do-not-itemize).
+    #[test]
+    fn charity_2026_cap_and_floor() {
+        let us = builtin("us-federal-2026").unwrap();
+        let gifts = |status: &str, wages: &str, gift: &str| {
+            estimate(
+                &us,
+                &input(json!({"filingStatus": status, "incomes":[{"kind":"wages","amount": wages}],
+                    "deductions":{"itemized":[{"kind":"charity","amount": gift}]}})),
+                today(),
+            )
+            .unwrap()
+        };
+        // Non-itemiser cap: $1,000 single, $2,000 married filing jointly.
+        let single = gifts("single", "80000", "1500");
+        assert_eq!(single.deduction.kind, "standard");
+        assert_eq!(single.deduction.amount, dec("17100"));
+        let small = gifts("single", "80000", "400");
+        assert_eq!(small.deduction.amount, dec("16500"));
+        let mfj = gifts("mfj", "120000", "3000");
+        assert_eq!(mfj.deduction.amount, dec("34200"));
+        // Head of household and MFS get the single cap.
+        assert_eq!(gifts("hoh", "80000", "5000").deduction.amount, dec("25150"));
+        // Itemisers: only the part above 0.5% of AGI counts (200,000 × 0.5% = 1,000).
+        let e = estimate(
+            &us,
+            &input(json!({"incomes":[{"kind":"wages","amount":"200000"}],
+                "deductions":{"itemized":[{"kind":"salt","amount":"15000"},{"kind":"mortgage","amount":"12000"},{"kind":"charity","amount":"5000"}]}})),
+            today(),
+        )
+        .unwrap();
+        assert_eq!(e.deduction.kind, "itemized");
+        assert_eq!(e.deduction.amount, dec("31000"));
+        assert_eq!(e.deduction.itemized_would_be, Some(dec("31000")));
+        assert_eq!(e.taxable, dec("169000"));
+        // Effective rate is total tax over AGI.
+        assert!((e.effective_rate - 33158.0 / 200_000.0).abs() < 1e-12);
     }
 
     #[test]
