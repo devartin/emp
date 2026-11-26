@@ -56,29 +56,25 @@ export function useTodayEvents(today: string): CalendarEvent[] | null {
 
 // ───────────────────────────────────────────────────────────────────────────── today's note
 
-/**
- * Titles the backends give today's note: the mock writes "Thursday, Nov 26, 2026" under "Journal", the desktop
- * build "November 26, 2026" under "Daily notes" (en-US either way).
- */
-export function dailyNoteTitles(day: string): Set<string> {
+/** The title both backends give today's note ("Thursday, Nov 26, 2026", en-US), under the "Journal" page. */
+export function dailyNoteTitle(day: string): string {
   const [y, m, d] = day.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
   const wd = dt.toLocaleDateString("en-US", { weekday: "long" });
-  const long = dt.toLocaleDateString("en-US", { month: "long" });
   const short = dt.toLocaleDateString("en-US", { month: "short" });
-  return new Set([`${wd}, ${short} ${d}, ${y}`, `${long} ${d}, ${y}`, `${wd}, ${long} ${d}, ${y}`]);
+  return `${wd}, ${short} ${d}, ${y}`;
 }
 
-const NOTE_FOLDERS = new Set(["Journal", "Daily notes"]);
+const NOTE_FOLDER = "Journal";
 
 /** Today's note if it already exists (Home never creates it just by being looked at). */
 export function useTodayNoteMeta(today: string): PageMeta | null {
-  const titles = useMemo(() => dailyNoteTitles(today), [today]);
+  const title = useMemo(() => dailyNoteTitle(today), [today]);
   return useTree(
     useShallow((s) => {
       for (const p of s.byId.values()) {
-        if (p.deletedAt || p.kind !== "doc" || !p.parentId || !titles.has(p.title)) continue;
-        if (NOTE_FOLDERS.has(s.byId.get(p.parentId)?.title ?? "")) return p;
+        if (p.deletedAt || p.kind !== "doc" || !p.parentId || p.title !== title) continue;
+        if (s.byId.get(p.parentId)?.title === NOTE_FOLDER) return p;
       }
       return null;
     }),

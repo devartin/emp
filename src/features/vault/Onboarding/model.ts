@@ -4,7 +4,6 @@
  *
  *   welcome (name, how you start) → track (pick life apps) → protect → [password → recovery] → building → Home
  */
-import { CandlestickChart, HeartPulse, Kanban, ReceiptText, Sheet, Wallet, type LucideIcon } from "lucide-react";
 import type { AutoLock } from "@/backend/types";
 
 export type StepId = "welcome" | "track" | "protect" | "password" | "recovery" | "building";
@@ -16,17 +15,16 @@ export interface TrackOption {
   appId: string;
   label: string;
   detail: string;
-  icon: LucideIcon;
 }
 
 /** The six v1 life apps (§16), in the order people usually start with them. Each one is built with defaults. */
 export const TRACK_OPTIONS: TrackOption[] = [
-  { appId: "life-os", label: "Tasks and projects", detail: "Life OS", icon: Kanban },
-  { appId: "habits", label: "Habits and routines", detail: "Habits", icon: HeartPulse },
-  { appId: "money-hq", label: "Spending and budget", detail: "Money HQ", icon: Wallet },
-  { appId: "portfolio", label: "Investments", detail: "Portfolio", icon: CandlestickChart },
-  { appId: "tax-organizer", label: "Taxes", detail: "Tax Organizer", icon: ReceiptText },
-  { appId: "spreadsheet-studio", label: "Spreadsheets", detail: "Spreadsheet Studio", icon: Sheet },
+  { appId: "life-os", label: "Tasks and projects", detail: "Life OS" },
+  { appId: "habits", label: "Habits and routines", detail: "Habits" },
+  { appId: "money-hq", label: "Spending and budget", detail: "Money HQ" },
+  { appId: "portfolio", label: "Investments", detail: "Portfolio" },
+  { appId: "tax-organizer", label: "Taxes", detail: "Tax Organizer" },
+  { appId: "spreadsheet-studio", label: "Spreadsheets", detail: "Spreadsheet Studio" },
 ];
 
 export const DEFAULT_PICKS = ["life-os"];
@@ -75,6 +73,17 @@ export function appsFor(d: Pick<Draft, "picks" | "start">): string[] {
   const out = TRACK_OPTIONS.map((o) => o.appId).filter((id) => d.picks.includes(id));
   if (d.start === "money" && !out.includes("money-hq")) out.unshift("money-hq");
   return out;
+}
+
+/** The three screens the step index names. Password and recovery key belong to Protect; the build is not a step. */
+export const SCREENS = ["Welcome", "Track", "Protect"] as const;
+
+/** Which of the three screens a step belongs to (−1 for the build). */
+export function screenOf(step: StepId): number {
+  if (step === "welcome") return 0;
+  if (step === "track") return 1;
+  if (step === "building") return -1;
+  return 2;
 }
 
 /** Visible steps for the current draft (building is the progress screen, not a question). */

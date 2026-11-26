@@ -110,7 +110,7 @@ function GridSkeleton() {
         <Skeleton width={48} height={14} />
         <Skeleton width="40%" height={14} />
       </div>
-      <div className="flex-1 overflow-hidden" style={{ backgroundImage: "linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px)", backgroundSize: "96px 24px" }} />
+      <div className="flex-1 overflow-hidden" />
     </div>
   );
 }

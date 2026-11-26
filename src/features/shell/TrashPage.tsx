@@ -1,11 +1,11 @@
 /**
  * Trash (§11.3 trash_list / page_restore / page_purge / trash_empty). Deleted pages grouped by when they were
  * deleted, with their original location; restore (back to the original parent, or the top level if it's gone),
- * delete forever (confirmed), and Empty Trash (job with progress). Pages are purged after the retention window.
+ * delete forever (confirmed), and Empty trash (job with progress). Pages are purged after the retention window.
+ * Ruled, not boxed: one 36px row per page, and rows leave the list at once (C0).
  */
-import { ArrowUpLeft, Info, RotateCcw, Trash2 } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { navigate } from "@/app/router";
 import { api, latestRequest } from "@/backend";
 import type { Id, PageMeta } from "@/backend/types";
@@ -19,9 +19,6 @@ import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { IconButton } from "@/ui/IconButton";
 import { SearchField } from "@/ui/SearchField";
-import { SkeletonSwap, Skeleton } from "@/ui/Skeleton";
-import { ease, spring } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PageIcon } from "./PageIcon";
 import "./shell.css";
 
@@ -81,12 +78,8 @@ export default function TrashPage() {
   }, [items, now]);
 
   const removeLocal = (ids: Id[]) => setItems((cur) => (cur ? cur.filter((p) => !ids.includes(p.id)) : cur));
-  // Restored rows slide back toward the sidebar; purged rows sink into the page.
-  const exitKind = useRef<"restore" | "purge">("purge");
-  const reduced = useReducedMotionPref();
 
   const restore = async (meta: PageMeta) => {
-    exitKind.current = "restore";
     removeLocal([meta.id]);
     try {
       const restored = await api.page.restore({ ids: [meta.id] });
@@ -105,7 +98,6 @@ export default function TrashPage() {
   };
 
   const purge = async (meta: PageMeta) => {
-    exitKind.current = "purge";
     removeLocal([meta.id]);
     try {
       await api.page.purge({ ids: [meta.id] });
@@ -135,114 +127,65 @@ export default function TrashPage() {
   const count = items?.length ?? 0;
 
   return (
-    <div className="mx-auto w-full max-w-[760px] px-12 pb-24 pt-14">
+    <div className="mx-auto w-full max-w-[720px] px-6 pb-24 pt-14">
       <div className="flex items-start gap-4">
         <div className="flex-1">
           <h1 className="text-h1 text-primary">Trash</h1>
-          <p className="mt-1 flex items-center gap-1.5 text-body-sm text-tertiary">
-            <Info size={13} aria-hidden />
-            Pages in Trash are deleted forever after {retention} days.
-          </p>
+          <p className="mt-1 text-body-sm text-secondary">Pages here are deleted forever after {retention} days.</p>
         </div>
-        <Button variant="destructive-ghost" icon={Trash2} iconMotion="trash" disabled={!count || emptying !== null} loading={emptying !== null} onClick={() => setConfirm({ kind: "all" })}>
-          Empty Trash
+        <Button variant="ghost" disabled={!count || emptying !== null} loading={emptying !== null} onClick={() => setConfirm({ kind: "all" })}>
+          Empty trash
         </Button>
       </div>
       <div className="mt-6">
-        <SearchField value={q} onChange={(e) => setQ(e.currentTarget.value)} onClear={() => setQ("")} placeholder="Search Trash" shortcut={null} aria-label="Search Trash" />
+        <SearchField value={q} onChange={(e) => setQ(e.currentTarget.value)} onClear={() => setQ("")} placeholder="Search trash" shortcut={null} aria-label="Search trash" />
       </div>
 
-      <SkeletonSwap
-        loading={items === null}
-        skeleton={
-          <div className="mt-6 flex flex-col gap-2" aria-hidden>
-            {Array.from({ length: 4 }, (_, i) => (
-              <div key={i} className="flex h-[52px] items-center gap-3 px-2.5">
-                <Skeleton width={32} height={32} radius={6} />
-                <div className="flex-1">
-                  <Skeleton width={`${50 - i * 6}%`} height={11} />
-                  <Skeleton width={120} height={9} className="mt-2" />
-                </div>
-              </div>
-            ))}
-          </div>
-        }
-      >
-        {count === 0 ? (
+      {/* Until the list arrives the route reports busy (routeReady.ts), so it appears whole at its first frame. */}
+      {items === null ? (
+        <span data-route-busy="" hidden />
+      ) : count === 0 ? (
           <div className="mt-10">
             <EmptyState
               icon={Trash2}
               title={q ? "Nothing matches" : "Trash is empty"}
-              body={q ? `No deleted pages match “${q}”.` : "Pages you delete land here, so you can restore them if you change your mind."}
+              body={q ? `No deleted pages match “${q}”.` : "Deleted pages stay here until you restore them or they expire."}
             />
           </div>
         ) : (
-          <div className="mt-6 flex flex-col gap-6">
+          <div className="mt-2">
             {groups.map((g) => (
               <section key={g.label} aria-label={g.label}>
                 <h2 className="emp-trash-group">{g.label}</h2>
-                <ul className="flex flex-col">
-                  <AnimatePresence initial={false} custom={exitKind.current}>
-                    {g.items.map((p, i) => {
-                      const parent = p.parentId ? byId.get(p.parentId) : null;
-                      return (
-                        <m.li
-                          key={p.id}
-                          layout={reduced ? false : "position"}
-                          custom={exitKind.current}
-                          variants={{
-                            in: { opacity: 0, y: reduced ? 0 : 6 },
-                            on: { opacity: 1, y: 0, transition: { ...spring.settle, delay: reduced ? 0 : Math.min(i, 11) * 0.016 } },
-                            out: (k: "restore" | "purge") =>
-                              reduced
-                                ? { opacity: 0, transition: { duration: 0.1 } }
-                                : k === "restore"
-                                  ? { opacity: 0, x: -28, transition: { duration: 0.2, ease: ease.in } }
-                                  : { opacity: 0, scale: 0.96, y: 4, transition: { duration: 0.16, ease: ease.in } },
-                          }}
-                          initial="in"
-                          animate="on"
-                          exit="out"
-                          transition={spring.morph}
-                        >
-                          <div className="emp-trash-row" tabIndex={0} aria-label={`${p.title || "Untitled"}, deleted ${formatRelative(p.deletedAt ?? now)}`}>
-                            <span className="emp-trash-tile">
-                              <PageIcon icon={p.icon} kind={p.kind} size={18} />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-body font-medium text-primary">{p.title || "Untitled"}</p>
-                              <p className="flex items-center gap-1 truncate text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                                Deleted {formatRelative(p.deletedAt ?? now)}
-                                <span aria-hidden>·</span>
-                                {parent ? (
-                                  <>
-                                    from <ArrowUpLeft size={11} aria-hidden /> {parent.title || "Untitled"}
-                                  </>
-                                ) : p.parentId ? (
-                                  "from a deleted page"
-                                ) : (
-                                  "from Pages"
-                                )}
-                                {p.hasChildren ? <span className="ml-1">· includes sub-pages</span> : null}
-                              </p>
-                            </div>
-                            <div className="actions">
-                              <Button size="sm" variant="ghost" icon={RotateCcw} iconMotion="refresh" onClick={() => restore(p)}>
-                                Restore
-                              </Button>
-                              <IconButton size="sm" variant="destructive-ghost" icon={Trash2} label="Delete forever" onClick={() => setConfirm({ kind: "one", meta: p })} />
-                            </div>
-                          </div>
-                        </m.li>
-                      );
-                    })}
-                  </AnimatePresence>
+                <ul>
+                  {g.items.map((p) => {
+                    const parent = p.parentId ? byId.get(p.parentId) : null;
+                    const from = parent ? parent.title || "Untitled" : p.parentId ? "a deleted page" : "Pages";
+                    const when = formatRelative(p.deletedAt ?? now);
+                    return (
+                      <li key={p.id} className="emp-trash-row" tabIndex={0} aria-label={`${p.title || "Untitled"}, deleted ${when}, from ${from}`}>
+                        <span className="emp-trash-glyph">
+                          <PageIcon icon={p.icon} kind={p.kind} size={16} />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-body text-primary">{p.title || "Untitled"}</span>
+                        <span className="emp-trash-meta">
+                          {p.hasChildren ? "With sub-pages · " : ""}
+                          {from} · {when}
+                        </span>
+                        <span className="actions">
+                          <Button size="sm" variant="ghost" onClick={() => restore(p)}>
+                            Restore
+                          </Button>
+                          <IconButton size="sm" variant="destructive-ghost" icon={Trash2} label="Delete forever" onClick={() => setConfirm({ kind: "one", meta: p })} />
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             ))}
           </div>
         )}
-      </SkeletonSwap>
 
       <AlertDialog
         open={!!confirm}

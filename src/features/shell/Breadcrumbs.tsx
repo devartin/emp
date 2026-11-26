@@ -3,7 +3,6 @@
  * "…" menu. The current page's crumb opens an inline rename popover (title + icon live in the editor too).
  */
 import { CalendarDays, CandlestickChart, ChevronRight, Ellipsis, House, LayoutGrid, Settings, Trash2, Calendar } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { navigate, routePageId, useRoute, type AppRoute } from "@/app/router";
@@ -16,8 +15,6 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/ui/Menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
 import { PageIcon } from "./PageIcon";
 import { lifeAppIdentity } from "./Sidebar/lifeAppIdentity";
-import { ease } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { SECTIONS, resolveSection } from "@/features/settings/meta";
 
 const SETTINGS_TITLES: Record<string, string> = {
@@ -130,24 +127,15 @@ function useCrumbs(): Crumb[] {
 
 export function Breadcrumbs() {
   const crumbs = useCrumbs();
-  const reduced = useReducedMotionPref();
   if (!crumbs.length) return null;
   const collapse = crumbs.length > 4;
   const visible = collapse ? [crumbs[0], null, ...crumbs.slice(-2)] : crumbs;
   const hidden = collapse ? crumbs.slice(1, -2) : [];
   return (
     <nav className="emp-crumbs no-drag" aria-label="Breadcrumbs">
-      <AnimatePresence initial={false} mode="popLayout">
-        {visible.map((c, i) => (
-          <m.span
-            key={c?.key ?? "more"}
-            className="emp-crumb-slot"
-            layout={reduced ? false : "position"}
-            initial={{ opacity: 0, x: reduced ? 0 : -6 }}
-            animate={{ opacity: 1, x: 0, transition: { duration: 0.22, ease: ease.out, delay: reduced ? 0 : Math.min(i, 4) * 0.03 } }}
-            exit={{ opacity: 0, transition: { duration: 0.1, ease: ease.in } }}
-            transition={{ layout: { type: "spring", stiffness: 380, damping: 36 } }}
-          >
+      {/* Route changes are C0: the trail is simply the new trail, with no slide or stagger. */}
+      {visible.map((c, i) => (
+          <span key={c?.key ?? "more"} className="emp-crumb-slot">
             {i > 0 ? <ChevronRight className="emp-crumb-sep" size={13} strokeWidth={2} aria-hidden /> : null}
             {c === null ? (
               <Menu>
@@ -178,9 +166,8 @@ export function Breadcrumbs() {
                 <span>{c.label}</span>
               </button>
             )}
-          </m.span>
+          </span>
         ))}
-      </AnimatePresence>
     </nav>
   );
 }

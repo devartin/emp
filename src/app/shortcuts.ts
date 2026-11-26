@@ -6,6 +6,7 @@
  * selection opens the link popover). The global listener runs in the bubble phase and skips handled events.
  */
 import { isMac, shortcutLabel } from '@/lib/platform';
+import { useNav } from '@/stores/nav';
 import { runCommand } from './commands';
 
 export type ShortcutScope = 'app' | 'formatting' | 'blocks' | 'database' | 'sheets';
@@ -33,6 +34,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { id: 'nav.forward', keys: 'mod+]', description: 'Forward', scope: 'app' },
   { id: 'nav.parent', keys: 'mod+shift+u', description: 'Go to parent page', scope: 'app' },
   { id: 'sidebar.toggle', keys: 'mod+\\', description: 'Toggle sidebar', scope: 'app' },
+  { id: 'hub.tab', keys: 'mod+1', description: 'Switch tab in a life app (⌘1–9)', scope: 'app' },
   { id: 'vault.lock', keys: 'mod+shift+l', description: 'Lock now', scope: 'app' },
   { id: 'privacy.toggle', keys: 'mod+shift+h', description: 'Hide numbers', scope: 'app' },
   { id: 'network.offline', keys: 'mod+shift+o', description: 'Offline mode', scope: 'app' },
@@ -217,8 +219,43 @@ export function overrideShortcut(id: string, fn: (e: KeyboardEvent) => boolean |
   };
 }
 
+/**
+ * ⌘1–9 (PROGRAMME-v3 N-FL4): the nth tab of the open life app's tab strip. It presses the tab the way a pointer would
+ * (mousedown for the kit `Tabs`, then click for route-driven strips), so the hub keeps owning what a tab does.
+ */
+export function switchHubTab(n: number): boolean {
+  if (useNav.getState().route.t !== 'app' || typeof document === 'undefined') return false;
+  const list = document.querySelector('.emp-route [role="tablist"]');
+  if (!list) return false;
+  const tabs = [...list.querySelectorAll<HTMLElement>('[role="tab"]')].filter((t) => !t.hasAttribute('disabled') && t.getAttribute('aria-disabled') !== 'true');
+  const tab = tabs[n - 1];
+  if (!tab) return false;
+  if (tab.getAttribute('aria-selected') !== 'true') {
+    tab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+    tab.click();
+  }
+  tab.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+  return true;
+}
+
+function hubTabDigit(e: KeyboardEvent): number {
+  const mod = isMac ? e.metaKey : e.ctrlKey;
+  if (!mod || e.shiftKey || e.altKey || (isMac && e.ctrlKey) || (!isMac && e.metaKey)) return 0;
+  const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);
+  return m ? Number(m[1]) : 0;
+}
+
 export function handleKeydown(e: KeyboardEvent): boolean {
   if (e.defaultPrevented || e.isComposing) return false;
+  const digit = hubTabDigit(e);
+  if (digit) {
+    if (switchHubTab(digit)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return true;
+    }
+    return false;
+  }
   bound ??= SHORTCUTS.filter((s) => s.scope === 'app').map((def) => ({ def, combos: keysOf(def).map(parseCombo) }));
   const editable = isEditableTarget(e.target);
   for (const { def, combos } of bound) {

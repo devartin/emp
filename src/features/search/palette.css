@@ -1,4 +1,5 @@
-/* Command palette (§5.9, §3.8 glass, §4.2 motion). */
+/* Command palette (§5.9; DESIGN v3: opaque paper, E3, radius 12; 14px rows, ink washes, hairline rules; selection is
+   instant and a keyboard-opened palette is present at its first frame). */
 
 .cmdk-scrim {
   position: fixed;
@@ -47,7 +48,7 @@
   align-items: center;
   gap: 10px;
   padding: 0 16px;
-  box-shadow: inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .cmdk-search-icon {
@@ -66,37 +67,28 @@
   border-radius: 6px;
   background: transparent;
   color: var(--text-secondary);
-  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out), transform var(--dur-release) var(--spring-release);
 }
 .cmdk-back:hover {
-  background: var(--ghost-hover);
+  background: var(--state-hover);
   color: var(--text-primary);
 }
-.cmdk-back:hover svg {
-  transform: translateX(-2px);
-  transition: transform var(--dur-release) var(--spring-release);
-}
 .cmdk-back:active {
-  background: var(--ghost-press);
-  transform: scale(0.94);
-  transition: transform var(--dur-press) var(--ease-press);
+  background: var(--state-active);
 }
 
-/* the scope chip is a latched mini keycap */
+/* the scope chip: a flat tag (radius 4, surface-2 tint), not a key */
 .cmdk-chip {
   flex: none;
-  height: 22px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
-  padding: 0 8px;
-  border-radius: 6px;
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 0 0 1px var(--slab-s-rim), 0 1px 0 var(--slab-s-side-b);
-  filter: var(--slab-s-press);
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--bg-surface-2);
   color: var(--text-primary);
   font-size: calc(12rem / 14);
   line-height: 16px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -110,7 +102,6 @@
   color: var(--text-primary);
   font-size: calc(16rem / 14);
   line-height: 24px;
-  letter-spacing: -0.011em;
 }
 .cmdk-input::placeholder {
   color: var(--text-tertiary);
@@ -166,14 +157,12 @@
   color: var(--text-primary);
   cursor: default;
   user-select: none;
-  transition: background-color 120ms var(--ease-out);
 }
 .cmdk-item.has-sub {
   min-height: 48px;
 }
 .cmdk-item[data-selected="true"] {
-  background: color-mix(in oklab, var(--text-primary) 7%, transparent);
-  transition-duration: 0ms;
+  background: var(--state-active);
 }
 .cmdk-item {
   border-radius: var(--radius-md);
@@ -191,7 +180,6 @@
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  transition: color 120ms var(--ease-out);
 }
 .cmdk-icon-page {
   border-color: transparent;
@@ -205,7 +193,7 @@
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border);
 }
 
 .cmdk-text {
@@ -219,7 +207,6 @@
   font-size: 1rem;
   line-height: 20px;
   font-weight: 500;
-  letter-spacing: -0.006em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -231,36 +218,11 @@
 .cmdk-title:not(:has(mark)) {
   color: var(--text-primary);
 }
-/* matched characters: ink weight plus a 2px engraved underline that draws in (S7) */
+/* matched characters: ink at 600, nothing drawn under them */
 .cmdk-hl {
-  position: relative;
   background: none;
   color: var(--text-primary);
   font-weight: 600;
-}
-.cmdk-title .cmdk-hl::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  border-radius: 0;
-  background: linear-gradient(180deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px);
-  transform-origin: left center;
-  animation: cmdk-hl-draw 120ms var(--ease-out) both;
-}
-:root:is([data-theme="dark"], [data-theme="midnight"]) .cmdk-title .cmdk-hl::after {
-  background: rgba(255, 255, 255, 0.28);
-  height: 1.5px;
-}
-@keyframes cmdk-hl-draw {
-  from {
-    transform: scaleX(0);
-  }
-}
-:root[data-motion="reduced"] .cmdk-title .cmdk-hl::after {
-  animation: none;
 }
 .cmdk-sub,
 .cmdk-snippet {
@@ -298,7 +260,7 @@
   color: var(--text-tertiary);
 }
 .cmdk-check {
-  color: var(--accent-text);
+  color: var(--text-primary);
 }
 .cmdk-enter {
   width: 20px;
@@ -309,7 +271,6 @@
   border-radius: 4px;
   color: var(--text-tertiary);
   opacity: 0;
-  transition: opacity 120ms var(--ease-out);
 }
 .cmdk-item[data-selected="true"] .cmdk-enter {
   opacity: 1;
@@ -331,7 +292,7 @@
   min-width: 72px;
   text-align: right;
   font-size: calc(13rem / 14);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-primary);
 }
 
@@ -364,7 +325,7 @@
   color: var(--text-tertiary);
 }
 
-/* empty */
+/* empty: the EmptyState recipe (a bare 24px tertiary glyph, a 14/600 title, one 13/18 line) */
 .cmdk-empty {
   padding: 36px 24px 40px;
   display: flex;
@@ -374,26 +335,13 @@
   gap: 4px;
 }
 .cmdk-empty-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 10px;
-  background: var(--well-bg);
-  box-shadow: inset 0 1px 3px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  width: 24px;
+  height: 24px;
+  margin-bottom: 8px;
   color: var(--text-tertiary);
-  animation: cmdk-empty-in var(--dur-settle) var(--spring-settle) both;
-}
-@keyframes cmdk-empty-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.92);
-  }
-}
-:root[data-motion="reduced"] .cmdk-empty-icon {
-  animation: none;
 }
 .cmdk-empty-title {
   font-size: 1rem;
@@ -413,8 +361,8 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 0 14px 2px;
-  box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite);
+  padding: 0 14px;
+  border-top: 1px solid var(--border-subtle);
   font-size: calc(12rem / 14);
   color: var(--text-tertiary);
   white-space: nowrap;

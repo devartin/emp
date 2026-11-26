@@ -19,13 +19,12 @@ import { openPaletteHeld, openTodayNote, runCommand } from "@/app/commands";
 import { shortcutLabel } from "@/lib/platform";
 import { navigate } from "@/app/router";
 import { cn } from "@/lib/cn";
-import { formatCurrency } from "@/lib/format";
 import { formatRelative, formatTime } from "@/lib/dates";
 import { notify } from "@/stores/toasts";
 import { useUi } from "@/stores/ui";
 import { useWorkspace } from "@/stores/workspace";
+import { Amount } from "@/ui/Amount";
 import { Checkbox } from "@/ui/Checkbox";
-import { Sensitive } from "@/ui/Sensitive";
 import { PageIcon } from "@/features/shell/PageIcon";
 import { optionId, read, write } from "@/features/lifeapps/cells";
 import { useAppDatabases, useRows, useStableNow, type AppDb } from "@/features/lifeapps/data";
@@ -275,12 +274,13 @@ function MoneyLine({ today }: { today: string }) {
   const g = useMoneyGlance(today);
   if (g === null) return <Loading />;
   if (!g) return null;
-  const fmt = (n: number) => formatCurrency(Math.round(n), g.currency, { maximumFractionDigits: 0 });
+  // Whole units in a sentence (DESIGN §6.2: summaries drop cents); <Amount> is tabular and masked under Hide numbers.
+  const money = (n: number, className?: string) => <Amount value={{ amount: String(Math.round(Math.abs(n))), currency: g.currency }} noCents className={className} />;
   const parts: ReactNode[] = [];
   if (g.left !== null)
     parts.push(
       <button key="left" type="button" data-home-item="" className="hm-money-part" onClick={() => navigate({ t: "app", instanceId: g.instanceId, tab: "budget" })}>
-        <Sensitive className={cn("hm-num tabular", g.left < 0 && "is-over")}>{fmt(Math.abs(g.left))}</Sensitive> {g.left < 0 ? "over" : "left"} in {g.month}
+        {money(g.left, cn("hm-num", g.left < 0 && "is-over"))} {g.left < 0 ? "over" : "left"} in {g.month}
       </button>,
     );
   if (g.toReview > 0)
@@ -311,11 +311,11 @@ function MoneyLine({ today }: { today: string }) {
         <p className="hm-money-alert">
           {alert.tab === "budget" ? (
             <>
-              {alert.text} <Sensitive className="tabular">{fmt(alert.amount)}</Sensitive> over budget
+              {alert.text} {money(alert.amount)} over budget
             </>
           ) : (
             <>
-              {alert.text} <Sensitive className="tabular">{fmt(alert.amount)}</Sensitive> due{" "}
+              {alert.text} {money(alert.amount)} due{" "}
               {alert.tab.slice(5) === today ? "today" : new Date(`${alert.tab.slice(5)}T12:00:00`).toLocaleDateString(undefined, { weekday: "long" })}
             </>
           )}

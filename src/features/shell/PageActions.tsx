@@ -18,7 +18,7 @@ export function FavoriteButton({ meta }: { meta: PageMeta }) {
   return (
     <IconButton
       size="sm"
-      icon={<Star size={16} aria-hidden fill={fav ? "currentColor" : "none"} style={{ color: fav ? "var(--warning)" : undefined, transition: "color 160ms var(--ease-out)" }} />}
+      icon={<Star size={16} aria-hidden fill={fav ? "currentColor" : "none"} className={fav ? "text-primary" : "text-tertiary"} />}
       label={fav ? "Remove from Favorites" : "Add to Favorites"}
       active={fav}
       onClick={() => useWorkspace.getState().toggleFavorite(meta.id)}

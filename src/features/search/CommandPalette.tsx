@@ -1067,7 +1067,6 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
   }, [listItems]);
 
   const chip = nested ? nested.title : SCOPE_LABEL[effectiveScope];
-  let rowIndex = 0;
   const loading = (wantContent && content.loading) || (scope === "quote" && !!q.trim() && quotes === null) || (scope === "calc" && calcState.pending);
   const enterLabel = effectiveScope === "calc" ? "Copy" : nested ? "Apply" : selected?.id === "capture:row" ? "Add" : selected?.stay ? "Open" : selected?.route ? "Open" : "Run";
 
@@ -1133,7 +1132,6 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
                 value={it.id}
                 onSelect={() => void it.run({ peek: false })}
                 className={cn("cmdk-item", (it.subtitle || it.snippet) && !it.render && "has-sub", it.render && effectiveScope === "calc" && "is-calc")}
-                style={{ ["--i" as string]: Math.min(rowIndex++, 11) }}
               >
                 {it.icon}
                 {effectiveScope === "calc" && it.render ? (
@@ -1202,29 +1200,29 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
 
 function EmptyResults({ scope, query }: { scope: Scope; query: string }) {
   const q = query.trim();
-  let icon = <FileSearch size={20} aria-hidden />;
+  let icon = <FileSearch size={24} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />;
   let title = q ? `No results for “${q}”` : "Nothing here yet";
   let body = "Try fewer words, or search inside pages with ⌘P.";
   if (scope === "calc") {
-    icon = <Calculator size={20} aria-hidden />;
+    icon = <Calculator size={24} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />;
     title = q ? "That doesn’t compute" : "Type a calculation";
     body = "Arithmetic, percentages, units (5 km in mi) and currency (120 usd in eur).";
   } else if (scope === "quote") {
-    icon = <LineChart size={20} aria-hidden />;
+    icon = <LineChart size={24} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />;
     title = q ? `No symbol matches “${q}”` : "Look up a quote";
     body = "Type a ticker or company name.";
   } else if (scope === "tags") {
-    icon = <Database size={20} aria-hidden />;
+    icon = <Database size={24} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />;
     body = "Databases and their rows appear here.";
   } else if (scope === "dates") {
-    icon = <CalendarDays size={20} aria-hidden />;
+    icon = <CalendarDays size={24} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />;
     title = "Couldn’t read that date";
     body = "Try “friday”, “in 3 days” or “2026-12-24”.";
   } else if (scope === "commands") {
-    icon = <Hash size={20} aria-hidden />;
+    icon = <Hash size={24} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />;
     body = "Commands depend on where you are. Open a page for page actions.";
   } else if (scope === "pages") {
-    icon = <TextSearch size={20} aria-hidden />;
+    icon = <TextSearch size={24} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />;
   }
   return (
     <div className="cmdk-empty" role="status">

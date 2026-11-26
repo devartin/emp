@@ -3,9 +3,10 @@
  * (booting → onboarding | lock | shell | error). The lock screen and onboarding are in the initial chunk; the shell
  * is lazy and preloaded while the KDF runs.
  *
- * Phase transitions (§4.2, §6.2 step 8):
- *   lock → shell        lock card scales 1→0.96 and fades; the shell enters with scale 1.02→1, opacity, blur 12→0 (320ms)
- *   onboarding → shell  the panel scales 1→1.04 and fades; the shell enters with scale 0.98→1, blur 8→0 (480ms)
+ * Phase transitions (DESIGN v3 §7):
+ *   lock → shell        the end of the vault unlock (C3, a signature moment): the shell fades in over 320ms while the
+ *                       lock screen leaves; a 150ms crossfade under reduced motion
+ *   onboarding → shell  a plain crossfade (C2 dialog timing, 160ms); no blur, no scale
  */
 import { AnimatePresence, m } from "motion/react";
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -23,6 +24,7 @@ import { Toaster } from "@/ui/Toast";
 import { TooltipProvider } from "@/ui/Tooltip";
 import { setCelebrationsEnabled } from "@/ui/motion/Celebrate";
 import { MotionProvider } from "@/ui/motion/MotionProvider";
+import { motionSeconds } from "@/ui/motion/register";
 import { ease } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { currentRoute } from "./router";
@@ -104,8 +106,9 @@ function ShellPhase({ from }: { from: AppPhase }) {
   const reduced = useReducedMotionPref();
   const fromOnboarding = from === "onboarding";
   const fromLock = from === "lock";
-  const animated = (fromOnboarding || fromLock) && !reduced;
-  const dur = fromOnboarding ? 0.48 : 0.32;
+  const animated = fromOnboarding || fromLock;
+  // Unlock is the vault moment (≤ 600ms); first run ends on an ordinary crossfade.
+  const dur = fromLock ? Math.min(0.32, motionSeconds("vaultUnlock", reduced)) : motionSeconds("dialog", reduced) || 0.12;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // First shell frame is on screen: report boot marks (§3.9 app_ready).
@@ -117,23 +120,9 @@ function ShellPhase({ from }: { from: AppPhase }) {
       ref={ref}
       className="emp-phase"
       data-phase="shell"
-      initial={
-        animated
-          ? { opacity: 0, scale: fromOnboarding ? 0.98 : 1.02, filter: `blur(${fromOnboarding ? 8 : 12}px)` }
-          : reduced && (fromOnboarding || fromLock)
-            ? { opacity: 0 }
-            : false
-      }
-      animate={{ opacity: 1, scale: 1, filter: "blur(0px)", transition: { duration: reduced ? 0.12 : dur, ease: ease.out } }}
+      initial={animated ? { opacity: 0 } : false}
+      animate={{ opacity: 1, transition: { duration: dur, ease: ease.out } }}
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
-      onAnimationComplete={() => {
-        // A resting `filter`/`transform` would create a containing block for fixed descendants (menus, peek).
-        const el = ref.current;
-        if (el) {
-          el.style.filter = "none";
-          el.style.transform = "none";
-        }
-      }}
     >
       <Suspense fallback={<ShellSkeleton />}>
         <Shell />
@@ -161,10 +150,10 @@ function BootSplash() {
 function BootError() {
   const message = useVault((s) => s.bootError);
   return (
-    <m.div className="emp-phase stage-canvas flex items-center justify-center p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="alert">
-      <div className="panel w-[420px] p-8 text-center" style={{ borderRadius: 22 }}>
-        <AppMark size={56} animate={false} className="mx-auto" />
-        <h1 className="mt-5 text-title text-primary">Ultra Note couldn't open your workspace</h1>
+    <m.div className="emp-phase flex items-start justify-center bg-canvas px-6 pt-[18vh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="alert">
+      <div className="w-[420px] max-w-full">
+        <AppMark size={40} animate={false} />
+        <h1 className="mt-5 text-h2 text-primary">Ultra Note couldn't open your workspace</h1>
         <p className="mt-2 text-body text-secondary">{message || "The app backend didn't respond."}</p>
         <Button className="mt-6" variant="primary" icon={RefreshCw} onClick={() => window.location.reload()}>
           Try again
