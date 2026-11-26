@@ -2,11 +2,10 @@
  * Database view tabs (§5.5): underline tabs with a 14px layout icon, rename (double-click / menu), duplicate,
  * delete, drag to reorder, "+" to add a view (layout picker) and an "N more" overflow menu.
  */
-import { LayoutGroup, m } from 'motion/react';
 import {
   BarChart3, CalendarDays, ChevronDown, Copy, KanbanSquare, LayoutGrid, List, Pencil, Plus, Table2, Trash2,
 } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/backend';
 import type { DbSchema, Id, Layout, View } from '@/backend/types';
 import { cn } from '@/lib/cn';
@@ -14,7 +13,6 @@ import { notify } from '@/stores/toasts';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/ui/ContextMenu';
 import { IconButton } from '@/ui/IconButton';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '@/ui/Menu';
-import { spring } from '@/ui/motion/tokens';
 import type { IconComponent } from '@/ui/Button';
 import { useSchemas } from './store';
 
@@ -50,7 +48,6 @@ export function ViewTabs({ schema, activeId, onSelect, readOnly, compact }: View
   const dbId = schema.database.id;
   const [renaming, setRenaming] = useState<Id | null>(null);
   const [order, setOrder] = useState<View[]>(schema.views);
-  const group = useId();
   useEffect(() => setOrder(schema.views), [schema.views]);
 
   // Fit as many tabs as the row allows; the rest collapse into "N more" (§5.5).
@@ -141,7 +138,7 @@ export function ViewTabs({ schema, activeId, onSelect, readOnly, compact }: View
 
   return (
     <div ref={rootRef} className={cn('edb-tabs', compact && 'is-compact')} role="tablist" aria-label="Views">
-      <LayoutGroup id={group}>
+      <>
         <div className="edb-tabs-list">
           {shown.map((v) => (
             <div
@@ -193,7 +190,7 @@ export function ViewTabs({ schema, activeId, onSelect, readOnly, compact }: View
                 <span className="emp-tab-hover" />
                 {activeHidden ? hidden.find((v) => v.id === activeId)?.name : `${hidden.length} more`}
                 <ChevronDown size={12} aria-hidden />
-                {activeHidden ? <m.span layoutId="edb-tab-ind" className="emp-tab-indicator" transition={spring.ui} /> : null}
+                {activeHidden ? <span className="emp-tab-indicator" /> : null}
               </button>
             </MenuTrigger>
             <MenuContent width={220}>
@@ -205,7 +202,7 @@ export function ViewTabs({ schema, activeId, onSelect, readOnly, compact }: View
             </MenuContent>
           </Menu>
         ) : null}
-      </LayoutGroup>
+      </>
       {!readOnly ? (
         <Menu>
           <MenuTrigger asChild>
@@ -256,7 +253,7 @@ function TabButton({ v, active, renaming, readOnly, compact, onSelect, onRename,
       ) : (
         <span className="truncate">{v.name}</span>
       )}
-      {active ? compact ? <span className="emp-tab-indicator" /> : <m.span layoutId="edb-tab-ind" className="emp-tab-indicator" transition={spring.ui} /> : null}
+      {active ? compact ? <span className="emp-tab-indicator" /> : <span className="emp-tab-indicator" /> : null}
     </button>
   );
   if (readOnly) return btn;
