@@ -270,10 +270,10 @@ impl Store {
             if meta.len > MAX_IMAGE_BYTES {
                 return Err(StoreError::TooLarge("image"));
             }
-            if let Some(sn) = &sniffed {
-                if sn.width.unwrap_or(0) > MAX_IMAGE_DIM || sn.height.unwrap_or(0) > MAX_IMAGE_DIM {
-                    return Err(StoreError::TooLarge("image dimensions"));
-                }
+            if let Some(sn) = &sniffed
+                && (sn.width.unwrap_or(0) > MAX_IMAGE_DIM || sn.height.unwrap_or(0) > MAX_IMAGE_DIM)
+            {
+                return Err(StoreError::TooLarge("image dimensions"));
             }
         }
         let encrypted = s.codec.encrypting();

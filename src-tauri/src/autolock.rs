@@ -168,15 +168,15 @@ impl ActivityTracker {
                 return Decision::Lock(LockReason::Sleep);
             }
         }
-        if let (Some(h), Some(start)) = (cfg.max_session_hours, i.session_started) {
-            if now.saturating_duration_since(start) >= Duration::from_secs(u64::from(h) * 3600) {
-                return Decision::Lock(LockReason::SessionMax);
-            }
+        if let (Some(h), Some(start)) = (cfg.max_session_hours, i.session_started)
+            && now.saturating_duration_since(start) >= Duration::from_secs(u64::from(h) * 3600)
+        {
+            return Decision::Lock(LockReason::SessionMax);
         }
-        if let (Some(m), Some(since)) = (cfg.on_blur_minutes, i.unfocused_since) {
-            if now.saturating_duration_since(since) >= Duration::from_secs(u64::from(m) * 60) {
-                return Decision::Lock(LockReason::Blur);
-            }
+        if let (Some(m), Some(since)) = (cfg.on_blur_minutes, i.unfocused_since)
+            && now.saturating_duration_since(since) >= Duration::from_secs(u64::from(m) * 60)
+        {
+            return Decision::Lock(LockReason::Blur);
         }
         if let Some(limit) = idle_limit {
             let idle = now.saturating_duration_since(i.last_activity);

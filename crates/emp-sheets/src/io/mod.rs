@@ -74,7 +74,10 @@ pub fn prescan_zip<R: Read + Seek>(reader: R) -> Result<(), SheetError> {
         let f = z
             .by_index_raw(i)
             .map_err(|e| SheetError::Io(e.to_string()))?;
-        let name = f.name().to_string();
+        let name = f
+            .name()
+            .map_err(|e| SheetError::Invalid(format!("unreadable archive entry name: {e}")))?
+            .into_owned();
         if f.encrypted() {
             return Err(SheetError::Invalid(
                 "encrypted archive entries are not supported".into(),

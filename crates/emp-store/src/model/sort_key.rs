@@ -30,10 +30,10 @@ fn digit(i: usize) -> Result<u8> {
 }
 
 fn midpoint(a: &[u8], b: Option<&[u8]>) -> Result<Vec<u8>> {
-    if let Some(b) = b {
-        if a >= b {
-            return Err(err("a >= b"));
-        }
+    if let Some(b) = b
+        && a >= b
+    {
+        return Err(err("a >= b"));
     }
     if a.last() == Some(&ZERO) || b.and_then(|b| b.last()) == Some(&ZERO) {
         return Err(err("trailing zero"));
@@ -64,10 +64,10 @@ fn midpoint(a: &[u8], b: Option<&[u8]>) -> Result<Vec<u8>> {
         // Math.round(0.5 * (a + b)) rounds .5 up.
         return Ok(vec![digit((digit_a + digit_b).div_ceil(2))?]);
     }
-    if let Some(b) = b {
-        if b.len() > 1 {
-            return Ok(vec![b[0]]);
-        }
+    if let Some(b) = b
+        && b.len() > 1
+    {
+        return Ok(vec![b[0]]);
     }
     let mut out = vec![digit(digit_a)?];
     out.extend(midpoint(a.get(1..).unwrap_or(&[]), None)?);
@@ -207,10 +207,10 @@ pub fn key_between(a: Option<&str>, b: Option<&str>) -> Result<String> {
     if let Some(b) = b {
         validate_key(b)?;
     }
-    if let (Some(a), Some(b)) = (a, b) {
-        if a >= b {
-            return Err(err("a >= b"));
-        }
+    if let (Some(a), Some(b)) = (a, b)
+        && a >= b
+    {
+        return Err(err("a >= b"));
     }
     match (a.map(str::as_bytes), b.map(str::as_bytes)) {
         (None, None) => Ok(INTEGER_ZERO.to_owned()),

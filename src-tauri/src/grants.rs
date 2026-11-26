@@ -168,14 +168,13 @@ impl GrantRegistry {
         let id = new_grant_id()?;
         let mut grants = self.grants.lock();
         grants.retain(|_, e| e.expires > now);
-        if grants.len() >= MAX_GRANTS {
-            if let Some(oldest) = grants
+        if grants.len() >= MAX_GRANTS
+            && let Some(oldest) = grants
                 .iter()
                 .min_by_key(|(_, e)| e.issued)
                 .map(|(k, _)| k.clone())
-            {
-                grants.remove(&oldest);
-            }
+        {
+            grants.remove(&oldest);
         }
         grants.insert(
             id.clone(),

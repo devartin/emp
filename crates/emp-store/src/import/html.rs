@@ -666,21 +666,21 @@ impl Conv<'_> {
                 if let Some(img) = n.find(&|x| x.name() == "img") {
                     return self.block(img, depth + 1);
                 }
-                if n.has_class("bookmark") || n.has_class("embed") || n.has_class("link-to-page") {
-                    if let Some(a) = n.find(&|x| x.name() == "a") {
-                        let mut inl = Vec::new();
-                        self.inline(a, &[], &mut inl);
-                        if inl.is_empty() {
-                            inl.push(TipTapNode::text(a.attr("href").unwrap_or_default()));
-                        }
-                        if n.has_class("embed") {
-                            self.unsupported.push("embed".into());
-                        }
-                        return one(container(
-                            TipTapNode::new("paragraph").with_content(inl),
-                            None,
-                        )?);
+                if (n.has_class("bookmark") || n.has_class("embed") || n.has_class("link-to-page"))
+                    && let Some(a) = n.find(&|x| x.name() == "a")
+                {
+                    let mut inl = Vec::new();
+                    self.inline(a, &[], &mut inl);
+                    if inl.is_empty() {
+                        inl.push(TipTapNode::text(a.attr("href").unwrap_or_default()));
                     }
+                    if n.has_class("embed") {
+                        self.unsupported.push("embed".into());
+                    }
+                    return one(container(
+                        TipTapNode::new("paragraph").with_content(inl),
+                        None,
+                    )?);
                 }
                 self.blocks_of(n, depth)
             }

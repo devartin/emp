@@ -477,10 +477,10 @@ fn norm_columns(list: TipTapNode, ctx: &mut Ctx, depth: usize) -> Result<Columns
 /// Gives every block a fresh id (duplicate, paste, template instantiation) and normalises the document.
 pub fn regenerate_ids(doc: &mut TipTapDoc) -> Result<()> {
     fn clear(node: &mut TipTapNode) {
-        if node.kind == "blockContainer" {
-            if let Some(a) = node.attrs.as_mut() {
-                a.remove("id");
-            }
+        if node.kind == "blockContainer"
+            && let Some(a) = node.attrs.as_mut()
+        {
+            a.remove("id");
         }
         if let Some(c) = node.content.as_mut() {
             for n in c {

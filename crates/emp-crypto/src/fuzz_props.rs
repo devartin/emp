@@ -33,10 +33,10 @@ fn mutate(mut data: Vec<u8>, flips: &[(usize, u8)], cut: Option<usize>, extra: &
         let i = pos % data.len();
         data[i] ^= mask.max(1);
     }
-    if let Some(c) = cut {
-        if !data.is_empty() {
-            data.truncate(c % data.len());
-        }
+    if let Some(c) = cut
+        && !data.is_empty()
+    {
+        data.truncate(c % data.len());
     }
     data.extend_from_slice(extra);
     data

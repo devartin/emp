@@ -177,12 +177,12 @@ fn export_inner(wb: &Workbook) -> Result<Vec<u8>, SheetError> {
         }
         for (&c, &w) in &s.col_widths {
             if c < 16_384 {
-                ws.set_column_width_pixels(c as u16, w.clamp(0.0, 4096.0) as u16)
+                ws.set_column_width_pixels(c as u16, w.clamp(0.0, 4096.0) as u32)
                     .map_err(xe)?;
             }
         }
         for (&r, &h) in &s.row_heights {
-            ws.set_row_height_pixels(r, h.clamp(0.0, 4096.0) as u16)
+            ws.set_row_height_pixels(r, h.clamp(0.0, 4096.0) as u32)
                 .map_err(xe)?;
         }
         for m in &s.merges {

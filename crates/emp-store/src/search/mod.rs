@@ -119,33 +119,33 @@ pub fn parse_query(q: &str, filters: Option<&SearchFilters>, now: i64) -> Parsed
     let mut out = ParsedQuery::default();
     let mut text = Vec::new();
     for word in q.split_whitespace() {
-        if let Some((op, val)) = word.split_once(':') {
-            if !val.is_empty() {
-                match op {
-                    "in" => {
-                        out.within = Some(val.to_owned());
-                        continue;
-                    }
-                    "type" => {
-                        let kinds: Vec<SearchHitKind> =
-                            val.split(',').filter_map(SearchHitKind::parse).collect();
-                        if !kinds.is_empty() {
-                            out.kinds = Some(kinds);
-                            continue;
-                        }
-                    }
-                    "db" => {
-                        out.db = Some(val.to_owned());
-                        continue;
-                    }
-                    "edited" => {
-                        if let Some(t) = parse_edited(val, now) {
-                            out.edited_from = Some(t);
-                            continue;
-                        }
-                    }
-                    _ => {}
+        if let Some((op, val)) = word.split_once(':')
+            && !val.is_empty()
+        {
+            match op {
+                "in" => {
+                    out.within = Some(val.to_owned());
+                    continue;
                 }
+                "type" => {
+                    let kinds: Vec<SearchHitKind> =
+                        val.split(',').filter_map(SearchHitKind::parse).collect();
+                    if !kinds.is_empty() {
+                        out.kinds = Some(kinds);
+                        continue;
+                    }
+                }
+                "db" => {
+                    out.db = Some(val.to_owned());
+                    continue;
+                }
+                "edited" => {
+                    if let Some(t) = parse_edited(val, now) {
+                        out.edited_from = Some(t);
+                        continue;
+                    }
+                }
+                _ => {}
             }
         }
         text.push(word);
@@ -354,20 +354,20 @@ impl SearchIndex {
                 return false;
             }
         }
-        if let Some(db) = &q.db {
-            if d.db_id.as_deref() != Some(db.as_str()) {
-                return false;
-            }
+        if let Some(db) = &q.db
+            && d.db_id.as_deref() != Some(db.as_str())
+        {
+            return false;
         }
         if q.edited_from.is_some_and(|f| d.updated_at < f)
             || q.edited_to.is_some_and(|t| d.updated_at > t)
         {
             return false;
         }
-        if let Some(root) = &q.within {
-            if !self.is_within(&d.id, root) || d.id == *root {
-                return false;
-            }
+        if let Some(root) = &q.within
+            && (!self.is_within(&d.id, root) || d.id == *root)
+        {
+            return false;
         }
         true
     }

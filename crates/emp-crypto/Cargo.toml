@@ -2,6 +2,7 @@
 name = "emp-crypto"
 description = "EMP vault cryptography: Argon2id KDF, keyslots, record envelopes, STREAM blobs, integrity MACs, recovery keys"
 version.workspace = true
+publish = false
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true

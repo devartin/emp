@@ -14,14 +14,13 @@ use std::collections::HashMap;
 
 fn attr(e: &BytesStart, key: &[u8]) -> Option<String> {
     for a in e.attributes().flatten() {
-        let k = a.key.as_ref();
+        let k = a.key.as_ref().as_bytes();
         let local = match k.iter().rposition(|b| *b == b':') {
             Some(i) => &k[i + 1..],
             None => k,
         };
         if k == key || local == key {
-            let raw = std::str::from_utf8(&a.value).ok()?;
-            return quick_xml::escape::unescape(raw)
+            return quick_xml::escape::unescape(&a.value)
                 .ok()
                 .map(|v| v.into_owned());
         }
@@ -30,7 +29,7 @@ fn attr(e: &BytesStart, key: &[u8]) -> Option<String> {
 }
 
 fn local(e: &BytesStart) -> Vec<u8> {
-    e.local_name().as_ref().to_vec()
+    e.local_name().as_ref().as_bytes().to_vec()
 }
 
 /// Colour `FFRRGGBB` → `#RRGGBB`.
@@ -120,7 +119,7 @@ pub fn parse_styles(xml: &[u8]) -> Vec<CellStyle> {
             Ok(Event::Start(e)) => (Some(e.clone()), false),
             Ok(Event::Empty(e)) => (Some(e.clone()), true),
             Ok(Event::End(end)) => {
-                match end.local_name().as_ref() {
+                match end.local_name().as_ref().as_bytes() {
                     b"font" => {
                         if let Some(f) = cur_font.take() {
                             fonts.push(f);

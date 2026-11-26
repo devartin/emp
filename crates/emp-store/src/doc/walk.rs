@@ -61,15 +61,14 @@ pub fn push_inline_text(node: &TipTapNode, out: &mut String) {
             if let Some(label) = node.attr_str("label") {
                 out.push('@');
                 out.push_str(label);
-            } else if node.attr_str("kind") == Some("date") {
-                if let Some(start) = node
+            } else if node.attr_str("kind") == Some("date")
+                && let Some(start) = node
                     .attr("date")
                     .and_then(|d| d.get("start"))
                     .and_then(Value::as_str)
-                {
-                    out.push('@');
-                    out.push_str(start);
-                }
+            {
+                out.push('@');
+                out.push_str(start);
             }
         }
         "emoji" => out.push_str(node.attr_str("native").unwrap_or("")),
@@ -157,13 +156,13 @@ fn remove_in_group(group: &mut TipTapNode, ids: &[String], removed: &mut Vec<Tip
             for part in parts.iter_mut() {
                 if part.kind == "blockGroup" {
                     remove_in_group(part, ids, removed);
-                } else if part.kind == "columnList" {
-                    if let Some(cols) = part.content.as_mut() {
-                        for col in cols {
-                            if let Some(gs) = col.content.as_mut() {
-                                for g in gs {
-                                    remove_in_group(g, ids, removed);
-                                }
+                } else if part.kind == "columnList"
+                    && let Some(cols) = part.content.as_mut()
+                {
+                    for col in cols {
+                        if let Some(gs) = col.content.as_mut() {
+                            for g in gs {
+                                remove_in_group(g, ids, removed);
                             }
                         }
                     }
@@ -192,11 +191,12 @@ fn replace_in(node: &mut TipTapNode, at: &str, slot: &mut Option<TipTapNode>) ->
         return false;
     };
     for c in children.iter_mut() {
-        if c.kind == "blockContainer" && c.attr_str("id") == Some(at) {
-            if let Some(r) = slot.take() {
-                *c = r;
-                return true;
-            }
+        if c.kind == "blockContainer"
+            && c.attr_str("id") == Some(at)
+            && let Some(r) = slot.take()
+        {
+            *c = r;
+            return true;
         }
         if replace_in(c, at, slot) {
             return true;
@@ -223,11 +223,10 @@ fn insert_in(node: &mut TipTapNode, before: &str, slot: &mut Option<TipTapNode>)
     if let Some(pos) = children
         .iter()
         .position(|c| c.kind == "blockContainer" && c.attr_str("id") == Some(before))
+        && let Some(n) = slot.take()
     {
-        if let Some(n) = slot.take() {
-            children.insert(pos, n);
-            return true;
-        }
+        children.insert(pos, n);
+        return true;
     }
     children.iter_mut().any(|c| insert_in(c, before, slot))
 }

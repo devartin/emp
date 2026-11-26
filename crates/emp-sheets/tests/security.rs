@@ -126,7 +126,7 @@ fn patch_xlsx(base: &[u8], parts: &[(&str, &[u8])]) -> Vec<u8> {
             .compression_method(zip::CompressionMethod::Deflated);
         for i in 0..src.len() {
             let mut f = src.by_index(i).expect("entry");
-            let name = f.name().to_string();
+            let name = f.name().expect("name").into_owned();
             if parts.iter().any(|(n, _)| *n == name) {
                 continue;
             }

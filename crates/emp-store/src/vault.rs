@@ -640,10 +640,10 @@ impl Store {
         let mut out = Vec::new();
         for e in std::fs::read_dir(dir)? {
             let p = e?.path();
-            if Self::exists(&p) {
-                if let Some(n) = p.file_name().and_then(|n| n.to_str()) {
-                    out.push(n.to_owned());
-                }
+            if Self::exists(&p)
+                && let Some(n) = p.file_name().and_then(|n| n.to_str())
+            {
+                out.push(n.to_owned());
             }
         }
         out.sort();

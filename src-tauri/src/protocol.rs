@@ -128,15 +128,15 @@ pub fn percent_decode(s: &str) -> String {
     let mut i = 0;
     let hex = |b: u8| (b as char).to_digit(16).and_then(|d| u8::try_from(d).ok());
     while let Some(&b) = bytes.get(i) {
-        if b == b'%' {
-            if let (Some(h), Some(l)) = (
+        if b == b'%'
+            && let (Some(h), Some(l)) = (
                 bytes.get(i + 1).copied().and_then(hex),
                 bytes.get(i + 2).copied().and_then(hex),
-            ) {
-                out.push(h * 16 + l);
-                i += 3;
-                continue;
-            }
+            )
+        {
+            out.push(h * 16 + l);
+            i += 3;
+            continue;
         }
         out.push(b);
         i += 1;

@@ -154,10 +154,10 @@ impl InstanceDb {
     /// The property for `role`, else the property named one of `names` (case-insensitive).
     #[must_use]
     pub fn col(&self, role: &str, names: &[&str]) -> Option<&Property> {
-        if let Some(id) = self.schema.database.roles.get(role) {
-            if let Some(p) = self.schema.property(id) {
-                return Some(p);
-            }
+        if let Some(id) = self.schema.database.roles.get(role)
+            && let Some(p) = self.schema.property(id)
+        {
+            return Some(p);
         }
         if let Some(p) = self
             .schema
@@ -1519,14 +1519,13 @@ pub async fn finance_import_start(
         .map_err(fin_err)?;
         let mut mapping = st.mapping_guess.clone();
         let mut profile_match = None;
-        if let Some(fp) = &st.header_fingerprint {
-            if let Some(p) = store
+        if let Some(fp) = &st.header_fingerprint
+            && let Some(p) = store
                 .kv_get_any(PROFILES_NS, fp)?
                 .and_then(|v| serde_json::from_value::<ImportProfile>(v).ok())
-            {
-                mapping = p.mapping.clone();
-                profile_match = Some(json!({ "id": p.id, "name": p.name }));
-            }
+        {
+            mapping = p.mapping.clone();
+            profile_match = Some(json!({ "id": p.id, "name": p.name }));
         }
         let last4 = st
             .account
@@ -2337,10 +2336,10 @@ pub async fn finance_recurring_accept(app: AppHandle, req: AcceptReq) -> ApiResu
                     },
                 );
             }
-            if let Some(p) = &kind {
-                if let Some(opt) = InstanceDb::option_id(p, &i.kind) {
-                    v.insert(p.id.clone(), CellValue::Select { v: Some(opt) });
-                }
+            if let Some(p) = &kind
+                && let Some(opt) = InstanceDb::option_id(p, &i.kind)
+            {
+                v.insert(p.id.clone(), CellValue::Select { v: Some(opt) });
             }
             rows.push(v);
         }

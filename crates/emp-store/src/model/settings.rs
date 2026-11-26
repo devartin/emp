@@ -35,29 +35,29 @@ impl Default for AutoLock {
 impl AutoLock {
     /// Validates the option sets of §9.9.
     pub fn validate(&self) -> crate::Result<()> {
-        if let Some(m) = self.idle_minutes {
-            if ![1, 5, 15, 30, 60, 240].contains(&m) {
-                return Err(crate::StoreError::invalid_field(
-                    "idleMinutes",
-                    "idle timeout must be 1, 5, 15, 30, 60 or 240 minutes",
-                ));
-            }
+        if let Some(m) = self.idle_minutes
+            && ![1, 5, 15, 30, 60, 240].contains(&m)
+        {
+            return Err(crate::StoreError::invalid_field(
+                "idleMinutes",
+                "idle timeout must be 1, 5, 15, 30, 60 or 240 minutes",
+            ));
         }
-        if let Some(m) = self.on_blur_minutes {
-            if ![0, 1, 5].contains(&m) {
-                return Err(crate::StoreError::invalid_field(
-                    "onBlurMinutes",
-                    "blur timeout must be 0, 1 or 5 minutes",
-                ));
-            }
+        if let Some(m) = self.on_blur_minutes
+            && ![0, 1, 5].contains(&m)
+        {
+            return Err(crate::StoreError::invalid_field(
+                "onBlurMinutes",
+                "blur timeout must be 0, 1 or 5 minutes",
+            ));
         }
-        if let Some(h) = self.max_session_hours {
-            if h == 0 || h > 24 * 30 {
-                return Err(crate::StoreError::invalid_field(
-                    "maxSessionHours",
-                    "maximum session length out of range",
-                ));
-            }
+        if let Some(h) = self.max_session_hours
+            && (h == 0 || h > 24 * 30)
+        {
+            return Err(crate::StoreError::invalid_field(
+                "maxSessionHours",
+                "maximum session length out of range",
+            ));
         }
         Ok(())
     }

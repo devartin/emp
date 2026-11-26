@@ -190,10 +190,10 @@ impl Store {
             let _ = self.rows_dto(&s, &db, &[owner_id.to_owned()]);
             self.db_changed_rows(&db, Some(vec![owner_id.to_owned()]));
         }
-        if owner_kind == DocOwnerKind::Page {
-            if let Ok(Some(meta)) = self.read(|c| load_meta(c, &s.codec, owner_id)) {
-                self.index_page(&s, &meta, Some(&doc));
-            }
+        if owner_kind == DocOwnerKind::Page
+            && let Ok(Some(meta)) = self.read(|c| load_meta(c, &s.codec, owner_id))
+        {
+            self.index_page(&s, &meta, Some(&doc));
         }
         self.emit(StoreEvent::PageChanged {
             id: owner_id.to_owned(),

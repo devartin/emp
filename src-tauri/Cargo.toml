@@ -1,6 +1,7 @@
 [package]
 name = "emp-app"
 version.workspace = true
+publish = false
 description = "EMP — local-first, encrypted productivity super app"
 authors.workspace = true
 edition.workspace = true

@@ -413,10 +413,10 @@ pub fn local_events(
 /// The first date property of a schema (or `prefer` when it is a date property).
 #[must_use]
 pub fn date_prop(schema: &DbSchema, prefer: Option<&str>) -> Option<String> {
-    if let Some(p) = prefer.and_then(|id| schema.property(id)) {
-        if p.kind == PropType::Date {
-            return Some(p.id.clone());
-        }
+    if let Some(p) = prefer.and_then(|id| schema.property(id))
+        && p.kind == PropType::Date
+    {
+        return Some(p.id.clone());
     }
     schema
         .properties
@@ -679,12 +679,11 @@ fn export_calendar(store: &Store, source: &IcsSource) -> ApiResult<ExportCalenda
                 let Some(schema) = schemas.get(&got.database_id) else {
                     continue;
                 };
-                if let Some(date) = date_prop(schema, None) {
-                    if let Some(e) =
+                if let Some(date) = date_prop(schema, None)
+                    && let Some(e) =
                         row_event(&got.row, &schema.database.primary_prop_id, &date, &vault)
-                    {
-                        cal.events.push(e);
-                    }
+                {
+                    cal.events.push(e);
                 }
             }
         }

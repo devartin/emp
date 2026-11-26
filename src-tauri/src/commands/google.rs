@@ -209,10 +209,10 @@ pub fn session_for(
     account_id: &str,
 ) -> ApiResult<Arc<GoogleSession>> {
     let vault = store.vault_id().to_string();
-    if let Some((v, s)) = SESSIONS.lock().get(account_id) {
-        if *v == vault {
-            return Ok(Arc::clone(s));
-        }
+    if let Some((v, s)) = SESSIONS.lock().get(account_id)
+        && *v == vault
+    {
+        return Ok(Arc::clone(s));
     }
     let creds = client(store)?
         .ok_or_else(|| ApiError::new(ErrorCode::AuthRequired, "Set up Google first"))?;
@@ -237,11 +237,11 @@ pub fn integration_err(app: &AppHandle, account_id: &str, e: IntegrationError) -
     if matches!(e, IntegrationError::ReauthRequired) {
         SESSIONS.lock().remove(account_id);
         let state = app.state::<AppState>();
-        if let Ok(store) = state.session_quiet() {
-            if let Ok(mut d) = account(&store, account_id) {
-                d.status = "reauth_required".into();
-                let _ = save_account(&store, Some(account_id), &d);
-            }
+        if let Ok(store) = state.session_quiet()
+            && let Ok(mut d) = account(&store, account_id)
+        {
+            d.status = "reauth_required".into();
+            let _ = save_account(&store, Some(account_id), &d);
         }
         return ApiError::new(ErrorCode::ReauthRequired, "Reconnect Google");
     }
@@ -482,18 +482,18 @@ pub async fn google_disconnect(app: AppHandle, req: DisconnectReq) -> ApiResult<
         Ok((store, d, c))
     })
     .await?;
-    if req.revoke {
-        if let Some(c) = creds {
-            let oauth = GoogleOAuth::new(app.state::<AppState>().net.clone(), c);
-            if let Err(e) = oauth
-                .revoke(&SecretString::from(d.refresh_token.clone()))
-                .await
-            {
-                tracing::info!(
-                    code = e.code().as_str(),
-                    "Google revoke failed; deleting locally"
-                );
-            }
+    if req.revoke
+        && let Some(c) = creds
+    {
+        let oauth = GoogleOAuth::new(app.state::<AppState>().net.clone(), c);
+        if let Err(e) = oauth
+            .revoke(&SecretString::from(d.refresh_token.clone()))
+            .await
+        {
+            tracing::info!(
+                code = e.code().as_str(),
+                "Google revoke failed; deleting locally"
+            );
         }
     }
     SESSIONS.lock().remove(&req.account_id);
@@ -1304,15 +1304,15 @@ pub struct SheetsImportReq {
 
 fn imported_input(c: &emp_integrations::google::sheets::ImportedCell) -> Option<String> {
     use emp_integrations::google::sheets::CellValue as G;
-    if let Some(f) = &c.formula {
-        if f.is_supported() {
-            let t = f.text.trim();
-            return Some(if t.starts_with('=') {
-                t.to_owned()
-            } else {
-                format!("={t}")
-            });
-        }
+    if let Some(f) = &c.formula
+        && f.is_supported()
+    {
+        let t = f.text.trim();
+        return Some(if t.starts_with('=') {
+            t.to_owned()
+        } else {
+            format!("={t}")
+        });
     }
     match &c.value {
         G::Empty => None,
@@ -1464,22 +1464,22 @@ pub async fn gsheets_import(
                 let mut edits = Vec::new();
                 for (r, row) in sh.rows.iter().enumerate() {
                     for (c, cell) in row.iter().enumerate() {
-                        if let Some(input) = imported_input(cell) {
-                            if let (Ok(row), Ok(col)) = (u32::try_from(r), u32::try_from(c)) {
-                                edits.push(emp_sheets::CellEdit {
-                                    row,
-                                    col,
-                                    input: Some(input),
-                                });
-                            }
+                        if let Some(input) = imported_input(cell)
+                            && let (Ok(row), Ok(col)) = (u32::try_from(r), u32::try_from(c))
+                        {
+                            edits.push(emp_sheets::CellEdit {
+                                row,
+                                col,
+                                input: Some(input),
+                            });
                         }
-                        if let Some(f) = &cell.formula {
-                            if !f.is_supported() {
-                                warnings.push(format!(
-                                    "{}: a formula was imported as its value",
-                                    sh.meta.title
-                                ));
-                            }
+                        if let Some(f) = &cell.formula
+                            && !f.is_supported()
+                        {
+                            warnings.push(format!(
+                                "{}: a formula was imported as its value",
+                                sh.meta.title
+                            ));
                         }
                     }
                 }

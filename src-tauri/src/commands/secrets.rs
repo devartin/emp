@@ -57,13 +57,13 @@ pub fn check_user_secret(listed: &[SecretInfo], id: &str, provider: Option<&str>
         .iter()
         .find(|s| s.id == id)
         .ok_or_else(|| ApiError::not_found("secret"))?;
-    if let Some(p) = provider {
-        if info.provider != p || APP_MANAGED_PROVIDERS.contains(&info.provider.as_str()) {
-            return Err(ApiError::invalid(
-                "id",
-                "this secret belongs to another provider",
-            ));
-        }
+    if let Some(p) = provider
+        && (info.provider != p || APP_MANAGED_PROVIDERS.contains(&info.provider.as_str()))
+    {
+        return Err(ApiError::invalid(
+            "id",
+            "this secret belongs to another provider",
+        ));
     }
     Ok(())
 }

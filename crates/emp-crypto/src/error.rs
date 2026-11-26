@@ -129,10 +129,10 @@ impl From<std::io::Error> for CryptoError {
     fn from(e: std::io::Error) -> Self {
         // A stream decryptor wraps its own CryptoError into io::Error for the `Read` impl; unwrap it again.
         if e.get_ref().is_some_and(|inner| inner.is::<CryptoError>()) {
-            if let Some(inner) = e.into_inner() {
-                if let Ok(ce) = inner.downcast::<CryptoError>() {
-                    return *ce;
-                }
+            if let Some(inner) = e.into_inner()
+                && let Ok(ce) = inner.downcast::<CryptoError>()
+            {
+                return *ce;
             }
             return Self::Internal;
         }

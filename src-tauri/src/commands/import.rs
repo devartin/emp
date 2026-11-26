@@ -221,10 +221,10 @@ pub fn remember_job(job: &JobRef, cell: Arc<Mutex<Option<String>>>) {
     let mut m = JOB_IMPORTS.lock();
     if m.len() >= MAX_JOB_IMPORTS {
         m.retain(|_, c| c.lock().is_some());
-        if m.len() >= MAX_JOB_IMPORTS {
-            if let Some(k) = m.keys().next().cloned() {
-                m.remove(&k);
-            }
+        if m.len() >= MAX_JOB_IMPORTS
+            && let Some(k) = m.keys().next().cloned()
+        {
+            m.remove(&k);
         }
     }
     m.insert(job.job_id.clone(), cell);

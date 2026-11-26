@@ -52,10 +52,10 @@ pub fn handle(app: &AppHandle, event: SystemEvent) {
     if !store.is_unlocked() || !store.is_encrypted().unwrap_or(false) {
         return;
     }
-    if let Some((reason, grace)) = lock_for(event, &state.auto_lock()) {
-        if let Err(e) = state.lock_now(reason, grace) {
-            tracing::error!(code = e.code.as_str(), "lock on system signal failed");
-        }
+    if let Some((reason, grace)) = lock_for(event, &state.auto_lock())
+        && let Err(e) = state.lock_now(reason, grace)
+    {
+        tracing::error!(code = e.code.as_str(), "lock on system signal failed");
     }
 }
 

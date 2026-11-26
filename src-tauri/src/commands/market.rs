@@ -215,10 +215,10 @@ pub async fn market_provider_configure(
     if let Some(Some(k)) = &req.api_key {
         validate::non_empty("apiKey", emp_crypto::ExposeSecret::expose_secret(k), 512)?;
     }
-    if let Some(p) = req.priority {
-        if p > 32 {
-            return Err(ApiError::invalid("priority", "must be 0–32"));
-        }
+    if let Some(p) = req.priority
+        && p > 32
+    {
+        return Err(ApiError::invalid("priority", "must be 0–32"));
     }
     blocking(move || {
         let state = app.state::<AppState>();
@@ -374,16 +374,15 @@ pub async fn quotes_for(r: &Arc<MarketRouter>, keys: &[String]) -> Vec<Quote> {
             note_quote_arrival(&arrived_keys(&stale, &fetched));
         });
     }
-    if !missing.is_empty() {
-        if let Ok(fetched) =
+    if !missing.is_empty()
+        && let Ok(fetched) =
             tokio::time::timeout(FIRST_FETCH_DEADLINE, r.quotes(&missing, &HashMap::new())).await
-        {
-            note_quote_arrival(&arrived_keys(&missing, &fetched));
-            let mut it = fetched.into_iter();
-            for slot in &mut out {
-                if slot.is_none() {
-                    *slot = it.next().and_then(Result::ok);
-                }
+    {
+        note_quote_arrival(&arrived_keys(&missing, &fetched));
+        let mut it = fetched.into_iter();
+        for slot in &mut out {
+            if slot.is_none() {
+                *slot = it.next().and_then(Result::ok);
             }
         }
     }

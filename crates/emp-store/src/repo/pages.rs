@@ -538,10 +538,10 @@ impl Store {
             self.index_page(&s, m, d.as_ref());
         }
         let mut upserted: Vec<PageMeta> = extra.into_iter().map(|(m, _)| m).collect();
-        if let Some(p) = &meta.parent_id {
-            if let Ok(Some(pm)) = self.read(|c| load_meta(c, &s.codec, p)) {
-                upserted.push(pm);
-            }
+        if let Some(p) = &meta.parent_id
+            && let Ok(Some(pm)) = self.read(|c| load_meta(c, &s.codec, p))
+        {
+            upserted.push(pm);
         }
         self.tree_changed(&meta.workspace_id, upserted, Vec::new());
         self.tour_tick_quiet("create_page");

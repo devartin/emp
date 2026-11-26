@@ -170,7 +170,7 @@ fn median(mut v: Vec<f64>) -> Option<f64> {
     }
     v.sort_by(f64::total_cmp);
     let m = v.len() / 2;
-    Some(if v.len() % 2 == 0 {
+    Some(if v.len().is_multiple_of(2) {
         (v[m - 1] + v[m]) / 2.0
     } else {
         v[m]
@@ -294,7 +294,7 @@ fn numeric(func: Func, vals: &[&CellValue], p: &Property) -> AggOut {
                 let mut s = ds.clone();
                 s.sort();
                 let m = s.len() / 2;
-                if s.len() % 2 == 0 {
+                if s.len().is_multiple_of(2) {
                     ((s[m - 1] + s[m]) / Decimal::TWO).round_dp(8)
                 } else {
                     s[m]

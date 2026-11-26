@@ -212,11 +212,11 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(SHOW_FALLBACK).await;
-        if let Some(w) = handle.get_webview_window(MAIN_WINDOW) {
-            if !w.is_visible().unwrap_or(true) {
-                tracing::warn!("frontend did not report ready; showing the window");
-                let _ = w.show();
-            }
+        if let Some(w) = handle.get_webview_window(MAIN_WINDOW)
+            && !w.is_visible().unwrap_or(true)
+        {
+            tracing::warn!("frontend did not report ready; showing the window");
+            let _ = w.show();
         }
     });
     Ok(())

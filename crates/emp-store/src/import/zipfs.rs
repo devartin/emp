@@ -82,13 +82,15 @@ fn scan_into(bytes: &[u8], limits: &ZipLimits, acc: &mut Scan) -> Result<()> {
                 "encrypted archive entries are not supported",
             ));
         }
+        let name = f
+            .name()
+            .map_err(|_| StoreError::invalid("unreadable zip entry name"))?;
         if f.is_symlink() {
             return Err(StoreError::invalid(format!(
-                "symbolic link in archive: {}",
-                f.name()
+                "symbolic link in archive: {name}"
             )));
         }
-        normalize_path(f.name())?;
+        normalize_path(&name)?;
         let size = f.size();
         let csize = f.compressed_size().max(1);
         if size > 64 * 1024 && size / csize > limits.max_ratio {
@@ -149,7 +151,10 @@ impl ZipFs {
             if f.is_dir() {
                 continue;
             }
-            let path = normalize_path(f.name())?;
+            let name = f
+                .name()
+                .map_err(|_| StoreError::invalid("unreadable zip entry name"))?;
+            let path = normalize_path(&name)?;
             if path.is_empty() {
                 continue;
             }

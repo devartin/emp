@@ -694,15 +694,14 @@ impl Store {
         let mut g = ENGINES.lock();
         g.0 += 1;
         let tick = g.0;
-        if g.1.len() >= MAX_CACHED_ENGINES {
-            if let Some(i) =
+        if g.1.len() >= MAX_CACHED_ENGINES
+            && let Some(i) =
                 g.1.iter()
                     .enumerate()
                     .min_by_key(|(_, e)| e.used)
                     .map(|(i, _)| i)
-            {
-                g.1.swap_remove(i);
-            }
+        {
+            g.1.swap_remove(i);
         }
         g.1.push(CacheEntry {
             session: w,

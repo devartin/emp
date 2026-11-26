@@ -16,7 +16,14 @@ db-path = "$CARGO_HOME/advisory-dbs"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 # Unmaintained / unsound / yanked are reported; vulnerabilities always fail.
 yanked = "warn"
-ignore = []
+ignore = [
+    # chrono / chrono-tz were declared unmaintained (chronotope/chrono#1768). These are "unmaintained"
+    # notices, not vulnerabilities: no patched release exists and no known flaw affects EMP. chrono is used
+    # pervasively (workspace crates, rrule, rusqlite, calamine, rust_xlsxwriter); migrating to jiff is a
+    # separate, tracked piece of work. Remove these entries once that migration lands.
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained (informational, no vulnerability); jiff migration tracked separately" },
+    { id = "RUSTSEC-2026-0555", reason = "chrono-tz unmaintained (informational, no vulnerability); pulled with chrono via rrule; jiff migration tracked separately" },
+]
 
 [licenses]
 version = 2

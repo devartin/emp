@@ -37,10 +37,10 @@ pub fn resolve_word(word: &str) -> Option<&'static str> {
     if let Some(i) = lang.find_word(&w) {
         return lang.word_list().get(usize::from(i)).copied();
     }
-    if w.len() >= MIN_PREFIX_LEN {
-        if let [only] = lang.words_by_prefix(&w) {
-            return Some(*only);
-        }
+    if w.len() >= MIN_PREFIX_LEN
+        && let [only] = lang.words_by_prefix(&w)
+    {
+        return Some(*only);
     }
     None
 }

@@ -270,13 +270,11 @@ pub async fn open_external_confirm(
     else {
         return Ok(());
     };
-    if remember {
-        if let Some(store) = state.store_opt() {
-            let st = app.clone();
-            tauri::async_runtime::spawn_blocking(move || {
-                st.state::<AppState>().persist_remembered_hosts(&store);
-            });
-        }
+    if remember && let Some(store) = state.store_opt() {
+        let st = app.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            st.state::<AppState>().persist_remembered_hosts(&store);
+        });
     }
     launch(&app, &target)
 }

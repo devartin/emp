@@ -2,6 +2,7 @@
 name = "emp-store"
 description = "EMP storage: SQLite vault with envelope encryption, integrity manifest, repositories, doc indexing, in-memory search, versions, assets, snapshots and backups"
 version.workspace = true
+publish = false
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -17,7 +18,7 @@ zeroize.workspace = true
 base64.workspace = true
 emp-crypto.workspace = true
 emp-sheets.workspace = true
-rusqlite = { version = "0.37", features = ["bundled", "serde_json", "functions", "limits"] }
+rusqlite = { version = "0.43", features = ["bundled", "serde_json", "functions", "limits"] }
 crossbeam-channel = "0.5"
 zstd = { version = "0.13", default-features = false }
 ciborium = "0.2"
@@ -31,7 +32,7 @@ hex = "0.4"
 rrule = "0.14"
 chrono-tz = "0.10"
 csv = "1"
-zip = { version = "4", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 rust_decimal = "1"
 pulldown-cmark = { version = "0.13", default-features = false }
 regex = { version = "1", default-features = false, features = ["std", "unicode-case", "unicode-perl"] }

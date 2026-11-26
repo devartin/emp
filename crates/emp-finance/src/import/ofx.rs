@@ -209,28 +209,21 @@ pub fn parse_xml(body: &str, opts: &ImportOptions<'_>, warnings: &mut Vec<String
     loop {
         let pos = reader.buffer_position();
         match reader.read_event().map_err(|e| xml_err(e, pos))? {
-            Event::Start(e) => b.open(&String::from_utf8_lossy(e.name().as_ref()))?,
-            Event::End(e) => b.close(&String::from_utf8_lossy(e.name().as_ref())),
+            Event::Start(e) => b.open(e.name().as_ref())?,
+            Event::End(e) => b.close(e.name().as_ref()),
             Event::Empty(e) => {
-                let n = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let n = e.name().as_ref().to_owned();
                 b.open(&n)?;
                 b.close(&n);
             }
             Event::Text(t) => {
-                let s = t
-                    .decode()
-                    .map_err(|e| FinanceError::parse(format!("bad text encoding: {e}")))?;
-                b.text(&s, false)?;
+                b.text(&t.xml10_content(), false)?;
             }
             Event::CData(t) => {
-                let s = String::from_utf8_lossy(&t).into_owned();
-                b.text(&s, false)?;
+                b.text(&t, false)?;
             }
             Event::GeneralRef(r) => {
-                let name = r
-                    .decode()
-                    .map_err(|e| FinanceError::parse(format!("bad entity: {e}")))?
-                    .into_owned();
+                let name = r.to_string();
                 let resolved = match name.as_str() {
                     "amp" => "&".to_string(),
                     "lt" => "<".to_string(),

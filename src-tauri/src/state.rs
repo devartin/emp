@@ -129,10 +129,10 @@ impl AppPaths {
 #[must_use]
 pub fn choose_vault(available: &[String], recorded: Option<&str>) -> Option<String> {
     let recorded = recorded.map(str::trim).filter(|r| !r.is_empty());
-    if let Some(r) = recorded {
-        if available.iter().any(|a| a == r) {
-            return Some(r.to_owned());
-        }
+    if let Some(r) = recorded
+        && available.iter().any(|a| a == r)
+    {
+        return Some(r.to_owned());
     }
     available.first().cloned()
 }
@@ -457,10 +457,10 @@ impl AppState {
         if let Ok(al) = store.auto_lock() {
             self.set_auto_lock_cache(al);
         }
-        if let Ok(Some(v)) = store.kv_get_any(NET_LOG_NS, "entries") {
-            if let Ok(entries) = serde_json::from_value(v) {
-                self.net.log().restore(entries);
-            }
+        if let Ok(Some(v)) = store.kv_get_any(NET_LOG_NS, "entries")
+            && let Ok(entries) = serde_json::from_value(v)
+        {
+            self.net.log().restore(entries);
         }
         if let Ok(Some(Value::Array(hosts))) = store.kv_get_any(APP_NS, REMEMBERED_HOSTS_KEY) {
             self.links.set_remembered(
@@ -537,10 +537,10 @@ impl AppState {
     /// Moves pre-vault device settings into `store` and deletes the file.
     pub fn migrate_pending_device_settings(&self, store: &Store) {
         let pending = self.pending_device_settings();
-        if pending.as_object().is_some_and(|o| !o.is_empty()) {
-            if let Err(e) = store.settings_set_device(&pending) {
-                tracing::warn!(code = e.code(), "pending device settings were not applied");
-            }
+        if pending.as_object().is_some_and(|o| !o.is_empty())
+            && let Err(e) = store.settings_set_device(&pending)
+        {
+            tracing::warn!(code = e.code(), "pending device settings were not applied");
         }
         let _ = std::fs::remove_file(self.paths.pending_device_settings_file());
     }
