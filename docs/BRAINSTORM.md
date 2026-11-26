@@ -704,7 +704,7 @@ Full table with rationale in SPEC §0.3. Headlines:
 | "Military grade" expectation vs honest copy | Medium | Low | FAQ explanation; emphasise concrete parameters |
 
 ### 12.2 Open questions (to confirm during implementation)
-1. Ship Linux aarch64 in v1? It depends on runner availability for `devartin/emp`. Default: build it if `ubuntu-22.04-arm` is available, otherwise defer.
+1. Ship Linux aarch64 in v1? It depends on runner availability for `devartin/ultra-note`. Default: build it if `ubuntu-22.04-arm` is available, otherwise defer.
 2. Argon2 default on machines with < 8 GiB RAM: auto-downgrade to 128 MiB t=4? (Calibration handles it; confirm the UX copy.)
 3. A custom UniqueID plugin vs the TipTap UniqueID extension (licence and behaviour on paste). Default: custom plugin.
 4. Whether `style-src 'unsafe-inline'` can be removed once the editor is built (verify TipTap/motion behaviour).

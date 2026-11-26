@@ -9,7 +9,7 @@
     "infinite_animation": "animation …infinite, repeat: Infinity, animate-spin/pulse/ping/bounce",
     "transition_all": "'transition: all' / transition-all",
     "font_weight_off_scale": "font weight outside {400, 500, 600, 700}",
-    "radius_off_scale": "border radius outside {0, 4, 6, 10, 12, 999px, 50%}",
+    "radius_off_scale": "border radius outside {0, 4, 6, 10, 12, 999px, 50%} (literal, var(--radius-*) token or rounded-* utility)",
     "uppercase": "text-transform: uppercase / the uppercase class",
     "inline_style": "inline style object (style={{ … }}) in TSX",
     "usd_literal": "hard-coded \"USD\" literal in UI code",
@@ -25,8 +25,8 @@
     "keyframes": 116,
     "infinite_animation": 16,
     "transition_all": 0,
-    "font_weight_off_scale": 137,
-    "radius_off_scale": 388,
+    "font_weight_off_scale": 153,
+    "radius_off_scale": 411,
     "uppercase": 51,
     "inline_style": 550,
     "usd_literal": 203,
@@ -63,7 +63,7 @@
     },
     "src/charts/Donut.tsx": {
       "inline_style": 6,
-      "radius_off_scale": 1,
+      "radius_off_scale": 2,
       "usd_literal": 1
     },
     "src/charts/Fan.tsx": {
@@ -116,7 +116,7 @@
       "font_weight_off_scale": 7,
       "gradient": 15,
       "keyframes": 2,
-      "radius_off_scale": 12,
+      "radius_off_scale": 13,
       "shadow_literal": 28,
       "uppercase": 2
     },
@@ -277,7 +277,7 @@
     },
     "src/features/finance/MoneyHQ/MoneyHQ.tsx": {
       "inline_style": 2,
-      "radius_off_scale": 3
+      "radius_off_scale": 4
     },
     "src/features/finance/MoneyHQ/NetWorth.tsx": {
       "deltapill_import": 1,
@@ -335,7 +335,7 @@
       "gradient": 42,
       "infinite_animation": 4,
       "keyframes": 11,
-      "radius_off_scale": 22,
+      "radius_off_scale": 23,
       "shadow_literal": 78,
       "uppercase": 9
     },
@@ -413,7 +413,8 @@
       "sparkles_import": 1
     },
     "src/features/lifeapps/Insights.tsx": {
-      "inline_style": 1
+      "inline_style": 1,
+      "radius_off_scale": 1
     },
     "src/features/lifeapps/LifeStack.tsx": {
       "color_literal": 2,
@@ -437,7 +438,7 @@
     },
     "src/features/lifeapps/apps/LifeOS.tsx": {
       "inline_style": 6,
-      "radius_off_scale": 1
+      "radius_off_scale": 2
     },
     "src/features/lifeapps/apps/Studio.tsx": {
       "gradient": 1,
@@ -656,7 +657,8 @@
       "inline_style": 1
     },
     "src/features/shell/ImportDialog.tsx": {
-      "inline_style": 3
+      "inline_style": 3,
+      "radius_off_scale": 1
     },
     "src/features/shell/OpenExternalPrompt.tsx": {
       "inline_style": 1
@@ -670,6 +672,7 @@
     },
     "src/features/shell/RightPanel.tsx": {
       "inline_style": 3,
+      "radius_off_scale": 1,
       "shadow_literal": 1,
       "sparkles_import": 1,
       "uppercase": 1
@@ -677,7 +680,7 @@
     "src/features/shell/RouteSkeleton.tsx": {
       "gradient": 2,
       "inline_style": 1,
-      "radius_off_scale": 10
+      "radius_off_scale": 14
     },
     "src/features/shell/Shell.tsx": {
       "inline_style": 1
@@ -690,6 +693,7 @@
     },
     "src/features/shell/Sidebar/Sidebar.tsx": {
       "inline_style": 7,
+      "radius_off_scale": 2,
       "shadow_literal": 1,
       "sparkles_import": 1
     },
@@ -770,7 +774,8 @@
     },
     "src/features/vault/RecoveryCeremony.tsx": {
       "color_literal": 6,
-      "inline_style": 3
+      "inline_style": 3,
+      "radius_off_scale": 1
     },
     "src/features/vault/RecoveryUnlock.tsx": {
       "inline_style": 1
@@ -806,7 +811,7 @@
     },
     "src/styles/editor.css": {
       "color_literal": 38,
-      "font_weight_off_scale": 10,
+      "font_weight_off_scale": 19,
       "gradient": 25,
       "infinite_animation": 1,
       "keyframes": 3,
@@ -815,7 +820,7 @@
       "uppercase": 2
     },
     "src/styles/grid.css": {
-      "font_weight_off_scale": 6,
+      "font_weight_off_scale": 13,
       "gradient": 2,
       "radius_off_scale": 13,
       "shadow_literal": 25,
@@ -824,7 +829,7 @@
     "src/styles/material.css": {
       "color_literal": 14,
       "gradient": 22,
-      "radius_off_scale": 2,
+      "radius_off_scale": 3,
       "shadow_literal": 28
     },
     "src/styles/print.css": {
@@ -875,6 +880,7 @@
       "inline_style": 8
     },
     "src/ui/EmptyState.tsx": {
+      "radius_off_scale": 1,
       "sparkles_import": 1
     },
     "src/ui/Gallery.tsx": {
@@ -882,7 +888,7 @@
       "deltapill_import": 1,
       "gradient": 1,
       "inline_style": 15,
-      "radius_off_scale": 2,
+      "radius_off_scale": 7,
       "shadow_literal": 6,
       "sparkles_import": 1,
       "uppercase": 2,
@@ -892,7 +898,7 @@
       "deltapill_import": 1,
       "gradient": 1,
       "inline_style": 6,
-      "radius_off_scale": 9,
+      "radius_off_scale": 10,
       "shadow_literal": 1,
       "sparkles_import": 1,
       "uppercase": 2,

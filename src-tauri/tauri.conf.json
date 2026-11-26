@@ -82,7 +82,7 @@
     "longDescription": "Ultra Note keeps your notes, databases, spreadsheets and finances on your computer, optionally encrypted with 256-bit XChaCha20-Poly1305 under a key protected by your password using Argon2id.",
     "copyright": "Copyright (c) devartin. MIT License.",
     "publisher": "devartin",
-    "homepage": "https://github.com/devartin/emp",
+    "homepage": "https://github.com/devartin/ultra-note",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -10,9 +10,9 @@
  */
 import { describe, expect, test } from 'vitest';
 import { scanCss } from './css';
-import { cssFiles, isEmojiMapFile, manifestFiles, read, rustFiles, tsFiles } from './files';
+import { cssFiles, isEmojiMapFile, manifestFiles, read, RUST_COPY_FILES, rustFiles, tsFiles } from './files';
 import { collectTs, type TsFacts } from './tsx';
-import { cssStyleCounts, STYLE_METRICS, tsStyleCounts } from './style-rules';
+import { cssStyleCounts, radiusTokens, STYLE_METRICS, tsStyleCounts } from './style-rules';
 import { COPY_METRICS, copyCountsForStrings, isTitleCase, manifestStrings, parseProperNouns, tsCopyCounts } from './copy-rules';
 import { emojiIn, rustStrings } from './emoji-rules';
 import { clean, diff, ratchet, topOffenders, type FileCounts, type RatchetResult } from './ratchet';
@@ -73,7 +73,11 @@ function scan(): Scan {
     copy[f] = copyCountsForStrings(manifestStrings(json), nouns, true);
     addEmoji(f, [raw]);
   }
-  for (const f of rustFiles()) addEmoji(f, rustStrings(read(f)));
+  for (const f of rustFiles()) {
+    const strings = rustStrings(read(f));
+    addEmoji(f, strings);
+    if (RUST_COPY_FILES.includes(f)) copy[f] = copyCountsForStrings(strings.map((text) => ({ text, label: false })), nouns, false);
+  }
   cached = { style: clean(style), copy: clean(copy), emoji: clean(emoji), emojiChars };
   return cached;
 }
@@ -222,12 +226,88 @@ describe('guard matchers', () => {
     expect(isTitleCase('Create New Page', nouns)).toBe(true);
   });
 
-  test('emoji: clusters, flags and keycaps count once; ©®™ and arrows like → do not', () => {
+  test('radius: off-scale tokens count through var(--radius-*), var() fallbacks and named rounded-* utilities', () => {
+    const tokens = new Map([
+      ['--radius-sm', '6px'],
+      ['--radius-md', '8px'],
+      ['--radius-lg', '10px'],
+      ['--radius-xl', '14px'],
+      ['--radius-2xl', '20px'],
+      ['--radius-full', '9999px'],
+    ]);
+    // The live token map resolves too (theme.css / tokens.css).
+    expect(radiusTokens().get('--radius-lg')).toBe('10px');
+    expect(cssStyleCounts('src/x.css', '.a{border-radius:var(--r,16px)} .b{border-radius:var(--radius-xl)} .c{border-radius:var(--radius-lg)} .d{border-radius:var(--unknown)}')).toEqual({ radius_off_scale: 2 });
+    const tsx = `export const X = () => <div className="rounded-2xl md:rounded-t-xl rounded-lg rounded-full rounded-none rounded-[10px]" />;`;
+    expect(tsStyleCounts('src/features/x/X.tsx', collectTs('X.tsx', tsx), tokens)).toEqual({ radius_off_scale: 2 });
+  });
+
+  test('Tailwind gradients and class strings held in variables count', () => {
+    const tsx = `
+      const cls = "uppercase rounded-2xl font-light shadow-[0_1px_2px_black]";
+      const pillClassName = "bg-radial from-black";
+      export const X = () => (
+        <>
+          <div className="bg-linear-to-r from-indigo-500 to-pink-500 shadow-2xl backdrop-blur-md" />
+          <div className={cls} />
+          <div className="from-indigo-500 to-pink-500" />
+          <p title="Uppercase rounded-2xl">Rounded-2xl uppercase</p>
+        </>
+      );`;
+    expect(tsStyleCounts('src/features/x/X.tsx', collectTs('X.tsx', tsx), new Map([['--radius-2xl', '20px']]))).toEqual({
+      gradient: 3,
+      backdrop_filter: 1,
+      uppercase: 1,
+      radius_off_scale: 1,
+      font_weight_off_scale: 1,
+      shadow_literal: 1,
+    });
+  });
+
+  test('font shorthand weights are checked', () => {
+    expect(cssStyleCounts('src/x.css', '.a{font:650 14px/1.2 Inter} .b{font:italic 450 13px/20px var(--font-sans)} .c{font:600 12px Inter} .d{font:13px/1 Inter} .e{font:var(--type-body)} .f{font:inherit}')).toEqual({ font_weight_off_scale: 2 });
+    const tsx = `export const X = () => <div style={{ font: "650 14px Inter" }} />;`;
+    expect(tsStyleCounts('src/features/x/X.tsx', collectTs('X.tsx', tsx))).toEqual({ inline_style: 1, font_weight_off_scale: 1 });
+  });
+
+  test('copy: Title Case on menu / select / tool buttons by suffix, and through inline wrappers', () => {
+    const nouns = parseProperNouns(read('src/test/guards/proper-nouns.txt'));
+    const src = `
+      export const X = () => (
+        <>
+          <DropdownMenuItem>Add New Page</DropdownMenuItem>
+          <ContextMenuItem>Copy Link</ContextMenuItem>
+          <MenuSubTrigger>Move To</MenuSubTrigger>
+          <SelectOption>Last Thirty Days</SelectOption>
+          <ToolButton>Insert Row</ToolButton>
+          <Button><span>Save Changes</span></Button>
+          <Button><strong>Delete page</strong></Button>
+          <p><span>Not A Label Here</span></p>
+        </>
+      );`;
+    expect(tsCopyCounts('src/features/x/X.tsx', collectTs('X.tsx', src), nouns)).toEqual({ title_case: 6 });
+  });
+
+  test('emoji: clusters, flags and keycaps count once; ©®™ and text-presentation arrows / triangles / checks do not', () => {
     expect(emojiIn('Run 🏃‍♀️ 🔥🔥 ✅ 🇺🇸 1️⃣ © ® ™ → ←')).toEqual(['🏃‍♀️', '🔥', '🔥', '✅', '🇺🇸', '1️⃣']);
+    expect(emojiIn('↗ ↘ ↔ ▶ ◀ ✔ ✖ ☑ ➡')).toEqual([]);
+    // …unless VS16 asks for the emoji presentation.
+    expect(emojiIn('▶️ ✔️ ↗️')).toEqual(['▶️', '✔️', '↗️']);
     expect(rustStrings('// "🔥" comment\nlet a = "💰 cash"; let r = r#"🎯 raw"#; let c = \'✨\'; fn f<\'a>() {}\n#[cfg(test)] mod t { const X: &str = "🧪"; }')).toEqual([
       '💰 cash',
       '🎯 raw',
       '✨',
     ]);
+  });
+
+  test('rust: #[cfg(test)] skips only the item it gates', () => {
+    expect(rustStrings('#[cfg(test)]\nmod tests { fn t() { let x = "🧪"; } }\nfn after_tests() { let e = "🚀"; }')).toEqual(['🚀']);
+    const field = 'struct S {\n    #[cfg(test)]\n    clock: Option<Box<dyn Fn() -> u64>>,\n    name: String,\n}\nconst A: &str = "after field";';
+    expect(rustStrings(field)).toEqual(['after field']);
+    const helper = '#[cfg(test)]\n#[must_use]\npub fn helper(a: u8, b: u8) -> String { format!("{a}{b} 🧪") }\nconst B: &str = "prod";';
+    expect(rustStrings(helper)).toEqual(['prod']);
+    expect(rustStrings('#[cfg(test)]\nuse std::{fmt, io};\nconst C: &str = "c";')).toEqual(['c']);
+    expect(rustStrings('const D: &str = "d";\n#[cfg(test)]\nmod tests;\nconst E: &str = "}";')).toEqual(['d', '}']);
+    expect(rustStrings('#![cfg(test)]\nconst F: &str = "f";')).toEqual([]);
   });
 });

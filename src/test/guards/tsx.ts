@@ -25,6 +25,11 @@ export interface TsString {
   key?: string;
   /** Tag name of the closest enclosing JSX element ('Button', 'Menu.Item', 'button'). */
   tag?: string;
+  /**
+   * The closest enclosing element that is not an inline text wrapper (span, strong, em…): for
+   * `<Button><span>Save</span></Button>` this is 'Button' while `tag` is 'span'.
+   */
+  labelTag?: string;
   /** Inside className=… or a cn()/clsx()/cva() call: Tailwind classes, not copy. */
   inClass: boolean;
   line: number;
@@ -50,9 +55,14 @@ export interface TsFacts {
 }
 
 const CLASS_CALLS = new Set(['cn', 'clsx', 'cva', 'twMerge', 'classNames', 'cx']);
+/** Variables / properties whose names say they hold class strings (`const cls = "…"`, `{ className: "…" }`). */
+const CLASS_IDENT = /^(?:cls|class|classes|className|classNames)$|(?:Cls|ClassNames?|Classes|_cls|_class)$/;
+/** Inline text wrappers: a label inside one still belongs to the enclosing button / item. */
+const INLINE_TAGS = new Set(['span', 'strong', 'em', 'b', 'i', 'small', 'kbd', 'mark', 'bdi', 'Fragment', 'React.Fragment']);
 const TOAST_CALLS = new Set(['toast', 'notify', 'showToast', 'pushToast']);
 const STYLE_PROP_NAMES = new Set([
   'fontWeight',
+  'font',
   'borderRadius',
   'boxShadow',
   'backdropFilter',
@@ -87,12 +97,21 @@ export function collectTs(file: string, source: string): TsFacts {
     kind: StringKind;
     key?: string;
     tag?: string;
+    labelTag?: string;
     inClass: boolean;
   }
 
   const pushString = (text: string, n: ts.Node, ctx: Ctx) => {
-    facts.strings.push({ text, kind: ctx.kind, key: ctx.key, tag: ctx.tag, inClass: ctx.inClass, line: lineOf(n) });
+    facts.strings.push({ text, kind: ctx.kind, key: ctx.key, tag: ctx.tag, labelTag: ctx.labelTag ?? ctx.tag, inClass: ctx.inClass, line: lineOf(n) });
   };
+  /** Class context for `const cls = …` / `{ className: … }` unless the value is a function or a (non-class) call. */
+  const holdsClasses = (name: string | undefined, init: ts.Expression) => {
+    if (!name || !CLASS_IDENT.test(name)) return false;
+    let e: ts.Expression = init;
+    while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isSatisfiesExpression(e)) e = e.expression;
+    return !(ts.isArrowFunction(e) || ts.isFunctionExpression(e) || ts.isCallExpression(e) || ts.isIdentifier(e) || ts.isPropertyAccessExpression(e));
+  };
+  const childLabelTag = (tag: string, ctx: Ctx) => (INLINE_TAGS.has(tag) && ctx.labelTag ? ctx.labelTag : tag);
 
   /** Contexts that pass "this expression's string value is shown" through to their branches. */
   const passesValue = (n: ts.Node) =>
@@ -122,7 +141,7 @@ export function collectTs(file: string, source: string): TsFacts {
     }
     if (ts.isJsxText(n)) {
       const text = n.text.replace(/\s+/g, ' ').trim();
-      if (text) pushString(text, n, { kind: 'jsxText', tag: ctx.tag, inClass: false });
+      if (text) pushString(text, n, { kind: 'jsxText', tag: ctx.tag, labelTag: ctx.labelTag, inClass: false });
       return;
     }
 
@@ -130,7 +149,8 @@ export function collectTs(file: string, source: string): TsFacts {
     if (ts.isJsxElement(n)) {
       const tag = tagName(n.openingElement.tagName);
       visit(n.openingElement, { ...ctx, kind: 'other', tag });
-      for (const c of n.children) visit(c, { kind: 'jsxChild', tag, inClass: false });
+      const labelTag = childLabelTag(tag, ctx);
+      for (const c of n.children) visit(c, { kind: 'jsxChild', tag, labelTag, inClass: false });
       return;
     }
     if (ts.isJsxSelfClosingElement(n) || ts.isJsxOpeningElement(n)) {
@@ -139,7 +159,7 @@ export function collectTs(file: string, source: string): TsFacts {
       return;
     }
     if (ts.isJsxFragment(n)) {
-      for (const c of n.children) visit(c, { kind: 'jsxChild', tag: ctx.tag, inClass: false });
+      for (const c of n.children) visit(c, { kind: 'jsxChild', tag: ctx.tag, labelTag: ctx.labelTag, inClass: false });
       return;
     }
     if (ts.isJsxExpression(n)) {
@@ -172,7 +192,12 @@ export function collectTs(file: string, source: string): TsFacts {
       if (name === 'repeat' && ts.isIdentifier(n.initializer) && n.initializer.text === 'Infinity') facts.repeatInfinity.push(lineOf(n));
       if (ts.isComputedPropertyName(n.name)) visit(n.name, { ...ctx, kind: 'other' });
       else if (ctx.inClass && ts.isStringLiteral(n.name)) pushString(n.name.text, n.name, ctx);
-      visit(n.initializer, ctx.inClass ? ctx : { kind: 'prop', key: name, tag: ctx.tag, inClass: false });
+      if (!ctx.inClass && holdsClasses(name, n.initializer)) visit(n.initializer, { kind: 'other', tag: ctx.tag, inClass: true });
+      else visit(n.initializer, ctx.inClass ? ctx : { kind: 'prop', key: name, tag: ctx.tag, inClass: false });
+      return;
+    }
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && holdsClasses(n.name.text, n.initializer)) {
+      visit(n.initializer, { kind: 'other', tag: ctx.tag, inClass: true });
       return;
     }
 

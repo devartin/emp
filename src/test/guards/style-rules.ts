@@ -3,6 +3,7 @@
  * separator is NOT a target). Each metric counts occurrences per file; the baseline may only fall.
  */
 import { scanCss, type CssDecl } from './css';
+import { read } from './files';
 import type { TsFacts } from './tsx';
 
 export const STYLE_METRICS = {
@@ -14,7 +15,7 @@ export const STYLE_METRICS = {
   infinite_animation: "animation …infinite, repeat: Infinity, animate-spin/pulse/ping/bounce",
   transition_all: "'transition: all' / transition-all",
   font_weight_off_scale: 'font weight outside {400, 500, 600, 700}',
-  radius_off_scale: 'border radius outside {0, 4, 6, 10, 12, 999px, 50%}',
+  radius_off_scale: 'border radius outside {0, 4, 6, 10, 12, 999px, 50%} (literal, var(--radius-*) token or rounded-* utility)',
   uppercase: 'text-transform: uppercase / the uppercase class',
   inline_style: 'inline style object (style={{ … }}) in TSX',
   usd_literal: 'hard-coded "USD" literal in UI code',
@@ -70,8 +71,44 @@ function shadowIsLiteral(value: string): boolean {
   return stripVars(v).replace(/[\s,]/g, '') !== '';
 }
 
-function radiusOffScale(value: string): boolean {
-  const v = stripVars(value).replace(/calc\([^()]*\)/g, '').trim();
+/** Radius tokens (`--radius-*`) as tokens.css and theme.css (Tailwind's @theme, which wins) define them. */
+let radiusTokenCache: Map<string, string> | null = null;
+export function radiusTokens(): Map<string, string> {
+  if (radiusTokenCache) return radiusTokenCache;
+  const m = new Map<string, string>();
+  for (const f of ['src/styles/tokens.css', 'src/styles/theme.css']) {
+    let raw = '';
+    try {
+      raw = read(f);
+    } catch {
+      continue;
+    }
+    for (const d of scanCss(raw).decls) if (/^--radius-[\w-]+$/.test(d.prop) && !d.prop.includes('*')) m.set(d.prop, d.value.trim());
+  }
+  radiusTokenCache = m;
+  return m;
+}
+
+/**
+ * Replace var(--radius-*) with the token's value and any other var(--x, fallback) with its fallback (a var without a
+ * fallback, or an unknown token, drops out), innermost first, so only the radii that would actually render remain.
+ */
+function resolveRadiusVars(value: string, tokens: Map<string, string>): string {
+  let prev;
+  let s = value;
+  do {
+    prev = s;
+    s = s.replace(/var\(\s*(--[\w-]+)\s*(?:,([^()]*))?\)/g, (_, name: string, fb: string | undefined) => {
+      const t = tokens.get(name);
+      if (t !== undefined && !/var\(/.test(t)) return ` ${t} `;
+      return fb !== undefined ? ` ${fb.trim()} ` : ' ';
+    });
+  } while (s !== prev);
+  return s;
+}
+
+function radiusOffScale(value: string, tokens: Map<string, string> = radiusTokens()): boolean {
+  const v = resolveRadiusVars(value, tokens).replace(/calc\([^()]*\)/g, '').trim();
   if (!v) return false;
   return v
     .split(/[\s/]+/)
@@ -83,6 +120,19 @@ function weightOffScale(value: string): boolean {
   const v = value.trim().toLowerCase();
   if (v.startsWith('var(') || v.startsWith('calc(')) return false;
   return !WEIGHTS.has(v);
+}
+
+const FONT_KEYWORD_WEIGHTS = /^(bold|bolder|lighter|normal)$/;
+/** The weight token of a `font:` shorthand (before the size), or null when there is none / it is a var(). */
+function fontShorthandWeight(value: string): string | null {
+  const v = value.trim().toLowerCase();
+  if (!v || /^(inherit|initial|unset|revert)$/.test(v) || v.startsWith('var(')) return null;
+  for (const tok of v.split(/\s+/)) {
+    if (/^\d+(\.\d+)?$/.test(tok) || FONT_KEYWORD_WEIGHTS.test(tok)) return tok;
+    // Reached the size (12px, 1rem, 12px/1.4, small, var(--size)…): no explicit weight.
+    if (!/^(italic|oblique|small-caps|normal|condensed|expanded|semi-condensed|semi-expanded|ultra-condensed|ultra-expanded|extra-condensed|extra-expanded)$/.test(tok)) return null;
+  }
+  return null;
 }
 
 const isRadiusProp = (p: string) => /^border(-(top|bottom|start|end)-(left|right|start|end))?-radius$/.test(p);
@@ -107,7 +157,12 @@ export function cssStyleCounts(file: string, raw: string): Counts {
     // @font-face font-weight is the variable font's supported range ("100 900"), not a weight in use.
     const fontFace = d.atRules.some((a) => /^@font-face\b/i.test(a));
     if (!fontFace && (d.prop === 'font-weight' || (custom && /weight/i.test(d.prop) && /^\d+$/.test(value.trim()))) && weightOffScale(value)) add(c, 'font_weight_off_scale');
-    if ((isRadiusProp(d.prop) || (custom && /radius/i.test(d.prop) && /^[\d.]/.test(value.trim()))) && radiusOffScale(value)) add(c, 'radius_off_scale');
+    if (d.prop === 'font' && !fontFace) {
+      const w = fontShorthandWeight(value);
+      if (w !== null && weightOffScale(w)) add(c, 'font_weight_off_scale');
+    }
+    // Custom radius properties count where defined (a literal or an alias of an off-scale token), uses where used.
+    if ((isRadiusProp(d.prop) || (custom && /radius/i.test(d.prop) && /^([\d.]|var\()/.test(value.trim()))) && radiusOffScale(value)) add(c, 'radius_off_scale');
     if (d.prop === 'text-transform' && /uppercase/i.test(value)) add(c, 'uppercase');
   }
   return c;
@@ -120,8 +175,19 @@ function isGlassRecipe(file: string, d: CssDecl): boolean {
 const TAILWIND_WEIGHT_OFF = /(?<![\w-])font-(?:thin|extralight|light|extrabold|black)(?![\w-])/g;
 const TAILWIND_WEIGHT_ARB = /(?<![\w-])font-\[(\d+)\]/g;
 const TAILWIND_RADIUS_ARB = /(?<![\w-])rounded(?:-[a-z]{1,2})?-\[([^\]]+)\]/g;
+/** Named radius utilities (rounded-md, rounded-t-xl, md:rounded-2xl…) resolve through --radius-<name>. */
+const TAILWIND_RADIUS_NAMED = /(?<![\w-])rounded(?:-(?:t|r|b|l|s|e|tl|tr|br|bl|ss|se|es|ee))?-([a-z0-9]+)(?![\w[-])/g;
+/** Tailwind v4 gradient utilities (bg-linear-to-r, bg-linear-45, bg-radial, bg-conic-*, legacy bg-gradient-to-*). */
+const TAILWIND_GRADIENT = /(?<![\w-])-?bg-(?:linear|radial|conic|gradient)(?:-[\w[\]().%/-]+)?(?![\w-])/g;
+const TAILWIND_GRADIENT_STOP = /(?<![\w-])(?:from|via|to)-(?:[a-z]+-\d{2,3}|\[[^\]]+\]|[a-z]+(?:-[a-z]+)*)(?:\/[\w.]+)?(?![\w-])/;
 
-export function tsStyleCounts(file: string, f: TsFacts): Counts {
+function namedRadiusOffScale(name: string, tokens: Map<string, string>): boolean {
+  if (name === 'none' || name === 'full') return false;
+  const t = tokens.get(`--radius-${name}`);
+  return t !== undefined && radiusOffScale(t, tokens);
+}
+
+export function tsStyleCounts(file: string, f: TsFacts, tokens: Map<string, string> = radiusTokens()): Counts {
   const c: Counts = {};
   const colorData = COLOR_DATA_FILES.some((re) => re.test(file));
   const ui = !file.startsWith('src/backend/');
@@ -139,7 +205,11 @@ export function tsStyleCounts(file: string, f: TsFacts): Counts {
       add(c, 'shadow_literal', count(s.text, /(?<![\w-])shadow-\[/g));
       add(c, 'font_weight_off_scale', count(s.text, TAILWIND_WEIGHT_OFF));
       for (const m of s.text.matchAll(TAILWIND_WEIGHT_ARB)) if (!WEIGHTS.has(m[1])) add(c, 'font_weight_off_scale');
-      for (const m of s.text.matchAll(TAILWIND_RADIUS_ARB)) if (radiusOffScale(m[1].replace(/_/g, ' '))) add(c, 'radius_off_scale');
+      for (const m of s.text.matchAll(TAILWIND_RADIUS_ARB)) if (radiusOffScale(m[1].replace(/_/g, ' '), tokens)) add(c, 'radius_off_scale');
+      for (const m of s.text.matchAll(TAILWIND_RADIUS_NAMED)) if (namedRadiusOffScale(m[1], tokens)) add(c, 'radius_off_scale');
+      // One gradient per gradient utility; stops without a direction utility in the same string still make one.
+      const grads = count(s.text, TAILWIND_GRADIENT);
+      add(c, 'gradient', grads || (TAILWIND_GRADIENT_STOP.test(s.text) ? 1 : 0));
     }
   }
   for (const p of f.styleProps) {
@@ -150,7 +220,13 @@ export function tsStyleCounts(file: string, f: TsFacts): Counts {
         if (weightOffScale(lit)) add(c, 'font_weight_off_scale');
         break;
       case 'borderRadius':
-        if (radiusOffScale(p.isNumber ? (lit === '0' ? '0' : `${lit}px`) : lit)) add(c, 'radius_off_scale');
+        if (radiusOffScale(p.isNumber ? (lit === '0' ? '0' : `${lit}px`) : lit, tokens)) add(c, 'radius_off_scale');
+        break;
+      case 'font':
+        if (!p.isNumber) {
+          const w = fontShorthandWeight(lit);
+          if (w !== null && weightOffScale(w)) add(c, 'font_weight_off_scale');
+        }
         break;
       case 'boxShadow':
         if (shadowIsLiteral(lit)) add(c, 'shadow_literal');
@@ -170,7 +246,7 @@ export function tsStyleCounts(file: string, f: TsFacts): Counts {
         break;
     }
   }
-  for (const r of f.radiusAttrs) if (radiusOffScale(r.value === 0 ? '0' : `${r.value}px`)) add(c, 'radius_off_scale');
+  for (const r of f.radiusAttrs) if (radiusOffScale(r.value === 0 ? '0' : `${r.value}px`, tokens)) add(c, 'radius_off_scale');
   add(c, 'inline_style', file.endsWith('.tsx') ? f.inlineStyleAttrs.length : 0);
   add(c, 'infinite_animation', f.repeatInfinity.length);
   for (const imp of f.imports) {

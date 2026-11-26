@@ -61,7 +61,8 @@ const COPY_KEYS = new Set([
 ]);
 /** Keys that hold short labels (buttons, menu items, tabs): the sentence-case check applies to these. */
 const LABEL_KEYS = new Set(['label', 'confirmLabel', 'cancelLabel', 'actionLabel', 'cta']);
-const BUTTONISH_TAG = /(^|\.)(Button|IconButton|button|MenuItem|Item|Tab|TabsTrigger|Trigger)$/;
+/** Button-like tags by suffix: Button, ToolButton, ContextMenuItem, MenuSubTrigger, SelectOption, Tab, <button>, <option>. */
+const BUTTONISH_TAG = /(Button|Item|Trigger|Tab|Option|^button|^option)$/;
 
 const RULES: [Exclude<CopyMetric, 'exclamation' | 'em_dash' | 'title_case'>, RegExp][] = [
   ['greeting', /\bgood (morning|afternoon|evening)\b/i],
@@ -125,7 +126,10 @@ export function isCopy(s: TsString): boolean {
 
 /** Is this a short action label (button child, menu item, label prop)? */
 export function isLabel(s: TsString): boolean {
-  if (s.kind === 'jsxText' || s.kind === 'jsxChild') return !!s.tag && BUTTONISH_TAG.test(s.tag);
+  if (s.kind === 'jsxText' || s.kind === 'jsxChild') {
+    const tag = s.labelTag ?? s.tag;
+    return !!tag && BUTTONISH_TAG.test(tag);
+  }
   if ((s.kind === 'attr' || s.kind === 'prop') && s.key) return LABEL_KEYS.has(s.key);
   return false;
 }

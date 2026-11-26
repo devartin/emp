@@ -109,18 +109,23 @@ The main outlet emits one signal per route mount when the route's data has loade
 Tests, gates and visual baselines wait on it instead of sleeping.
 
 - **What fires:** `window.dispatchEvent(new CustomEvent('emp:route-ready', { detail }))` and
-  `performance.mark('emp:route-ready', { detail })`, with `detail = { route, ms, timedOut }` (`route` is the route key,
-  `ms` the time from the route's content mounting to the mark).
+  `performance.mark('emp:route-ready', { startTime: detail.at, detail })`, with `detail = { route, at, ms, timedOut }`:
+  `route` is the route key, `at` the `performance.now()` timestamp of the first frame from which the route stayed idle,
+  `ms` the time from the route's content mounting to `at`. The mark is backdated to `at`; the event itself fires at
+  least 100 ms plus two frames later. Measure from `at` (or the mark's `startTime`), not from when the event arrives.
 - **When:** `src/app/routeReady.ts`, called once from `src/app/routes.tsx` (`RouteReadyMark`, inside the route's
-  Suspense boundary, so the lazy chunk has resolved). After two animation frames it waits until the route pane holds no
-  loading marker, then waits two more frames and emits. If a marker never clears, it emits after 8 s with
-  `timedOut: true`.
+  Suspense boundary, so the lazy chunk has resolved). After two animation frames it looks for loading markers in the
+  route pane. The first frame with none becomes `at`. The pane must then stay free of markers for a 100 ms hold
+  (`QUIET_MS`; chained loads leave short gaps, and a marker that comes back resets `at`). After the hold and two more
+  frames it emits. If a marker never clears, it emits after 8 s with `timedOut: true` (`at` is then the last idle
+  start, or the time of the timeout).
 - **Loading markers** (any of these inside the route pane holds the mark back): `.emp-route-skeleton` (`<RouteSkeleton>`),
   `.emp-skeleton` (`<Skeleton>`, including `<SkeletonSwap>`'s hidden pending state), `[aria-busy="true"]`, and
   `[data-route-busy]`. A feature that loads its main data without a skeleton should put `data-route-busy` on its root
   while loading. A number that animates after the mark counts as motion on arrival in the settle gate.
-- **Cost:** two `requestAnimationFrame`s per navigation, plus a `MutationObserver` on the route pane only while a
-  marker is present. Side peeks (`<RouteView>` without `readyHost`) don't emit, and nor do sub-target changes that
+- **Cost:** a few `requestAnimationFrame`s and one timer per navigation, plus one `MutationObserver` on the route pane
+  (`class`, `aria-busy` and `data-route-busy` attributes and child lists) from the route's mount until the mark fires,
+  at most 8 s. It is disconnected when the mark fires or the route unmounts. Side peeks (`<RouteView>` without `readyHost`) don't emit, and nor do sub-target changes that
   keep the route key (a hub tab, a settings section, a block anchor): those don't remount the route. To measure a tab,
   load its URL fresh.
 - **Listening:** `addEventListener('emp:route-ready', (e) => …)`, or after the fact

@@ -4,7 +4,7 @@ Product renamed to Ultra Note on 2026-11-26; 'EMP' below refers to the same prod
 
 > **Status:** authoritative for v1.0. Implementers take names and numbers from this file exactly.
 > **Companion:** [`BRAINSTORM.md`](./BRAINSTORM.md) records the ideas and rationale. If the two disagree, this file wins.
-> **Repository:** `github.com/devartin/emp` · bundle identifier `com.devartin.emp` · product name `EMP`.
+> **Repository:** `github.com/devartin/ultra-note` · bundle identifier `com.devartin.emp` · product name `EMP`.
 > **Date:** 2026-11-26.
 
 Conventions:
@@ -1860,7 +1860,7 @@ Lock sequence, all in Rust:
       "capabilities": ["main", "settings"]
     }
   },
-  "plugins": { "updater": { "pubkey": "<minisign public key>", "endpoints": ["https://github.com/devartin/emp/releases/latest/download/latest.json"] } },
+  "plugins": { "updater": { "pubkey": "<minisign public key>", "endpoints": ["https://github.com/devartin/ultra-note/releases/latest/download/latest.json"] } },
   "bundle": { "targets": "all", "createUpdaterArtifacts": true }
 }
 ```
@@ -4310,7 +4310,7 @@ How the budgets are met:
 - The release notes must then include a **"First launch"** section:
   - On macOS: right-click → Open, or `xattr -dr com.apple.quarantine /Applications/EMP.app`.
   - On Windows: SmartScreen → More info → Run anyway.
-  - How to verify `SHA256SUMS.txt` and `gh attestation verify <file> --repo devartin/emp`.
+  - How to verify `SHA256SUMS.txt` and `gh attestation verify <file> --repo devartin/ultra-note`.
 
 **Versioning**
 - `package.json` is the single source of the version. `tauri.conf.json` reads it via `"version": "../package.json"`.
@@ -4416,7 +4416,7 @@ Each item is verified by an automated test unless it is marked (manual). "Mock" 
 46. Notion export fixture (nested zips, databases, relations, callouts, toggles, columns) imports with 0 unresolved internal links. The report lists any unsupported blocks, and "Undo import" removes everything.
 47. `.empsnap` snapshots are created on schedule with correct retention. Restoring one into a new vault reproduces identical page and row counts. A tampered snapshot (MAC failure, or an extra trigger in its SQLite) is rejected.
 48. "Export everything" produces the zip layout in §17.5 with valid SHA-256 manifest entries. With encryption on, it requires re-auth and shows the unencrypted warning.
-49. Pushing tag `v1.0.0` produces a published GitHub Release on `devartin/emp` with:
+49. Pushing tag `v1.0.0` produces a published GitHub Release on `devartin/ultra-note` with:
     - macOS universal dmg
     - Windows msi and nsis
     - Linux deb, rpm and AppImage

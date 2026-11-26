@@ -52,5 +52,11 @@ export const rustFiles = () =>
     (r) => !/(^|\/)tests?\//.test(r) && !/(_tests?|\/tests?)\.rs$/.test(r),
   );
 
+/**
+ * Rust modules whose string literals are shipped content (the desktop Getting Started tour, life-app sample data):
+ * the copy lint scans them like the TS mock seed (banned phrases, "!", em dashes; no sentence-case heuristic).
+ */
+export const RUST_COPY_FILES = ['crates/emp-store/src/repo/tour.rs', 'crates/emp-store/src/lifeapps/sample.rs'];
+
 /** The emoji→icon import mapping table(s) (K1 kit lane) are the only place emoji may live in source. */
 export const isEmojiMapFile = (rel: string) => /(^|\/)emojiMap\.[^/]+$/.test(rel);

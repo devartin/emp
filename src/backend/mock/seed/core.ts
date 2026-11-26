@@ -302,7 +302,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
         ', ',
         ...t.code('inline code'),
         ', ',
-        ...t.link('links', 'https://github.com/devartin/emp'),
+        ...t.link('links', 'https://github.com/devartin/ultra-note'),
         ', ',
         ...t.color('coloured text', 'blue'),
         ' and ',

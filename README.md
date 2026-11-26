@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/devartin/emp/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/devartin/emp?style=flat-square&color=18181b&labelColor=09090b&label=release"></a>
-  <a href="https://github.com/devartin/emp/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/devartin/emp/ci.yml?branch=main&style=flat-square&labelColor=09090b&label=ci"></a>
+  <a href="https://github.com/devartin/ultra-note/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/devartin/ultra-note?style=flat-square&color=18181b&labelColor=09090b&label=release"></a>
+  <a href="https://github.com/devartin/ultra-note/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/devartin/ultra-note/ci.yml?branch=main&style=flat-square&labelColor=09090b&label=ci"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-18181b?style=flat-square&labelColor=09090b">
   <img alt="Built with Rust + Tauri" src="https://img.shields.io/badge/Rust%20·%20Tauri%202-18181b?style=flat-square&logo=rust&logoColor=white&labelColor=09090b">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-18181b?style=flat-square&labelColor=09090b"></a>
@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/devartin/emp/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/devartin/ultra-note/releases/latest"><b>Download</b></a> ·
   <a href="#features">Features</a> ·
   <a href="#security">Security</a> ·
   <a href="#build-from-source">Build from source</a> ·
@@ -135,7 +135,7 @@ exactly what is and isn't protected — including the small amount of structural
 
 ## Download
 
-Grab the latest installer for your platform from **[Releases](https://github.com/devartin/emp/releases/latest)**:
+Grab the latest installer for your platform from **[Releases](https://github.com/devartin/ultra-note/releases/latest)**:
 
 | Platform | Files |
 |---|---|
@@ -151,7 +151,7 @@ Grab the latest installer for your platform from **[Releases](https://github.com
 Requirements: Rust (stable), Node.js 22+, and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS.
 
 ```bash
-git clone https://github.com/devartin/emp && cd emp
+git clone https://github.com/devartin/ultra-note && cd ultra-note
 npm ci
 npm run tauri dev        # run the desktop app with hot reload
 npm run tauri build      # produce installers in target/release/bundle

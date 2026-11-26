@@ -8,6 +8,9 @@
  *   idle        infinite animations still running at the end of the window (spinners, pulses, live dots)
  *   changed     numbers on screen at route-ready whose text changed later (count-up / late data on arrival)
  *   late        numbers that appeared after route-ready (counted per parent element)
+ * "At route-ready" means at `detail.at` (the first idle frame), not at the event, which fires ≥ 100 ms later: number
+ * snapshots are taken from page load (every 50 ms, and every frame while the route is idle but not yet ready), and the
+ * baseline is the last idle snapshot taken in or before the frame `at` names.
  *   rolling     elements holding a number that were animated (style mutation or WAAPI) after route-ready
  * Run with --runs 3 for a median. Output: a table, and JSON with --out.
  *
@@ -42,6 +45,7 @@ const SETTLE_INIT = (windowMs) => {
     }
     return parts.reverse().join('/');
   };
+  const BUSY = '.emp-route-skeleton, .emp-skeleton, [aria-busy="true"], [data-route-busy]';
   const snapshot = () => {
     const root = document.querySelector('.emp-route') || document.body;
     const out = {};
@@ -82,8 +86,24 @@ const SETTLE_INIT = (windowMs) => {
   });
   mo.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
   let t0 = null;
+  // Number snapshots from page load: [t, busy, nums]. Every frame while idle-but-not-ready (so one lands on the frame
+  // routeReady reports as `at`) and every 50 ms otherwise, so changes between `at` and the event show up.
+  const snaps = [];
+  let lastSnap = -Infinity;
+  let wasBusy = true;
+  const takeSnap = (t, force = false) => {
+    const root = document.querySelector('.emp-route') || document.body;
+    const busy = !root || !!root.querySelector(BUSY);
+    // Every frame while idle but not yet ready (the ~100 ms hold), so one snapshot lands on the frame `at` names.
+    if (force || (!busy && t0 === null) || t - lastSnap >= 50) {
+      snaps.push([t, busy, snapshot()]);
+      lastSnap = t;
+    }
+    wasBusy = busy;
+  };
   const tick = () => {
     const t = performance.now();
+    takeSnap(t);
     for (const a of document.getAnimations()) {
       if (a.playState !== 'running') continue;
       const timing = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : {};
@@ -97,9 +117,15 @@ const SETTLE_INIT = (windowMs) => {
     else finish();
   };
   requestAnimationFrame(tick);
-  const S = { samples: [] };
   const finish = () => {
     mo.disconnect();
+    takeSnap(performance.now(), true);
+    // Baseline: the last idle snapshot taken in or before the frame `at` names (else the first idle one after it).
+    let baseIdx = -1;
+    for (let k = 0; k < snaps.length && snaps[k][0] <= t0 + 4; k++) if (!snaps[k][1]) baseIdx = k;
+    if (baseIdx < 0) baseIdx = snaps.findIndex(([t, busy]) => !busy && t > t0);
+    const samples = baseIdx < 0 ? [] : snaps.slice(baseIdx).map(([t, , nums]) => ({ t: Math.round(t - t0), nums }));
+    if (samples.length) samples[0].base = true;
     const after = R.muts.filter(([t]) => t >= t0);
     const tail = {};
     for (const [t, d] of after) if (t > t0 + windowMs - 300) tail[d] = (tail[d] || 0) + 1;
@@ -111,7 +137,7 @@ const SETTLE_INIT = (windowMs) => {
       lastAnim: R.lastAnim >= t0 ? R.lastAnim - t0 : 0,
       tail,
       input: R.input >= t0,
-      samples: S.samples,
+      samples,
       rollingCount: hosts.filter((h) => !hosts.some((o) => o !== h && o.contains(h))).length,
       idle: document
         .getAnimations()
@@ -122,15 +148,12 @@ const SETTLE_INIT = (windowMs) => {
   window.addEventListener('emp:route-ready', (e) => {
     if (t0 !== null) return;
     t0 = e.detail && typeof e.detail.at === 'number' ? e.detail.at : performance.now();
-    const since = performance.now() - t0;
-    S.samples.push({ t: 0, nums: snapshot() });
-    for (const at of [100, 300, 1000, windowMs - 50]) setTimeout(() => S.samples.push({ t: at, nums: snapshot() }), Math.max(0, at - since));
   });
 };
 
 function analyse(S, windowMs) {
-  const first = S.samples.find((s) => s.t === 0) || { nums: {} };
-  const later = S.samples.filter((s) => s.t > 0);
+  const first = S.samples.find((s) => s.base) || { nums: {} };
+  const later = S.samples.filter((s) => !s.base);
   const changed = new Set();
   const late = new Set();
   for (const s of later) {
@@ -151,7 +174,9 @@ function analyse(S, windowMs) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
     .map(([k, n]) => `${k}×${n}`);
-  return { settle, continuous, mutations: S.muts, idle: S.idle, changed: outermost(changed), late: outermost(late), rolling: S.rollingCount || 0, input: S.input, tail };
+  // baseAt: ms of the baseline snapshot relative to detail.at (≈ 0); numbers: how many it held; snapshots: compared.
+  const baseline = { baseAt: first.t ?? null, numbers: Object.keys(first.nums).length, snapshots: later.length };
+  return { settle, continuous, mutations: S.muts, idle: S.idle, changed: outermost(changed), late: outermost(late), rolling: S.rollingCount || 0, input: S.input, tail, baseline };
 }
 
 (async () => {

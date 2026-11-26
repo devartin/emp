@@ -4,7 +4,7 @@
     "emoji": "emoji cluster (\\p{Extended_Pictographic}, flags, keycaps; ©®™ allowed)"
   },
   "totals": {
-    "emoji": 1539
+    "emoji": 1531
   },
   "files": {
     "crates/emp-sheets/src/functions/text.rs": {
@@ -33,9 +33,6 @@
     },
     "crates/emp-store/src/lifeapps/content.rs": {
       "emoji": 2
-    },
-    "crates/emp-store/src/query/cells.rs": {
-      "emoji": 1
     },
     "crates/emp-store/src/repo/tour.rs": {
       "emoji": 5
@@ -88,13 +85,7 @@
     "src/features/editor/extensions/clipboard.ts": {
       "emoji": 1
     },
-    "src/features/editor/extensions/inputRules.ts": {
-      "emoji": 2
-    },
     "src/features/editor/lib/blocks.ts": {
-      "emoji": 1
-    },
-    "src/features/editor/lib/html.ts": {
       "emoji": 1
     },
     "src/features/editor/nodeviews/dom.ts": {
@@ -139,9 +130,6 @@
     "src/features/lifeapps/mock/sheets.ts": {
       "emoji": 11
     },
-    "src/features/settings/sections/Appearance.tsx": {
-      "emoji": 2
-    },
     "src/features/sheets/engine/functions.ts": {
       "emoji": 1
     },
@@ -152,7 +140,7 @@
       "emoji": 2
     },
     "src/ui/emoji-data.ts": {
-      "emoji": 1112
+      "emoji": 1110
     }
   }
 }

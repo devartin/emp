@@ -17,14 +17,14 @@
   "totals": {
     "greeting": 4,
     "coach_voice": 12,
-    "hedge": 78,
+    "hedge": 79,
     "show_math": 5,
     "needs_attention": 2,
     "dollar_job": 5,
     "we_voice": 27,
-    "device_verb": 6,
+    "device_verb": 7,
     "exclamation": 0,
-    "em_dash": 238,
+    "em_dash": 244,
     "coming_soon": 0,
     "title_case": 1
   },
@@ -59,6 +59,11 @@
       "hedge": 6,
       "show_math": 1,
       "we_voice": 3
+    },
+    "crates/emp-store/src/repo/tour.rs": {
+      "device_verb": 1,
+      "em_dash": 6,
+      "hedge": 1
     },
     "src/backend/mock/commands/finance.ts": {
       "em_dash": 2

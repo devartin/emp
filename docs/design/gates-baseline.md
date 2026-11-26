@@ -60,6 +60,9 @@ It records DOM mutations and animation frames from page load, then evaluates the
   the DOM was still changing in the last 300 ms of the window.
 - **idle:** infinite animations still running at the end of the window.
 - **changed:** numbers on screen at route-ready whose text changed later. This is a count-up, or data arriving late.
+  "At route-ready" is the frame `detail.at` names, not the event, which arrives at least 100 ms later. Number
+  snapshots run from page load (every frame during the idle hold, every 50 ms otherwise), so a change made during
+  the hold counts.
 - **late:** numbers that appeared after route-ready, counted per parent element.
 - **rolling:** elements holding a number that animated after route-ready, through a style mutation or WAAPI.
 
@@ -105,6 +108,10 @@ Readings:
 - **Both routes take about 1.6–1.7 s from mount to idle** (mock backend, demo seed). Home toggles skeletons more than
   once while its widgets load.
 - **Variance between runs** is ±20 ms for settle and 0 for the census counts.
+- **Re-checked with the `detail.at` number baseline** (same day, after the settle script stopped taking its first
+  number snapshot at the event): Home 491 / 495 ms with 3 rolling, Money HQ 1,596 / 1,606 ms; reduced motion Home
+  524 / 506 ms with 1 rolling, Money HQ 0 ms. Changed and late stay 0, so neither route rewrites number text during
+  the hold.
 
 ## CI baselines at the same point
 

@@ -14,7 +14,7 @@
  * Exit code 1 on any failure.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
@@ -25,8 +25,8 @@ const opt = (name, def) => {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : def;
 };
-const DIST = join(ROOT, opt('--dist', 'dist'));
-const BASELINE = join(ROOT, opt('--baseline', 'scripts/bundle-baseline.json'));
+const DIST = resolve(ROOT, opt('--dist', 'dist'));
+const BASELINE = resolve(ROOT, opt('--baseline', 'scripts/bundle-baseline.json'));
 const CHUNK_TOLERANCE = 0.05;
 const CHUNK_SLACK_BYTES = 512;
 const NEW_CHUNK_MAX = 50 * 1024;

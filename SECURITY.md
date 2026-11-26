@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please **do not open a public issue** for security problems. Use GitHub's
-[private vulnerability reporting](https://github.com/devartin/emp/security/advisories/new) instead.
+[private vulnerability reporting](https://github.com/devartin/ultra-note/security/advisories/new) instead.
 We aim to acknowledge reports within 72 hours.
 
 ## What Ultra Note protects
