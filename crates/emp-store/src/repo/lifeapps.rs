@@ -1572,7 +1572,19 @@ impl Store {
         inst: &InstanceRow,
     ) -> Result<(BTreeMap<String, MetricValue>, MetricData)> {
         let m = manifest_of(&inst.app_id)?;
-        let (data, sig) = self.metric_data(s, inst, m)?;
+        let (data, mut sig) = self.metric_data(s, inst, m)?;
+        // The provider's values are computed on every pass (they read data outside this instance's databases, e.g.
+        // Portfolio and market prices) and are part of the cache signature, so a cached pass never serves stale ones.
+        let provider = PROVIDER.read().clone();
+        let overrides = provider
+            .as_deref()
+            .map(|p| p.overrides(self, &data))
+            .unwrap_or_default();
+        if !overrides.is_empty() {
+            for (k, v) in &overrides {
+                sig.push_str(&format!("|ov:{k}={}", v.value));
+            }
+        }
         let weak = Arc::downgrade(s);
         {
             let cache = METRIC_CACHE.lock();
@@ -1582,8 +1594,7 @@ impl Store {
                 return Ok((e.values.clone(), data));
             }
         }
-        let provider = PROVIDER.read().clone();
-        let values = metrics::compute_all(m, &data, provider.as_deref());
+        let values = metrics::compute_all(m, &data, &overrides);
         {
             let mut cache = METRIC_CACHE.lock();
             cache.retain(|e| e.session.strong_count() > 0 && e.instance != inst.id);
