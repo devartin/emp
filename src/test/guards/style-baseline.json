@@ -18,14 +18,14 @@
     "tofixed_finance": "toFixed( in finance features (use the money/number formatters)"
   },
   "totals": {
-    "color_literal": 523,
-    "shadow_literal": 570,
-    "gradient": 246,
+    "color_literal": 522,
+    "shadow_literal": 567,
+    "gradient": 239,
     "backdrop_filter": 20,
     "keyframes": 74,
     "infinite_animation": 6,
     "transition_all": 0,
-    "font_weight_off_scale": 92,
+    "font_weight_off_scale": 89,
     "radius_off_scale": 296,
     "uppercase": 36,
     "inline_style": 464,
@@ -468,7 +468,6 @@
     },
     "src/features/search/palette.css": {
       "color_literal": 3,
-      "font_weight_off_scale": 1,
       "gradient": 2,
       "keyframes": 2,
       "radius_off_scale": 7,
@@ -600,12 +599,11 @@
     },
     "src/features/shell/shell.css": {
       "backdrop_filter": 2,
-      "color_literal": 24,
-      "font_weight_off_scale": 2,
-      "gradient": 22,
+      "color_literal": 23,
+      "gradient": 15,
       "keyframes": 3,
       "radius_off_scale": 13,
-      "shadow_literal": 25,
+      "shadow_literal": 22,
       "uppercase": 3
     },
     "src/features/taxes/Estimator.tsx": {

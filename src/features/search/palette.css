@@ -236,7 +236,7 @@
   position: relative;
   background: none;
   color: var(--text-primary);
-  font-weight: 650;
+  font-weight: 600;
 }
 .cmdk-title .cmdk-hl::after {
   content: "";
