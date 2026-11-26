@@ -1,11 +1,11 @@
 # Changelog
 
-All notable changes to EMP are documented here. The format follows
+All notable changes to Ultra Note are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [0.1.0] — 2026-11-26
 
-First public release. Local-first: everything runs on your device, and every connection is optional.
+First public release, as Ultra Note (developed under the codename EMP). Local-first: everything runs on your device, and every connection is optional.
 
 ### Workspace
 - Block editor with slash menu, mentions, backlinks, page history, covers and drag-and-drop blocks.

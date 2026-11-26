@@ -1,0 +1,349 @@
+{
+  "description": "Copy lint (PROGRAMME-v3 K6). Per-file offending UI strings; each area reaches 0 when its sweep closes.",
+  "metrics": {
+    "greeting": "\"Good morning/afternoon/evening\" greeting",
+    "coach_voice": "coach voice (\"Small wins add up\", \"level up\", \"Don't miss twice\", \"make it yours\", …)",
+    "hedge": "\"Consider…\", \"Common guideline\", \"not advice\" boilerplate",
+    "show_math": "\"Show math\" control",
+    "needs_attention": "\"Needs attention\"",
+    "dollar_job": "\"Give every dollar a job\"",
+    "we_voice": "the app as \"we\" (\"we spotted…\", \"we'll\", \"let's\"); security truths (\"we can't…\") excepted",
+    "device_verb": "touch verbs on a desktop app (\"tap\", \"long-press\", \"swipe\")",
+    "exclamation": "UI string ending in \"!\"",
+    "em_dash": "em dash in a UI string",
+    "coming_soon": "\"Coming soon\"",
+    "title_case": "Title Case button / label (sentence case is the rule)"
+  },
+  "totals": {
+    "greeting": 4,
+    "coach_voice": 12,
+    "hedge": 78,
+    "show_math": 5,
+    "needs_attention": 2,
+    "dollar_job": 5,
+    "we_voice": 27,
+    "device_verb": 6,
+    "exclamation": 0,
+    "em_dash": 238,
+    "coming_soon": 0,
+    "title_case": 1
+  },
+  "files": {
+    "crates/emp-store/lifeapps/habits.json": {
+      "coach_voice": 4,
+      "em_dash": 2,
+      "hedge": 4
+    },
+    "crates/emp-store/lifeapps/life-os.json": {
+      "em_dash": 2,
+      "hedge": 2
+    },
+    "crates/emp-store/lifeapps/money-hq.json": {
+      "dollar_job": 1,
+      "em_dash": 12,
+      "hedge": 16,
+      "needs_attention": 1,
+      "we_voice": 2
+    },
+    "crates/emp-store/lifeapps/portfolio.json": {
+      "em_dash": 7,
+      "hedge": 3,
+      "we_voice": 1
+    },
+    "crates/emp-store/lifeapps/spreadsheet-studio.json": {
+      "em_dash": 2,
+      "hedge": 3
+    },
+    "crates/emp-store/lifeapps/tax-organizer.json": {
+      "em_dash": 4,
+      "hedge": 6,
+      "show_math": 1,
+      "we_voice": 3
+    },
+    "src/backend/mock/commands/finance.ts": {
+      "em_dash": 2
+    },
+    "src/backend/mock/commands/gdocs.ts": {
+      "em_dash": 2
+    },
+    "src/backend/mock/commands/google.ts": {
+      "em_dash": 2
+    },
+    "src/backend/mock/commands/gsheets.ts": {
+      "em_dash": 3
+    },
+    "src/backend/mock/commands/sheet.ts": {
+      "em_dash": 2
+    },
+    "src/backend/mock/commands/tax.ts": {
+      "hedge": 1
+    },
+    "src/backend/mock/control.ts": {
+      "em_dash": 1
+    },
+    "src/backend/mock/index.ts": {
+      "em_dash": 1
+    },
+    "src/backend/mock/lib/templates.ts": {
+      "we_voice": 1
+    },
+    "src/backend/mock/lib/words.ts": {
+      "hedge": 1
+    },
+    "src/backend/mock/market.ts": {
+      "em_dash": 1
+    },
+    "src/backend/mock/seed/calendar.ts": {
+      "em_dash": 1
+    },
+    "src/backend/mock/seed/core.ts": {
+      "device_verb": 1,
+      "em_dash": 39,
+      "hedge": 1,
+      "we_voice": 3
+    },
+    "src/backend/mock/seed/databases.ts": {
+      "em_dash": 5,
+      "we_voice": 3
+    },
+    "src/backend/mock/seed/finance.ts": {
+      "em_dash": 1
+    },
+    "src/backend/mock/seed/shell.ts": {
+      "em_dash": 2
+    },
+    "src/features/calendar/CalendarPage.tsx": {
+      "em_dash": 2
+    },
+    "src/features/databases/TemplatesDialog.tsx": {
+      "em_dash": 1
+    },
+    "src/features/databases/engine/formula.ts": {
+      "em_dash": 2
+    },
+    "src/features/databases/properties/CellEditor.tsx": {
+      "em_dash": 1
+    },
+    "src/features/databases/properties/PropertyConfig.tsx": {
+      "em_dash": 2
+    },
+    "src/features/databases/sort/SortMenu.tsx": {
+      "em_dash": 1
+    },
+    "src/features/databases/views/BoardView.tsx": {
+      "em_dash": 1
+    },
+    "src/features/editor/PageView.tsx": {
+      "hedge": 1
+    },
+    "src/features/editor/page/ConflictSheet.tsx": {
+      "em_dash": 1
+    },
+    "src/features/finance/DebtPlanner.tsx": {
+      "em_dash": 4
+    },
+    "src/features/finance/MoneyHQ/Budget.tsx": {
+      "em_dash": 1
+    },
+    "src/features/finance/MoneyHQ/Goals.tsx": {
+      "em_dash": 1
+    },
+    "src/features/finance/MoneyHQ/MoneyHQ.tsx": {
+      "title_case": 1
+    },
+    "src/features/finance/MoneyHQ/Overview.tsx": {
+      "dollar_job": 1,
+      "em_dash": 2,
+      "hedge": 2
+    },
+    "src/features/finance/MoneyHQ/Recurring.tsx": {
+      "em_dash": 1,
+      "we_voice": 1
+    },
+    "src/features/finance/MoneyHQ/Transactions.tsx": {
+      "em_dash": 1
+    },
+    "src/features/finance/MoneyHQ/insights.ts": {
+      "hedge": 3
+    },
+    "src/features/finance/shared/ui.tsx": {
+      "em_dash": 2,
+      "hedge": 1,
+      "show_math": 1
+    },
+    "src/features/home/HomePage.tsx": {
+      "greeting": 4
+    },
+    "src/features/integrations/GoogleSetupSheet.tsx": {
+      "em_dash": 6
+    },
+    "src/features/integrations/NetworkLog.tsx": {
+      "em_dash": 1
+    },
+    "src/features/integrations/ProvidersPanel.tsx": {
+      "em_dash": 1
+    },
+    "src/features/integrations/mock/googleStore.ts": {
+      "em_dash": 1
+    },
+    "src/features/integrations/mock/sampleCalendar.ts": {
+      "em_dash": 1
+    },
+    "src/features/lifeapps/Gallery.tsx": {
+      "em_dash": 2
+    },
+    "src/features/lifeapps/Insights.tsx": {
+      "hedge": 1,
+      "show_math": 1
+    },
+    "src/features/lifeapps/PlanPreview.tsx": {
+      "we_voice": 1
+    },
+    "src/features/lifeapps/StartHere.tsx": {
+      "coach_voice": 1
+    },
+    "src/features/lifeapps/WizardSheet.tsx": {
+      "em_dash": 2
+    },
+    "src/features/lifeapps/apps/Habits.tsx": {
+      "coach_voice": 2,
+      "device_verb": 3,
+      "em_dash": 2
+    },
+    "src/features/lifeapps/apps/LifeOS.tsx": {
+      "coach_voice": 1,
+      "em_dash": 4
+    },
+    "src/features/lifeapps/apps/Studio.tsx": {
+      "em_dash": 1
+    },
+    "src/features/lifeapps/engine/manifests.ts": {
+      "coach_voice": 3,
+      "device_verb": 1,
+      "em_dash": 7,
+      "hedge": 14,
+      "we_voice": 5
+    },
+    "src/features/lifeapps/engine/moneyHqSteps.ts": {
+      "dollar_job": 1,
+      "em_dash": 6,
+      "hedge": 2,
+      "we_voice": 2
+    },
+    "src/features/lifeapps/engine/plan.ts": {
+      "em_dash": 5,
+      "hedge": 7
+    },
+    "src/features/lifeapps/mock/finance.ts": {
+      "dollar_job": 1,
+      "em_dash": 14,
+      "hedge": 5,
+      "show_math": 1
+    },
+    "src/features/lifeapps/mock/habits.ts": {
+      "em_dash": 1
+    },
+    "src/features/lifeapps/mock/lifeos.ts": {
+      "em_dash": 5
+    },
+    "src/features/lifeapps/mock/sheets.ts": {
+      "we_voice": 1
+    },
+    "src/features/lifeapps/mock/workbooks.ts": {
+      "em_dash": 5
+    },
+    "src/features/lifeapps/steps/Connect.tsx": {
+      "em_dash": 1
+    },
+    "src/features/lifeapps/steps/FileImport.tsx": {
+      "em_dash": 1
+    },
+    "src/features/lifeapps/steps/ListBuilder.tsx": {
+      "device_verb": 1,
+      "em_dash": 1
+    },
+    "src/features/markets/MarketsPage.tsx": {
+      "em_dash": 1
+    },
+    "src/features/portfolio/HoldingPage.tsx": {
+      "em_dash": 1
+    },
+    "src/features/portfolio/IPS.tsx": {
+      "em_dash": 3
+    },
+    "src/features/portfolio/Performance.tsx": {
+      "em_dash": 1
+    },
+    "src/features/portfolio/PortfolioDashboard.tsx": {
+      "em_dash": 3,
+      "hedge": 3,
+      "needs_attention": 1
+    },
+    "src/features/portfolio/RebalancePlanner.tsx": {
+      "em_dash": 1
+    },
+    "src/features/search/nested.tsx": {
+      "em_dash": 1
+    },
+    "src/features/settings/data/ImportFlow.tsx": {
+      "em_dash": 1
+    },
+    "src/features/settings/sections/Advanced.tsx": {
+      "em_dash": 2
+    },
+    "src/features/settings/sections/Appearance.tsx": {
+      "em_dash": 1
+    },
+    "src/features/settings/sections/Backups.tsx": {
+      "em_dash": 5
+    },
+    "src/features/settings/sections/Data.tsx": {
+      "em_dash": 3
+    },
+    "src/features/settings/sections/Editor.tsx": {
+      "em_dash": 1
+    },
+    "src/features/settings/sections/Privacy.tsx": {
+      "em_dash": 1
+    },
+    "src/features/settings/security/SecurityCenter.tsx": {
+      "em_dash": 2
+    },
+    "src/features/settings/security/dialogs.tsx": {
+      "em_dash": 1
+    },
+    "src/features/settings/security/panels.tsx": {
+      "em_dash": 3
+    },
+    "src/features/sheets/engine/templates.ts": {
+      "em_dash": 9
+    },
+    "src/features/taxes/Estimator.tsx": {
+      "em_dash": 2,
+      "show_math": 1
+    },
+    "src/features/taxes/QuarterlyPlan.tsx": {
+      "em_dash": 3
+    },
+    "src/features/taxes/TaxHub.tsx": {
+      "em_dash": 2,
+      "hedge": 2
+    },
+    "src/features/vault/Onboarding/steps.tsx": {
+      "coach_voice": 1,
+      "em_dash": 1,
+      "we_voice": 2
+    },
+    "src/features/vault/RecoveryCeremony.tsx": {
+      "em_dash": 1
+    },
+    "src/ui/Gallery.tsx": {
+      "em_dash": 4,
+      "we_voice": 2
+    },
+    "src/ui/GalleryV2.tsx": {
+      "dollar_job": 1,
+      "em_dash": 4
+    }
+  }
+}

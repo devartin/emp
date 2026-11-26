@@ -1,9 +1,9 @@
 //! Device-key storage in the OS keychain (SPEC §9.2).
 //!
-//! The device key of an unencrypted vault lives in the OS keychain under service `com.devartin.ultranote` (the bundle identifier), account
-//! `device-key/<vault_id hex>`. When no keychain is available (headless Linux without a Secret Service, a locked
-//! keychain…) the key falls back to `<data>/device.key` (mode 0600) and Security Center warns that API keys are
-//! obfuscated, not protected.
+//! The device key of an unencrypted vault lives in the OS keychain under service `com.devartin.ultranote` (the
+//! bundle identifier), account `device-key/<vault_id hex>`. When no keychain is available (headless Linux without
+//! a Secret Service, a locked keychain…) the key falls back to `<data>/device.key` (mode 0600) and Security Center
+//! warns that API keys are obfuscated, not protected.
 
 use std::sync::Arc;
 

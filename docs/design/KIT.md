@@ -1,4 +1,4 @@
-# EMP UI kit v2 "Slab" — guide for feature teams
+# Ultra Note UI kit v2 "Slab" — guide for feature teams
 
 The binding spec is `docs/DESIGN.md`. This page is the short version: **which primitive or class to use for what**.
 Live reference: `http://localhost:1420/ui-gallery.html` (add `?theme=dark|midnight&effects=full`); every component in
@@ -102,3 +102,27 @@ mirrors it. Tabs set `data-nav-dir=lateral` and `--nav-sign`.
   `.groove-v` right edge; topbar `.glass-1` once scrolled.
 - Sidebar selection: a `.emp-glide` / `<GlideHighlight tone="slab" selector='[aria-current="page"]'>` slab (S11).
 - Command palette: `<GlideHighlight tone="slab" />` in the list and `<Kbd>` footers (living keycaps, S1/S7).
+
+## 6. Route-ready mark (`emp:route-ready`)
+
+The main outlet emits one signal per route mount when the route's data has loaded and its first content has painted.
+Tests, gates and visual baselines wait on it instead of sleeping.
+
+- **What fires:** `window.dispatchEvent(new CustomEvent('emp:route-ready', { detail }))` and
+  `performance.mark('emp:route-ready', { detail })`, with `detail = { route, ms, timedOut }` (`route` is the route key,
+  `ms` the time from the route's content mounting to the mark).
+- **When:** `src/app/routeReady.ts`, called once from `src/app/routes.tsx` (`RouteReadyMark`, inside the route's
+  Suspense boundary, so the lazy chunk has resolved). After two animation frames it waits until the route pane holds no
+  loading marker, then waits two more frames and emits. If a marker never clears, it emits after 8 s with
+  `timedOut: true`.
+- **Loading markers** (any of these inside the route pane holds the mark back): `.emp-route-skeleton` (`<RouteSkeleton>`),
+  `.emp-skeleton` (`<Skeleton>`, including `<SkeletonSwap>`'s hidden pending state), `[aria-busy="true"]`, and
+  `[data-route-busy]`. A feature that loads its main data without a skeleton should put `data-route-busy` on its root
+  while loading. A number that animates after the mark counts as motion on arrival in the settle gate.
+- **Cost:** two `requestAnimationFrame`s per navigation, plus a `MutationObserver` on the route pane only while a
+  marker is present. Side peeks (`<RouteView>` without `readyHost`) don't emit, and nor do sub-target changes that
+  keep the route key (a hub tab, a settings section, a block anchor): those don't remount the route. To measure a tab,
+  load its URL fresh.
+- **Listening:** `addEventListener('emp:route-ready', (e) => …)`, or after the fact
+  `performance.getEntriesByName('emp:route-ready')`. Playwright: add an init script that records the events, then
+  `page.waitForFunction(...)`, as `scripts/gates/lib.js` does.

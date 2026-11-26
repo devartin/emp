@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.png" alt="EMP — your whole life, beautifully organised. Local-first. Encrypted. Yours." width="100%">
+  <img src="docs/assets/banner.png" alt="Ultra Note — your whole life, beautifully organised. Local-first. Encrypted. Yours." width="100%">
 </p>
 
 <p align="center">
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <b>EMP</b> is a productivity super app for your whole life — documents, databases, spreadsheets, money, investing and taxes —
+  <b>Ultra Note</b> is a productivity super app for your whole life — documents, databases, spreadsheets, money, investing and taxes —
   that runs entirely on your computer, encrypts what you write, and sets itself up for you with best practices built in.
 </p>
 
@@ -32,7 +32,7 @@
 <table>
   <tr>
     <td width="50%"><img src="docs/media/unlock.gif" alt="Typing the password on the lock screen; the vault unlocks and Home settles in" width="100%"><br><sub><b>Unlock → Home.</b> The vault opens and your day assembles itself.</sub></td>
-    <td width="50%"><img src="docs/media/life-app-install.gif" alt="Setting up the Habits life app: pick habits, choose a streak rule, then watch EMP build the dashboard, databases and reminders" width="100%"><br><sub><b>Life apps build your workspace.</b> Answer three questions; EMP lays down every page, database and reminder.</sub></td>
+    <td width="50%"><img src="docs/media/life-app-install.gif" alt="Setting up the Habits life app: pick habits, choose a streak rule, then watch Ultra Note build the dashboard, databases and reminders" width="100%"><br><sub><b>Life apps build your workspace.</b> Answer three questions; Ultra Note lays down every page, database and reminder.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/media/money-hq.gif" alt="Opening Money HQ: net worth counts up, then scrubbing the chart rolls every figure to that day" width="100%"><br><sub><b>Money HQ.</b> Numbers count up, and scrubbing the chart rolls every figure to that day.</sub></td>
@@ -40,15 +40,15 @@
   </tr>
 </table>
 
-## Why EMP
+## Why Ultra Note
 
 Notion is wonderful until you want it offline, private, fast — or until you need a real spreadsheet, a budget that
-understands money, or a portfolio that knows what XIRR is. EMP keeps everything you love about a block-based workspace and
+understands money, or a portfolio that knows what XIRR is. Ultra Note keeps everything you love about a block-based workspace and
 adds the parts of life that usually live in five other apps.
 
 - **Local-first.** Your workspace is a file on your disk. No account, no server, no telemetry. It works on a plane.
 - **Encrypted if you want it.** Turn on vault encryption and every record is sealed with modern, authenticated cryptography.
-- **Set up for you.** Pick a *life app* — budgeting, investing, taxes, habits — answer a few questions and EMP builds the whole
+- **Set up for you.** Pick a *life app* — budgeting, investing, taxes, habits — answer a few questions and Ultra Note builds the whole
   system: pages, databases, dashboards, formulas and the written guidance explaining *why*.
 - **Fast and polished.** A native Rust core, a 60 fps interface, and micro-interactions that make it a pleasure to use.
 
@@ -100,9 +100,9 @@ Each app keeps watching your data and surfaces **insights** — *"You're 2 month
 
 ### 🔗 Connections — always optional
 - **Google Calendar** (read & sync), **Google Docs** and **Google Sheets** (import/export) using your own Google Cloud
-  OAuth client — EMP ships no secrets.
+  OAuth client — Ultra Note ships no secrets.
 - **.ics** calendars, **Markdown** and **Notion export** import, **Excel** in and out, export everything to Markdown/CSV/JSON.
-- A built-in **network log** and an **offline switch**: you can see every request EMP makes, and stop them all.
+- A built-in **network log** and an **offline switch**: you can see every request Ultra Note makes, and stop them all.
 
 ## Screenshots
 
@@ -117,7 +117,7 @@ Each app keeps watching your data and surfaces **insights** — *"You're 2 month
 
 ## Security
 
-EMP is designed so that a stolen laptop reveals as little as possible.
+Ultra Note is designed so that a stolen laptop reveals as little as possible.
 
 | | |
 |---|---|
@@ -129,7 +129,7 @@ EMP is designed so that a stolen laptop reveals as little as possible.
 | **App hardening** | Strict Content-Security-Policy, minimal Tauri capabilities, no shell access, every network call through one guarded client |
 | **Secrets** | API keys and OAuth tokens are always encrypted, even when vault encryption is off |
 
-We deliberately don't use the phrase "military-grade". EMP uses standard, well-reviewed primitives, and we document
+We deliberately don't use the phrase "military-grade". Ultra Note uses standard, well-reviewed primitives, and we document
 exactly what is and isn't protected — including the small amount of structural metadata that stays visible on disk. See
 [SECURITY.md](SECURITY.md) and [SPEC §9](docs/SPEC.md#9-security-spec).
 
@@ -173,17 +173,20 @@ npm test
 ## Architecture
 
 ```
-┌──────────────────────── EMP desktop app (Tauri 2) ────────────────────────┐
+┌───────────────────── Ultra Note desktop app (Tauri 2) ─────────────────────┐
 │  React 19 · TypeScript · Tailwind · motion · TipTap · Recharts             │
 │  ── typed IPC (231 commands, strict allowlist) ──                          │
 │  emp-app      commands, auto-lock, jobs, asset protocol, OS keychain       │
 │  emp-store    SQLite, vault, encrypted records, search, life apps, import  │
-│  emp-crypto   Argon2id, XChaCha20-Poly1305, keyslots, recovery key          │
+│  emp-crypto   Argon2id, XChaCha20-Poly1305, keyslots, recovery key         │
 │  emp-sheets   formula engine, dependency graph, xlsx/csv                   │
 │  emp-finance  statements, budgets, debt, forecast, portfolio, tax          │
 │  emp-integrations  NetGuard, Google OAuth (PKCE), market data, ICS         │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
+
+Ultra Note was called EMP during early development. The codename survives in internal identifiers (the `emp-*`
+crates, file extensions such as `.empbackup`, storage keys); only the product name changed.
 
 The full design — every token, animation curve, schema table and IPC command — lives in [docs/SPEC.md](docs/SPEC.md),
 and the brainstorm that produced it in [docs/BRAINSTORM.md](docs/BRAINSTORM.md).

@@ -8,7 +8,7 @@
   "category": "tax",
   "sensitivity": "high",
   "estMinutes": 5,
-  "disclaimer": "Estimates for planning only — not tax advice, and EMP never files returns or makes payments. Confirm figures with official forms or a tax professional.",
+  "disclaimer": "Estimates for planning only — not tax advice, and Ultra Note never files returns or makes payments. Confirm figures with official forms or a tax professional.",
   "steps": [
     {
       "id": "jurisdiction",
@@ -275,7 +275,7 @@
       "default": {
         "storeOriginals": true
       },
-      "help": "Store originals encrypted in EMP (recommended) or track status only."
+      "help": "Store originals encrypted in Ultra Note (recommended) or track status only."
     },
     {
       "id": "reminders",
@@ -558,7 +558,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "How long to keep tax records — a common guideline based on how long the tax authority can review a return (US):\n\n| Record | Keep for |\n|---|---|\n| Returns and supporting documents | **3 years** from filing (or the due date, if later) |\n| Employment tax records | **4 years** after the tax is due or paid |\n| If income was under-reported by more than 25% | **6 years** |\n| Bad debt or worthless securities | **7 years** |\n| Property and investment basis records | Until **3 years after you sell** |\n| Returns themselves | Many people keep them indefinitely |\n\nThe *Keep until* column of the document checklist applies the 3-year rule to each document. Store originals encrypted in EMP and keep the paper only when you must."
+            "md": "How long to keep tax records — a common guideline based on how long the tax authority can review a return (US):\n\n| Record | Keep for |\n|---|---|\n| Returns and supporting documents | **3 years** from filing (or the due date, if later) |\n| Employment tax records | **4 years** after the tax is due or paid |\n| If income was under-reported by more than 25% | **6 years** |\n| Bad debt or worthless securities | **7 years** |\n| Property and investment basis records | Until **3 years after you sell** |\n| Returns themselves | Many people keep them indefinitely |\n\nThe *Keep until* column of the document checklist applies the 3-year rule to each document. Store originals encrypted in Ultra Note and keep the paper only when you must."
           },
           {
             "t": "disclaimer"

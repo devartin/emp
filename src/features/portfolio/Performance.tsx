@@ -12,24 +12,27 @@ import { useAsync } from "../finance/shared/hooks";
 import { Quiet, Section, Stat } from "../finance/shared/ui";
 import { ticker } from "../markets/data";
 
+const BENCHMARK = "EMP500:INDEX";
+
 export default function Performance({ instanceId, summary: s }: { instanceId: Id; summary?: PortfolioSummary }) {
   const [range, setRange] = useState<PerfRange>("1y");
-  const perf = useAsync(() => api.portfolio.performance({ instanceId, range, benchmark: "EMP500:INDEX" }), [instanceId, range]);
+  const perf = useAsync(() => api.portfolio.performance({ instanceId, range, benchmark: BENCHMARK }), [instanceId, range]);
   const year = new Date().getFullYear();
   const realized = useAsync(() => api.portfolio.realized({ instanceId, year }), [instanceId, year]);
   const data = useMemo(() => (perf.data ? perf.data.t.map((t, i) => ({ t, twr: perf.data!.twr[i], bench: perf.data!.benchmark?.[i] ?? 0 })) : []), [perf.data]);
   const last = data[data.length - 1];
   const long = range === "5y" || range === "all";
+  const benchLabel = ticker(BENCHMARK);
   return (
     <div className="flex flex-col gap-4">
       <Section
-        title="Time-weighted return vs EMP 500"
+        title={`Time-weighted return vs ${benchLabel}`}
         subtitle="TWR removes the effect of when you added money — the fair way to compare with an index."
         actions={<Segmented size="sm" value={range} onValueChange={setRange} aria-label="Range" options={[{ value: "3m", label: "3M" }, { value: "ytd", label: "YTD" }, { value: "1y", label: "1Y" }, { value: "5y", label: "5Y" }, { value: "all", label: "All" }]} />}
       >
         <div className="flex gap-8 mb-4">
           <Stat label="Your portfolio (TWR)" value={last ? <GainLoss value={last.twr}>{fmtPct(last.twr, 1, true)}</GainLoss> : "—"} size="lg" />
-          <Stat label="EMP 500" value={last ? <GainLoss value={last.bench}>{fmtPct(last.bench, 1, true)}</GainLoss> : "—"} size="lg" />
+          <Stat label={benchLabel} value={last ? <GainLoss value={last.bench}>{fmtPct(last.bench, 1, true)}</GainLoss> : "—"} size="lg" />
           <Stat label="Difference" value={last ? <GainLoss value={last.twr - last.bench}>{fmtPct(last.twr - last.bench, 1, true)}</GainLoss> : "—"} size="lg" />
           <Stat label="Money-weighted (XIRR)" value={perf.data?.xirr !== undefined ? `${fmtPct(perf.data.xirr, 1, true)}/yr` : "—"} size="lg" />
         </div>
@@ -38,7 +41,7 @@ export default function Performance({ instanceId, summary: s }: { instanceId: Id
           x="t"
           series={[
             { key: "twr", label: "Portfolio", color: "var(--accent-solid)", area: true },
-            { key: "bench", label: "EMP 500", color: "var(--text-tertiary)", dashed: true },
+            { key: "bench", label: benchLabel, color: "var(--text-tertiary)", dashed: true },
           ]}
           format="percent"
           colorBySign={false}

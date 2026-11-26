@@ -42,7 +42,7 @@ def page(w,h,left_css,win_css,tag_size=30,word_size=84,sub=True,chips=True):
     return f'''<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="common.css"></head>
 <body><div class="stage" style="width:{w}px;height:{h}px"><div class="grid"></div>
 <div style="position:absolute;{left_css};display:flex;flex-direction:column;gap:26px">
- <div class="brand"><img src="icon.svg"><div class="word" style="font-size:{word_size}px">EMP</div></div>
+ <div class="brand"><img src="icon.svg"><div class="word" style="font-size:{word_size}px">Ultra Note</div></div>
  <div class="tag" style="font-size:{tag_size}px">Your whole life, <em>beautifully</em> organised.<br>Local-first. Encrypted. Yours.</div>
  {'<div class="sub">The productivity super app: documents, databases, spreadsheets, money,<br>investing and taxes — with guided setups built on best practices.</div>' if sub else ''}
  {f'<div class="chips">{ch}</div>' if chips else ''}

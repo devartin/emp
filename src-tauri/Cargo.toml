@@ -2,7 +2,7 @@
 name = "emp-app"
 version.workspace = true
 publish = false
-description = "EMP — local-first, encrypted productivity super app"
+description = "Ultra Note — local-first, encrypted productivity super app"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true

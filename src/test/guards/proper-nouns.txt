@@ -1,0 +1,92 @@
+# Words and phrases that keep their capitals inside sentence-case labels (copy lint, title_case rule).
+# One per line; a line with a space is a phrase. Acronyms (CSV, OFX, …) and camel-case brands (iCloud) pass on their own.
+Ultra Note
+Money HQ
+Life OS
+Spreadsheet Studio
+Tax Organizer
+Google Calendar
+Google Drive
+Google Sheets
+Google Docs
+Google Contacts
+Security Center
+Daily Note
+Apple Pay
+Face ID
+Touch ID
+Windows Hello
+Social Security
+Cloud Console
+United States
+United Kingdom
+Getting started
+# Area names of the app (Notion and macOS keep these capitalised: "Move to Trash", "Add to Favorites")
+Trash
+Favorites
+Favourites
+Inbox
+Today
+Pages
+Projects
+Portfolio
+Markets
+Backups
+Notion
+Google
+Gmail
+Excel
+Obsidian
+Markdown
+Tauri
+Linux
+Windows
+Mac
+Apple
+Chrome
+Safari
+Firefox
+Roth
+Medicare
+Medicaid
+Vanguard
+Fidelity
+Schwab
+Chase
+Visa
+Mastercard
+Amex
+Venmo
+PayPal
+Plaid
+Monday
+Tuesday
+Wednesday
+Thursday
+Friday
+Saturday
+Sunday
+January
+February
+March
+April
+May
+June
+July
+August
+September
+October
+November
+December
+Jan
+Feb
+Mar
+Apr
+Jun
+Jul
+Aug
+Sep
+Sept
+Oct
+Nov
+Dec

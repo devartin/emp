@@ -8,7 +8,7 @@
   "category": "finance",
   "sensitivity": "high",
   "estMinutes": 6,
-  "disclaimer": "EMP provides estimates and common guidelines for education, not financial advice. Check important decisions with a qualified professional.",
+  "disclaimer": "Ultra Note provides estimates and common guidelines for education, not financial advice. Check important decisions with a qualified professional.",
   "steps": [
     {
       "id": "currency",
@@ -980,7 +980,7 @@
             "key": "balance",
             "name": "Balance",
             "type": "computed",
-            "description": "Opening balance plus transactions; kept up to date by EMP."
+            "description": "Opening balance plus transactions; kept up to date by Ultra Note."
           },
           {
             "key": "cleared",

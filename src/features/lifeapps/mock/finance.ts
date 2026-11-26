@@ -386,7 +386,7 @@ function sampleTransactions(env: Env, txns: DbHandle, x: { catIds: Record<string
 // ───────────────────────────────────────────────────────────────────────────── Portfolio
 
 export const SAMPLE_HOLDINGS: { ticker: string; name: string; cls: string; region: string; type: string; er: number; qty: number; cost: number; price: number }[] = [
-  { ticker: 'EMPX:XNAS', name: 'EMP Total Market ETF', cls: 'US equity', region: 'US', type: 'ETF', er: 0.0003, qty: 120, cost: 182.4, price: 214.6 },
+  { ticker: 'EMPX:XNAS', name: 'Empyrean Total Market ETF', cls: 'US equity', region: 'US', type: 'ETF', er: 0.0003, qty: 120, cost: 182.4, price: 214.6 },
   { ticker: 'NOVA:XNAS', name: 'Nova Semiconductors', cls: 'US equity', region: 'US', type: 'Stock', er: 0, qty: 35, cost: 96.1, price: 141.25 },
   { ticker: 'ORBT:XNYS', name: 'Orbit Logistics', cls: 'US equity', region: 'US', type: 'Stock', er: 0, qty: 60, cost: 41.7, price: 38.9 },
   { ticker: 'KITE:XNAS', name: 'Kite International Developed ETF', cls: 'Intl developed', region: 'Developed ex-US', type: 'ETF', er: 0.0007, qty: 210, cost: 48.2, price: 53.4 },

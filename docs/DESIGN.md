@@ -1,4 +1,4 @@
-# EMP Design Language v2 — "Slab"
+# Ultra Note Design Language v2 — "Slab"
 
 **Status:** binding. Per CLAUDE.md override 5, this document supersedes SPEC §3–§5 for materials, depth, colour usage
 and motion. These SPEC rules still apply unchanged: token *names* (`--bg-*`, `--text-*`, `--accent-*`, `--gain*`, `--elev-*`,
@@ -35,7 +35,7 @@ performance risk, 5 = lowest risk):
 | Implementability with Tailwind v4 + motion + Radix | **5** (no new DOM) | 3.5 (sheen span, `@property`, many layers) | 3.5 (face span, FLIP machinery) |
 | **Total / 30** | **28** | 23 | 24.5 |
 
-**Synthesis.** EMP v2 = **Tactile's material** (every control is part of the slab family) + **Depth's light** (one key
+**Synthesis.** Ultra Note v2 = **Tactile's material** (every control is part of the slab family) + **Depth's light** (one key
 light, a canvas halo, edge light, glass reserved for overlays) + **Kinetic's choreography** (one spring table, things come
 from somewhere, numbers roll, charts are drawn).
 
@@ -922,7 +922,7 @@ end state, and honours reduced effects (no particles, glow or blur).
 | S17 | **Rebalance preview** | portfolio/RebalancePlanner | Allocation bars show a "before" ghost (well-tinted) while lit bars spring to the targets (settle, 40ms stagger). Trade amounts roll. Drift badges change colour over 200ms. |
 | S18 | **Tax estimator scrub** | taxes/Estimator, QuarterlyPlan | Dragging an income or deduction slider drives the refund/owe RollingNumber (scrub mode). The bracket waterfall morphs live. Crossing from "owe" to "refund" flips the DeltaPill colour, and the number does one `pop` scale (1 → 1.04 → 1). |
 | S19 | **Home arrival** | home/HomePage, widgets | The greeting rises, then widgets cascade (40ms, max 8). The Today ring fills, net worth counts up (first session view only), and the next calendar event's time chip pulses once. |
-| S20 | **Connect Google** | integrations/GoogleSetupSheet, ProvidersPanel | On OAuth success, two slab glyphs (EMP and the provider mark) slide together and *click*: a 2px press, a contact flash, then a check pop. Sync progress is a groove. The first synced item count rolls. |
+| S20 | **Connect Google** | integrations/GoogleSetupSheet, ProvidersPanel | On OAuth success, two slab glyphs (Ultra Note and the provider mark) slide together and *click*: a 2px press, a contact flash, then a check pop. Sync progress is a groove. The first synced item count rolls. |
 | S21 | **Database view switch** | databases/ViewTabs | Switching Table → Board → Calendar uses a lateral route-style transition inside the view area. Rows and cards rise with a 16ms stagger (cap 12). Filter chips latch with a sliding check, and the row count rolls. |
 | S22 | **Editor slash and block moves** | editor/menus, nodeviews | The slash menu grows from the caret (origin = caret rect). Block drag shows a 2px insertion groove that glides between blocks. A dropped block lands with settle. A new page's cover fades in with a 1.02 → 1 scale. |
 

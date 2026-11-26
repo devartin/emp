@@ -48,10 +48,13 @@ export function useSymbolInfo(key: SymbolKey | null | undefined): MarketSearchRe
   return info;
 }
 
+/** Display names for the fictional demo indices; the symbol keys (EMP500, EMPT100) are stable data ids. */
+const INDEX_TICKERS: Record<string, string> = { EMP500: "US 500", EMPT100: "US Tech 100" };
+
 export function ticker(key: SymbolKey): string {
   const [t, mic] = key.split(":");
   if (mic === "FX" && t.length === 6) return `${t.slice(0, 3)}/${t.slice(3)}`;
-  if (mic === "INDEX") return t.replace(/(\d+)$/, " $1").replace("EMPT", "EMP Tech");
+  if (mic === "INDEX") return INDEX_TICKERS[t] ?? t.replace(/(\d+)$/, " $1");
   return t;
 }
 

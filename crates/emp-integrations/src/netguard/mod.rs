@@ -739,7 +739,12 @@ mod tests {
         assert_eq!(log[0].bytes, 11);
         let seen = server.requests();
         assert_eq!(seen[0].path, "/latest?from=USD&secret=1");
-        assert!(seen[0].header("user-agent").unwrap().starts_with("UltraNote/"));
+        assert!(
+            seen[0]
+                .header("user-agent")
+                .unwrap()
+                .starts_with("UltraNote/")
+        );
     }
 
     #[tokio::test]

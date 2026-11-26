@@ -63,7 +63,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "EMP ${{ github.ref_name }}"
+          releaseName: "Ultra Note ${{ github.ref_name }}"
           releaseBody: "See CHANGELOG.md for what's new. Download the installer for your platform below."
           releaseDraft: false
           prerelease: false

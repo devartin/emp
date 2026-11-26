@@ -8,7 +8,7 @@
  *   preloadRoute(route)             — warm a chunk on hover / intent
  */
 import { AnimatePresence, m } from "motion/react";
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type LazyExoticComponent, type ReactNode, type RefObject } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { FileQuestion, Trash2 } from "lucide-react";
 import { api, hasCode } from "@/backend";
@@ -25,6 +25,7 @@ import { isViewTransitionActive } from "@/ui/motion/viewTransition";
 import { useNav } from "@/stores/nav";
 import { registerShellPreload } from "./boot";
 import { navigate, routeKey, useRoute, type AppRoute } from "./router";
+import { watchRouteReady } from "./routeReady";
 
 // ───────────────────────────────────────────────────────────────────────────── lazy entries
 
@@ -264,15 +265,26 @@ function renderRoute(route: AppRoute): ReactNode {
 
 export interface RouteViewProps {
   route: AppRoute;
+  /** Main outlet only: emit `emp:route-ready` for this route's content inside this element (routeReady.ts). */
+  readyHost?: RefObject<HTMLElement | null>;
+}
+
+/** Mounted inside the route's Suspense boundary, so its effect runs once the lazy chunk has resolved. */
+function RouteReadyMark({ host, route }: { host: RefObject<HTMLElement | null>; route: string }) {
+  useEffect(() => watchRouteReady(host.current, route), [host, route]);
+  return null;
 }
 
 /** One route in isolation, with its own Suspense fallback and error boundary. */
-export function RouteView({ route }: RouteViewProps) {
+export function RouteView({ route, readyHost }: RouteViewProps) {
   const kind = useTree((s) => (route.t === "page" ? s.byId.get(route.id)?.kind : undefined));
   const key = routeKey(route);
   return (
     <RouteErrorBoundary resetKey={key}>
-      <Suspense fallback={<RouteSkeleton variant={skeletonFor(route, kind)} />}>{renderRoute(route)}</Suspense>
+      <Suspense fallback={<RouteSkeleton variant={skeletonFor(route, kind)} />}>
+        {renderRoute(route)}
+        {readyHost ? <RouteReadyMark host={readyHost} route={key} /> : null}
+      </Suspense>
     </RouteErrorBoundary>
   );
 }
@@ -336,6 +348,7 @@ export function RouteOutlet({ onRouteChange }: { onRouteChange?: (route: AppRout
   const route = useRoute();
   const key = routeKey(route);
   const dir = useNavDirection(key);
+  const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     onRouteChange?.(route);
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -346,6 +359,7 @@ export function RouteOutlet({ onRouteChange }: { onRouteChange?: (route: AppRout
     <AnimatePresence mode="wait" initial={false} custom={dir}>
       <m.div
         key={key}
+        ref={host}
         className="emp-route"
         data-route={route.t}
         custom={dir}
@@ -354,7 +368,7 @@ export function RouteOutlet({ onRouteChange }: { onRouteChange?: (route: AppRout
         animate="enter"
         exit="exit"
       >
-        <RouteView route={route} />
+        <RouteView route={route} readyHost={host} />
       </m.div>
     </AnimatePresence>
   );

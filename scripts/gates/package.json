@@ -1,0 +1,4 @@
+{
+  "//": "The gate scripts are CommonJS so they can require() the globally installed Playwright through NODE_PATH.",
+  "type": "commonjs"
+}

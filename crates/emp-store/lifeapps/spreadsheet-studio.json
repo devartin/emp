@@ -66,7 +66,7 @@
       "quick": false,
       "skippable": true,
       "default": false,
-      "help": "When on, EMP warns about EMP-only functions such as STOCK and FX."
+      "help": "When on, Ultra Note warns about functions only Ultra Note has, such as STOCK and FX."
     },
     {
       "id": "structure",
@@ -521,7 +521,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }
@@ -848,7 +848,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }
@@ -1153,7 +1153,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }
@@ -1419,7 +1419,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }
@@ -1715,7 +1715,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }
@@ -1954,7 +1954,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }
@@ -2246,7 +2246,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }
@@ -2519,7 +2519,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }
@@ -2735,7 +2735,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }
@@ -2951,7 +2951,7 @@
                   [
                     "{{today}}",
                     "Created by Spreadsheet Studio",
-                    "EMP"
+                    "Ultra Note"
                   ]
                 ]
               }

@@ -1,3 +1,5 @@
+Product renamed to Ultra Note on 2026-11-26; 'EMP' below refers to the same product.
+
 # EMP v1 Build Spec
 
 > **Status:** authoritative for v1.0. Implementers take names and numbers from this file exactly.

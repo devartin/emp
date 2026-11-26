@@ -1,0 +1,966 @@
+{
+  "description": "Style ratchet (PROGRAMME-v3 K6). Per-file maxima; may only fall.",
+  "metrics": {
+    "color_literal": "raw hex / rgb() / hsl() / oklch() colour outside token definitions",
+    "shadow_literal": "box-shadow that is not none or var(--token) only",
+    "gradient": "linear-/radial-/conic-gradient( outside token definitions",
+    "backdrop_filter": "backdrop-filter outside the .glass-* recipes",
+    "keyframes": "@keyframes definition",
+    "infinite_animation": "animation …infinite, repeat: Infinity, animate-spin/pulse/ping/bounce",
+    "transition_all": "'transition: all' / transition-all",
+    "font_weight_off_scale": "font weight outside {400, 500, 600, 700}",
+    "radius_off_scale": "border radius outside {0, 4, 6, 10, 12, 999px, 50%}",
+    "uppercase": "text-transform: uppercase / the uppercase class",
+    "inline_style": "inline style object (style={{ … }}) in TSX",
+    "usd_literal": "hard-coded \"USD\" literal in UI code",
+    "sparkles_import": "Sparkles / Sparkle icon import",
+    "deltapill_import": "DeltaPill import",
+    "tofixed_finance": "toFixed( in finance features (use the money/number formatters)"
+  },
+  "totals": {
+    "color_literal": 686,
+    "shadow_literal": 712,
+    "gradient": 369,
+    "backdrop_filter": 30,
+    "keyframes": 116,
+    "infinite_animation": 16,
+    "transition_all": 0,
+    "font_weight_off_scale": 137,
+    "radius_off_scale": 388,
+    "uppercase": 51,
+    "inline_style": 550,
+    "usd_literal": 203,
+    "sparkles_import": 28,
+    "deltapill_import": 16,
+    "tofixed_finance": 67
+  },
+  "files": {
+    "src/App.css": {
+      "color_literal": 19,
+      "radius_off_scale": 1,
+      "shadow_literal": 1
+    },
+    "src/app/App.tsx": {
+      "inline_style": 2,
+      "radius_off_scale": 1
+    },
+    "src/charts/Area.tsx": {
+      "deltapill_import": 1,
+      "inline_style": 1,
+      "usd_literal": 1
+    },
+    "src/charts/Bar.tsx": {
+      "inline_style": 1,
+      "usd_literal": 1
+    },
+    "src/charts/Candles.tsx": {
+      "inline_style": 3,
+      "radius_off_scale": 1,
+      "usd_literal": 1
+    },
+    "src/charts/ChartFrame.tsx": {
+      "inline_style": 3
+    },
+    "src/charts/Donut.tsx": {
+      "inline_style": 6,
+      "radius_off_scale": 1,
+      "usd_literal": 1
+    },
+    "src/charts/Fan.tsx": {
+      "usd_literal": 1
+    },
+    "src/charts/Gauge.tsx": {
+      "inline_style": 6,
+      "usd_literal": 1
+    },
+    "src/charts/Heatmap.tsx": {
+      "inline_style": 10,
+      "usd_literal": 2
+    },
+    "src/charts/Line.tsx": {
+      "color_literal": 3,
+      "inline_style": 3,
+      "usd_literal": 1
+    },
+    "src/charts/Sankey.tsx": {
+      "inline_style": 4,
+      "usd_literal": 1
+    },
+    "src/charts/Sparkline.tsx": {
+      "inline_style": 4
+    },
+    "src/charts/Tooltip.tsx": {
+      "inline_style": 1
+    },
+    "src/charts/Treemap.tsx": {
+      "color_literal": 3,
+      "inline_style": 4,
+      "usd_literal": 1
+    },
+    "src/charts/Waterfall.tsx": {
+      "inline_style": 1,
+      "usd_literal": 1
+    },
+    "src/charts/axis.ts": {
+      "usd_literal": 2
+    },
+    "src/charts/theme.ts": {
+      "color_literal": 1
+    },
+    "src/features/calendar/CalendarPage.tsx": {
+      "inline_style": 9,
+      "radius_off_scale": 2
+    },
+    "src/features/calendar/calendar.css": {
+      "color_literal": 30,
+      "font_weight_off_scale": 7,
+      "gradient": 15,
+      "keyframes": 2,
+      "radius_off_scale": 12,
+      "shadow_literal": 28,
+      "uppercase": 2
+    },
+    "src/features/databases/databases.css": {
+      "backdrop_filter": 4,
+      "color_literal": 33,
+      "font_weight_off_scale": 5,
+      "gradient": 31,
+      "keyframes": 7,
+      "radius_off_scale": 26,
+      "shadow_literal": 96,
+      "uppercase": 3
+    },
+    "src/features/databases/engine/aggregate.ts": {
+      "usd_literal": 1
+    },
+    "src/features/databases/engine/format.ts": {
+      "usd_literal": 1
+    },
+    "src/features/databases/engine/formula.ts": {
+      "usd_literal": 2
+    },
+    "src/features/databases/engine/schema.ts": {
+      "usd_literal": 1
+    },
+    "src/features/databases/engine/values.ts": {
+      "usd_literal": 1
+    },
+    "src/features/databases/properties/CellEditor.tsx": {
+      "inline_style": 7,
+      "usd_literal": 1
+    },
+    "src/features/databases/properties/CellView.tsx": {
+      "inline_style": 4
+    },
+    "src/features/databases/properties/OptionPicker.tsx": {
+      "inline_style": 1
+    },
+    "src/features/databases/properties/PropertyConfig.tsx": {
+      "usd_literal": 2
+    },
+    "src/features/databases/properties/PropertyMenu.tsx": {
+      "inline_style": 2
+    },
+    "src/features/databases/views/BoardView.tsx": {
+      "inline_style": 2
+    },
+    "src/features/databases/views/CalendarView.tsx": {
+      "inline_style": 5
+    },
+    "src/features/databases/views/ChartView.tsx": {
+      "inline_style": 1
+    },
+    "src/features/databases/views/GalleryView.tsx": {
+      "inline_style": 1
+    },
+    "src/features/databases/views/ListView.tsx": {
+      "inline_style": 2
+    },
+    "src/features/databases/views/TableView.tsx": {
+      "inline_style": 23
+    },
+    "src/features/editor/DailyNote.tsx": {
+      "radius_off_scale": 1
+    },
+    "src/features/editor/PageView.tsx": {
+      "radius_off_scale": 1
+    },
+    "src/features/editor/dev/preview.tsx": {
+      "usd_literal": 2
+    },
+    "src/features/editor/editor-v2.css": {
+      "backdrop_filter": 8,
+      "color_literal": 28,
+      "gradient": 23,
+      "keyframes": 14,
+      "radius_off_scale": 5,
+      "shadow_literal": 51
+    },
+    "src/features/editor/menus/BlockHandle.tsx": {
+      "inline_style": 1
+    },
+    "src/features/editor/menus/BlockMenu.tsx": {
+      "inline_style": 1
+    },
+    "src/features/editor/menus/BubbleToolbar.tsx": {
+      "inline_style": 1
+    },
+    "src/features/editor/menus/ColorMenu.tsx": {
+      "inline_style": 2
+    },
+    "src/features/editor/menus/Floating.tsx": {
+      "inline_style": 2
+    },
+    "src/features/editor/menus/OverlayHost.tsx": {
+      "inline_style": 1
+    },
+    "src/features/editor/menus/slashItems.ts": {
+      "sparkles_import": 1
+    },
+    "src/features/editor/nodeviews/ImageView.tsx": {
+      "inline_style": 2
+    },
+    "src/features/editor/nodeviews/sources.tsx": {
+      "sparkles_import": 1
+    },
+    "src/features/editor/page/Cover.tsx": {
+      "inline_style": 1
+    },
+    "src/features/editor/page/HistoryDrawer.tsx": {
+      "radius_off_scale": 1
+    },
+    "src/features/finance/DebtPlanner.tsx": {
+      "font_weight_off_scale": 2,
+      "inline_style": 11,
+      "radius_off_scale": 1,
+      "sparkles_import": 1,
+      "tofixed_finance": 1,
+      "usd_literal": 8
+    },
+    "src/features/finance/DebtRace.tsx": {
+      "inline_style": 9,
+      "usd_literal": 2
+    },
+    "src/features/finance/Forecast.tsx": {
+      "font_weight_off_scale": 1,
+      "inline_style": 10,
+      "usd_literal": 5
+    },
+    "src/features/finance/ImportWizard/ImportWizard.tsx": {
+      "inline_style": 14,
+      "sparkles_import": 1
+    },
+    "src/features/finance/MoneyHQ/Accounts.tsx": {
+      "font_weight_off_scale": 1,
+      "inline_style": 12,
+      "tofixed_finance": 2,
+      "usd_literal": 3
+    },
+    "src/features/finance/MoneyHQ/Budget.tsx": {
+      "font_weight_off_scale": 1,
+      "inline_style": 5,
+      "radius_off_scale": 1,
+      "sparkles_import": 1,
+      "tofixed_finance": 7,
+      "usd_literal": 2
+    },
+    "src/features/finance/MoneyHQ/Goals.tsx": {
+      "font_weight_off_scale": 3,
+      "inline_style": 7,
+      "radius_off_scale": 1,
+      "tofixed_finance": 6,
+      "usd_literal": 7
+    },
+    "src/features/finance/MoneyHQ/KpiMorph.tsx": {
+      "inline_style": 12,
+      "radius_off_scale": 2
+    },
+    "src/features/finance/MoneyHQ/MoneyHQ.tsx": {
+      "inline_style": 2,
+      "radius_off_scale": 3
+    },
+    "src/features/finance/MoneyHQ/NetWorth.tsx": {
+      "deltapill_import": 1,
+      "usd_literal": 4
+    },
+    "src/features/finance/MoneyHQ/Overview.tsx": {
+      "deltapill_import": 1,
+      "font_weight_off_scale": 1,
+      "inline_style": 9,
+      "radius_off_scale": 4,
+      "sparkles_import": 1,
+      "tofixed_finance": 5,
+      "usd_literal": 19
+    },
+    "src/features/finance/MoneyHQ/Recurring.tsx": {
+      "font_weight_off_scale": 1,
+      "inline_style": 14,
+      "radius_off_scale": 1,
+      "sparkles_import": 1,
+      "usd_literal": 7
+    },
+    "src/features/finance/MoneyHQ/Transactions.tsx": {
+      "inline_style": 5,
+      "tofixed_finance": 5
+    },
+    "src/features/finance/MoneyHQ/insights.ts": {
+      "tofixed_finance": 2,
+      "usd_literal": 2
+    },
+    "src/features/finance/MoneyHQ/ledger.ts": {
+      "tofixed_finance": 5
+    },
+    "src/features/finance/MoneyHQ/widgets.tsx": {
+      "inline_style": 16,
+      "radius_off_scale": 3,
+      "tofixed_finance": 1,
+      "usd_literal": 4
+    },
+    "src/features/finance/Rules/RulesEditor.tsx": {
+      "inline_style": 2
+    },
+    "src/features/finance/shared/SpendWheel.tsx": {
+      "color_literal": 1,
+      "inline_style": 10,
+      "tofixed_finance": 1
+    },
+    "src/features/finance/shared/charts.tsx": {
+      "inline_style": 1,
+      "usd_literal": 1
+    },
+    "src/features/finance/shared/finance.css": {
+      "backdrop_filter": 2,
+      "color_literal": 37,
+      "font_weight_off_scale": 16,
+      "gradient": 42,
+      "infinite_animation": 4,
+      "keyframes": 11,
+      "radius_off_scale": 22,
+      "shadow_literal": 78,
+      "uppercase": 9
+    },
+    "src/features/finance/shared/format.ts": {
+      "tofixed_finance": 3,
+      "usd_literal": 4
+    },
+    "src/features/finance/shared/hooks.ts": {
+      "usd_literal": 1
+    },
+    "src/features/finance/shared/ui.tsx": {
+      "inline_style": 3,
+      "sparkles_import": 2
+    },
+    "src/features/home/HomePage.tsx": {
+      "inline_style": 1
+    },
+    "src/features/home/home.css": {
+      "color_literal": 8,
+      "font_weight_off_scale": 6,
+      "gradient": 4,
+      "keyframes": 1,
+      "radius_off_scale": 11,
+      "shadow_literal": 13,
+      "uppercase": 1
+    },
+    "src/features/home/widgets/Money.tsx": {
+      "deltapill_import": 1,
+      "inline_style": 1,
+      "usd_literal": 1
+    },
+    "src/features/home/widgets/QuickActions.tsx": {
+      "sparkles_import": 1
+    },
+    "src/features/home/widgets/Recent.tsx": {
+      "inline_style": 1
+    },
+    "src/features/home/widgets/Today.tsx": {
+      "inline_style": 2,
+      "radius_off_scale": 2
+    },
+    "src/features/home/widgets/Watchlist.tsx": {
+      "deltapill_import": 1
+    },
+    "src/features/integrations/GoogleSetupSheet.tsx": {
+      "inline_style": 2,
+      "uppercase": 1
+    },
+    "src/features/integrations/NetworkLog.tsx": {
+      "inline_style": 3
+    },
+    "src/features/integrations/integrations.css": {
+      "color_literal": 38,
+      "font_weight_off_scale": 1,
+      "gradient": 13,
+      "keyframes": 6,
+      "radius_off_scale": 15,
+      "shadow_literal": 30,
+      "uppercase": 1
+    },
+    "src/features/lifeapps/AppPage.tsx": {
+      "sparkles_import": 1
+    },
+    "src/features/lifeapps/AppTile.tsx": {
+      "inline_style": 1
+    },
+    "src/features/lifeapps/Art.tsx": {
+      "color_literal": 1,
+      "inline_style": 2
+    },
+    "src/features/lifeapps/BuildStage.tsx": {
+      "inline_style": 4
+    },
+    "src/features/lifeapps/Gallery.tsx": {
+      "sparkles_import": 1
+    },
+    "src/features/lifeapps/Insights.tsx": {
+      "inline_style": 1
+    },
+    "src/features/lifeapps/LifeStack.tsx": {
+      "color_literal": 2,
+      "inline_style": 11
+    },
+    "src/features/lifeapps/PlanPreview.tsx": {
+      "inline_style": 3,
+      "uppercase": 1
+    },
+    "src/features/lifeapps/WizardSheet.tsx": {
+      "color_literal": 1,
+      "inline_style": 3,
+      "sparkles_import": 1,
+      "uppercase": 1,
+      "usd_literal": 1
+    },
+    "src/features/lifeapps/apps/Habits.tsx": {
+      "inline_style": 2,
+      "radius_off_scale": 1,
+      "uppercase": 2
+    },
+    "src/features/lifeapps/apps/LifeOS.tsx": {
+      "inline_style": 6,
+      "radius_off_scale": 1
+    },
+    "src/features/lifeapps/apps/Studio.tsx": {
+      "gradient": 1,
+      "inline_style": 4,
+      "shadow_literal": 2
+    },
+    "src/features/lifeapps/engine/expr.ts": {
+      "usd_literal": 1
+    },
+    "src/features/lifeapps/engine/manifests.ts": {
+      "usd_literal": 1
+    },
+    "src/features/lifeapps/engine/moneyHqSteps.ts": {
+      "usd_literal": 2
+    },
+    "src/features/lifeapps/identity.ts": {
+      "color_literal": 7,
+      "sparkles_import": 1
+    },
+    "src/features/lifeapps/lifeapps.css": {
+      "color_literal": 51,
+      "font_weight_off_scale": 23,
+      "gradient": 29,
+      "infinite_animation": 1,
+      "keyframes": 9,
+      "radius_off_scale": 51,
+      "shadow_literal": 49,
+      "uppercase": 3
+    },
+    "src/features/lifeapps/mock/env.ts": {
+      "usd_literal": 2
+    },
+    "src/features/lifeapps/mock/finance.ts": {
+      "usd_literal": 4
+    },
+    "src/features/lifeapps/mock/metrics.ts": {
+      "usd_literal": 3
+    },
+    "src/features/lifeapps/mock/workbooks.ts": {
+      "color_literal": 8
+    },
+    "src/features/lifeapps/steps/fields.tsx": {
+      "usd_literal": 1
+    },
+    "src/features/markets/CandleChart.tsx": {
+      "inline_style": 1,
+      "tofixed_finance": 1,
+      "usd_literal": 1
+    },
+    "src/features/markets/MarketsPage.tsx": {
+      "deltapill_import": 1,
+      "inline_style": 1,
+      "tofixed_finance": 5,
+      "usd_literal": 3
+    },
+    "src/features/markets/QuoteTile.tsx": {
+      "deltapill_import": 1,
+      "tofixed_finance": 1
+    },
+    "src/features/markets/markets.css": {
+      "backdrop_filter": 2,
+      "font_weight_off_scale": 5,
+      "gradient": 7,
+      "keyframes": 1,
+      "radius_off_scale": 4,
+      "shadow_literal": 12,
+      "uppercase": 1
+    },
+    "src/features/portfolio/Dividends.tsx": {
+      "inline_style": 1,
+      "usd_literal": 4
+    },
+    "src/features/portfolio/HoldingPage.tsx": {
+      "deltapill_import": 2,
+      "font_weight_off_scale": 1,
+      "inline_style": 3,
+      "radius_off_scale": 2,
+      "tofixed_finance": 1,
+      "usd_literal": 7
+    },
+    "src/features/portfolio/Holdings.tsx": {
+      "deltapill_import": 1,
+      "inline_style": 4,
+      "radius_off_scale": 1,
+      "tofixed_finance": 1,
+      "usd_literal": 6
+    },
+    "src/features/portfolio/IPS.tsx": {
+      "inline_style": 3
+    },
+    "src/features/portfolio/Performance.tsx": {
+      "deltapill_import": 1,
+      "usd_literal": 6
+    },
+    "src/features/portfolio/PortfolioDashboard.tsx": {
+      "deltapill_import": 1,
+      "inline_style": 13,
+      "radius_off_scale": 3,
+      "tofixed_finance": 8,
+      "usd_literal": 9
+    },
+    "src/features/portfolio/RebalancePlanner.tsx": {
+      "inline_style": 6,
+      "radius_off_scale": 2,
+      "tofixed_finance": 2,
+      "usd_literal": 6
+    },
+    "src/features/portfolio/portfolio.css": {
+      "color_literal": 6,
+      "font_weight_off_scale": 4,
+      "gradient": 7,
+      "keyframes": 1,
+      "radius_off_scale": 4,
+      "shadow_literal": 13,
+      "uppercase": 1
+    },
+    "src/features/search/CommandPalette.tsx": {
+      "color_literal": 1,
+      "deltapill_import": 1,
+      "inline_style": 1,
+      "sparkles_import": 1
+    },
+    "src/features/search/calc.ts": {
+      "usd_literal": 1
+    },
+    "src/features/search/icons.ts": {
+      "sparkles_import": 1
+    },
+    "src/features/search/nested.tsx": {
+      "color_literal": 7,
+      "inline_style": 2
+    },
+    "src/features/search/palette.css": {
+      "color_literal": 3,
+      "font_weight_off_scale": 1,
+      "gradient": 2,
+      "keyframes": 3,
+      "radius_off_scale": 9,
+      "shadow_literal": 6,
+      "uppercase": 1
+    },
+    "src/features/settings/SettingsPage.tsx": {
+      "radius_off_scale": 2
+    },
+    "src/features/settings/sections/Appearance.tsx": {
+      "color_literal": 48,
+      "gradient": 2,
+      "inline_style": 21
+    },
+    "src/features/settings/sections/Editor.tsx": {
+      "inline_style": 1
+    },
+    "src/features/settings/sections/General.tsx": {
+      "usd_literal": 1
+    },
+    "src/features/settings/security/SecurityCenter.tsx": {
+      "inline_style": 4
+    },
+    "src/features/settings/security/dialogs.tsx": {
+      "inline_style": 3,
+      "sparkles_import": 1
+    },
+    "src/features/settings/settings.css": {
+      "color_literal": 45,
+      "font_weight_off_scale": 13,
+      "gradient": 20,
+      "infinite_animation": 2,
+      "keyframes": 9,
+      "radius_off_scale": 29,
+      "shadow_literal": 49,
+      "uppercase": 7
+    },
+    "src/features/sheets/CondFormatPopover.tsx": {
+      "color_literal": 4,
+      "gradient": 1,
+      "inline_style": 3
+    },
+    "src/features/sheets/FormulaAssist.tsx": {
+      "inline_style": 2
+    },
+    "src/features/sheets/GridView.tsx": {
+      "inline_style": 1
+    },
+    "src/features/sheets/SheetEmbed.tsx": {
+      "inline_style": 1
+    },
+    "src/features/sheets/SheetTabs.tsx": {
+      "inline_style": 1
+    },
+    "src/features/sheets/Toolbar.tsx": {
+      "color_literal": 1,
+      "inline_style": 1
+    },
+    "src/features/sheets/engine/calc.ts": {
+      "color_literal": 4
+    },
+    "src/features/sheets/engine/xlsx.ts": {
+      "color_literal": 1
+    },
+    "src/features/sheets/palette.ts": {
+      "gradient": 1
+    },
+    "src/features/sheets/sheets.css": {
+      "backdrop_filter": 2,
+      "color_literal": 4,
+      "gradient": 8,
+      "keyframes": 1,
+      "radius_off_scale": 10,
+      "shadow_literal": 20
+    },
+    "src/features/shell/Breadcrumbs.tsx": {
+      "inline_style": 1,
+      "sparkles_import": 1
+    },
+    "src/features/shell/ErrorBoundary.tsx": {
+      "inline_style": 1
+    },
+    "src/features/shell/ImportDialog.tsx": {
+      "inline_style": 3
+    },
+    "src/features/shell/OpenExternalPrompt.tsx": {
+      "inline_style": 1
+    },
+    "src/features/shell/PageActions.tsx": {
+      "inline_style": 1
+    },
+    "src/features/shell/PageIcon.tsx": {
+      "inline_style": 3,
+      "sparkles_import": 1
+    },
+    "src/features/shell/RightPanel.tsx": {
+      "inline_style": 3,
+      "shadow_literal": 1,
+      "sparkles_import": 1,
+      "uppercase": 1
+    },
+    "src/features/shell/RouteSkeleton.tsx": {
+      "gradient": 2,
+      "inline_style": 1,
+      "radius_off_scale": 10
+    },
+    "src/features/shell/Shell.tsx": {
+      "inline_style": 1
+    },
+    "src/features/shell/ShortcutsDialog.tsx": {
+      "inline_style": 1
+    },
+    "src/features/shell/Sidebar/PageTree.tsx": {
+      "inline_style": 5
+    },
+    "src/features/shell/Sidebar/Sidebar.tsx": {
+      "inline_style": 7,
+      "shadow_literal": 1,
+      "sparkles_import": 1
+    },
+    "src/features/shell/Sidebar/lifeAppIdentity.ts": {
+      "color_literal": 7,
+      "sparkles_import": 1
+    },
+    "src/features/shell/TemplatesDialog.tsx": {
+      "inline_style": 1
+    },
+    "src/features/shell/TrashPage.tsx": {
+      "inline_style": 1,
+      "radius_off_scale": 1
+    },
+    "src/features/shell/chrome.css": {
+      "color_literal": 4
+    },
+    "src/features/shell/icons.ts": {
+      "sparkles_import": 1
+    },
+    "src/features/shell/shell.css": {
+      "backdrop_filter": 2,
+      "color_literal": 24,
+      "font_weight_off_scale": 2,
+      "gradient": 22,
+      "keyframes": 3,
+      "radius_off_scale": 13,
+      "shadow_literal": 25,
+      "uppercase": 3
+    },
+    "src/features/taxes/Estimator.tsx": {
+      "inline_style": 14,
+      "radius_off_scale": 2,
+      "sparkles_import": 1,
+      "tofixed_finance": 2,
+      "usd_literal": 18
+    },
+    "src/features/taxes/QuarterlyPlan.tsx": {
+      "font_weight_off_scale": 2,
+      "inline_style": 5,
+      "radius_off_scale": 1,
+      "tofixed_finance": 2,
+      "usd_literal": 3
+    },
+    "src/features/taxes/TaxHub.tsx": {
+      "inline_style": 10,
+      "radius_off_scale": 2,
+      "usd_literal": 7
+    },
+    "src/features/taxes/data.ts": {
+      "tofixed_finance": 6
+    },
+    "src/features/taxes/taxes.css": {
+      "color_literal": 9,
+      "font_weight_off_scale": 4,
+      "gradient": 9,
+      "radius_off_scale": 6,
+      "shadow_literal": 22,
+      "uppercase": 2
+    },
+    "src/features/vault/AppMark.tsx": {
+      "color_literal": 36,
+      "inline_style": 3
+    },
+    "src/features/vault/LockScreen.tsx": {
+      "inline_style": 1
+    },
+    "src/features/vault/Onboarding/Onboarding.tsx": {
+      "inline_style": 2,
+      "radius_off_scale": 1
+    },
+    "src/features/vault/Onboarding/steps.tsx": {
+      "inline_style": 13,
+      "sparkles_import": 1
+    },
+    "src/features/vault/PasswordField.tsx": {
+      "inline_style": 5
+    },
+    "src/features/vault/RecoveryCeremony.tsx": {
+      "color_literal": 6,
+      "inline_style": 3
+    },
+    "src/features/vault/RecoveryUnlock.tsx": {
+      "inline_style": 1
+    },
+    "src/features/vault/vault.css": {
+      "color_literal": 38,
+      "font_weight_off_scale": 5,
+      "gradient": 22,
+      "infinite_animation": 1,
+      "keyframes": 1,
+      "radius_off_scale": 9,
+      "shadow_literal": 22
+    },
+    "src/lib/format.ts": {
+      "usd_literal": 1
+    },
+    "src/lib/money.ts": {
+      "usd_literal": 2
+    },
+    "src/stores/settings.ts": {
+      "usd_literal": 1
+    },
+    "src/styles/components.css": {
+      "backdrop_filter": 10,
+      "color_literal": 101,
+      "font_weight_off_scale": 13,
+      "gradient": 53,
+      "infinite_animation": 6,
+      "keyframes": 28,
+      "radius_off_scale": 36,
+      "shadow_literal": 91,
+      "uppercase": 3
+    },
+    "src/styles/editor.css": {
+      "color_literal": 38,
+      "font_weight_off_scale": 10,
+      "gradient": 25,
+      "infinite_animation": 1,
+      "keyframes": 3,
+      "radius_off_scale": 35,
+      "shadow_literal": 41,
+      "uppercase": 2
+    },
+    "src/styles/grid.css": {
+      "font_weight_off_scale": 6,
+      "gradient": 2,
+      "radius_off_scale": 13,
+      "shadow_literal": 25,
+      "uppercase": 2
+    },
+    "src/styles/material.css": {
+      "color_literal": 14,
+      "gradient": 22,
+      "radius_off_scale": 2,
+      "shadow_literal": 28
+    },
+    "src/styles/print.css": {
+      "color_literal": 9
+    },
+    "src/styles/theme.css": {
+      "color_literal": 2,
+      "font_weight_off_scale": 3,
+      "gradient": 3,
+      "infinite_animation": 1,
+      "keyframes": 16,
+      "radius_off_scale": 3,
+      "shadow_literal": 1
+    },
+    "src/styles/tokens.css": {
+      "radius_off_scale": 3
+    },
+    "src/ui/Avatar.tsx": {
+      "inline_style": 2
+    },
+    "src/ui/Banner.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/Checkbox.tsx": {
+      "inline_style": 2
+    },
+    "src/ui/ColorPicker.tsx": {
+      "gradient": 1,
+      "inline_style": 2
+    },
+    "src/ui/Combobox.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/ContextMenu.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/DatePicker.tsx": {
+      "inline_style": 4
+    },
+    "src/ui/DeltaPill.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/EmojiPicker.tsx": {
+      "inline_style": 3,
+      "radius_off_scale": 2
+    },
+    "src/ui/EmojiPickerPanel.tsx": {
+      "inline_style": 8
+    },
+    "src/ui/EmptyState.tsx": {
+      "sparkles_import": 1
+    },
+    "src/ui/Gallery.tsx": {
+      "color_literal": 3,
+      "deltapill_import": 1,
+      "gradient": 1,
+      "inline_style": 15,
+      "radius_off_scale": 2,
+      "shadow_literal": 6,
+      "sparkles_import": 1,
+      "uppercase": 2,
+      "usd_literal": 12
+    },
+    "src/ui/GalleryV2.tsx": {
+      "deltapill_import": 1,
+      "gradient": 1,
+      "inline_style": 6,
+      "radius_off_scale": 9,
+      "shadow_literal": 1,
+      "sparkles_import": 1,
+      "uppercase": 2,
+      "usd_literal": 4
+    },
+    "src/ui/Input.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/KpiTile.tsx": {
+      "deltapill_import": 1
+    },
+    "src/ui/Menu.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/MoneyField.tsx": {
+      "usd_literal": 1
+    },
+    "src/ui/Popover.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/Progress.tsx": {
+      "inline_style": 4
+    },
+    "src/ui/Radio.tsx": {
+      "inline_style": 2
+    },
+    "src/ui/Resizable.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/Ring.tsx": {
+      "inline_style": 2
+    },
+    "src/ui/SecretField.tsx": {
+      "inline_style": 2
+    },
+    "src/ui/Segmented.tsx": {
+      "inline_style": 1,
+      "radius_off_scale": 1
+    },
+    "src/ui/Select.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/Sensitive.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/Skeleton.tsx": {
+      "inline_style": 2
+    },
+    "src/ui/SlabGlyph.tsx": {
+      "inline_style": 8
+    },
+    "src/ui/Slider.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/StrengthMeter.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/Tabs.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/Tag.tsx": {
+      "inline_style": 1
+    },
+    "src/ui/Toast.tsx": {
+      "inline_style": 6
+    },
+    "src/ui/motion/RollingNumber.tsx": {
+      "inline_style": 1
+    }
+  }
+}

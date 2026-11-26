@@ -188,7 +188,8 @@ pub fn verify_schema(conn: &Connection) -> Result<()> {
         Ok(())
     } else {
         Err(StoreError::Integrity(
-            "the vault database has unexpected schema objects (it was modified outside Ultra Note)".into(),
+            "the vault database has unexpected schema objects (it was modified outside Ultra Note)"
+                .into(),
         ))
     }
 }

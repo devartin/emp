@@ -109,7 +109,7 @@ secret_key!(
     pub FileKey
 );
 secret_key!(
-    /// The 32-byte device key kept in the OS keychain (service `com.devartin.emp`,
+    /// The 32-byte device key kept in the OS keychain (service `com.devartin.ultranote`,
     /// account `device-key/<vault_id hex>`) or in `<data>/device.key` (0600). Used directly as `KEK_dev`.
     pub DeviceKey
 );
