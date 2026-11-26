@@ -3,9 +3,10 @@ cx, cy = 512, 503
 C, S = 0.8660254, 0.5
 def P(x, y, z): return (cx + (x - y) * C, cy + (x + y) * S - z)
 def pts(ps): return " ".join("%.2f,%.2f" % P(*p) for p in ps)
-B, H, G = 272, 76, 20
-MID = 172
-slabs = [(B, B, 0, H), (MID, B, H + G, H), (B, B, 2 * (H + G), H)]
+B, H, G = 272, 76, int(sys.argv[3]) if len(sys.argv) > 3 else 24
+INSET = int(sys.argv[2]) if len(sys.argv) > 2 else 0
+M = B - INSET
+slabs = [(B, B, 0, H), (M, M, H + G, H), (B, B, 2 * (H + G), H)]
 def mix(c1, c2, k):
     a=[int(c1[j:j+2],16) for j in (1,3,5)]; b=[int(c2[j:j+2],16) for j in (1,3,5)]
     return "#%02x%02x%02x" % tuple(round(a[n]+(b[n]-a[n])*k) for n in range(3))
