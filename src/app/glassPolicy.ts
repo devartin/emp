@@ -8,14 +8,38 @@
  *   pref "off"  → glass off everywhere.
  *   pref "auto" → off when the OS asks for reduced transparency or effects are reduced; otherwise on. On Linux
  *                 (WebKitGTK, where backdrop blur is the expensive part) Auto starts *probing*: glass on while the
- *                 glass probe measures frames during overlay animations; when the dropped-frame budget is exceeded the
- *                 verdict "failed" is persisted and Auto resolves to off from then on (including at boot, flash-free).
- *                 Choosing Auto again from On/Off (or "Test again") clears the verdict and re-probes.
+ *                 glass probe measures frames during overlay animations. When the dropped-frame budget is exceeded,
+ *                 glass steps down for the rest of that session and a strike is recorded. A second strike in a later
+ *                 session (no clean session in between, strikes older than STRIKE_TTL_MS forgotten) persists the
+ *                 verdict "failed", and Auto resolves to off from then on, including at boot without a flash. A failed
+ *                 verdict expires after VERDICT_TTL_MS or when the app version changes, and the probe runs again.
+ *                 Choosing Auto again from On/Off (or "Test again") clears the verdict and strikes and re-probes.
  */
 
 export type GlassPref = "auto" | "on" | "off";
-/** Persisted probe outcome. Only "failed" is ever stored; a pass is per session. */
+/** Persisted step-down (the only verdict the boot script reads). Passes and strikes live in `GlassProbeLog`. */
 export type GlassVerdict = "failed" | null;
+
+/** Probe history for this machine (boot cache `glassLog`; the boot script ignores it). Times are epoch ms. */
+export interface GlassProbeLog {
+  /** Sessions in a row whose probe exceeded the budget (reset by a clean session). */
+  strikes: number;
+  lastFail: number;
+  /** Sessions whose probe passed. */
+  passes: number;
+  lastPass: number;
+  /** When the verdict "failed" was persisted, and on which app version ("" if unknown at the time). */
+  failedAt: number;
+  failedVersion: string;
+}
+
+export const EMPTY_LOG: GlassProbeLog = { strikes: 0, lastFail: 0, passes: 0, lastPass: 0, failedAt: 0, failedVersion: "" };
+/** Sessions with a failed probe (consecutive, no pass between) before the step-down is persisted. */
+export const FAIL_SESSIONS = 2;
+/** A strike older than this is forgotten (a busy afternoon months ago says nothing about today). */
+export const STRIKE_TTL_MS = 14 * 24 * 3600 * 1000;
+/** A persisted step-down is measured again after this long (drivers and WebKitGTK get updated). */
+export const VERDICT_TTL_MS = 30 * 24 * 3600 * 1000;
 
 export type GlassStatus =
   | "forced-on"
@@ -28,6 +52,8 @@ export type GlassStatus =
   | "auto-passed"
   /** Auto on Linux: the probe stepped down (persisted). */
   | "auto-stepped-down"
+  /** Auto on Linux: the probe exceeded the budget this session; off until the next launch, which measures again. */
+  | "auto-session-off"
   /** Auto: the OS asks for reduced transparency. */
   | "auto-os"
   /** Auto: visual effects are reduced (setting or frame monitor). */
@@ -39,8 +65,10 @@ export interface GlassInputs {
   linux: boolean;
   reducedTransparency: boolean;
   effectsReduced: boolean;
-  /** Probe finished cleanly this session (not persisted). */
+  /** Probe finished cleanly this session. */
   passed?: boolean;
+  /** Probe exceeded the budget this session, but not yet in enough sessions to persist the verdict. */
+  sessionFailed?: boolean;
 }
 
 export interface GlassDecision {
@@ -57,6 +85,7 @@ export function decideGlass(i: GlassInputs): GlassDecision {
   if (i.effectsReduced) return { glass: "off", status: "auto-effects", probe: false };
   if (!i.linux) return { glass: "on", status: "auto-on", probe: false };
   if (i.verdict === "failed") return { glass: "off", status: "auto-stepped-down", probe: false };
+  if (i.sessionFailed) return { glass: "off", status: "auto-session-off", probe: false };
   if (i.passed) return { glass: "on", status: "auto-passed", probe: false };
   return { glass: "on", status: "auto-probing", probe: true };
 }
@@ -71,14 +100,66 @@ export const BOOT_KEY = "emp.boot";
 export interface GlassBootFields {
   pref: GlassPref;
   verdict: GlassVerdict;
+  /** Omitted → the existing `glassLog` is kept as it is. */
+  log?: GlassProbeLog;
 }
 
-/** Read `glass` / `glassProbe` from the parsed emp.boot object (absent or invalid → auto, no verdict). */
-export function readGlassFields(o: unknown): GlassBootFields {
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+
+function readLog(v: unknown): GlassProbeLog {
+  if (!v || typeof v !== "object") return { ...EMPTY_LOG };
+  const r = v as Record<string, unknown>;
+  return {
+    strikes: Math.floor(num(r.strikes)),
+    lastFail: num(r.lastFail),
+    passes: Math.floor(num(r.passes)),
+    lastPass: num(r.lastPass),
+    failedAt: num(r.failedAt),
+    failedVersion: typeof r.failedVersion === "string" ? r.failedVersion.slice(0, 64) : "",
+  };
+}
+
+const isEmptyLog = (l: GlassProbeLog) => (Object.keys(EMPTY_LOG) as (keyof GlassProbeLog)[]).every((k) => l[k] === EMPTY_LOG[k]);
+
+/** Read `glass` / `glassProbe` / `glassLog` from the parsed emp.boot object (absent or invalid → auto, no verdict). */
+export function readGlassFields(o: unknown): Required<GlassBootFields> {
   const r = (o && typeof o === "object" ? o : {}) as Record<string, unknown>;
   const pref: GlassPref = r.glass === "on" || r.glass === "off" ? r.glass : "auto";
   const verdict: GlassVerdict = r.glassProbe === "failed" ? "failed" : null;
-  return { pref, verdict };
+  return { pref, verdict, log: readLog(r.glassLog) };
+}
+
+// ───────────────────────────────────────────────────────────────────────────── probe outcomes
+
+export interface ProbeOutcome {
+  verdict: GlassVerdict;
+  log: GlassProbeLog;
+  /** Step down for the rest of this session only (verdict not persisted yet). */
+  sessionFailed: boolean;
+}
+
+/**
+ * Fold one session's probe result into the machine's history. A failure steps down at once for the session; it
+ * persists the verdict only on the FAIL_SESSIONS-th consecutive failing session. A pass clears the strikes.
+ */
+export function recordProbeResult(log: GlassProbeLog, result: "exceeded" | "passed", now: number, version: string): ProbeOutcome {
+  if (result === "passed") return { verdict: null, sessionFailed: false, log: { ...log, strikes: 0, passes: log.passes + 1, lastPass: now } };
+  const recent = log.strikes > 0 && now - log.lastFail <= STRIKE_TTL_MS && log.lastFail >= log.lastPass;
+  const strikes = (recent ? log.strikes : 0) + 1;
+  const next: GlassProbeLog = { ...log, strikes, lastFail: now };
+  if (strikes < FAIL_SESSIONS) return { verdict: null, sessionFailed: true, log: next };
+  return { verdict: "failed", sessionFailed: false, log: { ...next, failedAt: now, failedVersion: version } };
+}
+
+/**
+ * Whether a persisted "failed" verdict should be dropped and measured again: it is older than VERDICT_TTL_MS, or the
+ * app version differs from the one it was recorded on (both known). A verdict with no timestamp (written by hand or by
+ * an older build) is not expired; the caller stamps it.
+ */
+export function verdictExpired(verdict: GlassVerdict, log: GlassProbeLog, now: number, version: string): boolean {
+  if (verdict !== "failed") return false;
+  if (log.failedAt > 0 && now - log.failedAt > VERDICT_TTL_MS) return true;
+  return !!version && !!log.failedVersion && version !== log.failedVersion;
 }
 
 /**
@@ -93,12 +174,16 @@ export function mergeGlassFields(raw: string | null, f: GlassBootFields): string
   } catch {
     o = {};
   }
-  if (raw === null && f.pref === "auto" && !f.verdict) return null;
+  if (raw === null && f.pref === "auto" && !f.verdict && (!f.log || isEmptyLog(f.log))) return null;
   const next: Record<string, unknown> = { ...o };
   delete next.glass;
   delete next.glassProbe;
   if (f.pref !== "auto") next.glass = f.pref;
   if (f.verdict) next.glassProbe = f.verdict;
+  if (f.log) {
+    delete next.glassLog;
+    if (!isEmptyLog(f.log)) next.glassLog = { ...f.log };
+  }
   const out = JSON.stringify(next);
   return out === raw ? null : out;
 }

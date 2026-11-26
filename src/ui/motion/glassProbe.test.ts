@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createFrameBudget, estimateRefresh } from "./glassProbe";
+import { GLASS_OVERLAY_SELECTOR, animationTouchesGlass, createFrameBudget, estimateRefresh, holdsGlass, insideGlass, mutationTouchesGlass } from "./glassProbe";
 
 const R = 1000 / 60;
 
@@ -82,3 +82,51 @@ describe("estimateRefresh", () => {
     expect(estimateRefresh(Array.from({ length: 30 }, () => 500))).toBeCloseTo(1000 / 60, 3);
   });
 });
+
+/** Minimal element: `glass` = is a glass layer; `inGlass` = has a glass ancestor; `holds` = has a glass descendant. */
+function el({ glass = false, inGlass = false, holds = false, ignored = false } = {}) {
+  return {
+    closest: (sel: string) => (sel === GLASS_OVERLAY_SELECTOR ? (glass || inGlass ? {} : null) : sel === "[data-glass-probe-ignore]" && ignored ? {} : null),
+    matches: (sel: string) => sel === GLASS_OVERLAY_SELECTOR && glass,
+    querySelector: (sel: string) => (sel === GLASS_OVERLAY_SELECTOR && holds ? {} : null),
+  };
+}
+const text = { nodeType: 3 };
+
+describe("what wakes the probe", () => {
+  it("toasts are not glass overlays for the probe", () => {
+    expect(GLASS_OVERLAY_SELECTOR).not.toContain("emp-toast");
+  });
+
+  it("only mutations that (un)mount a glass layer or change one count — not route renders", () => {
+    const page = el();
+    const routeRender = { target: page, addedNodes: [el(), text], removedNodes: [el()] };
+    expect(mutationTouchesGlass(routeRender)).toBe(false);
+    expect(mutationTouchesGlass({ target: page, addedNodes: [el({ glass: true })], removedNodes: [] })).toBe(true); // menu portal mounted
+    expect(mutationTouchesGlass({ target: page, addedNodes: [], removedNodes: [el({ holds: true })] })).toBe(true); // dialog wrapper unmounted
+    expect(mutationTouchesGlass({ target: el({ inGlass: true }), addedNodes: [text], removedNodes: [] })).toBe(true); // palette results changed
+    expect(mutationTouchesGlass({ target: el({ inGlass: true }), addedNodes: [], removedNodes: [] })).toBe(false);
+    expect(mutationTouchesGlass({ target: page, addedNodes: [el({ glass: true, ignored: true })], removedNodes: [] })).toBe(false);
+  });
+
+  it("input only counts inside an open glass layer", () => {
+    expect(insideGlass(el({ inGlass: true }))).toBe(true);
+    expect(insideGlass(el())).toBe(false);
+    expect(insideGlass(window_like())).toBe(false);
+    expect(insideGlass(null)).toBe(false);
+  });
+
+  it("animations count on, inside or around a glass layer, not elsewhere on the page", () => {
+    expect(animationTouchesGlass(el({ glass: true }))).toBe(true);
+    expect(animationTouchesGlass(el({ inGlass: true }))).toBe(true);
+    expect(animationTouchesGlass(el({ holds: true }))).toBe(true);
+    expect(animationTouchesGlass(el())).toBe(false); // spinner / shimmer on the page
+    expect(animationTouchesGlass(null)).toBe(false);
+    expect(holdsGlass(el({ holds: true, ignored: true }))).toBe(false);
+  });
+});
+
+/** An event target that isn't an element (window / document). */
+function window_like() {
+  return { addEventListener() {} };
+}

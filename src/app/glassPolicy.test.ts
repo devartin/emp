@@ -2,7 +2,22 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
-import { decideGlass, isLinuxUserAgent, mergeGlassFields, parseKvPref, readGlassFields, type GlassInputs, type GlassPref, type GlassVerdict } from "./glassPolicy";
+import {
+  EMPTY_LOG,
+  FAIL_SESSIONS,
+  STRIKE_TTL_MS,
+  VERDICT_TTL_MS,
+  decideGlass,
+  isLinuxUserAgent,
+  mergeGlassFields,
+  parseKvPref,
+  readGlassFields,
+  recordProbeResult,
+  verdictExpired,
+  type GlassInputs,
+  type GlassPref,
+  type GlassVerdict,
+} from "./glassPolicy";
 
 const base: GlassInputs = { pref: "auto", verdict: null, linux: false, reducedTransparency: false, effectsReduced: false };
 
@@ -35,6 +50,13 @@ describe("decideGlass", () => {
     expect(decideGlass({ ...base, linux: true })).toEqual({ glass: "on", status: "auto-probing", probe: true });
     expect(decideGlass({ ...base, linux: true, verdict: "failed" })).toEqual({ glass: "off", status: "auto-stepped-down", probe: false });
     expect(decideGlass({ ...base, linux: true, passed: true })).toEqual({ glass: "on", status: "auto-passed", probe: false });
+    expect(decideGlass({ ...base, linux: true, sessionFailed: true })).toEqual({ glass: "off", status: "auto-session-off", probe: false });
+  });
+
+  it("a session step-down only applies to Auto on Linux", () => {
+    expect(decideGlass({ ...base, pref: "on", linux: true, sessionFailed: true })).toMatchObject({ glass: "on", status: "forced-on" });
+    expect(decideGlass({ ...base, sessionFailed: true })).toMatchObject({ glass: "on", status: "auto-on" });
+    expect(decideGlass({ ...base, linux: true, sessionFailed: true, reducedTransparency: true })).toMatchObject({ status: "auto-os" });
   });
 
   it("A stale verdict doesn't affect non-Linux", () => {
@@ -54,9 +76,10 @@ describe("isLinuxUserAgent", () => {
 
 describe("boot cache fields", () => {
   it("reads defaults from missing or invalid values", () => {
-    expect(readGlassFields(null)).toEqual({ pref: "auto", verdict: null });
-    expect(readGlassFields({ glass: "maybe", glassProbe: "passed" })).toEqual({ pref: "auto", verdict: null });
-    expect(readGlassFields({ glass: "off", glassProbe: "failed" })).toEqual({ pref: "off", verdict: "failed" });
+    expect(readGlassFields(null)).toEqual({ pref: "auto", verdict: null, log: EMPTY_LOG });
+    expect(readGlassFields({ glass: "maybe", glassProbe: "passed", glassLog: "x" })).toEqual({ pref: "auto", verdict: null, log: EMPTY_LOG });
+    expect(readGlassFields({ glass: "off", glassProbe: "failed" })).toEqual({ pref: "off", verdict: "failed", log: EMPTY_LOG });
+    expect(readGlassFields({ glassLog: { strikes: 1.7, lastFail: 5, passes: -2, lastPass: "x", failedVersion: 3 } }).log).toEqual({ ...EMPTY_LOG, strikes: 1, lastFail: 5 });
   });
 
   it("merges without touching the five bootPrefs keys", () => {
@@ -71,6 +94,14 @@ describe("boot cache fields", () => {
     expect(JSON.parse(mergeGlassFields(raw, { pref: "auto", verdict: "failed" }) as string)).toEqual({ theme: "light", glassProbe: "failed" });
   });
 
+  it("writes the probe log only when it has content, and keeps it when omitted", () => {
+    const raw = JSON.stringify({ theme: "light", glassLog: { strikes: 1, lastFail: 9 } });
+    expect(JSON.parse(mergeGlassFields(raw, { pref: "on", verdict: null }) as string)).toEqual({ theme: "light", glass: "on", glassLog: { strikes: 1, lastFail: 9 } });
+    expect(JSON.parse(mergeGlassFields(raw, { pref: "auto", verdict: null, log: EMPTY_LOG }) as string)).toEqual({ theme: "light" });
+    expect(mergeGlassFields(null, { pref: "auto", verdict: null, log: EMPTY_LOG })).toBeNull();
+    expect(JSON.parse(mergeGlassFields(null, { pref: "auto", verdict: null, log: { ...EMPTY_LOG, passes: 1, lastPass: 2 } }) as string)).toEqual({ glassLog: { ...EMPTY_LOG, passes: 1, lastPass: 2 } });
+  });
+
   it("reports no-op merges so callers skip the write", () => {
     const raw = JSON.stringify({ theme: "light", glass: "off" });
     expect(mergeGlassFields(raw, { pref: "off", verdict: null })).toBeNull();
@@ -80,7 +111,8 @@ describe("boot cache fields", () => {
   it("restores fields after a whitelisting rewrite and survives corrupt JSON", () => {
     // writeBootPrefs() keeps only five keys; the controller re-merges.
     const stripped = JSON.stringify({ theme: "dark", accent: "graphite", motion: "system", density: "comfortable", textSize: "m" });
-    expect(readGlassFields(JSON.parse(mergeGlassFields(stripped, { pref: "auto", verdict: "failed" }) as string))).toEqual({ pref: "auto", verdict: "failed" });
+    const log = { ...EMPTY_LOG, strikes: 1, lastFail: 1000, passes: 3, lastPass: 500 };
+    expect(readGlassFields(JSON.parse(mergeGlassFields(stripped, { pref: "auto", verdict: "failed", log }) as string))).toEqual({ pref: "auto", verdict: "failed", log });
     expect(JSON.parse(mergeGlassFields("{not json", { pref: "off", verdict: null }) as string)).toEqual({ glass: "off" });
   });
 
@@ -89,6 +121,48 @@ describe("boot cache fields", () => {
     expect(parseKvPref("off")).toBe("off");
     expect(parseKvPref({ pref: "sometimes" })).toBeNull();
     expect(parseKvPref(null)).toBeNull();
+  });
+});
+
+describe("probe outcomes across sessions", () => {
+  const DAY = 24 * 3600 * 1000;
+  const T0 = Date.UTC(2026, 10, 26);
+
+  it("one bad session steps down for that session only; the next session measures again", () => {
+    const s1 = recordProbeResult(EMPTY_LOG, "exceeded", T0, "1.0.0");
+    expect(FAIL_SESSIONS).toBe(2);
+    expect(s1).toMatchObject({ verdict: null, sessionFailed: true, log: { strikes: 1, lastFail: T0 } });
+    // Next launch: nothing persisted → boot and Auto resolve to glass on, probing.
+    expect(decideGlass({ ...base, linux: true, verdict: s1.verdict })).toMatchObject({ glass: "on", status: "auto-probing" });
+  });
+
+  it("a second consecutive bad session persists the step-down, stamped with time and version", () => {
+    const s1 = recordProbeResult(EMPTY_LOG, "exceeded", T0, "1.0.0");
+    const s2 = recordProbeResult(s1.log, "exceeded", T0 + DAY, "1.0.0");
+    expect(s2).toMatchObject({ verdict: "failed", sessionFailed: false, log: { strikes: 2, failedAt: T0 + DAY, failedVersion: "1.0.0" } });
+  });
+
+  it("a clean session in between clears the strikes", () => {
+    const s1 = recordProbeResult(EMPTY_LOG, "exceeded", T0, "1.0.0");
+    const p = recordProbeResult(s1.log, "passed", T0 + DAY, "1.0.0");
+    expect(p).toMatchObject({ verdict: null, sessionFailed: false, log: { strikes: 0, passes: 1, lastPass: T0 + DAY } });
+    expect(recordProbeResult(p.log, "exceeded", T0 + 2 * DAY, "1.0.0")).toMatchObject({ verdict: null, sessionFailed: true, log: { strikes: 1 } });
+  });
+
+  it("an old strike is forgotten", () => {
+    const s1 = recordProbeResult(EMPTY_LOG, "exceeded", T0, "1.0.0");
+    expect(recordProbeResult(s1.log, "exceeded", T0 + STRIKE_TTL_MS + 1, "1.0.0")).toMatchObject({ verdict: null, sessionFailed: true, log: { strikes: 1 } });
+  });
+
+  it("a persisted step-down expires with age or a new app version", () => {
+    const log = { ...EMPTY_LOG, strikes: 2, failedAt: T0, failedVersion: "1.0.0" };
+    expect(verdictExpired("failed", log, T0 + DAY, "1.0.0")).toBe(false);
+    expect(verdictExpired("failed", log, T0 + DAY, "")).toBe(false); // version not known yet
+    expect(verdictExpired("failed", log, T0 + DAY, "1.1.0")).toBe(true);
+    expect(verdictExpired("failed", log, T0 + VERDICT_TTL_MS + 1, "1.0.0")).toBe(true);
+    expect(verdictExpired(null, log, T0 + VERDICT_TTL_MS + 1, "2.0.0")).toBe(false);
+    // Unstamped (hand-written / older build): not expired; the controller stamps it.
+    expect(verdictExpired("failed", EMPTY_LOG, T0, "1.0.0")).toBe(false);
   });
 });
 

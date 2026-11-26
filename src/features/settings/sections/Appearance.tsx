@@ -238,7 +238,8 @@ const TRANSPARENCY_NOTES: Record<GlassStatus, string> = {
   "auto-on": "Frosted glass on menus, dialogs and the command palette, unless your system asks for less transparency.",
   "auto-probing": "Glass is on while EMP checks that menus and dialogs stay smooth on this computer.",
   "auto-passed": "Glass is on. Menus and dialogs run smoothly with it on this computer.",
-  "auto-stepped-down": "Turned off on this computer because menus and dialogs dropped frames with glass.",
+  "auto-stepped-down": "Turned off on this computer because menus and dialogs dropped frames with glass more than once.",
+  "auto-session-off": "Off for now because menus and dialogs dropped frames with glass. EMP checks again next time it opens.",
   "auto-os": "Off because your system asks for reduced transparency.",
   "auto-effects": "Off while visual effects are reduced.",
 };
@@ -254,7 +255,7 @@ function TransparencyRow() {
       id="transparency"
       label="Transparency"
       description={
-        g.status === "auto-stepped-down" ? (
+        g.status === "auto-stepped-down" || g.status === "auto-session-off" ? (
           <>
             {note}{" "}
             <Button size="xs" variant="link" onClick={() => retestGlass()}>

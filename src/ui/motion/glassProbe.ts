@@ -1,13 +1,18 @@
 /**
  * Glass probe — the frame monitor's transparency step (docs/DESIGN.md §4.12 / §5 degrade ladder). Used on Linux while
- * Transparency is Auto: glass starts on, and this measures frames *only while glass overlays (menus, popovers,
- * dialogs, the palette, sheets, toasts) are on screen and animating*. Counting rules match `lib/perf.ts`: a frame is
- * dropped when its interval exceeds 1.5× the refresh interval, and intervals over 100ms are long tasks (chunk load,
- * mount), not compositing cost, so they are skipped.
+ * Transparency is Auto: glass starts on, and this measures frames *only while a glass overlay (menu, popover, dialog,
+ * the palette, sheet, floating toolbar) is on screen and that overlay itself is animating or being used*:
+ *   - for ~520ms after a glass layer mounts/unmounts or its own subtree changes (not any DOM change on the page),
+ *   - for ~320ms after pointer/wheel/key input whose target is inside an open glass layer,
+ *   - while a WAAPI/CSS animation runs on (or inside, or around) a glass layer — not page spinners or shimmer.
+ * Toasts don't count: they are small, transient and appear during unrelated work (saves, sync, route loads).
+ * Sampling pauses for 1s after a route change (hashchange/popstate), as in `lib/perf.ts`: route mounts are CPU work
+ * that glass doesn't cause. Frame counting matches `lib/perf.ts`: a frame is dropped when its interval exceeds 1.5×
+ * the refresh interval, and intervals over 100ms are long tasks (chunk load, mount), so they are skipped.
  *
  * Budget: windows of 60 sampled frames; > 10% dropped makes a window bad; 2 consecutive bad windows exceed the budget
- * (the caller steps glass down and persists that). 6 consecutive clean windows pass the probe for this session and
- * sampling stops. Nothing runs (no rAF loop) while no glass overlay is mounted.
+ * for this session. 6 consecutive clean windows pass it and sampling stops. Nothing runs (no rAF loop) while no glass
+ * overlay is active. What a session result means across launches is decided in `app/glassPolicy`.
  */
 
 export interface BudgetOptions {
@@ -107,12 +112,61 @@ export function estimateRefresh(intervals: readonly number[]): number {
 
 /**
  * Floating glass layers: the `.glass-*` recipes plus the kit overlays that carry their own backdrop blur (menu,
- * popover/select/combobox/date picker, dialog, sheet, toast), the editor's floating toolbar, the markets search list
- * and the floating sidebar. Persistent bars (topbar, bulk-action bars) aren't overlays and don't count.
- * `[data-opaque]` glass (opened inside another overlay) has no backdrop and doesn't count either.
+ * popover/select/combobox/date picker, dialog, sheet), the editor's floating toolbar, the markets search list and the
+ * floating sidebar. Persistent bars (topbar, bulk-action bars) aren't overlays and don't count; neither do toasts
+ * (see above). `[data-opaque]` glass (opened inside another overlay) has no backdrop and doesn't count either.
  */
 export const GLASS_OVERLAY_SELECTOR =
-  ":is(.glass-1, .glass-2, .glass-3, .emp-menu, .emp-popover, .emp-dialog, .emp-sheet, .emp-toast, .emp-floating, .mk-search-list, .emp-sidebar[data-floating]):not([data-opaque])";
+  ":is(.glass-1, .glass-2, .glass-3, .emp-menu, .emp-popover, .emp-dialog, .emp-sheet, .emp-floating, .mk-search-list, .emp-sidebar[data-floating]):not([data-opaque])";
+const IGNORE_SELECTOR = "[data-glass-probe-ignore]";
+/** Route mounts are not glass cost: no sampling this long after hashchange/popstate (same as lib/perf.ts). */
+export const ROUTE_SETTLE_MS = 1000;
+
+/** The DOM surface the relevance checks need (duck-typed so they can be unit-tested without a DOM). */
+export interface ElementLike {
+  closest(selector: string): unknown;
+  matches(selector: string): boolean;
+  querySelector(selector: string): unknown;
+}
+
+function asElement(n: unknown): ElementLike | null {
+  const e = n as Partial<ElementLike> | null;
+  return e && typeof e.closest === "function" && typeof e.matches === "function" && typeof e.querySelector === "function" ? (e as ElementLike) : null;
+}
+
+/** `el` is a counted glass layer or inside one. */
+export function insideGlass(n: unknown): boolean {
+  const el = asElement(n);
+  return !!el && !!el.closest(GLASS_OVERLAY_SELECTOR) && !el.closest(IGNORE_SELECTOR);
+}
+
+/** `el` is, or contains, a counted glass layer (a mounted/unmounted portal subtree). */
+export function holdsGlass(n: unknown): boolean {
+  const el = asElement(n);
+  if (!el || el.closest(IGNORE_SELECTOR)) return false;
+  return el.matches(GLASS_OVERLAY_SELECTOR) || !!el.querySelector(GLASS_OVERLAY_SELECTOR);
+}
+
+export interface MutationLike {
+  /** Element target, or a text node's parent element. */
+  target: unknown;
+  addedNodes: ArrayLike<unknown>;
+  removedNodes: ArrayLike<unknown>;
+}
+
+/** A childList mutation is glass choreography: a glass layer (un)mounted, or an open glass layer's content changed. */
+export function mutationTouchesGlass(r: MutationLike): boolean {
+  if (!r.addedNodes.length && !r.removedNodes.length) return false;
+  if (insideGlass(r.target)) return true;
+  for (let i = 0; i < r.addedNodes.length; i++) if (holdsGlass(r.addedNodes[i])) return true;
+  for (let i = 0; i < r.removedNodes.length; i++) if (holdsGlass(r.removedNodes[i])) return true;
+  return false;
+}
+
+/** An animation counts when its target is a glass layer, inside one, or wraps one (portal/scrim wrapper). */
+export function animationTouchesGlass(target: unknown): boolean {
+  return insideGlass(target) || holdsGlass(target);
+}
 /** After a glass layer mounts or unmounts, its open/close choreography runs for about this long. */
 const ACTIVE_AFTER_MUTATION_MS = 520;
 /** Pointer/scroll/key input over open glass repaints it (highlight plate, list scroll, typing in the palette). */
@@ -135,16 +189,18 @@ export interface GlassProbeHandle {
 export function glassOverlayVisible(doc: Document = document): boolean {
   const els = doc.querySelectorAll<HTMLElement>(GLASS_OVERLAY_SELECTOR);
   for (const el of els) {
-    if (el.closest("[data-glass-probe-ignore]")) continue;
+    if (el.closest(IGNORE_SELECTOR)) continue;
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.height > 0) return true;
   }
   return false;
 }
 
-function animationsRunning(): boolean {
+/** A running WAAPI/CSS animation on, inside or around a glass layer (page spinners and shimmer don't count). */
+function glassAnimationRunning(): boolean {
   try {
-    return typeof document.getAnimations === "function" && document.getAnimations().some((a) => a.playState === "running");
+    if (typeof document.getAnimations !== "function") return false;
+    return document.getAnimations().some((a) => a.playState === "running" && a.effect instanceof KeyframeEffect && animationTouchesGlass(a.effect.target));
   } catch {
     return false;
   }
@@ -152,8 +208,8 @@ function animationsRunning(): boolean {
 
 /**
  * Start the probe. Calibrates the refresh interval first (60 idle frames), then sleeps until a glass overlay mounts;
- * while one is on screen it samples frames during its open/close choreography, input over it, or running WAAPI
- * animations, and sleeps (no rAF) in between. Calls `onExceeded` / `onPassed` once and stops itself.
+ * while one is on screen it samples frames during its open/close choreography, input inside it, or animations on it,
+ * and sleeps (no rAF) in between. Calls `onExceeded` / `onPassed` once and stops itself.
  */
 export function startGlassProbe(opts: GlassProbeOptions): GlassProbeHandle {
   const budget = createFrameBudget(opts);
@@ -170,6 +226,7 @@ export function startGlassProbe(opts: GlassProbeOptions): GlassProbeHandle {
   let checkQueued = false;
   let anim = false;
   let animCheckedAt = 0;
+  let pausedUntil = 0;
 
   const finish = (ev: BudgetEvent) => {
     if (ev === "exceeded") {
@@ -202,10 +259,10 @@ export function startGlassProbe(opts: GlassProbeOptions): GlassProbeHandle {
     present = glassOverlayVisible();
     if (t - animCheckedAt >= 250) {
       animCheckedAt = t;
-      anim = present && animationsRunning();
+      anim = present && glassAnimationRunning();
     }
     const active = t < activeUntil || anim;
-    sampling = present && active && renders() && document.visibilityState === "visible";
+    sampling = present && active && t >= pausedUntil && renders() && document.visibilityState === "visible";
     if (sampling && last && !skipNext) {
       const ev = budget.sample(t - last, refresh);
       if (ev === "exceeded" || ev === "passed") return finish(ev);
@@ -233,31 +290,38 @@ export function startGlassProbe(opts: GlassProbeOptions): GlassProbeHandle {
     }
   };
 
-  // Mounts and unmounts of glass layers (portals live under <body>). The callback is O(1); the check is coalesced.
+  // Mounts/unmounts of glass layers (portals live under <body>) and changes inside an open one. Route renders and
+  // other page mutations are ignored. No layout reads here; the rAF tick does the full visibility check.
   const mo =
     typeof MutationObserver === "function"
       ? new MutationObserver((records) => {
           if (checkQueued || stopped) return;
           for (const r of records) {
-            if (r.addedNodes.length || r.removedNodes.length) {
-              checkQueued = true;
-              queueMicrotask(() => {
-                checkQueued = false;
-                // querySelector only (no layout read here); the rAF tick does the full visibility check.
-                if (document.querySelector(GLASS_OVERLAY_SELECTOR)) {
-                  present = true;
-                  wake(ACTIVE_AFTER_MUTATION_MS);
-                }
-              });
-              return;
-            }
+            if (r.type !== "childList" || !mutationTouchesGlass(r)) continue;
+            checkQueued = true;
+            queueMicrotask(() => {
+              checkQueued = false;
+              // Mount → open choreography; unmount → close choreography (the layer may already be gone; the tick
+              // re-checks visibility and goes back to sleep if nothing glassy is left).
+              present = present || !!document.querySelector(GLASS_OVERLAY_SELECTOR);
+              wake(ACTIVE_AFTER_MUTATION_MS);
+            });
+            return;
           }
         })
       : null;
   mo?.observe(document.body, { childList: true, subtree: true });
 
-  const onInput = () => {
-    if (present) wake(ACTIVE_AFTER_INPUT_MS);
+  const onInput = (e: Event) => {
+    // Cheap early-out while already awake; otherwise only input inside an open glass layer repaints glass.
+    if (stopped || performance.now() < activeUntil - 100) return;
+    if (insideGlass(e.target)) {
+      present = true;
+      wake(ACTIVE_AFTER_INPUT_MS);
+    }
+  };
+  const onNav = () => {
+    pausedUntil = Math.max(pausedUntil, performance.now() + ROUTE_SETTLE_MS);
   };
   const onVis = () => {
     last = 0;
@@ -266,6 +330,8 @@ export function startGlassProbe(opts: GlassProbeOptions): GlassProbeHandle {
   const inputs = ["pointermove", "pointerdown", "wheel", "keydown"] as const;
   inputs.forEach((e) => window.addEventListener(e, onInput, { passive: true, capture: true }));
   document.addEventListener("visibilitychange", onVis);
+  window.addEventListener("hashchange", onNav);
+  window.addEventListener("popstate", onNav);
   raf = requestAnimationFrame(tick);
 
   const handle: GlassProbeHandle = {
@@ -278,6 +344,8 @@ export function startGlassProbe(opts: GlassProbeOptions): GlassProbeHandle {
       mo?.disconnect();
       inputs.forEach((e) => window.removeEventListener(e, onInput, { capture: true }));
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("hashchange", onNav);
+      window.removeEventListener("popstate", onNav);
     },
     state: () => ({ ...budget.state(), refresh, sampling }),
     feedWindow(frames, dropped) {
