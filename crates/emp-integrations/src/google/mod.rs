@@ -147,10 +147,18 @@ pub(crate) fn extract_file_id(input: &str, kind: &str, expected_host: &str) -> R
 }
 
 /// Percent-encode one URL path segment.
-pub(crate) fn path_segment(s: &str) -> String {
-    url::form_urlencoded::byte_serialize(s.as_bytes())
+///
+/// Empty, `.` and `..` ids are refused: URL parsing resolves them as dot-segments, so an id of
+/// `..` (from a stored sync link or an API response) would move the request to another endpoint
+/// on the same host (`/drive/v3/files/..` → `/drive/v3/`).
+pub(crate) fn path_segment(s: &str) -> Result<String> {
+    // Percent-encoding does not help: `%2e%2e` is a dot-segment for URL parsers too.
+    if s.is_empty() || s.bytes().all(|b| b == b'.') {
+        return Err(IntegrationError::Invalid("invalid Google id".into()));
+    }
+    Ok(url::form_urlencoded::byte_serialize(s.as_bytes())
         .collect::<String>()
-        .replace('+', "%20")
+        .replace('+', "%20"))
 }
 
 #[cfg(test)]
@@ -203,8 +211,14 @@ mod tests {
 
     #[test]
     fn path_segments_are_encoded() {
-        assert_eq!(path_segment("a b/c@d"), "a%20b%2Fc%40d");
-        assert_eq!(path_segment("primary"), "primary");
+        assert_eq!(path_segment("a b/c@d").unwrap(), "a%20b%2Fc%40d");
+        assert_eq!(path_segment("primary").unwrap(), "primary");
+        assert_eq!(path_segment("a.b").unwrap(), "a.b");
+        // Dot-segments would be resolved by URL parsing (even percent-encoded): refused.
+        for dots in ["", ".", "..", "..."] {
+            assert!(path_segment(dots).is_err(), "{dots:?}");
+        }
+        assert!(crate::google::drive::metadata_request(&crate::SecretString::new("t"), "..").is_err());
     }
 
     #[tokio::test]

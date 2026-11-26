@@ -241,7 +241,7 @@ pub fn events_request(
 ) -> Result<NetRequest> {
     let mut url = api_url(&format!(
         "/calendar/v3/calendars/{}/events",
-        path_segment(calendar_id)
+        path_segment(calendar_id)?
     ))?;
     {
         let mut q = url.query_pairs_mut();

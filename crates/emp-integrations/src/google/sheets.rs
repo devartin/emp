@@ -157,7 +157,7 @@ fn sheets_url(path: &str) -> Result<Url> {
 
 /// `GET /v4/spreadsheets/{id}?fields=…` (no grid data).
 pub fn metadata_request(token: &SecretString, id: &str) -> Result<NetRequest> {
-    let mut url = sheets_url(&format!("/v4/spreadsheets/{}", path_segment(id)))?;
+    let mut url = sheets_url(&format!("/v4/spreadsheets/{}", path_segment(id)?))?;
     url.query_pairs_mut().append_pair(
         "fields",
         "spreadsheetId,properties(title,locale,timeZone),sheets(properties(sheetId,title,index,sheetType,gridProperties),merges)",
@@ -177,7 +177,7 @@ pub fn batch_get_request(
 ) -> Result<NetRequest> {
     let mut url = sheets_url(&format!(
         "/v4/spreadsheets/{}/values:batchGet",
-        path_segment(id)
+        path_segment(id)?
     ))?;
     {
         let mut q = url.query_pairs_mut();
@@ -718,7 +718,7 @@ pub fn values_update_request(
 ) -> Result<NetRequest> {
     let url = sheets_url(&format!(
         "/v4/spreadsheets/{}/values:batchUpdate",
-        path_segment(id)
+        path_segment(id)?
     ))?;
     Ok(NetRequest::with_body(
         ConnectorId::Google,
@@ -802,7 +802,7 @@ pub fn format_request(
 ) -> Result<NetRequest> {
     let url = sheets_url(&format!(
         "/v4/spreadsheets/{}:batchUpdate",
-        path_segment(id)
+        path_segment(id)?
     ))?;
     Ok(NetRequest::with_body(
         ConnectorId::Google,

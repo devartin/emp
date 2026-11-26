@@ -81,6 +81,9 @@ pub struct NetGuardConfig {
     /// Test-only routing of allowlisted hosts to local plain-HTTP servers.
     #[cfg(test)]
     pub(crate) test_routes: HashMap<String, std::net::SocketAddr>,
+    /// Test-only explicit HTTP proxy for the proxied client.
+    #[cfg(test)]
+    pub(crate) test_proxy: Option<std::net::SocketAddr>,
 }
 
 impl Default for NetGuardConfig {
@@ -100,6 +103,8 @@ impl Default for NetGuardConfig {
             use_system_proxy: true,
             #[cfg(test)]
             test_routes: HashMap::new(),
+            #[cfg(test)]
+            test_proxy: None,
         }
     }
 }
@@ -110,7 +115,13 @@ struct ConnectorState {
 }
 
 struct Inner {
+    /// Client for allowlisted connectors (honours the system proxy when configured).
     client: reqwest::Client,
+    /// Client for user-content fetches ([`HostPolicy::AnyPublic`]): never proxied, so the
+    /// vetting resolver is what picks the address and the connection goes only to a vetted IP.
+    /// Through a proxy the proxy would resolve the name again, and a DNS-rebinding host could
+    /// answer the local pre-check with a public address and the proxy with a private one.
+    direct: reqwest::Client,
     config: NetGuardConfig,
     offline: AtomicBool,
     dispatched: AtomicU64,
@@ -142,29 +153,40 @@ impl NetGuard {
         #[cfg(not(test))]
         let test_mode = false;
 
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            reqwest::header::ACCEPT_ENCODING,
-            HeaderValue::from_static("identity"),
-        );
-        let mut builder = reqwest::Client::builder()
-            .use_preconfigured_tls(tls::client_config()?)
-            .https_only(!test_mode)
-            .connect_timeout(config.connect_timeout)
-            .timeout(config.timeout)
-            .redirect(reqwest::redirect::Policy::none())
-            .referer(false)
-            .user_agent(USER_AGENT)
-            .default_headers(headers)
-            .dns_resolver(Arc::new(addr::VettingResolver {
-                allow_private: test_mode,
-            }));
-        if !config.use_system_proxy || test_mode {
-            builder = builder.no_proxy();
-        }
-        let client = builder
-            .build()
-            .map_err(|e| IntegrationError::Internal(format!("HTTP client: {}", e.without_url())))?;
+        let tls = tls::client_config()?;
+        let builder = |proxied: bool| -> Result<reqwest::Client> {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                reqwest::header::ACCEPT_ENCODING,
+                HeaderValue::from_static("identity"),
+            );
+            let mut builder = reqwest::Client::builder()
+                .use_preconfigured_tls(tls.clone())
+                .https_only(!test_mode)
+                .connect_timeout(config.connect_timeout)
+                .timeout(config.timeout)
+                .redirect(reqwest::redirect::Policy::none())
+                .referer(false)
+                .user_agent(USER_AGENT)
+                .default_headers(headers)
+                .dns_resolver(Arc::new(addr::VettingResolver {
+                    allow_private: test_mode,
+                }));
+            if !proxied || !config.use_system_proxy || test_mode {
+                builder = builder.no_proxy();
+            }
+            #[cfg(test)]
+            if proxied && let Some(p) = config.test_proxy {
+                let proxy = reqwest::Proxy::all(format!("http://{p}"))
+                    .map_err(|e| IntegrationError::Internal(e.to_string()))?;
+                builder = builder.proxy(proxy);
+            }
+            builder.build().map_err(|e| {
+                IntegrationError::Internal(format!("HTTP client: {}", e.without_url()))
+            })
+        };
+        let client = builder(true)?;
+        let direct = builder(false)?;
 
         let connectors = ConnectorId::ALL
             .iter()
@@ -190,6 +212,7 @@ impl NetGuard {
         Ok(NetGuard {
             inner: Arc::new(Inner {
                 client,
+                direct,
                 log: NetLog::new(config.log_capacity),
                 config,
                 offline: AtomicBool::new(false),
@@ -418,14 +441,26 @@ impl NetGuard {
         let mut body = req.body.clone();
         let mut credential = req.credential.clone();
         let mut hops: u8 = 0;
+        let client = match req.connector.host_policy() {
+            HostPolicy::AnyPublic => &self.inner.direct,
+            HostPolicy::Exact(_) => &self.inner.client,
+        };
 
         loop {
             let host = self.validate_url(&url, req.connector)?;
             if host != original_host {
                 credential = None;
+                // A 307/308 keeps the method and body. Bodies carry secrets too (OAuth client
+                // secret, refresh token, code verifier), so they are bound to the original host
+                // exactly like credentials.
+                if body.is_some() {
+                    return Err(IntegrationError::Provider(
+                        "refused to resend a request body to another host".into(),
+                    ));
+                }
             }
             let wire_url = self.wire_url(&url, &host);
-            let mut rb = self.inner.client.request(method.to_reqwest(), wire_url);
+            let mut rb = client.request(method.to_reqwest(), wire_url);
             if let Some(t) = req.timeout {
                 rb = rb.timeout(t);
             }
@@ -829,6 +864,74 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, IntegrationError::HostNotAllowed { .. }));
         assert_eq!(server.requests().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn bodies_are_not_resent_cross_host() {
+        // A 307 from the token endpoint to another Google host must not replay the form body
+        // (client secret, refresh token) there.
+        let server = TestServer::start(vec![
+            Reply::redirect(307, "https://www.googleapis.com/elsewhere"),
+            Reply::json(200, "{}"),
+        ])
+        .await;
+        let guard = guard_for(&["oauth2.googleapis.com", "www.googleapis.com"], server.addr());
+        let req = NetRequest::with_body(
+            ConnectorId::Google,
+            Method::Post,
+            url("https://oauth2.googleapis.com/token"),
+            "/token",
+            Body::form(&[("refresh_token", "rt-secret")]),
+        );
+        assert!(guard.send(req).await.is_err());
+        let seen = server.requests();
+        assert_eq!(seen.len(), 1, "the body was replayed to the second host");
+        // Same-host 307 still replays the body (that is what 307 means).
+        let server = TestServer::start(vec![
+            Reply::redirect(307, "/token2"),
+            Reply::json(200, "{}"),
+        ])
+        .await;
+        let guard = guard_for(&["oauth2.googleapis.com"], server.addr());
+        let req = NetRequest::with_body(
+            ConnectorId::Google,
+            Method::Post,
+            url("https://oauth2.googleapis.com/token"),
+            "/token",
+            Body::form(&[("a", "b")]),
+        );
+        assert_eq!(guard.send(req).await.unwrap().status, 200);
+        assert_eq!(server.requests()[1].body_str(), "a=b");
+    }
+
+    #[tokio::test]
+    async fn user_content_bypasses_the_proxy() {
+        // The proxy would resolve user-supplied hosts itself, defeating address vetting, so
+        // remote-image requests go direct while connector traffic uses the proxy.
+        let proxy = TestServer::start(vec![Reply::json(200, "{}")]).await;
+        let target = TestServer::start(vec![Reply::new(200, "image/png", "png")]).await;
+        let guard = guard_with(
+            &["api.frankfurter.app", "img.example.org"],
+            target.addr(),
+            |c| c.test_proxy = Some(proxy.addr()),
+        );
+        let img = NetRequest::get(
+            ConnectorId::RemoteImage,
+            url("https://img.example.org/a.png"),
+            "/image",
+        )
+        .expect(Expect::Image);
+        assert_eq!(guard.send(img).await.unwrap().body, b"png");
+        assert_eq!(proxy.requests().len(), 0);
+        assert_eq!(target.requests().len(), 1);
+        let fx = NetRequest::get(
+            ConnectorId::Frankfurter,
+            url("https://api.frankfurter.app/latest"),
+            "/latest",
+        );
+        let _: serde_json::Value = guard.send_json(fx).await.unwrap();
+        assert_eq!(proxy.requests().len(), 1);
+        assert_eq!(target.requests().len(), 1);
     }
 
     #[tokio::test]

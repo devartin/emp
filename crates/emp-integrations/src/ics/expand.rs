@@ -129,12 +129,24 @@ fn overlaps(
 /// Most rule candidates (instances before filtering) an expansion may have to walk.
 const MAX_RULE_CANDIDATES: u64 = 2_000_000;
 
-/// Upper bound on the candidates the rrule iterator generates between `from` and `to`: days in
-/// the span × candidate times per day. Day-level BY rules can only remove days, so they are
-/// ignored; time-level lists multiply per period.
-fn candidate_estimate(rule: &RRule, from: DateTime<Utc>, to: DateTime<Utc>) -> u64 {
+/// Upper bound on the candidates the rrule iterator visits for one expansion.
+///
+/// The iterator walks from DTSTART: candidates before `start_bound` are generated and thrown
+/// away, then it runs until `end_bound` or until `max_instances` instances were kept. A rule
+/// yields `per_day` candidates per day (its frequency, divided by INTERVAL, times the time-level
+/// BY lists that expand each period); day-level BY rules can only remove days. Inside the window
+/// an unfiltered rule keeps every candidate, so it stops after about `max_instances`; a rule with
+/// filters (BYHOUR on an HOURLY rule, BYMONTH on a sub-daily rule, BYSETPOS…) may walk the whole
+/// window.
+fn candidate_estimate(
+    rule: &RRule,
+    dt_start: DateTime<Utc>,
+    start_bound: DateTime<Utc>,
+    end_bound: DateTime<Utc>,
+    max_instances: u16,
+) -> u64 {
     use rrule::Frequency;
-    let days = u64::try_from((to - from).num_days()).unwrap_or(0) + 1;
+    let days = |a: DateTime<Utc>, b: DateTime<Utc>| u64::try_from((b - a).num_days()).unwrap_or(0);
     let interval = u64::from(rule.get_interval().max(1));
     let n = |len: usize| (len as u64).max(1);
     let (hours, minutes, seconds) = (
@@ -142,13 +154,41 @@ fn candidate_estimate(rule: &RRule, from: DateTime<Utc>, to: DateTime<Utc>) -> u
         n(rule.get_by_minute().len()),
         n(rule.get_by_second().len()),
     );
-    let per_day = match rule.get_freq() {
-        Frequency::Secondly => 86_400u64.div_ceil(interval),
-        Frequency::Minutely => 1_440u64.div_ceil(interval) * seconds,
-        Frequency::Hourly => 24u64.div_ceil(interval) * minutes * seconds,
-        _ => hours * minutes * seconds,
+    let day_filters = !rule.get_by_month().is_empty()
+        || !rule.get_by_month_day().is_empty()
+        || !rule.get_by_year_day().is_empty()
+        || !rule.get_by_week_no().is_empty()
+        || !rule.get_by_weekday().is_empty()
+        || !rule.get_by_set_pos().is_empty();
+    let (per_day, filtered) = match rule.get_freq() {
+        Frequency::Secondly => (
+            86_400u64.div_ceil(interval),
+            day_filters
+                || !rule.get_by_hour().is_empty()
+                || !rule.get_by_minute().is_empty()
+                || !rule.get_by_second().is_empty(),
+        ),
+        Frequency::Minutely => (
+            1_440u64.div_ceil(interval).saturating_mul(seconds),
+            day_filters || !rule.get_by_hour().is_empty() || !rule.get_by_minute().is_empty(),
+        ),
+        Frequency::Hourly => (
+            24u64.div_ceil(interval).saturating_mul(minutes * seconds),
+            day_filters || !rule.get_by_hour().is_empty(),
+        ),
+        // Daily and coarser: day-level lists select days per period; only BYSETPOS discards
+        // generated candidates.
+        _ => (hours * minutes * seconds, !rule.get_by_set_pos().is_empty()),
     };
-    days.saturating_mul(per_day)
+    let first = dt_start.max(start_bound);
+    let before = days(dt_start, start_bound).saturating_mul(per_day);
+    let inside = (days(first, end_bound) + 1).saturating_mul(per_day);
+    let inside = if filtered {
+        inside
+    } else {
+        inside.min(u64::from(max_instances).saturating_mul(2) + per_day)
+    };
+    before.saturating_add(inside)
 }
 
 /// Expand `event` into occurrences overlapping `[window_start, window_end]`.
@@ -204,8 +244,12 @@ pub fn expand_event(
                 // The rrule iterator walks every candidate from DTSTART, including those before
                 // the window that are then discarded: FREQ=SECONDLY started ten years ago is
                 // ~300 million steps. Refuse rules whose candidate count is out of reach.
+                let first = start.to_utc(None);
                 let span_end = window_end.min(horizon);
-                if candidate_estimate(&r, start.to_utc(None), span_end) > MAX_RULE_CANDIDATES {
+                let span_start = window_start.checked_sub_signed(length).unwrap_or(window_start);
+                let estimate =
+                    candidate_estimate(&r, first, span_start, span_end, limits.max_instances);
+                if estimate > MAX_RULE_CANDIDATES {
                     return single(Some(
                         "RRULE not expanded: it repeats too often to expand".into(),
                     ));
@@ -436,6 +480,10 @@ mod tests {
             "FREQ=SECONDLY;INTERVAL=1;BYSECOND=59;BYMINUTE=59;BYHOUR=23;BYMONTHDAY=31;BYMONTH=12",
             "FREQ=DAILY;BYSETPOS=366;BYYEARDAY=366",
             "FREQ=SECONDLY;COUNT=4294967295",
+            "FREQ=DAILY;BYHOUR=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23;BYMINUTE=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59",
+            // Reasonable rules still expand.
+            "FREQ=HOURLY;BYHOUR=9;BYMINUTE=0",
+            "FREQ=MINUTELY;INTERVAL=30",
         ] {
             let c = cal(&format!(
                 "BEGIN:VEVENT\nUID:p\nDTSTART:20160101T000000Z\nRRULE:{rule}\nEND:VEVENT"
@@ -453,6 +501,12 @@ mod tests {
                 started.elapsed()
             );
             assert!(x.occurrences.len() <= 5_000, "{rule}");
+            if rule.starts_with("FREQ=SECONDLY") || rule.starts_with("FREQ=DAILY;BYHOUR") {
+                assert!(x.warning.is_some(), "{rule} should be refused");
+            } else if rule.starts_with("FREQ=HOURLY") || rule.starts_with("FREQ=MINUTELY;INTERVAL") {
+                assert!(x.warning.is_none(), "{rule}: {:?}", x.warning);
+                assert!(!x.occurrences.is_empty(), "{rule}");
+            }
         }
     }
 }

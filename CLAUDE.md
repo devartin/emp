@@ -15,6 +15,9 @@ React 19/TypeScript frontend.
    sides implement; if you must deviate, keep both sides consistent and say so in your final report.
 3. SBOM/provenance attestation, Linux arm64 and the updater are optional (P1) — never block on them.
 4. The app crate is `src-tauri` (package `emp-app`, lib `emp_lib`).
+5. **Visual design v2.** Once `docs/DESIGN.md` exists it supersedes SPEC §3–§5 for materials, depth, colour usage and motion
+   (tactile/3D controls, choreography, signature animations). Token *names* and component APIs stay compatible; reduced
+   motion, contrast and tabular-number rules still apply. IPC/data contracts remain SPEC §11.
 
 ## Ownership
 Every task names the files/directories it owns. Only edit what you own. If you need a change in a file you don't

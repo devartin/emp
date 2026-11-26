@@ -71,7 +71,7 @@ pub fn extract_document_id(url: &str) -> Result<String> {
 pub fn document_request(token: &SecretString, id: &str) -> Result<NetRequest> {
     let url = url::Url::parse(&format!(
         "https://docs.googleapis.com/v1/documents/{}",
-        super::path_segment(id)
+        super::path_segment(id)?
     ))
     .map_err(|e| IntegrationError::Internal(e.to_string()))?;
     Ok(

@@ -53,7 +53,7 @@ fn api_url(path: &str) -> Result<Url> {
 
 /// `GET /drive/v3/files/{id}?fields=…`.
 pub fn metadata_request(token: &SecretString, file_id: &str) -> Result<NetRequest> {
-    let mut url = api_url(&format!("/drive/v3/files/{}", path_segment(file_id)))?;
+    let mut url = api_url(&format!("/drive/v3/files/{}", path_segment(file_id)?))?;
     url.query_pairs_mut()
         .append_pair("fields", "id,name,mimeType,modifiedTime,webViewLink")
         .append_pair("supportsAllDrives", "true");
@@ -71,7 +71,7 @@ pub fn export_request(
     expect: Expect,
     cap: BodyCap,
 ) -> Result<NetRequest> {
-    let mut url = api_url(&format!("/drive/v3/files/{}/export", path_segment(file_id)))?;
+    let mut url = api_url(&format!("/drive/v3/files/{}/export", path_segment(file_id)?))?;
     url.query_pairs_mut().append_pair("mimeType", mime);
     Ok(
         NetRequest::get(ConnectorId::Google, url, "/drive/v3/files/{id}/export")
@@ -146,7 +146,7 @@ pub fn update_request(
     media_type: &str,
     media: &[u8],
 ) -> Result<NetRequest> {
-    let mut url = api_url(&format!("/upload/drive/v3/files/{}", path_segment(file_id)))?;
+    let mut url = api_url(&format!("/upload/drive/v3/files/{}", path_segment(file_id)?))?;
     url.query_pairs_mut()
         .append_pair("uploadType", "multipart")
         .append_pair("fields", "id,webViewLink");
