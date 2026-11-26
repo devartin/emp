@@ -168,14 +168,18 @@ const SHORTCUTS: &str = "Press `?` anywhere outside a text field for the cheat s
 | --- | --- |
 | `⌘K` | Command palette |
 | `⌘P` | Quick find pages |
+| `⌘⇧P` | Run a command |
 | `⌘N` | New page |
 | `⌘[` / `⌘]` | Back / forward |
+| `⌘⇧U` | Go to parent page |
 | `⌘\\` | Toggle sidebar |
-| `⌘⌥D` | Today's daily note |
+| `⌘⌥D` | Today’s daily note |
 | `⌘⇧H` | Hide numbers |
 | `⌘⇧L` | Lock now |
+| `⌘⇧D` | Light / dark theme |
 | `⌘⇧O` | Offline mode |
 | `⌘,` | Settings |
+| `⌘L` | Copy link to page |
 
 ## Formatting
 
@@ -184,6 +188,9 @@ const SHORTCUTS: &str = "Press `?` anywhere outside a text field for the cheat s
 | `⌘B` `⌘I` `⌘U` | Bold, italic, underline |
 | `⌘⇧S` | Strikethrough |
 | `⌘E` | Inline code |
+| `⌘⇧E` | Inline equation |
+| `⌘K` with text selected | Add a link |
+| `⌘⌥H` | Apply the last colour |
 | `⌘⇧V` | Paste as plain text |
 
 ## Blocks
@@ -191,10 +198,13 @@ const SHORTCUTS: &str = "Press `?` anywhere outside a text field for the cheat s
 | Keys | Action |
 | --- | --- |
 | `Esc` | Select the current block |
+| `⇧↑` `⇧↓` | Extend the block selection |
 | `⌘D` | Duplicate |
 | `⌘⇧↑` `⌘⇧↓` | Move the block with its children |
 | `Tab` `⇧Tab` | Indent / outdent |
 | `⌘↵` | Tick a to-do, open a toggle, follow a link |
+| `⌘⌥T` | Expand or collapse all toggles |
+| `⌘⌥0–9` | Turn into another block type |
 
 > [!tip]
 > Markdown works as you type: `#` headings, `-` bullets, `[]` to-dos, `---` dividers.
@@ -471,6 +481,28 @@ mod tests {
         assert_eq!(
             platform_keys("Lock with `⌘⇧L`, tick with `⌘↵`, daily note `⌘⌥D`", false),
             "Lock with `Ctrl+Shift+L`, tick with `Ctrl+Enter`, daily note `Ctrl+Alt+D`"
+        );
+    }
+
+    #[test]
+    fn shortcut_tables_set_every_key_as_a_code_chip() {
+        // The Getting Started style (and the mock seed's `keys()` helper): each chord is its own code chip.
+        let rows = SHORTCUTS
+            .lines()
+            .filter(|l| l.starts_with("| ") && !l.starts_with("| Keys") && !l.starts_with("| ---"));
+        let mut n = 0;
+        for row in rows {
+            n += 1;
+            let keys = row
+                .trim_start_matches("| ")
+                .split(" | ")
+                .next()
+                .unwrap_or_default();
+            assert!(keys.starts_with('`'), "plain-text keys in {row:?}");
+        }
+        assert_eq!(
+            n, 29,
+            "the shortcut tables changed; keep the mock seed (seed/core.ts) in step"
         );
     }
 

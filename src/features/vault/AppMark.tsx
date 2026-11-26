@@ -4,18 +4,22 @@
  *   variant="tile"   the full app icon (dark squircle, lit slabs) — onboarding hero, lock screen, about
  *   variant="glyph"  just the slabs, tinted from currentColor against the canvas — inline/brand use
  *
- * Launch animation (§6.2 step 0): the layers draw in bottom-up, staggered 80ms, 480ms `ease.outExpo`.
+ * Static by default (DESIGN v3 §7, earned motion): the mark is part of the page from the first frame. Motion is opt-in:
+ *   animate   a short draw-in (layers rise 240ms on the v3 ease-out, 40ms apart), ≤ the vault-unlock budget
+ *   stage     the lock screen's slab beats; only `open` is a moment (C3 vault unlock), the rest are C1 feedback
+ * Nothing overshoots: every curve is an ease-out or ease-in cubic with control points inside [0, 1].
  */
 import { m, useAnimationControls, type TargetAndTransition } from "motion/react";
 import { useEffect, useId } from "react";
 import { cn } from "@/lib/cn";
+import { CLASSES, REGISTER, motionSeconds } from "@/ui/motion/register";
 import { ease } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 
 export interface AppMarkProps {
   size?: number;
   variant?: "tile" | "glyph";
-  /** Play the draw-in (default true). */
+  /** Play the draw-in (default false: the mark is static). */
   animate?: boolean;
   /** Delay before the first layer (s). */
   delay?: number;
@@ -23,13 +27,13 @@ export interface AppMarkProps {
   /** Accessible name; omit for decorative use. */
   title?: string;
   /**
-   * Choreographed slab moments (S2 lock screen, S3 onboarding). Overrides `animate`.
-   *   drop   the three slabs fall into a stack bottom → top (70ms stagger) and land with a contact squash
-   *   rest   at rest
-   *   press  the stack compresses 2px in 70ms, then releases with overshoot (correct password)
-   *   jolt   the slabs knock out of alignment ±3px and re-stack (wrong password)
-   *   open   the slabs separate upward and the tile dissolves (the vault opening)
-   *   exploded  slabs held apart (forge: they assemble as `assemble` goes 0 → 1)
+   * Slab beats for the lock screen (S2) and first run (S3). Overrides `animate`.
+   *   drop      at rest from the first frame (the lock screen arrives without motion)
+   *   rest      at rest
+   *   press     C1 key-press feedback: the stack compresses ~1.5px in 60ms and settles back in 100ms (correct password)
+   *   jolt      C1 feedback: the slabs knock ±2px out of line and re-stack in 160ms (wrong password)
+   *   open      the C3 vault-unlock moment: a 60ms press, then the slabs separate upward and the tile fades, ≤ 600ms
+   *   exploded  slabs held apart (first run: they assemble as `assemble` goes 0 → 1, C2 continuity per step)
    */
   stage?: "drop" | "rest" | "press" | "jolt" | "open" | "exploded";
   /** Bump to replay the same stage (e.g. a second wrong password). */
@@ -38,55 +42,62 @@ export interface AppMarkProps {
   assemble?: number;
 }
 
-const settle = { type: "spring", stiffness: 380, damping: 30 } as const;
-const release = { type: "spring", stiffness: 700, damping: 30 } as const;
+/** Beat timings (s), all inside their register class. */
+export const MARK_TIMING = {
+  pressIn: REGISTER.keyPress.in / 1000,
+  pressOut: REGISTER.keyPress.out / 1000,
+  jolt: CLASSES.C1.maxIn / 1000,
+  /** The whole vault-unlock beat: press + separate + fade. */
+  open: Math.min(0.52, REGISTER.vaultUnlock.in / 1000),
+  assemble: 0.2,
+  settle: 0.16,
+  drawIn: 0.24,
+  drawStagger: 0.04,
+} as const;
 
-/** Per-layer target for a stage; `u` is svg units per css px. */
-function stageTarget(stage: NonNullable<AppMarkProps["stage"]>, k: number, u: number, assemble: number): TargetAndTransition {
+const T = MARK_TIMING;
+const pressShare = T.pressIn / (T.pressIn + T.pressOut);
+const openShare = T.pressIn / T.open;
+
+/** Per-layer target for a stage; `u` is svg units per css px. Exported for the motion-budget test. */
+export function stageTarget(stage: NonNullable<AppMarkProps["stage"]>, k: number, u: number, assemble: number): TargetAndTransition {
   switch (stage) {
-    case "drop":
-      return {
-        opacity: 1,
-        y: [-(26 + k * 12) * u, 0, -2.5 * u, 0],
-        scaleY: [1, 1, 0.9, 1],
-        transition: {
-          delay: 0.1 + k * 0.07,
-          y: { duration: 0.62, times: [0, 0.56, 0.74, 1], ease: [[0.55, 0, 0.9, 0.45], [0.2, 0.7, 0.3, 1], [0.45, 0, 0.4, 1]] },
-          scaleY: { duration: 0.62, times: [0, 0.56, 0.64, 1], ease: "easeOut" },
-          opacity: { duration: 0.18, ease: "easeOut" },
-        },
-      };
     case "press":
       return {
-        y: [0, (1 + k * 1.6) * u, 0],
-        scaleY: [1, 0.95, 1],
-        transition: { duration: 0.56, times: [0, 0.13, 1], ease: [[0.3, 0, 0.6, 1], [0.34, 1.56, 0.64, 1]] },
+        y: [0, (0.5 + k * 0.5) * u, 0],
+        scaleY: [1, 0.97, 1],
+        transition: { duration: T.pressIn + T.pressOut, times: [0, pressShare, 1], ease: [ease.press, ease.out] },
       };
     case "jolt": {
-      const j = [3, -3, 2.5][k] * u;
-      return { x: [0, j, -j * 0.55, j * 0.2, 0], transition: { duration: 0.52, times: [0, 0.16, 0.42, 0.7, 1], ease: "easeInOut", delay: k * 0.02 } };
+      const j = [2, -2, 1.5][k] * u;
+      return { x: [0, j, -j * 0.4, 0], transition: { duration: T.jolt, times: [0, 0.3, 0.65, 1], ease: "easeOut" } };
     }
     case "open":
-      // the stack presses (correct password), then springs apart as the vault opens
+      // the stack presses (correct password), then lifts apart as the vault opens
       return {
-        y: [0, (1 + k * 1.6) * u, -(8 + k * 22) * u],
-        scaleY: [1, 0.95, 1],
-        scale: [1, 1, 1 + k * 0.02],
+        y: [0, (0.5 + k * 0.5) * u, -(6 + k * 14) * u],
+        scaleY: [1, 0.97, 1],
         opacity: [1, 1, 0],
         transition: {
-          y: { duration: 0.78, times: [0, 0.12, 1], ease: [[0.3, 0, 0.6, 1], [0.16, 1, 0.3, 1]] },
-          scaleY: { duration: 0.5, times: [0, 0.14, 1], ease: [[0.3, 0, 0.6, 1], [0.34, 1.56, 0.64, 1]] },
-          scale: { duration: 0.78, times: [0, 0.12, 1], ease: "easeOut" },
-          opacity: { duration: 0.7, times: [0, 0.45, 1], ease: "easeIn", delay: (2 - k) * 0.04 },
+          y: { duration: T.open, times: [0, openShare, 1], ease: [ease.press, ease.out] },
+          scaleY: { duration: T.open, times: [0, openShare, 1], ease: [ease.press, ease.out] },
+          opacity: { duration: T.open, times: [0, 0.4, 1], ease: "easeIn" },
         },
       };
     case "exploded": {
       const gap = (1 - Math.max(0, Math.min(1, assemble))) * (k - 1) * 14 * u;
-      return { y: -gap, opacity: 0.55 + 0.45 * assemble, x: 0, scaleY: 1, transition: settle };
+      return { y: -gap, opacity: 0.55 + 0.45 * assemble, x: 0, scaleY: 1, transition: { duration: T.assemble, ease: ease.out } };
     }
     default:
-      return { y: 0, x: 0, scale: 1, scaleY: 1, opacity: 1, transition: release };
+      return { y: 0, x: 0, scale: 1, scaleY: 1, opacity: 1, transition: { duration: T.settle, ease: ease.out } };
   }
+}
+
+/** The tile background's beat for a stage (null: it does not move). Exported for the motion-budget test. */
+export function tileTarget(stage: NonNullable<AppMarkProps["stage"]>): TargetAndTransition | null {
+  if (stage === "open") return { opacity: [1, 1, 0], scale: [1, 0.99, 1.03], transition: { duration: T.open, times: [0, openShare, 1], ease: [ease.press, ease.out] } };
+  if (stage === "press") return { scale: [1, 0.99, 1], transition: { duration: T.pressIn + T.pressOut, times: [0, pressShare, 1], ease: [ease.press, ease.out] } };
+  return null;
 }
 
 /* Geometry from assets/icon.svg (1024 viewBox). Slab k (0 = bottom) has its top face centred at y = 463 − 100k. */
@@ -119,7 +130,7 @@ const GLYPH = [
   [100, 86, 96],
 ];
 
-export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0, className, title, stage, stageKey = 0, assemble = 1 }: AppMarkProps) {
+export function AppMark({ size = 64, variant = "tile", animate = false, delay = 0, className, title, stage, stageKey = 0, assemble = 1 }: AppMarkProps) {
   const uid = useId().replace(/:/g, "");
   const reduced = useReducedMotionPref();
   const play = animate && !reduced && !stage;
@@ -132,15 +143,15 @@ export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0
     if (!stage) return;
     const ctrls = [c0, c1, c2];
     if (reduced) {
-      // Reduced motion: no travel — the end state, with the vault opening as a plain fade.
-      ctrls.forEach((c) => void c.start({ x: 0, y: 0, scale: 1, scaleY: 1, opacity: stage === "open" ? 0 : 1, transition: { duration: 0.14 } }));
-      void bg.start({ opacity: stage === "open" ? 0 : 1, scale: 1, transition: { duration: 0.14 } });
+      // Reduced motion: no travel. The end state, with the vault opening as a plain crossfade (C3 under reduced motion).
+      const d = motionSeconds("vaultUnlock", true);
+      ctrls.forEach((c) => void c.start({ x: 0, y: 0, scale: 1, scaleY: 1, opacity: stage === "open" ? 0 : 1, transition: { duration: stage === "open" ? d : 0 } }));
+      void bg.start({ opacity: stage === "open" ? 0 : 1, scale: 1, transition: { duration: stage === "open" ? d : 0 } });
       return;
     }
     ctrls.forEach((c, k) => void c.start(stageTarget(stage, k, unit, assemble)));
-    if (stage === "open") void bg.start({ opacity: [1, 1, 0], scale: [1, 0.985, 1.08], transition: { duration: 0.7, times: [0, 0.12, 1], ease: [[0.3, 0, 0.6, 1], [0.16, 1, 0.3, 1]] } });
-    else if (stage === "drop") void bg.start({ opacity: 1, scale: 1, transition: { duration: 0.42, ease: [0.16, 1, 0.3, 1] } });
-    else if (stage === "press") void bg.start({ scale: [1, 0.985, 1], transition: { duration: 0.5, times: [0, 0.14, 1], ease: [[0.3, 0, 0.6, 1], [0.34, 1.56, 0.64, 1]] } });
+    const tileBeat = tileTarget(stage);
+    if (tileBeat) void bg.start(tileBeat);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, stageKey, reduced, stage === "exploded" ? assemble : 0]);
   const staged = !!stage;
@@ -172,7 +183,7 @@ export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0
     );
     if (staged) {
       const ctrl = [c0, c1, c2][k];
-      const init = stage === "drop" ? (reduced ? { opacity: 0 } : { opacity: 0, y: -(26 + k * 12) * unit }) : stage === "exploded" ? { y: -(k - 1) * 14 * unit * (1 - assemble), opacity: 0.55 + 0.45 * assemble } : false;
+      const init = stage === "exploded" ? { y: -(k - 1) * 14 * unit * (1 - assemble), opacity: 0.55 + 0.45 * assemble } : false;
       return (
         <m.g key={k} initial={init} animate={ctrl} style={{ transformBox: "fill-box", transformOrigin: "50% 100%" }}>
           {body}
@@ -183,9 +194,9 @@ export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0
     return (
       <m.g
         key={k}
-        initial={{ opacity: 0, y: -36 }}
+        initial={{ opacity: 0, y: -12 * unit }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.48, ease: ease.outExpo, delay: delay + 0.12 + k * 0.08 }}
+        transition={{ duration: T.drawIn, ease: ease.out, delay: delay + k * T.drawStagger }}
       >
         {body}
       </m.g>
@@ -253,9 +264,9 @@ export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0
       ) : null}
       {tile ? (
         <m.g
-          initial={play ? { opacity: 0, scale: 0.92 } : staged && stage === "drop" && !reduced ? { opacity: 0, scale: 0.92 } : false}
+          initial={play ? { opacity: 0 } : false}
           animate={staged ? bg : { opacity: 1, scale: 1 }}
-          transition={{ duration: 0.48, ease: ease.outExpo, delay }}
+          transition={{ duration: T.drawIn, ease: ease.out, delay }}
           style={{ transformOrigin: "512px 512px" }}
         >
           <g clipPath={`url(#${id("sq")})`}>
@@ -271,15 +282,14 @@ export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0
   );
 }
 
-/** "Ultra Note" wordmark (Inter 720, −0.03em, §6.2 step 0). Product renamed from EMP; class names keep the emp prefix. */
-export function Wordmark({ className, animate = true, delay = 0.5 }: { className?: string; animate?: boolean; delay?: number }) {
-  const reduced = useReducedMotionPref();
+/** "Ultra Note" wordmark (IBM Plex Sans 700, −0.02em). Static by default; `animate` fades it in (no travel). */
+export function Wordmark({ className, animate = false, delay = 0 }: { className?: string; animate?: boolean; delay?: number }) {
   return (
     <m.span
       className={cn("emp-wordmark", className)}
-      initial={animate ? { opacity: 0, y: reduced ? 0 : 4 } : false}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.48, ease: ease.outExpo, delay }}
+      initial={animate ? { opacity: 0 } : false}
+      animate={{ opacity: 1 }}
+      transition={{ duration: T.drawIn, ease: ease.out, delay }}
     >
       Ultra Note
     </m.span>

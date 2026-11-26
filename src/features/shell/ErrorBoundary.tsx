@@ -8,8 +8,6 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AppMark } from "@/features/vault/AppMark";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
-import "@/features/vault/vault.css";
-import "@/features/vault/Onboarding/onboarding.css";
 
 interface Props {
   children: ReactNode;
@@ -87,7 +85,7 @@ export function AppErrorBoundary({ children }: { children: ReactNode }) {
   return (
     <Boundary
       fallback={(error) => (
-        <div className="emp-stage emp-vault-stage onb-stage" role="alert">
+        <div className="fixed inset-0 z-[var(--z-lock)] flex items-start justify-center overflow-y-auto bg-canvas px-6 pt-[18vh]" role="alert">
           <div className="w-[420px] max-w-full">
             <AppMark size={40} animate={false} />
             <h1 className="mt-5 text-h2 text-primary">Ultra Note needs to restart</h1>

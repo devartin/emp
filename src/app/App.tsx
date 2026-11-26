@@ -4,8 +4,8 @@
  * is lazy and preloaded while the KDF runs.
  *
  * Phase transitions (DESIGN v3 §7):
- *   lock → shell        the end of the vault unlock (C3, a signature moment): the shell fades in over 320ms while the
- *                       lock screen leaves; a 150ms crossfade under reduced motion
+ *   lock → shell        the tail of the vault unlock (C3): opacity only, 200ms (the moment's exit budget), so the
+ *                       lock screen's own beat keeps the headroom; a 150ms crossfade under reduced motion
  *   onboarding → shell  a plain crossfade (C2 dialog timing, 160ms); no blur, no scale
  */
 import { AnimatePresence, m } from "motion/react";
@@ -24,7 +24,7 @@ import { Toaster } from "@/ui/Toast";
 import { TooltipProvider } from "@/ui/Tooltip";
 import { setCelebrationsEnabled } from "@/ui/motion/Celebrate";
 import { MotionProvider } from "@/ui/motion/MotionProvider";
-import { motionSeconds } from "@/ui/motion/register";
+import { REGISTER, motionSeconds } from "@/ui/motion/register";
 import { ease } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { currentRoute } from "./router";
@@ -107,8 +107,8 @@ function ShellPhase({ from }: { from: AppPhase }) {
   const fromOnboarding = from === "onboarding";
   const fromLock = from === "lock";
   const animated = fromOnboarding || fromLock;
-  // Unlock is the vault moment (≤ 600ms); first run ends on an ordinary crossfade.
-  const dur = fromLock ? Math.min(0.32, motionSeconds("vaultUnlock", reduced)) : motionSeconds("dialog", reduced) || 0.12;
+  // Unlock: the shell is the moment's exit (opacity only, ≤ 200ms); first run ends on an ordinary crossfade.
+  const dur = fromLock ? (reduced ? motionSeconds("vaultUnlock", true) : REGISTER.vaultUnlock.out / 1000) : motionSeconds("dialog", reduced) || 0.12;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // First shell frame is on screen: report boot marks (§3.9 app_ready).

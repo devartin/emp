@@ -96,6 +96,8 @@ const QUICK_REFERENCE = `# Ultra Note quick reference
 
 /** A tour page doc with shortcut labels for this platform (⌘ on macOS, Ctrl+ elsewhere). */
 const tourDoc = (blocks: Parameters<typeof makeDoc>[0]) => platformKeys(makeDoc(blocks), isMac);
+/** Key chords as code chips (the Getting Started style), space-separated: `⌘B` `⌘I` `⌘U`. Mirrors tour.rs. */
+const keys = (...chords: string[]): Inline[] => chords.flatMap((c, i) => (i ? [' ', t.code(c)] : [t.code(c)]));
 
 interface TourIds {
   workspaceId: string;
@@ -407,20 +409,20 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       b.table(
         [
           ['Keys', 'Action'],
-          ['⌘K', 'Command palette'],
-          ['⌘P', 'Quick find pages'],
-          ['⌘⇧P', 'Run a command'],
-          ['⌘N', 'New page'],
-          ['⌘[  /  ⌘]', 'Back / forward'],
-          ['⌘⇧U', 'Go to parent page'],
-          ['⌘\\', 'Toggle sidebar'],
-          ['⌘⌥D', 'Today’s daily note'],
-          ['⌘⇧H', 'Hide numbers'],
-          ['⌘⇧L', 'Lock now'],
-          ['⌘⇧D', 'Light / dark theme'],
-          ['⌘⇧O', 'Offline mode'],
-          ['⌘,', 'Settings'],
-          ['⌘L', 'Copy link to page'],
+          [keys('⌘K'), 'Command palette'],
+          [keys('⌘P'), 'Quick find pages'],
+          [keys('⌘⇧P'), 'Run a command'],
+          [keys('⌘N'), 'New page'],
+          [[t.code('⌘['), ' / ', t.code('⌘]')], 'Back / forward'],
+          [keys('⌘⇧U'), 'Go to parent page'],
+          [keys('⌘\\'), 'Toggle sidebar'],
+          [keys('⌘⌥D'), 'Today’s daily note'],
+          [keys('⌘⇧H'), 'Hide numbers'],
+          [keys('⌘⇧L'), 'Lock now'],
+          [keys('⌘⇧D'), 'Light / dark theme'],
+          [keys('⌘⇧O'), 'Offline mode'],
+          [keys('⌘,'), 'Settings'],
+          [keys('⌘L'), 'Copy link to page'],
         ],
         { colWidths: [160, 320] },
       ),
@@ -428,13 +430,13 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       b.table(
         [
           ['Keys', 'Action'],
-          ['⌘B  ⌘I  ⌘U', 'Bold, italic, underline'],
-          ['⌘⇧S', 'Strikethrough'],
-          ['⌘E', 'Inline code'],
-          ['⌘⇧E', 'Inline equation'],
-          ['⌘K with text selected', 'Add a link'],
-          ['⌘⌥H', 'Apply the last colour'],
-          ['⌘⇧V', 'Paste as plain text'],
+          [keys('⌘B', '⌘I', '⌘U'), 'Bold, italic, underline'],
+          [keys('⌘⇧S'), 'Strikethrough'],
+          [keys('⌘E'), 'Inline code'],
+          [keys('⌘⇧E'), 'Inline equation'],
+          [[t.code('⌘K'), ' with text selected'], 'Add a link'],
+          [keys('⌘⌥H'), 'Apply the last colour'],
+          [keys('⌘⇧V'), 'Paste as plain text'],
         ],
         { colWidths: [200, 280] },
       ),
@@ -442,14 +444,14 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       b.table(
         [
           ['Keys', 'Action'],
-          ['Esc', 'Select the current block'],
-          ['⇧↑  ⇧↓', 'Extend the block selection'],
-          ['⌘D', 'Duplicate'],
-          ['⌘⇧↑  ⌘⇧↓', 'Move the block with its children'],
-          ['Tab  ⇧Tab', 'Indent / outdent'],
-          ['⌘↵', 'Tick a to-do, open a toggle, follow a link'],
-          ['⌘⌥T', 'Expand or collapse all toggles'],
-          ['⌘⌥0–9', 'Turn into another block type'],
+          [keys('Esc'), 'Select the current block'],
+          [keys('⇧↑', '⇧↓'), 'Extend the block selection'],
+          [keys('⌘D'), 'Duplicate'],
+          [keys('⌘⇧↑', '⌘⇧↓'), 'Move the block with its children'],
+          [keys('Tab', '⇧Tab'), 'Indent / outdent'],
+          [keys('⌘↵'), 'Tick a to-do, open a toggle, follow a link'],
+          [keys('⌘⌥T'), 'Expand or collapse all toggles'],
+          [keys('⌘⌥0–9'), 'Turn into another block type'],
         ],
         { colWidths: [180, 300] },
       ),
@@ -554,6 +556,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
   ctx.seedRefs.set('core.page.gettingStarted', gs.id);
   ctx.seedRefs.set('core.page.blocks', writing.id);
   ctx.seedRefs.set('core.page.money', money.id);
+  ctx.seedRefs.set('core.page.shortcuts', shortcuts.id);
   return { workspaceId: ws.id, gettingStarted: gs.id, blocks: writing.id };
 }
 

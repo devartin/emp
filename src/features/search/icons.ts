@@ -3,7 +3,7 @@
  * (§12 import style). Unknown names fall back to a neutral command glyph.
  */
 import {
-  ALargeSmall, ArrowLeft, ArrowRight, Calendar, CalendarDays, CandlestickChart, ChevronsUpDown, Copy, CornerLeftUp, Command,
+  ALargeSmall, ArrowLeft, ArrowRight, Calendar, CalendarDays, ChartCandlestick, ChevronsUpDown, Copy, CornerLeftUp, Command,
   EyeOff, FileDown, FilePlus, FilePlus2, History, House, Keyboard, LayoutTemplate, Link, Lock, MoveHorizontal, PanelLeft,
   PanelRight, Replace, Save, Search, Settings, ShieldCheck, Star, StarOff, SunMoon, Trash2, Type, WifiOff, ZoomIn,
   ZoomOut, Palette, Printer, Download, Upload, Archive, Moon, Sun, Monitor, Rows3, CaseSensitive, Activity, Eye, Database, Sheet,
@@ -17,7 +17,8 @@ const MAP: Record<string, LucideIcon> = {
   "arrow-right": ArrowRight,
   calendar: Calendar,
   "calendar-days": CalendarDays,
-  "candlestick-chart": CandlestickChart,
+  "chart-candlestick": ChartCandlestick,
+  "candlestick-chart": ChartCandlestick, // legacy name (older data / manifests)
   "chevrons-up-down": ChevronsUpDown,
   copy: Copy,
   "corner-left-up": CornerLeftUp,
@@ -69,7 +70,7 @@ const MAP: Record<string, LucideIcon> = {
   "layout-grid": LayoutGrid,
   wallet: Wallet,
   kanban: Kanban,
-  "receipt-text": ReceiptText,
+  "receipt-text": ReceiptText, // legacy name; palette commands use "receipt"
 };
 
 export function commandIcon(name: string | undefined): LucideIcon {

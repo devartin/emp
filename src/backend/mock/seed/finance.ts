@@ -738,7 +738,7 @@ export function provisionPortfolio(ctx: MockCtx, o: ProvisionOpts): PfSet {
   const securities = createDatabase(ctx, {
     ...common,
     title: 'Securities',
-    icon: lucide('candlestick-chart', 'blue'),
+    icon: lucide('chart-candlestick', 'blue'),
     properties: [
       { name: 'Name', type: 'title' },
       { name: 'Ticker', type: 'ticker', role: 'sec.ticker', config: { showQuote: true } },
@@ -1073,8 +1073,8 @@ function seedTaxSample(ctx: MockCtx, set: TaxSet): void {
 
 const APP_META: Record<string, { title: string; icon: Icon; color: string }> = {
   'money-hq': { title: 'Money HQ', icon: lucide('wallet', 'green'), color: 'jade' },
-  portfolio: { title: 'Portfolio', icon: lucide('candlestick-chart', 'blue'), color: 'ocean' },
-  'tax-organizer': { title: 'Tax Organizer', icon: lucide('receipt-text', 'yellow'), color: 'amber' },
+  portfolio: { title: 'Portfolio', icon: lucide('chart-candlestick', 'blue'), color: 'ocean' },
+  'tax-organizer': { title: 'Tax Organizer', icon: lucide('receipt', 'yellow'), color: 'amber' },
 };
 
 interface FallbackInstance extends LifeAppInstance {
