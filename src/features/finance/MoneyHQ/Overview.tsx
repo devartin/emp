@@ -77,6 +77,9 @@ const xfLong = (v: unknown) => {
 // would disagree with the Accounts tab's 12-month figure (networth.change = end of range minus its start).
 const sinceLabel = (data: readonly { t: string }[]) => (data[0] ? `since ${xfLong(data[0].t)}` : "");
 
+/** A net-worth point label: series points are months ("2026-05") or days ("2026-05-14"). */
+const pointLabel = (t: string) => (t.length <= 7 ? monthLabel(t) : dayLabel(t, true));
+
 type NwPoint = { t: string; net: number; assets: number; liabilities: number };
 
 /** The inputs behind net worth, for its popover: assets, debts and the Portfolio share. */
@@ -174,11 +177,11 @@ function NetWorthReadout({ scrub, data, periodLabel, overview, onAccounts }: { s
         {cur ? (
           <>
             <span className="text-body-sm">
-              <Figure id="networth.change" inputs={first ? [{ label: dayLabel(first.t, true), value: fmtWhole(first.net, { currency }) }, { label: dayLabel(cur.t, true), value: fmtWhole(cur.net, { currency }) }] : undefined}>
+              <Figure id="networth.change" inputs={first ? [{ label: pointLabel(first.t), value: fmtWhole(first.net, { currency }) }, { label: pointLabel(cur.t), value: fmtWhole(cur.net, { currency }) }] : undefined}>
                 <Delta money={toMoney(delta, currency)} percent={change} />
               </Figure>
             </span>
-            <span className="text-body-sm text-secondary">{scrubbing ? dayLabel(cur.t, true) : periodLabel}</span>
+            <span className="text-body-sm text-secondary">{scrubbing ? pointLabel(cur.t) : periodLabel}</span>
           </>
         ) : null}
       </div>

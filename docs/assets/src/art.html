@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ultra Note art</title>
+<!--
+  Composition page for docs/assets/*.png. render.cjs opens it as art.html#<kind>/<theme>
+  (kind: banner | social | features; theme: light | dark) and screenshots the viewport.
+  Every app image comes from .shots/, captured live from the mock app. Colours are the v3
+  tokens from docs/DESIGN.md §2.1; elevation E3 is the only shadow (on the window frame).
+-->
+<style>
+  @font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 100 700;
+    font-display: block;
+    src: url('../../../node_modules/@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2') format('woff2-variations');
+  }
+  :root {
+    --paper: #fdfdfc;
+    --window: #f7f6f4;
+    --ink: #262624;
+    --ink-2: #67645e;
+    --ink-3: #87847e;
+    --rule: rgba(40, 30, 10, .09);
+    --ring: rgba(42, 28, 0, .09);
+    --dot: #dedcd7;
+    --e3: 0 20px 24px rgba(25, 25, 25, .05), 0 5px 8px rgba(25, 25, 25, .03), 0 0 0 1px rgba(42, 28, 0, .09);
+  }
+  html[data-theme='dark'] {
+    --paper: #1a1a19;
+    --window: #1f1f1e;
+    --ink: #ecebe8;
+    --ink-2: #a8a59f;
+    --ink-3: #8a8781;
+    --rule: rgba(255, 255, 240, .09);
+    --ring: rgba(255, 255, 240, .09);
+    --dot: #3a3a38;
+    --e3: 0 20px 24px rgba(0, 0, 0, .28), 0 5px 8px rgba(0, 0, 0, .18), 0 0 0 1px rgba(255, 255, 240, .1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+    position: relative;
+  }
+
+  /* Brand lock-up: the app mark tile and the name. The mark SVG has a 6.25% transparent margin. */
+  .brand { position: absolute; display: flex; flex-direction: column; }
+  .lockup { display: flex; align-items: center; }
+  .mark { display: block; flex: none; }
+  .name { font-weight: 600; letter-spacing: -0.02em; line-height: 1; white-space: nowrap; }
+  .line { color: var(--ink-2); font-weight: 400; letter-spacing: -0.01em; }
+
+  /* A plain window: one hairline ring, E3, a title bar with three neutral dots. */
+  .win {
+    position: absolute;
+    background: var(--window);
+    border-radius: 10px;
+    box-shadow: var(--e3);
+    overflow: hidden;
+  }
+  .bar { height: 28px; display: flex; align-items: center; gap: 7px; padding-left: 12px; border-bottom: 1px solid var(--rule); }
+  .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--dot); display: block; }
+  .shot { display: block; transform-origin: 0 0; }
+
+  /* Features: three crops of real screens, ruled captions. */
+  .tiles { position: absolute; display: grid; grid-template-columns: repeat(3, 1fr); }
+  .tile .crop {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--paper);
+    box-shadow: 0 0 0 1px var(--ring);
+  }
+  .tile .crop img { position: absolute; left: 0; top: 0; display: block; }
+  .tile h2 { font-size: 15px; font-weight: 600; line-height: 20px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule); }
+  .tile p { font-size: 13px; line-height: 19px; color: var(--ink-2); margin-top: 3px; }
+</style>
+</head>
+<body>
+<script>
+  // Shared copy. Plain sentences, sentence case, no emoji, no exclamation marks.
+  const COPY = {
+    name: 'Ultra Note',
+    line: 'Notes, databases, spreadsheets and money, on your computer.',
+    tiles: [
+      // Each crop holds only what its caption names, kept narrow so the text survives the README's width.
+      // Home: the date down to the money line (agenda, to-dos, habits, money).
+      { shot: 'home', title: 'Home is the day', text: 'Agenda, to-dos, habits and money for today, in one column.',
+        crop: { x: 368, y: 86, w: 790 } },
+      // Money HQ (one-column overview): the heading, net worth with its chart, and the month's figures.
+      { shot: 'money', title: 'Money HQ', text: 'Net worth and this month\u2019s figures, from your own records.',
+        crop: { x: 270, y: 70, w: 660 } },
+      // Client CRM: the title, the view tabs and four columns of the table.
+      { shot: 'crm', title: 'Databases', text: 'Table, board, calendar and gallery views of the same rows.',
+        crop: { x: 330, y: 118, w: 632 } },
+    ],
+  };
+  // Capture sizes in CSS px (render.cjs SCREENS; captured at 2x).
+  const SHOTS = { home: [1280, 960], money: [960, 1040], crm: [1280, 900] };
+  const [kind, theme] = (location.hash.slice(1) || 'banner/light').split('/');
+  document.documentElement.dataset.theme = theme;
+  const shot = (id) => `.shots/${id}-${theme}.png`;
+  const el = (tag, attrs = {}, kids = []) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'style') Object.assign(n.style, v);
+      else if (k === 'text') n.textContent = v;
+      else n.setAttribute(k, v);
+    }
+    for (const k of kids) n.appendChild(k);
+    return n;
+  };
+
+  function brand({ left, top, mark, name, line, lineWidth, gap }) {
+    const m = el('img', { class: 'mark', src: '../../../public/emp.svg', alt: '',
+      style: { width: mark + 'px', height: mark + 'px', margin: `${-mark * 0.0625}px ${mark * 0.22 - mark * 0.0625}px ${-mark * 0.0625}px ${-mark * 0.0625}px` } });
+    const n = el('div', { class: 'name', text: COPY.name, style: { fontSize: name + 'px' } });
+    const l = el('div', { class: 'line', text: COPY.line, style: { fontSize: line + 'px', lineHeight: Math.round(line * 1.4) + 'px', maxWidth: lineWidth + 'px', marginTop: gap + 'px' } });
+    const b = el('div', { class: 'brand', style: { left: left + 'px', top: top + 'px' } }, [el('div', { class: 'lockup' }, [m, n]), l]);
+    document.body.appendChild(b);
+    return b;
+  }
+
+  function windowFrame({ id, left, top, scale }) {
+    const [SHOT_W, SHOT_H] = SHOTS[id];
+    const img = el('img', { class: 'shot', src: shot(id), alt: '',
+      style: { width: SHOT_W * scale + 'px', height: SHOT_H * scale + 'px' } });
+    const w = el('div', { class: 'win', style: { left: left + 'px', top: top + 'px', width: SHOT_W * scale + 'px' } },
+      [el('div', { class: 'bar' }, [el('i'), el('i'), el('i')]), img]);
+    document.body.appendChild(w);
+    return w;
+  }
+
+  function centreVertically(node, areaTop, areaHeight) {
+    const h = node.getBoundingClientRect().height;
+    node.style.top = Math.round(areaTop + (areaHeight - h) / 2) + 'px';
+  }
+
+  function features() {
+    // Each crop is scaled to the tile width; tiles share one height so the captions line up.
+    const pad = 48, gap = 28, W = innerWidth, cropH = 360;
+    const grid = el('div', { class: 'tiles', style: { left: pad + 'px', top: pad + 'px', width: W - pad * 2 + 'px', columnGap: gap + 'px' } });
+    const tileW = (W - pad * 2 - gap * 2) / 3;
+    for (const t of COPY.tiles) {
+      const s = tileW / t.crop.w;
+      const h = cropH;
+      const [sw, sh] = SHOTS[t.shot];
+      if (t.crop.y + h / s > sh) throw new Error(`crop for ${t.shot} runs past the capture`);
+      const img = el('img', { src: shot(t.shot), alt: '',
+        style: { width: sw * s + 'px', height: sh * s + 'px', left: -t.crop.x * s + 'px', top: -t.crop.y * s + 'px' } });
+      grid.appendChild(el('div', { class: 'tile' }, [
+        el('div', { class: 'crop', style: { height: h + 'px' } }, [img]),
+        el('h2', { text: t.title }),
+        el('p', { text: t.text }),
+      ]));
+    }
+    document.body.appendChild(grid);
+  }
+
+  const afterFonts = [];
+  if (kind === 'banner') {
+    // 1200 x 500 at 2x. The window bleeds off the right and bottom edges; the visible part
+    // ends just past the right edge of Home's day column.
+    windowFrame({ id: 'home', left: 492, top: 76, scale: 0.62 });
+    const b = brand({ left: 84, top: 0, mark: 64, name: 50, line: 19, lineWidth: 340, gap: 26 });
+    afterFonts.push(() => centreVertically(b, 0, 500));
+  } else if (kind === 'social') {
+    // 1280 x 640 at 1x (GitHub's social preview size). The bottom edge cuts the capture at about 745 CSS px,
+    // between rows in both the sidebar (Client CRM / Reading list) and the day column ("5 more" / Habits).
+    windowFrame({ id: 'home', left: 560, top: 150, scale: 0.62 });
+    const b = brand({ left: 72, top: 0, mark: 76, name: 60, line: 24, lineWidth: 420, gap: 30 });
+    afterFonts.push(() => centreVertically(b, 0, 640));
+  } else {
+    features();
+  }
+
+  Promise.all([
+    document.fonts.ready,
+    ...[...document.images].map((i) => i.decode().catch(() => { throw new Error('image failed: ' + i.src); })),
+  ]).then(() => { afterFonts.forEach((f) => f()); window.__artReady = true; }, (e) => { document.title = 'ERROR ' + e.message; });
+</script>
+</body>
+</html>

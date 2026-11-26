@@ -20,7 +20,9 @@
     "budget:update": "node scripts/bundle-budget.mjs --update",
     "gates:census": "node scripts/gates/census.js",
     "gates:settle": "node scripts/gates/settle.js",
-    "gates:smoke": "node scripts/gates/smoke.js"
+    "gates:smoke": "node scripts/gates/smoke.js",
+    "media:capture": "node scripts/media/capture.mjs",
+    "media:art": "node docs/assets/src/render.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
