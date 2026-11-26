@@ -1,7 +1,6 @@
 import * as RC from "@radix-ui/react-checkbox";
 import { useId, useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { burst } from "./motion/Celebrate";
 
 export interface CheckboxProps {
   checked?: boolean | "indeterminate";
@@ -15,16 +14,16 @@ export interface CheckboxProps {
   name?: string;
   className?: string;
   /**
-   * Task completion (S13 — editor to-dos, Today, habits): checking fires an 8-ray ink burst and draws a
-   * strike-through across the label, which fades to tertiary.
+   * Task completion (editor to-dos, Today, habits): the quiet ink check of the motion register (C1 tick, 120ms) plus a
+   * 150ms strike-through across the label, which fades to tertiary. No rays, no burst (DESIGN v3 §4.2, §7).
    */
   celebrate?: boolean;
   "aria-label"?: string;
 }
 
 /**
- * Checkbox (docs/DESIGN.md §6.2): a 16px well with a ≥3:1 rim; checked pops into a lit mini-slab (scale .6 → 1 on the
- * `thumb` spring) and the tick draws over 220ms after 60ms. Press squashes to .9. 24×24 hit area.
+ * Checkbox (docs/DESIGN.md v3 §4.2): 16px, radius 4, a 1.25px `--border-strong` outline; checked fills with ink and
+ * draws its tick (C1, 120ms). 24×24 hit area.
  */
 export function Checkbox({ checked, defaultChecked, onCheckedChange, disabled, label, description, error, id, name, className, celebrate, ...aria }: CheckboxProps) {
   const auto = useId();
@@ -40,10 +39,7 @@ export function Checkbox({ checked, defaultChecked, onCheckedChange, disabled, l
         className={cn("emp-check", !label && className)}
         checked={checked}
         defaultChecked={defaultChecked}
-        onCheckedChange={(v) => {
-          if (celebrate && v === true && ref.current) burst(ref.current);
-          onCheckedChange?.(v === true);
-        }}
+        onCheckedChange={(v) => onCheckedChange?.(v === true)}
         disabled={disabled}
         data-error={error ? "" : undefined}
         aria-label={aria["aria-label"]}

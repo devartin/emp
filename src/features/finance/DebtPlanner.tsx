@@ -148,7 +148,7 @@ export default function DebtPlanner() {
       .sort((a, b) => (a.idx < 0 ? 9999 : a.idx) - (b.idx < 0 ? 9999 : b.idx));
   }, [plan, debts]);
 
-  if (l.loading || !debts) return <Skeleton height={420} radius={14} />;
+  if (l.loading || !debts) return <Skeleton height={420} radius={10} />;
   if (!debts.length)
     return (
       <Section>
@@ -167,7 +167,7 @@ export default function DebtPlanner() {
               Extra each month
             </div>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="tabular" style={{ fontSize: 30, lineHeight: "36px", fontWeight: 640, letterSpacing: "-0.025em" }}>
+              <span className="tabular text-kpi-xl">
                 <RollingNumber value={extra} format={(n) => fmtWhole(n)} countUp={false} />
               </span>
               <span className="text-body-sm text-tertiary">
@@ -212,14 +212,14 @@ export default function DebtPlanner() {
                       )}
                     </span>
                   </span>
-                  <AnimatePresence>{selected ? <m.span key="c" className="fh-strat-check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0, transition: { duration: 0.1 } }} transition={spring.pop}><Check size={11} strokeWidth={3} /></m.span> : null}</AnimatePresence>
+                  <AnimatePresence>{selected ? <m.span key="c" className="fh-strat-check" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.1 } }} transition={{ duration: 0.1 }}><Check size={11} strokeWidth={3} /></m.span> : null}</AnimatePresence>
                 </button>
               );
             })}
           </div>
         </section>
         <section className="fh-card fh-span-7 flex flex-col">
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          <dl className="fh-facts">
             <BigFact
               label={isYourPlan ? "Debt-free with your plan" : isLedger ? "Debt-free with this plan" : "Debt-free in this what-if"}
               value={sel ? isYourPlan ? <Figure id="debtFree.plan" inputs={[{ label: "Strategy", value: STRATS.find((x) => x.id === strategy)?.title ?? strategy, sensitive: false }, { label: "Extra a month", value: fmtWhole(extra) }, { label: "Months", value: String(sel.months), sensitive: false }]}><SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /></Figure> : <SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /> : "—"}
@@ -227,7 +227,7 @@ export default function DebtPlanner() {
             />
             <BigFact label="Interest saved" value={sel ? <RollingNumber value={num(sel.interestSavedVsMin)} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive /> : "—"} sub="vs minimums only" good sensitive />
             <BigFact label="Months sooner" value={sel && minimum ? <RollingNumber value={Math.max(0, minimum.months - sel.months)} format={(n) => String(Math.round(n))} countUp={false} /> : "—"} sub={minimum ? `Debt-free at minimum payments: ${minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)}` : ""} good />
-          </div>
+          </dl>
           {error ? <div className="text-body-sm text-loss-text">{error}</div> : null}
           <LineChart
             // remount on a new pick: recharts layers lines by mount order, and the chosen line must draw on top
@@ -286,9 +286,9 @@ export default function DebtPlanner() {
         {debts.map((d, i) => (
           <div key={d.key} className="fh-debt-row">
             <Input size="sm" value={d.name} onChange={(e) => setDebts((ds) => ds!.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} wrapperClassName="flex-1" aria-label="Debt name" />
-            <MoneyField size="sm" value={d.balance} onChange={(v) => setDebts((ds) => ds!.map((x, j) => (j === i ? { ...x, balance: v ?? "0" } : x)))} wrapperClassName="w-[150px]" aria-label="Balance" />
-            <NumberField size="sm" value={num(d.aprPct)} onChange={(v) => setDebts((ds) => ds!.map((x, j) => (j === i ? { ...x, aprPct: String(v ?? 0) } : x)))} step={0.1} min={0} max={99} suffix="%" wrapperClassName="w-[110px]" aria-label="APR" />
-            <MoneyField size="sm" value={d.minPayment} onChange={(v) => setDebts((ds) => ds!.map((x, j) => (j === i ? { ...x, minPayment: v ?? "0" } : x)))} wrapperClassName="w-[140px]" aria-label="Minimum payment" />
+            <MoneyField size="sm" value={d.balance} onChange={noop} onCommit={(v) => setDebts((ds) => ds!.map((x, j) => (j === i ? { ...x, balance: v ?? "0" } : x)))} wrapperClassName="w-[150px]" aria-label="Balance" />
+            <NumberField size="sm" value={num(d.aprPct)} onChange={noop} onCommit={(v) => setDebts((ds) => ds!.map((x, j) => (j === i ? { ...x, aprPct: String(v ?? 0) } : x)))} step={0.1} min={0} max={99} suffix="%" wrapperClassName="w-[110px]" aria-label="APR" />
+            <MoneyField size="sm" value={d.minPayment} onChange={noop} onCommit={(v) => setDebts((ds) => ds!.map((x, j) => (j === i ? { ...x, minPayment: v ?? "0" } : x)))} wrapperClassName="w-[140px]" aria-label="Minimum payment" />
             <IconButton icon={X} size="sm" label="Remove from plan" disabled={debts.length <= 1} onClick={() => setDebts((ds) => ds!.filter((_, j) => j !== i))} />
           </div>
         ))}
@@ -332,17 +332,14 @@ function SlideText({ text, order }: { text: string; order: number }) {
 function BigFact({ label, value, sub, good, sensitive }: { label: string; value: ReactNode; sub?: string; good?: boolean; sensitive?: boolean }) {
   return (
     <div className={cn("fh-fact", good && "is-good")}>
-      <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
-        {label}
-      </div>
-      <div className="tabular" style={{ fontSize: 22, lineHeight: "28px", fontWeight: 620, letterSpacing: "-0.02em" }}>
-        {sensitive ? <span data-sensitive="">{value}</span> : value}
-      </div>
-      {sub ? (
-        <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-          {sub}
-        </div>
-      ) : null}
+      <dt className="min-w-0">
+        <span className="block text-body-sm text-secondary">{label}</span>
+        {sub ? <span className="block text-caption text-tertiary">{sub}</span> : null}
+      </dt>
+      <dd className="tabular text-body font-semibold">{sensitive ? <span data-sensitive="">{value}</span> : value}</dd>
     </div>
   );
 }
+
+/** Debt rows keep their pre-v3 commit-on-blur behaviour (live field values are not written while typing). */
+const noop = () => undefined;

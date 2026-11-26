@@ -15,6 +15,8 @@ import { dailyTitle } from '../lib/templates';
 import { patchVaultSettings } from '../lib/settings';
 import { logNetwork } from '../commands/network';
 import { localDay } from '../clock';
+import { isMac } from '@/lib/platform';
+import { platformKeys, spellKeys } from '../lib/keys';
 
 export const order = 0;
 
@@ -80,9 +82,9 @@ function azulejoSvg(): string {
 const QUICK_REFERENCE = `# Ultra Note quick reference
 
 ## Everyday
-- ⌘K — command palette · ⌘P — quick find · ⌘N — new page
-- ⌘⌥D — today's daily note · ⌘[ / ⌘] — back / forward
-- ⌘⇧H — hide numbers · ⌘⇧L — lock now · ⌘⇧D — light/dark
+- ⌘K: command palette · ⌘P: quick find · ⌘N: new page
+- ⌘⌥D: today's daily note · ⌘[ / ⌘]: back / forward
+- ⌘⇧H: hide numbers · ⌘⇧L: lock now · ⌘⇧D: light/dark
 
 ## Writing
 - Type / for any block · [[ to link a page · @ to mention a page or a date
@@ -91,6 +93,9 @@ const QUICK_REFERENCE = `# Ultra Note quick reference
 `;
 
 // ───────────────────────────────────────────────────────────────────────────── workspace + tour
+
+/** A tour page doc with shortcut labels for this platform (⌘ on macOS, Ctrl+ elsewhere). */
+const tourDoc = (blocks: Parameters<typeof makeDoc>[0]) => platformKeys(makeDoc(blocks), isMac);
 
 interface TourIds {
   workspaceId: string;
@@ -117,13 +122,13 @@ function createWorkspace(ctx: MockCtx, name: string): WorkspaceRecord {
 }
 
 const GS_ITEMS: { key: string; content: Inline[] }[] = [
-  { key: 'create_page', content: [t.bold('Create a page'), ' — press ', t.code('⌘N'), ' or the + next to Pages.'] },
-  { key: 'try_slash', content: [t.bold('Try /'), ' — type ', t.code('/'), ' on an empty line to add any block.'] },
-  { key: 'open_palette', content: [t.bold('Open ⌘K'), ' — search everything and run any command.'] },
+  { key: 'create_page', content: [t.bold('Create a page'), ': press ', t.code('⌘N'), ' or the + next to Pages.'] },
+  { key: 'try_slash', content: [t.bold('Try /'), ': type ', t.code('/'), ' on an empty line to add any block.'] },
+  { key: 'open_palette', content: [t.bold('Open ⌘K'), ' to search everything and run any command.'] },
   { key: 'add_transaction', content: [t.bold('Add a transaction'), ' in Money HQ, or import a bank statement.'] },
-  { key: 'hide_numbers', content: [t.bold('Try ⌘⇧H'), ' — hide every number on screen when someone is looking.'] },
-  { key: 'lock', content: [t.bold('Lock with ⌘⇧L'), ' — encrypted workspaces lock instantly.'] },
-  { key: 'templates', content: [t.bold('Explore Templates'), ' — meeting notes, weekly reviews, trip plans and more.'] },
+  { key: 'hide_numbers', content: [t.bold('Hide numbers with ⌘⇧H'), ' when someone can see your screen.'] },
+  { key: 'lock', content: [t.bold('Lock with ⌘⇧L'), ': an encrypted workspace locks at once.'] },
+  { key: 'templates', content: [t.bold('Browse templates'), ' for meeting notes, weekly reviews, trip plans and more.'] },
 ];
 
 /** Creates the workspace and the Getting Started tour. Used by vault_create (onboarding) and the demo seed. */
@@ -146,7 +151,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     workspaceId: ws.id,
     name: 'Ultra Note quick reference.md',
     mime: 'text/markdown',
-    blob: new Blob([QUICK_REFERENCE], { type: 'text/markdown' }),
+    blob: new Blob([isMac ? QUICK_REFERENCE : spellKeys(QUICK_REFERENCE)], { type: 'text/markdown' }),
     source: 'builtin',
   });
 
@@ -213,16 +218,16 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
   ctx.docs.save(
     gs.id,
     'page',
-    makeDoc([
+    tourDoc([
       b.p([
         'Ultra Note keeps your notes, money, plans and life admin in ',
         t.bold('one private place on this device'),
-        '. This page is a short tour — the checklist below ticks itself as you try each thing.',
+        '. This page is a short tour: the checklist below ticks itself as you try each thing.',
       ]),
       b.callout(
         [
           t.bold('Your workspace lives on your computer.'),
-          ' Ultra Note has no servers and no accounts, and we never receive your data. Nothing connects to the internet unless you turn on an integration.',
+          ' Ultra Note has no servers and no accounts, and your data never leaves this device. Nothing connects to the internet unless you turn on an integration.',
         ],
         { icon: lucide('shield'), tone: 'gray' },
       ),
@@ -233,7 +238,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       b.columns([
         [
           b.h3('Write'),
-          b.p('Docs with headings, toggles, tables, math, code and columns — all keyboard-first.'),
+          b.p('Docs with headings, toggles, tables, maths, code and columns, all keyboard-first.'),
           b.pageLink(writing.id),
         ],
         [
@@ -271,7 +276,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
   ctx.docs.save(
     writing.id,
     'page',
-    makeDoc([
+    tourDoc([
       b.p([
         'Everything in a page is a ',
         t.bold('block'),
@@ -287,7 +292,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       b.h1('Heading 1'),
       b.h2('Heading 2'),
       b.h3('Heading 3'),
-      b.toggleHeading(2, 'A toggle heading — click the arrow', {
+      b.toggleHeading(2, 'A toggle heading: click the arrow', {
         children: [b.p('Toggle headings fold whole sections away. Great for long pages and FAQs.')],
       }),
       b.h2('Text that says more'),
@@ -366,7 +371,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       ),
       b.columns(
         [
-          [b.h3('Columns'), b.p('Drag a block to the side of another to make columns — up to five across.')],
+          [b.h3('Columns'), b.p('Drag a block to the side of another to make columns, up to five across.')],
           [b.h3('Resizable'), b.p('Drag the gap between columns to change their widths.')],
         ],
         { widths: [0.5, 0.5] },
@@ -377,7 +382,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       b.divider(),
       b.h2('Live blocks'),
       b.p([
-        'Databases, charts, KPIs, spreadsheet ranges and market watchlists can live inside any page — type ',
+        'Databases, charts, KPIs, spreadsheet ranges and market watchlists can live inside any page: type ',
         t.code('/database'),
         ', ',
         t.code('/chart'),
@@ -396,8 +401,8 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
   ctx.docs.save(
     shortcuts.id,
     'page',
-    makeDoc([
-      b.p(['On Windows and Linux, ', t.code('⌘'), ' is ', t.code('Ctrl'), ' and ', t.code('⌥'), ' is ', t.code('Alt'), '. Press ', t.code('?'), ' anywhere outside a text field for the cheat sheet.']),
+    tourDoc([
+      b.p(['Press ', t.code('?'), ' anywhere outside a text field for the cheat sheet.']),
       b.h2('Everywhere'),
       b.table(
         [
@@ -459,7 +464,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
   ctx.docs.save(
     privacy.id,
     'page',
-    makeDoc([
+    tourDoc([
       b.callout(
         'Your password never leaves this device, and we can’t reset it. Your recovery key is the only other way in, so keep it safe.',
         { icon: lucide('key-round'), tone: 'yellow' },
@@ -502,7 +507,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       }),
       b.toggle('Does Ultra Note connect to the internet?', {
         children: [
-          b.p('Only for integrations you turn on — market data, Google, update checks. Every request is listed in Security Center, and Offline mode (⌘⇧O) blocks them all.'),
+          b.p('Only for integrations you turn on: market data, Google, update checks. Every request is listed in Security Center, and Offline mode (⌘⇧O) blocks them all.'),
         ],
       }),
     ]),
@@ -512,26 +517,26 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
   ctx.docs.save(
     money.id,
     'page',
-    makeDoc([
-      b.p('Life apps are guided set-ups that build real pages, databases and dashboards for you — then get out of the way.'),
+    tourDoc([
+      b.p('Life apps are guided set-ups that build real pages, databases and dashboards for you, then get out of the way.'),
       b.h2('The six apps'),
       b.columns([
         [
-          b.callout([t.bold('Money HQ'), ' — budget, spending, bills and net worth.'], { icon: lucide('credit-card'), tone: 'green' }),
-          b.callout([t.bold('Portfolio'), ' — holdings, performance, allocation and rebalancing.'], { icon: lucide('trending-up'), tone: 'blue' }),
-          b.callout([t.bold('Tax Organizer'), ' — documents, deductions and quarterly estimates.'], { icon: lucide('receipt'), tone: 'yellow' }),
+          b.callout([t.bold('Money HQ'), ': budget, spending, bills and net worth.'], { icon: lucide('credit-card'), tone: 'green' }),
+          b.callout([t.bold('Portfolio'), ': holdings, performance, allocation and rebalancing.'], { icon: lucide('trending-up'), tone: 'blue' }),
+          b.callout([t.bold('Tax Organizer'), ': documents, deductions and quarterly estimates.'], { icon: lucide('receipt'), tone: 'yellow' }),
         ],
         [
-          b.callout([t.bold('Spreadsheet Studio'), ' — calculators and models with real formulas.'], { icon: lucide('calculator'), tone: 'purple' }),
-          b.callout([t.bold('Life OS'), ' — goals, projects and tasks in one system.'], { icon: lucide('folder-kanban'), tone: 'gray' }),
-          b.callout([t.bold('Habits'), ' — streaks and gentle check-ins.'], { icon: lucide('sprout'), tone: 'red' }),
+          b.callout([t.bold('Spreadsheet Studio'), ': calculators and models with real formulas.'], { icon: lucide('calculator'), tone: 'purple' }),
+          b.callout([t.bold('Life OS'), ': goals, projects and tasks in one system.'], { icon: lucide('folder-kanban'), tone: 'gray' }),
+          b.callout([t.bold('Habits'), ': streaks and gentle check-ins.'], { icon: lucide('sprout'), tone: 'red' }),
         ],
       ]),
       b.h2('How the advice works'),
-      b.bullet('Every number shows its maths — tap a figure to see where it came from.'),
-      b.bullet('Suggestions use common guidelines, never a sales pitch. Nothing is ever bought, filed or paid for you.'),
+      b.bullet('Every number shows its working: click a figure to see where it came from.'),
+      b.bullet('Suggestions name their source and never sell anything. Nothing is ever bought, filed or paid for you.'),
       b.callout(
-        'Estimates for planning only. Not financial or tax advice. Verify with official sources or a qualified professional.',
+        'Estimates for planning. Check important decisions with official sources or a qualified professional.',
         { icon: lucide('info'), tone: 'gray' },
       ),
     ]),
@@ -857,7 +862,7 @@ function createReading(ctx: MockCtx, workspaceId: string): string {
       b.numbered([t.bold('Make it easy'), ' — response'], { children: [b.bullet('The two-minute rule: scale it down until it takes two minutes.')] }),
       b.numbered([t.bold('Make it satisfying'), ' — reward'], { children: [b.bullet('Never miss twice.')] }),
       b.quote('You do not rise to the level of your goals. You fall to the level of your systems.'),
-      b.callout('Track these in the Habits app — it keeps streaks honest and forgiving.', { icon: lucide('sprout'), tone: 'green' }),
+      b.callout('Track these in the Habits app. It keeps streaks for you and allows one missed day.', { icon: lucide('sprout'), tone: 'green' }),
     ]),
   );
   return reading.id;

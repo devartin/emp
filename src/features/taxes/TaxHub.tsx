@@ -1,6 +1,6 @@
 /**
- * Tax Organizer hub (§16.4): document status ring, next-deadline countdown, estimated balance card, quarterly
- * timeline, deductions vs standard, insights and the persistent disclaimer; plus Estimator, Quarterly plan,
+ * Tax Organizer hub (§16.4): estimated balance card, "Next up" rows (documents received, next deadline), quarterly
+ * payments, deductions vs standard, insights and the persistent disclaimer; plus Estimator, Quarterly plan,
  * Documents and Deductions tabs. Copy never says "you owe" — every figure is an estimate.
  */
 import { AlertTriangle, Check, ChevronRight, FileCheck2, FileText, Plus, ReceiptText, ShieldAlert } from "lucide-react";
@@ -22,10 +22,9 @@ import { Skeleton } from "@/ui/Skeleton";
 import type { TabItem } from "@/ui/Tabs";
 import { Tooltip } from "@/ui/Tooltip";
 import "../finance/shared/finance.css";
-import { daysBetween, dayLabel, fmtMoney, num, todayIso, fmtWhole } from "../finance/shared/format";
+import { daysBetween, dayLabel, num, todayIso } from "../finance/shared/format";
 import { HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
-import { BudgetRing } from "../finance/MoneyHQ/widgets";
-import { DOC_FLOW, DOC_LABEL, STATUS_LABEL, TaxCtx, dueAtFilingText, useTax, useTaxData, type DocRow } from "./data";
+import { DOC_FLOW, DOC_LABEL, STATUS_LABEL, TaxCtx, dueAtFilingText, taxMoney, useTax, useTaxData, type DocRow } from "./data";
 import { Figure } from "../finance/shared/Figure";
 import { figureLabel, itemisedComparison, noPaymentNeeded, safeHarbourKnown, type FigureId } from "../finance/shared/definitions";
 import Estimator, { Result } from "./Estimator";
@@ -74,7 +73,7 @@ export default function TaxHub({ instanceId, tab }: TaxHubProps) {
         <Banner tone="warning" icon={ShieldAlert} inline className="tx-disclaimer">
           {disclaimer}
         </Banner>
-        <Suspense fallback={<Skeleton height={420} radius={14} />}>
+        <Suspense fallback={<Skeleton height={420} radius={10} />}>
           {current === "overview" ? <Overview go={go} instanceId={instanceId} /> : null}
           {current === "estimator" ? <Estimator /> : null}
           {current === "quarterly" ? <QuarterlyPlan /> : null}
@@ -90,6 +89,7 @@ export default function TaxHub({ instanceId, tab }: TaxHubProps) {
 
 function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id }) {
   const tx = useTax();
+  const { whole: fmtWhole } = taxMoney(tx.currency);
   const plan = useQuarterly();
   const received = tx.docs.filter((d) => d.status !== "expected" && d.status !== "na").length;
   const expected = tx.docs.filter((d) => d.status !== "na").length;
@@ -105,7 +105,7 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
   const est = tx.estimate;
   // `tax.itemised` (definitions.ts): the engine's own itemised total, floors and caps applied (the 7.5% of AGI medical
   // floor, the SALT cap). The raw organiser sum is only a fallback, under its own label "Logged so far".
-  const logged = tx.deductions.filter((d) => ["charity", "medical", "salt", "mortgage"].includes(d.category)).reduce((a, d) => a + d.amount * d.pct, 0);
+  const logged = tx.deductions.filter((d) => d.kind !== null).reduce((a, d) => a + d.amount * d.pct, 0);
   const cmp = itemisedComparison(est, logged);
   const itemized = cmp?.itemised ?? 0;
   const std = cmp?.standard ?? 0;
@@ -132,44 +132,43 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
       <div className="fh-span-7">
         <Result est={est} loading={tx.estimating && !est} unsure={tx.profile?.unsure} compact />
       </div>
-      <div className="fh-span-5 flex flex-col gap-3">
-        <button type="button" className="fh-metric" onClick={() => go("documents")}>
-          <BudgetRing ratio={expected ? received / expected : 0} size={56} stroke={5} color={received === expected && expected ? "var(--gain)" : "var(--accent-solid)"}>
-            <span className="text-caption font-semibold tabular">{received}/{expected}</span>
-          </BudgetRing>
-          <span className="min-w-0 flex-1 text-left">
-            <span className="block text-caption text-secondary" style={{ fontWeight: 500 }}>Documents</span>
-            <span className="block fh-metric-value">{expected - received ? `${expected - received} still expected` : "All received"}</span>
-            <span className="block text-caption text-tertiary">W-2s and most 1099s arrive by Jan 31</span>
-          </span>
-        </button>
-        <button type="button" className="fh-metric" onClick={() => go("quarterly")}>
-          <span className="tx-countdown">
-            <b className="tabular">{nextDays ?? "—"}</b>
-            <span>days</span>
-          </span>
-          <span className="min-w-0 flex-1 text-left">
-            <span className="block text-caption text-secondary" style={{ fontWeight: 500 }}>Next deadline</span>
-            <span className="block fh-metric-value truncate" style={{ fontSize: 16 }}>{next?.name ?? "Nothing due"}</span>
-            <span className="block text-caption text-tertiary">{next ? dayLabel(next.date, true) : ""}</span>
-          </span>
-        </button>
+      <div className="fh-span-5">
+        <Section title="Next up">
+          <div className="tx-rows">
+            <button type="button" className="tx-row" onClick={() => go("documents")}>
+              <span className="min-w-0 flex-1">
+                <span className="block text-body">Documents</span>
+                <span className="block text-caption text-tertiary">W-2s and most 1099s arrive by Jan 31</span>
+              </span>
+              <span className="text-body tabular text-right">{expected ? (expected - received ? `${received} of ${expected} received` : "All received") : "None listed"}</span>
+            </button>
+            <button type="button" className="tx-row" onClick={() => go("quarterly")}>
+              <span className="min-w-0 flex-1">
+                <span className="block text-body truncate">{next?.name ?? "Next deadline"}</span>
+                <span className="block text-caption text-tertiary">{next ? dayLabel(next.date, true) : "Nothing due"}</span>
+              </span>
+              {nextDays !== null ? <span className={cn("text-body tabular text-right", nextDays <= 14 && "text-warning-text")}>{nextDays === 0 ? "Today" : nextDays === 1 ? "In 1 day" : `In ${nextDays} days`}</span> : null}
+            </button>
+          </div>
+        </Section>
       </div>
       <div className="fh-span-7">
-        <Section title="Quarterly timeline" actions={<Button size="xs" variant="ghost" iconRight={ChevronRight} onClick={() => go("quarterly")}>Plan</Button>}>
+        <Section title="Quarterly payments" actions={<Button size="xs" variant="ghost" iconRight={ChevronRight} onClick={() => go("quarterly")}>Plan</Button>} pad={false}>
           {!plan.data ? (
             <Skeleton height={74} />
           ) : (
-            <div className="tx-mini-tl">
-              {plan.data.due.map((d) => (
-                <div key={d.period} className="tx-mini-q" data-status={d.status}>
-                  <span className="tx-mini-dot">{d.status === "paid" ? <Check size={11} strokeWidth={3} /> : null}</span>
-                  <span className="text-body-sm font-semibold">{d.period}</span>
-                  <span className="text-caption text-tertiary">{dayLabel(d.date)}</span>
-                  <span className="text-caption tabular font-medium">{d.status === "late" ? <span className="text-loss-text">Past due{num(d.suggested) > 0 ? <> · <Sensitive>{fmtWhole(d.suggested)}</Sensitive></> : null}</span> : d.status !== "paid" && num(d.suggested) === 0 ? <span className={noPayment.needsInput ? "text-warning-text" : "text-tertiary"}>{noPayment.short}</span> : <Sensitive>{fmtWhole(d.status === "paid" ? d.paid : d.suggested)}</Sensitive>}</span>
-                </div>
-              ))}
-            </div>
+            <table className="fh-table">
+              <tbody>
+                {plan.data.due.map((d) => (
+                  <tr key={d.period} data-status={d.status}>
+                    <td className="font-medium">{d.period}</td>
+                    <td className="text-secondary">{dayLabel(d.date)}</td>
+                    <td className="text-secondary">{d.status === "paid" ? <span className="inline-flex items-center gap-1 text-gain-text"><Check size={13} /> Paid</span> : d.status === "late" ? <span className="text-loss-text">Past due</span> : d.status === "due_soon" ? <span className="text-warning-text">Due soon</span> : num(d.suggested) === 0 ? <span className={noPayment.needsInput ? "text-warning-text" : "text-tertiary"}>{noPayment.short}</span> : "Suggested"}</td>
+                    <td className="num font-medium">{d.status !== "paid" && num(d.suggested) === 0 ? null : <Sensitive align="end">{fmtWhole(d.status === "paid" ? d.paid : d.suggested)}</Sensitive>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </Section>
       </div>
@@ -204,6 +203,7 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
 }
 
 function DedBar({ label, value, max, tone, figure, inputs }: { label: string; value: number; max: number; tone: "gain" | "accent" | "neutral"; figure: FigureId; inputs?: { label: string; value: string }[] }) {
+  const { whole: fmtWhole } = taxMoney(useTax().currency);
   return (
     <div>
       <div className="flex items-baseline justify-between text-body-sm mb-1">
@@ -215,7 +215,8 @@ function DedBar({ label, value, max, tone, figure, inputs }: { label: string; va
         </span>
       </div>
       <div className="fh-meter" style={{ height: 10 }}>
-        <m.i initial={false} animate={{ scaleX: max ? value / max : 0 }} transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }} style={{ background: tone === "gain" ? "var(--gain)" : tone === "accent" ? "var(--accent-solid)" : "color-mix(in oklab, var(--text-primary) 35%, transparent)" }} />
+        {/* Set, not animated: the bars follow the estimate as it arrives (no motion on arrival). */}
+        <i style={{ transform: `scaleX(${max ? value / max : 0})`, transition: "none", background: tone === "gain" ? "var(--gain)" : tone === "accent" ? "var(--accent-solid)" : "color-mix(in oklab, var(--text-primary) 35%, transparent)" }} />
       </div>
     </div>
   );
@@ -235,7 +236,7 @@ function Documents() {
     }
     return ["Waiting for", "In hand", "Not needed"].filter((k) => m.has(k)).map((k) => [k, m.get(k)!] as const);
   }, [tx.docs]);
-  if (!tx.schemas.documents) return <Skeleton height={360} radius={14} />;
+  if (!tx.schemas.documents) return <Skeleton height={360} radius={10} />;
   return (
     <div className="flex flex-col gap-4">
       {groups.map(([g, list]) => (
@@ -246,7 +247,7 @@ function Documents() {
               const idx = DOC_FLOW.indexOf(d.status);
               return (
                 <m.div key={d.id} layout className="tx-doc" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <span className="tx-doc-icon" data-status={d.status}>{d.status === "expected" ? <FileText size={16} /> : <FileCheck2 size={16} />}</span>
+                  <span className="tx-doc-icon" data-status={d.status} aria-hidden>{d.status === "expected" ? <FileText size={16} /> : <FileCheck2 size={16} />}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-body font-semibold">{d.name}</span>
@@ -305,6 +306,7 @@ const DED_CATS = [
 
 function Deductions() {
   const tx = useTax();
+  const { whole: fmtWhole, money: fmtMoney } = taxMoney(tx.currency);
   const [adding, setAdding] = useState(false);
   const byCat = useMemo(() => {
     const m = new Map<string, { name: string; total: number; n: number }>();
@@ -399,11 +401,15 @@ function AddDeduction({ onClose }: { onClose: () => void }) {
         <Input label="What was it?" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. Year-end gift to the food bank" autoFocus />
         <div className="grid grid-cols-2 gap-3">
           <Select label="Category" value={cat} onValueChange={setCat} options={DED_CATS} />
-          <MoneyField label="Amount" value={amount} onChange={setAmount} />
+          <MoneyField label="Amount" currency={tx.currency} value={amount} onChange={setAmount} />
           <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           <Input label="Paid to" value={payee} onChange={(e) => setPayee(e.target.value)} />
         </div>
-        <Checkbox checked={receipt} onCheckedChange={(v) => setReceipt(!!v)} label="I have a receipt" description="Keep receipts for gifts of $250 or more." />
+        {tx.receiptField === "checkbox" ? (
+          <Checkbox checked={receipt} onCheckedChange={(v) => setReceipt(!!v)} label="I have a receipt" description="Keep receipts for gifts of $250 or more." />
+        ) : tx.receiptField === "files" ? (
+          <p className="text-caption text-secondary">Attach the receipt to the row in Deductions &amp; credits. Keep receipts for gifts of $250 or more.</p>
+        ) : null}
       </div>
     </Dialog>
   );

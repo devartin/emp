@@ -1,11 +1,16 @@
 import { currencySymbol } from "@/lib/format";
+import { selectBaseCurrency, useSettings } from "@/stores/settings";
 import { currencyDecimals, formatMoney, parseMoneyInput } from "@/lib/money";
 import { NumberField, type NumberFieldProps } from "./NumberField";
 
-export interface MoneyFieldProps extends Omit<NumberFieldProps, "value" | "onChange" | "format" | "parse" | "prefix"> {
+export interface MoneyFieldProps extends Omit<NumberFieldProps, "value" | "onChange" | "onCommit" | "format" | "parse" | "prefix"> {
   /** Decimal string amount (scale ≤ 8) or null. */
   value: string | null;
+  /** Live per keystroke (parsed) and again on commit; see NumberField. */
   onChange: (amount: string | null) => void;
+  /** Commit only (blur, Enter, steps): use it for writes that persist. */
+  onCommit?: (amount: string | null) => void;
+  /** ISO 4217 code. Defaults to the workspace base currency (Settings, General). */
   currency?: string;
 }
 
@@ -13,7 +18,9 @@ export interface MoneyFieldProps extends Omit<NumberFieldProps, "value" | "onCha
  * Money input (§5.2): NumberField semantics with currency symbol prefix and currency-precision formatting.
  * Emits decimal strings (never floats) so values round-trip to Rust losslessly.
  */
-export function MoneyField({ value, onChange, currency = "USD", ...rest }: MoneyFieldProps) {
+export function MoneyField({ value, onChange, onCommit, currency: currencyProp, ...rest }: MoneyFieldProps) {
+  const base = useSettings(selectBaseCurrency);
+  const currency = currencyProp ?? base;
   const digits = currencyDecimals(currency);
   const num = value === null || value === "" ? null : Number(value);
   return (
@@ -27,6 +34,7 @@ export function MoneyField({ value, onChange, currency = "USD", ...rest }: Money
         return d === null ? null : Number(d);
       }}
       onChange={(n) => onChange(n === null ? null : n.toFixed(digits))}
+      onCommit={onCommit ? (n) => onCommit(n === null ? null : n.toFixed(digits)) : undefined}
     />
   );
 }

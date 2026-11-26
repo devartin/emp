@@ -3,6 +3,8 @@
  * ("today", "next fri", "Dec 3 3pm", "in 2 weeks"), and "Create page 'x'" for `[[`.
  */
 import type { Editor } from '@tiptap/core';
+import { PageGlyphWith } from '@/ui/icons/glyphCore';
+import { GLYPHS } from '@/ui/icons/glyphs';
 import { Calendar, CornerDownLeft, FileText, Plus } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/backend';
@@ -29,8 +31,7 @@ interface Row {
 }
 
 function glyph(icon: Icon | undefined): ReactNode {
-  if (icon?.t === 'emoji') return <span className="emp-slash-emoji">{icon.v}</span>;
-  return <FileText size={16} strokeWidth={1.75} />;
+  return <PageGlyphWith icon={icon} size={16} fallback="file" kindFallback={FileText} lookup={(n) => GLYPHS[n]} />;
 }
 
 function toDateValue(d: Date, time: boolean): DateValue {

@@ -297,7 +297,7 @@ export default function PageView({ pageId, blockId }: PageViewProps) {
           body={missing ? 'It may have been deleted permanently, or the link is out of date.' : 'Something went wrong while loading it. Try again in a moment.'}
           actions={
             <Button variant="secondary" onClick={() => (missing ? navigate({ t: 'home' }) : void reload())}>
-              {missing ? 'Go home' : 'Try again'}
+              {missing ? 'Open Home' : 'Try again'}
             </Button>
           }
         />
@@ -402,7 +402,7 @@ export default function PageView({ pageId, blockId }: PageViewProps) {
       ) : null}
       {large ? (
         <Banner tone="warning" icon={FileWarning}>
-          This page is very large, which can make it slower to edit. Consider splitting sections into sub-pages ({shortcutLabel('mod+alt+9')} turns a block into a page).
+          This page is very large, which can make it slower to edit. Splitting sections into sub-pages helps ({shortcutLabel('mod+alt+9')} turns a block into a page).
         </Banner>
       ) : null}
       <PageHeader

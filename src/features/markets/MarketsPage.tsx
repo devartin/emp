@@ -14,7 +14,6 @@ import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
 import { DeltaPill } from "@/ui/DeltaPill";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from "@/ui/Menu";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
@@ -96,8 +95,7 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
   const reduced = useReducedMotionPref();
   const pos = useMemo(() => (q && lo52 !== null && hi52 !== null && hi52 > lo52 ? (q.price - lo52) / (hi52 - lo52) : null), [q, lo52, hi52]);
   return (
-    <section className="fh-card mk-detail" data-light="">
-      <EdgeLight />
+    <section className="fh-card mk-detail">
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

@@ -313,6 +313,9 @@ pub struct TaxEstimate {
     pub filing_status: String,
     /// Pack id (extension).
     pub pack_id: String,
+    /// ISO 4217 currency of every amount (additive; absent when the pack's figures are user-entered).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
 }
 
 fn get(m: &super::pack::StatusMap<Decimal>, status: &str) -> Decimal {
@@ -968,6 +971,7 @@ fn estimate_inner(
         estimated_paid: input.estimated_paid,
         filing_status: input.filing_status.clone(),
         pack_id: p.id.clone(),
+        currency: p.currency_code(),
     })
 }
 
@@ -1059,10 +1063,12 @@ mod tests {
         assert_eq!(e.brackets[2].taxed, dec("13500"));
         assert!(!e.stale);
         assert!(e.disclaimer.contains("Not tax advice"));
+        assert_eq!(e.currency.as_deref(), Some("USD"));
         assert!(e.lines.iter().any(|l| l.label == "Estimated refund"));
         let j = serde_json::to_value(&e).unwrap();
         assert_eq!(j["deduction"]["standardWouldBe"], "16100");
         assert!(j["effectiveRate"].is_number());
+        assert_eq!(j["currency"], "USD");
     }
 
     #[test]

@@ -119,7 +119,7 @@ export default function RowPage({ rowId }: RowPageProps) {
   if (missing) {
     return (
       <div className="flex h-full min-h-[360px] items-center justify-center p-8">
-        <EmptyState icon={Database} title="This row doesn't exist" body="It may have been deleted. Rows deleted from a database can be restored with Undo." actions={<Button variant="secondary" onClick={() => (useUi.getState().closePeek(), navigate({ t: 'home' }))}>Go home</Button>} />
+        <EmptyState icon={Database} title="This row doesn't exist" body="It may have been deleted. Rows deleted from a database can be restored with Undo." actions={<Button variant="secondary" onClick={() => (useUi.getState().closePeek(), navigate({ t: 'home' }))}>Open Home</Button>} />
       </div>
     );
   }

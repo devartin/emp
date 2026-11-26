@@ -65,7 +65,6 @@ import {
   Sheet,
   ShieldCheck,
   ShoppingCart,
-  Sparkles,
   Star,
   StarOff,
   SunMoon,
@@ -146,7 +145,8 @@ const ICONS: Record<string, LucideIcon> = {
   sheet: Sheet,
   "shield-check": ShieldCheck,
   "shopping-cart": ShoppingCart,
-  sparkles: Sparkles,
+  // the Sparkles family is never drawn (DESIGN §8): a stored "sparkles" shows the star, as ✨ does
+  sparkles: Star,
   star: Star,
   "star-off": StarOff,
   "sun-moon": SunMoon,

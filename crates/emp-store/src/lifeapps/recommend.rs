@@ -1,7 +1,7 @@
 //! Wizard recommenders (`Step.recommend`, `lifeapp_recommend`). Pure functions of the answers so far.
 //!
-//! Every recommendation carries a short rationale ("Why?" chip) and its source type, phrased per the §16.1 copy
-//! rules ("common guideline", "consider", "estimate").
+//! Every recommendation carries a short rationale ("Why?" chip) and its source, in the plain v3 register (no
+//! "common guideline" / "consider" hedges; the TS mirror is `src/features/lifeapps/engine/plan.ts`).
 
 use chrono::{Datelike, NaiveDate};
 use serde::Serialize;
@@ -14,7 +14,7 @@ pub struct Recommendation {
     pub value: Value,
     /// Rationale.
     pub why: String,
-    /// Source type ("Common guideline", "Based on your answers", …).
+    /// Source ("Your answers", "3–6 months of essential expenses", …).
     pub source: String,
 }
 
@@ -140,35 +140,35 @@ fn recommend_budget_method(a: &Map<String, Value>) -> Recommendation {
     if stab == "irregular" || stab == "variable" {
         return rec(
             json!("zero_based"),
-            "Your income varies, so consider a zero-based budget that only assigns money you already have, with last month's income as a buffer.",
-            "Common guideline for irregular income",
+            "Your income varies, so each dollar is assigned as it arrives, with last month's income as a buffer.",
+            "Irregular income",
         );
     }
     if max_debt_apr(a).is_some_and(|apr| apr >= 10.0) {
         return rec(
             json!("zero_based"),
-            "You have high-interest debt; giving every dollar a job makes it easier to direct extra money at it.",
-            "Common guideline: prioritise high-interest debt",
+            "You carry high-interest debt. Assigning every dollar makes room for extra payments.",
+            "Debt above about 10% APR",
         );
     }
     if income > 0.0 && bills / income >= 0.8 {
         return rec(
             json!("zero_based"),
-            "Your fixed bills take most of your income, so a zero-based plan helps you see every dollar.",
-            "Based on your answers",
+            "Fixed bills take most of your income, so a zero-based plan shows where every dollar goes.",
+            "Your answers",
         );
     }
     if income > 0.0 && (income - bills) / income >= 0.5 && stab == "stable" {
         return rec(
             json!("pay_yourself_first"),
-            "Stable income with plenty of room after bills: consider automating savings first and spending the rest freely.",
-            "Common guideline: savings rate of 20% or more",
+            "Stable income with room after bills: savings move out on payday and the rest is free to spend.",
+            "Savings rate of 20% or more",
         );
     }
     rec(
         json!("fifty_thirty_twenty"),
-        "A simple starting point: about 50% needs, 30% wants and 20% savings and debt payments.",
-        "Common guideline (50/30/20)",
+        "Stable income and no high-interest debt: three buckets are easy to keep up with.",
+        "50% needs, 30% wants, 20% savings",
     )
 }
 
@@ -182,36 +182,35 @@ fn recommend_ef_months(a: &Map<String, Value>) -> Recommendation {
         .and_then(|i| i.get("items"))
         .and_then(Value::as_array)
         .is_some_and(|items| items.iter().any(|x| s(x.get("frequency")) == "irregular"));
-    let (months, why) = if stab == "irregular" || stab == "variable" || self_employed {
+    let (months, why, source) = if stab == "irregular" || stab == "variable" || self_employed {
         (
             9,
-            "Irregular or self-employed income: a common guideline is 9–12 months of essential expenses.",
+            "Irregular or self-employed income needs a deeper cushion.",
+            "9–12 months of essential expenses",
         )
     } else if partner && dependents == 0.0 {
         (
             3,
-            "Two stable incomes and no dependents: a common guideline is 3 months of essential expenses.",
+            "Two stable incomes and no dependents: a shorter cushion is usually enough.",
+            "3–6 months of essential expenses",
         )
     } else {
         (
             6,
-            "One income or dependents: a common guideline is 6 months of essential expenses.",
+            "One income or dependents relying on you: six months gives more room.",
+            "3–6 months of essential expenses",
         )
     };
     // Starter fund: about one month of essential bills, at least the common $1,000 minimum.
     let starter = monthly_bills(a).round().max(1000.0);
-    rec(
-        json!({ "months": months, "starter": starter }),
-        why,
-        "Common guideline: 3–6 months of essential expenses",
-    )
+    rec(json!({ "months": months, "starter": starter }), why, source)
 }
 
 fn recommend_debt_strategy(_a: &Map<String, Value>) -> Recommendation {
     rec(
         json!({ "strategy": "avalanche", "extra": 100 }),
-        "Avalanche (highest APR first) pays the least interest; snowball (smallest balance first) gives quicker wins. Consider avalanche unless motivation is the bottleneck.",
-        "Common guideline",
+        "Paying the highest APR first minimises total interest. Snowball (smallest balance first) clears the first debt sooner.",
+        "Debt avalanche",
     )
 }
 
@@ -268,7 +267,7 @@ fn recommend_risk_range(a: &Map<String, Value>) -> Recommendation {
     };
     rec(
         json!({ "stocksMin": lo, "stocksMax": hi }),
-        "An educational stock/bond range from your horizon, how you'd react to a 30% drop and your income stability — not a recommendation.",
+        "An educational stock/bond range from your horizon, how you would react to a 30% drop and your income stability. Not a recommendation.",
         "Education",
     )
 }
@@ -292,16 +291,16 @@ fn recommend_targets(a: &Map<String, Value>) -> Recommendation {
 fn recommend_rebalance(_a: &Map<String, Value>) -> Recommendation {
     rec(
         json!({ "mode": "hybrid", "calendar": "annual", "bandAbs": 5, "bandRel": 25, "cashFlowFirst": true, "avoidTaxableSells": true, "minTrade": 50 }),
-        "Check on a schedule but only trade when a class drifts outside its band (5 percentage points or 25% of its target); direct new contributions to underweight classes first.",
-        "Common guideline (5/25 bands)",
+        "Check on a schedule; trade only when a class drifts outside its band (5 percentage points or 25% of its target). New contributions go to underweight classes first.",
+        "5/25 bands",
     )
 }
 
 fn recommend_grace(_a: &Map<String, Value>) -> Recommendation {
     rec(
         json!("never_miss_twice"),
-        "Missing once is normal; missing twice starts a new pattern. This keeps streaks forgiving without losing their meaning.",
-        "Habit research guideline",
+        "Missing once is normal; missing twice starts a new pattern. Streaks forgive one miss without losing their meaning.",
+        "Habit research",
     )
 }
 
@@ -310,14 +309,14 @@ fn recommend_lifeos_style(a: &Map<String, Value>) -> Recommendation {
     if areas >= 6 {
         rec(
             json!("gtd"),
-            "With many areas of responsibility, GTD's inbox, next actions and weekly review keep everything trusted.",
-            "Based on your answers",
+            "With many areas of responsibility, GTD's inbox, next actions and weekly review keep everything current.",
+            "Your answers",
         )
     } else {
         rec(
             json!("simple"),
-            "Start simple with Today and Upcoming; you can add projects and contexts later.",
-            "Common guideline: start simple",
+            "Inbox and next tasks only; projects and contexts can be added later.",
+            "Your answers",
         )
     }
 }

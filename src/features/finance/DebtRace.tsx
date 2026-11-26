@@ -103,7 +103,7 @@ export function DebtRace({ plans, debts, minimumLabel }: { plans: Record<string,
         <span>{monthLabel(lanes[winner].payoff)}</span>
       </div>
       {lanes.map((l, i) => (
-        <RaceLane key={l.id} lane={l} clock={clock} maxMonths={maxMonths} won={done && i === winner} lost={done && i !== winner} />
+        <RaceLane key={l.id} lane={l} clock={clock} maxMonths={maxMonths} won={done && i === winner} lost={done && i !== winner} replayed={run > 0} />
       ))}
       <div className="fh-race-foot">
         <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
@@ -137,7 +137,7 @@ export function DebtRace({ plans, debts, minimumLabel }: { plans: Record<string,
   );
 }
 
-function RaceLane({ lane, clock, maxMonths, won, lost }: { lane: Lane; clock: MotionValue<number>; maxMonths: number; won: boolean; lost: boolean }) {
+function RaceLane({ lane, clock, maxMonths, won, lost, replayed }: { lane: Lane; clock: MotionValue<number>; maxMonths: number; won: boolean; lost: boolean; replayed: boolean }) {
   const privacy = usePrivacy();
   const end = lane.months / maxMonths;
   const t = useTransform(clock, (c) => Math.min(c, lane.months));
@@ -149,7 +149,8 @@ function RaceLane({ lane, clock, maxMonths, won, lost }: { lane: Lane; clock: Mo
     const b = lane.interest[Math.min(lane.interest.length - 1, i + 1)] ?? a;
     return privacy ? "•••" : fmtWhole(a + (b - a) * (v - Math.floor(v)));
   });
-  const [passed, setPassed] = useState(0);
+  // Seeded from the clock (the race starts finished), so the notches don't transition in on arrival.
+  const [passed, setPassed] = useState(() => lane.checkpoints.filter((c) => c.at <= clock.get() + 0.001).length);
   useMotionValueEvent(t, "change", (v) => {
     const n = lane.checkpoints.filter((c) => c.at <= v + 0.001).length;
     if (n !== passed) setPassed(n);
@@ -174,7 +175,7 @@ function RaceLane({ lane, clock, maxMonths, won, lost }: { lane: Lane; clock: Mo
           </span>
         ))}
         <span className="fh-race-flag" style={{ left: `${end * 100}%` }} aria-hidden />
-        <m.span className="fh-race-runner-rail" style={{ x }} aria-hidden>
+        <m.span className="fh-race-runner-rail" style={{ left: x }} aria-hidden>
           <span className="fh-race-runner">
             <RunnerSlab />
           </span>
@@ -183,7 +184,7 @@ function RaceLane({ lane, clock, maxMonths, won, lost }: { lane: Lane; clock: Mo
       <div className="fh-race-result tabular">
         <span>{monthLabel(lane.payoff)}</span>
         {won ? (
-          <m.span className="fh-race-trophy" initial={{ scale: 0.2, opacity: 0, rotate: -20 }} animate={{ scale: 1, opacity: 1, rotate: 0 }} transition={spring.pop}>
+          <m.span className="fh-race-trophy" initial={replayed ? { scale: 0.6, opacity: 0 } : false} animate={{ scale: 1, opacity: 1 }} transition={spring.pop}>
             <Trophy size={12} strokeWidth={2.4} />
           </m.span>
         ) : null}

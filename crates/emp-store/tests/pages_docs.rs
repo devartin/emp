@@ -241,7 +241,36 @@ fn duplicate_turn_into_page_outline_and_blocks() {
     let d1 = e.store.daily_note_open("2026-11-26").unwrap();
     let d2 = e.store.daily_note_open("2026-11-26").unwrap();
     assert_eq!(d1.id, d2.id);
-    assert_eq!(d1.title, "November 26, 2026");
+    assert_eq!(d1.title, "Thursday, Nov 26, 2026");
+    // The mock's daily template: Focus (three to-dos), Notes, End of day.
+    let body = serde_json::to_string(&e.store.page_get(&d1.id).unwrap().doc).unwrap();
+    for part in [
+        "\"Focus\"",
+        "\"Notes\"",
+        "\"End of day\"",
+        "\"What went well?\"",
+    ] {
+        assert!(body.contains(part), "daily note body lacks {part}");
+    }
+    assert_eq!(body.matches("\"todoItem\"").count(), 3);
+    assert!(matches!(
+        d1.icon,
+        Some(emp_store::model::Icon::Lucide { .. })
+    ));
+    // Under "Journal", newest first (the browser mock's order and titles).
+    let d0 = e.store.daily_note_open("2026-11-25").unwrap();
+    let d3 = e.store.daily_note_open("2026-11-27").unwrap();
+    assert_eq!(d3.title, "Friday, Nov 27, 2026");
+    let folder = e.store.page_get(d1.parent_id.as_deref().unwrap()).unwrap();
+    assert_eq!(folder.meta.title, "Journal");
+    let kids: Vec<String> = e
+        .store
+        .page_children(&folder.meta.workspace_id, Some(&folder.meta.id))
+        .unwrap()
+        .into_iter()
+        .map(|p| p.id)
+        .collect();
+    assert_eq!(kids, [d3.id.clone(), d1.id.clone(), d0.id.clone()]);
     assert!(e.store.daily_note_open("26/11/2026").is_err());
 }
 

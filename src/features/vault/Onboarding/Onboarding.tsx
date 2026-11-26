@@ -211,7 +211,8 @@ export default function Onboarding() {
           ))}
         </div>
         <span className="sr-only" aria-live="polite">
-          {index >= 0 ? `Step ${index + 1} of ${steps.length}` : ""}
+          {/* "building" is the progress screen, not a step: counting it made "Step 3 of 6" jump to "Step 4 of 4". */}
+          {step === "building" ? "Setting up your workspace" : index >= 0 ? `Step ${index + 1} of ${steps.filter((x) => x !== "building").length}` : ""}
         </span>
         <AnimatePresence mode="wait" initial={false}>
           <m.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: reduced ? 0 : 0.12 } }} exit={{ opacity: 0, transition: { duration: reduced ? 0 : 0.08 } }}>

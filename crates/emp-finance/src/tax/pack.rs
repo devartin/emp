@@ -344,6 +344,10 @@ pub struct TaxPack {
     pub name: String,
     /// ISO country (`US`; `*` for generic).
     pub country: String,
+    /// ISO 4217 currency the pack's figures are in (`USD`). Absent for the generic pack: its figures are
+    /// user-entered in the workspace's base currency. Additive (SPEC §11 append-only note).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
     /// Tax year.
     pub year: i32,
     /// Tier.
@@ -436,6 +440,9 @@ pub struct PackInfo {
     pub verified_on: Option<NaiveDate>,
     /// Stale for the current year.
     pub stale: bool,
+    /// ISO 4217 currency of the pack's figures (additive; absent for the generic pack).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
 }
 
 impl TaxPack {
@@ -518,7 +525,16 @@ impl TaxPack {
             version: self.version.clone(),
             verified_on: self.verified_on,
             stale: self.is_stale(selected_year, today),
+            currency: self.currency_code(),
         }
+    }
+
+    /// The pack's currency: its explicit `currency`, else `USD` for a US pack, else none (user-entered figures).
+    pub fn currency_code(&self) -> Option<String> {
+        self.currency
+            .clone()
+            .filter(|c| !c.trim().is_empty())
+            .or_else(|| (self.country == "US").then(|| "USD".to_string()))
     }
 
     /// The persistent disclaimer.
@@ -586,5 +602,23 @@ mod tests {
         let g = builtin("generic").unwrap();
         assert!(!g.is_stale(2031, v));
         assert!(builtin("nope").is_err());
+    }
+
+    #[test]
+    fn currency_is_reported_for_us_packs_only() {
+        let us = builtin("us-federal-2026").unwrap();
+        let v = us.verified_on.unwrap();
+        assert_eq!(us.currency_code().as_deref(), Some("USD"));
+        assert_eq!(us.info(2026, v).currency.as_deref(), Some("USD"));
+        let info = serde_json::to_value(us.info(2026, v)).unwrap();
+        assert_eq!(info["currency"], "USD");
+        let g = builtin("generic").unwrap();
+        assert_eq!(g.currency_code(), None);
+        assert!(
+            serde_json::to_value(g.info(2026, v))
+                .unwrap()
+                .get("currency")
+                .is_none()
+        );
     }
 }

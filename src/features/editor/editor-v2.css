@@ -69,17 +69,9 @@
 .emp-cover-pop-foot { border-top: 0; box-shadow: inset 0 1px 0 var(--groove-dark), inset 0 2px 0 var(--groove-lite); padding-top: 10px; }
 
 /* ───────────────────────────────────────────── header: icon, controls, title */
+/* v3: the page glyph is flat ink (no drop shadow, no hover tilt); hover shows the ghost-key background only. */
 .emp-page-icon:hover:not(:disabled) { background: transparent; }
-.emp-page-icon > * {
-  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.06)) drop-shadow(0 6px 10px rgba(16, 16, 24, 0.16));
-  transition: transform var(--dur-release) var(--spring-release);
-}
-:root:is([data-theme="dark"], [data-theme="midnight"]) .emp-page-icon > * { filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.4)) drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5)); }
-:root[data-effects="reduced"] .emp-page-icon > * { filter: none; }
-.emp-page-icon:hover:not(:disabled) > * { transform: translateY(-2px) rotate(-3deg) scale(1.03); }
-.emp-page-icon:active:not(:disabled) > * { transform: translateY(1px) scale(0.94); transition: transform var(--dur-press) var(--ease-press); }
 .emp-page-icon:focus-visible { outline: 1.5px solid var(--ring); outline-offset: 3px; }
-:root[data-motion="reduced"] .emp-page-icon > * { transition: none; transform: none !important; }
 
 .emp-page-controls { margin-bottom: 4px; }
 .emp-page-ctl {
@@ -114,7 +106,7 @@
 .emp-save-ind {
   border-radius: 9999px;
   background: var(--well-bg);
-  box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
+  box-shadow: none;
   transform: translateY(2px);
   transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-settle) var(--spring-settle);
 }
@@ -188,7 +180,7 @@
   position: absolute;
   inset: 1px 0;
   z-index: -1;
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--ghost-hover);
   opacity: 0;
   transform: scale(0.85);
@@ -211,32 +203,29 @@
 /* callouts (§8.2): wells tinted by the block colour */
 .emp-block[data-type="callout"],
 .emp-block[data-type="callout"][data-bg] {
+  /* v3: a flat tinted panel (no inset well, no ring). */
   background: color-mix(in oklab, var(--callout-bg) 72%, var(--well-bg));
-  box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px color-mix(in oklab, var(--callout-bg), var(--well-rim) 60%), 0 1px 0 var(--well-lip);
-  border-radius: 12px;
+  box-shadow: none;
+  border-radius: 10px;
 }
 :root:not([data-theme="light"]) .emp-block[data-type="callout"][data-tone="gray"] { --callout-bg: color-mix(in oklab, var(--well-bg), var(--text-primary) 6%); }
 .emp-callout-icon {
   position: relative;
   isolation: isolate;
   background: transparent !important;
-  transition: transform var(--dur-release) var(--spring-release);
+  color: var(--text-secondary);
 }
-.emp-callout-icon > * { filter: drop-shadow(0 2px 3px rgba(16, 16, 24, 0.14)); }
-.emp-callout-icon:hover { transform: translateY(-1px) rotate(-4deg) scale(1.06); }
-.emp-callout-icon:active { transform: scale(0.92); transition: transform var(--dur-press) var(--ease-press); }
-:root[data-motion="reduced"] .emp-callout-icon { transform: none !important; }
-.emp-block[data-type="callout"].emp-block-selected::after { border-radius: 12px; }
+.emp-block[data-type="callout"].emp-block-selected::after { border-radius: 10px; }
 
-/* divider: an engraved groove */
-.emp-divider hr { border-top: 0; height: 2px; background: linear-gradient(180deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px); }
+/* divider: a 1px hairline (v3: no engraved grooves) */
+.emp-divider hr { border-top: 0; height: 1px; background: var(--border); }
 .emp-divider.ProseMirror-selectednode hr { background: var(--accent-solid); }
 
-/* code (§8.2): a well; bar controls are ghost plates; copy morphs into a check */
+/* code (§8.2): a flat 10-radius tint; bar controls are ghost plates; copy morphs into a check */
 .emp-code {
   background: var(--well-bg);
-  box-shadow: inset 0 1px 2.5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip);
-  border-radius: 12px;
+  box-shadow: none;
+  border-radius: 10px;
 }
 .emp-code-lang,
 .emp-code-btn {
@@ -278,11 +267,11 @@
 .emp-code-copy-label { display: inline-block; min-width: 38px; }
 :root[data-motion="reduced"] .emp-code-copy-icon > svg { transition: opacity 120ms linear; transform: none !important; }
 
-/* inline code: a tiny recessed chip */
+/* inline code: a flat 4-radius tint (v3: no depth on things you can't press) */
 .emp-prose :not(pre) > code {
   background: var(--well-bg);
-  box-shadow: inset 0 1px 1px var(--well-in), inset 0 0 0 1px var(--well-rim);
-  border-radius: 5px;
+  box-shadow: none;
+  border-radius: 4px;
   padding: 1px 5px;
 }
 
@@ -297,7 +286,7 @@
   box-shadow: inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-rim);
 }
 .emp-mention:active { transform: translateY(0) scale(0.97); transition: transform var(--dur-press) var(--ease-press); }
-.emp-mention[data-kind="date"] { background: var(--well-bg); box-shadow: inset 0 1px 1px var(--well-in), inset 0 0 0 1px var(--well-rim); }
+.emp-mention[data-kind="date"] { background: var(--well-bg); box-shadow: none; }
 :root[data-motion="reduced"] .emp-mention { transform: none !important; }
 
 /* page blocks / links: ghost plate + arrow nudge */
@@ -559,3 +548,6 @@
 :root[data-motion="reduced"] :is(.emp-cover-art, .emp-cover img) { animation: emp2-fade 140ms linear backwards; }
 :root[data-motion="reduced"] .emp-backlinks-list > li { animation: none; }
 :root:not([data-theme="light"]) .emp-block[data-type="callout"]:not([data-tone]):not([data-bg]) { --callout-bg: color-mix(in oklab, var(--well-bg), var(--text-primary) 6%); }
+
+/* page glyph inside a mention (drawn by the kit glyph registry) */
+.emp-mention-glyph { display: inline-flex; flex: none; align-items: center; }

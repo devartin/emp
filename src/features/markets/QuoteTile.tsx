@@ -3,8 +3,8 @@ import type { Quote, SymbolKey } from "@/backend/types";
 import { Sparkline } from "@/charts/Sparkline";
 import { cn } from "@/lib/cn";
 import { useQuote } from "@/stores/market";
-import { DeltaPill, GainLoss } from "@/ui/DeltaPill";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
+import { Delta } from "@/ui/Delta";
+import { GainLoss } from "@/ui/DeltaPill";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Skeleton } from "@/ui/Skeleton";
@@ -19,15 +19,11 @@ export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: Symb
   return (
     <button
       type="button"
-      className={cn("mk-tile panel", selected && "is-selected")}
+      className={cn("mk-tile", selected && "is-selected")}
       data-compact={compact ? "" : undefined}
-      data-raise={selected ? undefined : ""}
-      data-latched={selected ? "" : undefined}
-      data-light=""
       aria-pressed={onClick ? !!selected : undefined}
       onClick={onClick}
     >
-      <EdgeLight specular={!selected} />
       <div className="flex items-start justify-between gap-2 w-full">
         <div className="min-w-0 text-left">
           <div className="mk-tile-ticker">{ticker(symbol)}</div>
@@ -44,12 +40,12 @@ export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: Symb
                   <RollingNumber value={q.price} format={(n) => fmtPrice(n, q.currency)} countUp={false} />
                 </PriceFlash>
               </div>
-              <DeltaPill value={q.changePct} digits={2} />
+              <Delta percent={q.changePct} digits={2} className="text-caption" />
             </>
           ) : (
             <>
               <Skeleton width={90} height={20} />
-              <Skeleton width={60} height={16} className="mt-1.5" radius={9999} />
+              <Skeleton width={60} height={16} className="mt-1.5" radius={4} />
             </>
           )}
         </div>

@@ -1329,7 +1329,7 @@ def('Text', 'CODE(text)', 'The code of the first character.', '=CODE("A")', (a) 
   return isErr(t) ? t : t ? t.charCodeAt(0) : ERR.value;
 });
 def('Text', 'UNICHAR(number)', 'The Unicode character for a code point.', '=UNICHAR(9731)', (a) => nums2<[number]>([num(a[0])], (n) => (n < 1 ? ERR.value : String.fromCodePoint(Math.floor(n)))));
-def('Text', 'UNICODE(text)', 'The code point of the first character.', '=UNICODE("☃")', (a) => {
+def('Text', 'UNICODE(text)', 'The code point of the first character.', '=UNICODE("A")', (a) => {
   const t = str(a[0]);
   return isErr(t) ? t : t ? (t.codePointAt(0) ?? ERR.value) : ERR.value;
 });

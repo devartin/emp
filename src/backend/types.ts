@@ -1291,6 +1291,8 @@ export interface TaxPackInfo {
   version: string;
   verifiedOn: string;
   stale: boolean;
+  /** ISO 4217 currency of the pack's figures (additive, SPEC §11 note). Absent for the generic pack (user-entered figures). */
+  currency?: string;
 }
 
 export type TaxIncomeKind =
@@ -1348,6 +1350,8 @@ export interface TaxEstimate {
   verifiedOn: string;
   stale: boolean;
   disclaimer: string;
+  /** ISO 4217 currency of every amount (additive, SPEC §11 note). Absent when the pack's figures are user-entered. */
+  currency?: string;
 }
 
 export type QuarterlyMethod = 'safe_harbor' | 'current_90' | 'even_split';

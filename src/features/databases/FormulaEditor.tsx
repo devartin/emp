@@ -30,7 +30,7 @@ const KIND_LABEL: Record<string, string> = { number: 'Number', money: 'Money', t
 
 const EXAMPLES: { label: string; expr: string }[] = [
   { label: 'Days until a date', expr: 'dateBetween(prop("Date"), today(), "days")' },
-  { label: 'Status label', expr: 'if(prop("Done"), "✅ Done", "⏳ Open")' },
+  { label: 'Status label', expr: 'if(prop("Done"), "Done", "Open")' },
   { label: 'Sum related amounts', expr: 'prop("Related").map(current.prop("Amount")).sum()' },
   { label: 'Monthly payment', expr: 'round(pmt(0.05 / 12, 360, 250000), 2)' },
 ];

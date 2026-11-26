@@ -67,7 +67,7 @@ export function Treemap({ data, height = 260, colorBy = "category", format = "mo
             const strong = colorBy === "change" && Math.abs((n.change ?? 0) / changeScale) > 0.66;
             const textColor = colorBy === "change" ? (strong ? (t.dark ? "#09090b" : "#fff") : t.text) : "#fff";
             return (
-              <g className="emp-pop-enter" style={{ ["--i" as string]: n.index * 6 }}>
+              <g>
                 <rect x={n.x + pad / 2} y={n.y + pad / 2} width={Math.max(0, n.width - pad)} height={Math.max(0, n.height - pad)} rx={6} style={{ fill }} fillOpacity={colorBy === "change" ? 1 : 0.88} />
                 {big ? (
                   <>

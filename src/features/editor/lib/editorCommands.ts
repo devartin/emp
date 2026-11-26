@@ -108,10 +108,6 @@ export function insertDateMention(editor: Editor, date: DateValue): void {
   editor.chain().focus().insertContent([node.toJSON(), { type: 'text', text: ' ' }]).run();
 }
 
-export function insertEmoji(editor: Editor, native: string, shortcode: string): void {
-  editor.chain().focus().insertContent({ type: 'emoji', attrs: { native, shortcode } }).run();
-}
-
 /** Inline / full-page databases (slash "Table view" … "Database full page"). */
 export async function insertDatabase(editor: Editor, layout: Layout, opts: { fullPage?: boolean } = {}): Promise<void> {
   const ctx = editorContext(editor);

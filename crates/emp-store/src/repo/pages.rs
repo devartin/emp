@@ -21,7 +21,7 @@ use crate::doc::schema::{container, normalize, regenerate_ids};
 use crate::doc::walk::{find_block, remove_blocks};
 use crate::model::sort_key::key_between;
 use crate::model::{
-    Backlink, Breadcrumb, OutlineItem, PageCreate, PageCreated, PageGet, PageKind, PageMeta,
+    Backlink, Breadcrumb, Icon, OutlineItem, PageCreate, PageCreated, PageGet, PageKind, PageMeta,
     PageMetaPatch, PagePayload, TemplateInfo, TipTapDoc, TipTapNode, ids::new_id, validate_title,
 };
 use crate::repo::docs::{insert_or_replace_doc, load_doc};
@@ -1064,7 +1064,8 @@ impl Store {
     }
 
     /// `daily_note_open`: the daily note for `date` (`YYYY-MM-DD`) in the first workspace, created if missing
-    /// under a root "Daily notes" page.
+    /// under a root "Journal" page, newest first. Same titles, icons and order as the browser mock
+    /// (`src/backend/mock/commands/daily.ts`): "Thursday, Nov 26, 2026", a sun glyph for today, else a calendar.
     pub fn daily_note_open(&self, date: &str) -> Result<PageMeta> {
         let day = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
             .map_err(|_| StoreError::invalid_field("date", "expected YYYY-MM-DD"))?;
@@ -1075,22 +1076,36 @@ impl Store {
             .next()
             .ok_or(StoreError::NotFound("workspace"))?;
         let key = format!("daily:{date}");
-        let (existing, folder) = self.read(|c| {
+        // (folder id, every daily note's (parent, date, id, sort key)) so the new note can go newest first.
+        type Notes = Vec<(Option<String>, String, String, String)>;
+        let (existing, folder, notes): (Option<PageMeta>, Option<String>, Notes) = self.read(|c| {
             let mut st = c.prepare_cached(&format!(
                 "SELECT {PAGE_COLS} FROM pages p WHERE p.workspace_id = ?1 AND p.deleted_at IS NULL AND p.kind = 'doc'"
             ))?;
             let rows: Vec<PageRow> = st.query_map([&ws.id], page_row)?.collect::<rusqlite::Result<_>>()?;
             let mut found = None;
             let mut folder = None;
+            let mut notes = Vec::new();
             for r in rows {
                 let p = decode_page(&s.codec, &r)?;
                 match p.template_key.as_deref() {
                     Some(k) if k == key => found = Some(to_meta(&r, p)?),
-                    Some("daily:folder") => folder = Some(r.id.clone()),
+                    // "daily:folder" is the pre-v3 desktop key; "daily:root" the shared one.
+                    Some("daily:root" | "daily:folder") => {
+                        if folder.is_none() {
+                            folder = Some(r.id.clone());
+                        }
+                    }
+                    Some(k) if k.starts_with("daily:") => notes.push((
+                        r.parent_id.clone(),
+                        k["daily:".len()..].to_owned(),
+                        r.id.clone(),
+                        r.sort_key.clone(),
+                    )),
                     _ => {}
                 }
             }
-            Ok((found, folder))
+            Ok((found, folder, notes))
         })?;
         if let Some(m) = existing {
             return Ok(m);
@@ -1098,17 +1113,34 @@ impl Store {
         let folder = match folder {
             Some(f) => f,
             None => {
-                let f = self
-                    .page_create(PageCreate::new(&ws.id, None, PageKind::Doc, "Daily notes"))?
-                    .meta;
-                self.set_template_key(&f.id, Some("daily:folder"))?;
+                let mut req = PageCreate::new(&ws.id, None, PageKind::Doc, "Journal");
+                req.icon = Some(lucide_icon("notebook"));
+                let f = self.page_create(req)?.meta;
+                self.set_template_key(&f.id, Some("daily:root"))?;
                 f.id
             }
         };
-        let title = day.format("%B %-d, %Y").to_string();
+        let title = daily_note_title(day);
+        let today = self.local_today().ok();
         let mut req = PageCreate::new(&ws.id, Some(&folder), PageKind::Doc, &title);
-        req.doc = Some(TipTapDoc::empty()?);
+        req.icon = Some(lucide_icon(if today == Some(day) {
+            "sun"
+        } else {
+            "calendar"
+        }));
+        req.doc = Some(daily_note_doc()?);
         let created = self.page_create(req)?.meta;
+        // Newest first: go before the newest note that is older than this one (the mock's `beforeId`).
+        let mut older: Vec<_> = notes
+            .into_iter()
+            .filter(|(parent, d, _, _)| {
+                parent.as_deref() == Some(folder.as_str()) && d.as_str() < date
+            })
+            .collect();
+        older.sort_by(|a, b| a.3.cmp(&b.3));
+        if let Some((_, _, before, _)) = older.first() {
+            self.page_move(&created.id, Some(&folder), Some(before), None)?;
+        }
         self.set_template_key(&created.id, Some(&key))
     }
 
@@ -1134,6 +1166,57 @@ impl Store {
             let row = load_page(c, id)?.ok_or(StoreError::NotFound("page"))?;
             decode_page(&s.codec, &row)
         })
+    }
+}
+
+/// A daily note's title, the same on both backends: "Thursday, Nov 26, 2026" (en-US).
+#[must_use]
+pub fn daily_note_title(day: chrono::NaiveDate) -> String {
+    day.format("%A, %b %-d, %Y").to_string()
+}
+
+/// A daily note's starting body (mirrors the mock's `dailyNoteDoc`): Focus with three to-dos, Notes, and an open
+/// "What went well?" toggle under End of day.
+fn daily_note_doc() -> Result<TipTapDoc> {
+    use serde_json::json;
+    let h3 = |t: &str| {
+        container(
+            TipTapNode::new("heading")
+                .with_attr("level", json!(3))
+                .with_attr("toggle", json!(false))
+                .with_attr("collapsed", json!(false))
+                .with_content(vec![TipTapNode::text(t)]),
+            None,
+        )
+    };
+    let todo = || {
+        container(
+            TipTapNode::new("todoItem").with_attr("checked", json!(false)),
+            None,
+        )
+    };
+    let para = || container(TipTapNode::new("paragraph"), None);
+    Ok(TipTapDoc::from_blocks(vec![
+        h3("Focus")?,
+        todo()?,
+        todo()?,
+        todo()?,
+        h3("Notes")?,
+        para()?,
+        h3("End of day")?,
+        container(
+            TipTapNode::new("toggle")
+                .with_attr("collapsed", json!(false))
+                .with_content(vec![TipTapNode::text("What went well?")]),
+            Some(vec![para()?]),
+        )?,
+    ]))
+}
+
+fn lucide_icon(v: &str) -> Icon {
+    Icon::Lucide {
+        v: v.to_owned(),
+        color: None,
     }
 }
 

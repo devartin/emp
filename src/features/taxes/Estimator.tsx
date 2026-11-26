@@ -13,7 +13,6 @@ import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { MoneyField } from "@/ui/MoneyField";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
@@ -24,10 +23,10 @@ import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { Slider } from "@/ui/Slider";
 import { Switch } from "@/ui/Switch";
-import { fmtMoney, fmtPct, num, fmtWhole } from "../finance/shared/format";
+import { fmtPct, num } from "../finance/shared/format";
 import { useAsync } from "../finance/shared/hooks";
 import { disclose, Section } from "../finance/shared/ui";
-import { STATUS_LABEL, useTax } from "./data";
+import { STATUS_LABEL, taxCurrency, taxMoney, useTax } from "./data";
 import { Figure } from "../finance/shared/Figure";
 import type { FigureId } from "../finance/shared/definitions";
 
@@ -55,6 +54,7 @@ const ADJ_KINDS: { value: TaxInput["adjustments"][number]["kind"]; label: string
 
 export default function Estimator() {
   const tx = useTax();
+  const { whole: fmtWhole, compact } = taxMoney(tx.currency);
   const p = tx.profile;
   const est = tx.estimate;
   const [scenario, setScenario] = useState<{ se: boolean; retire: boolean; retireAmt: string }>({ se: false, retire: false, retireAmt: "3000" });
@@ -88,7 +88,7 @@ export default function Estimator() {
       .catch(() => undefined);
   }, [wageDelta, tx.input]);
   const shownEst = preview ?? est;
-  if (!p) return <Skeleton height={480} radius={14} />;
+  if (!p) return <Skeleton height={480} radius={10} />;
   const setIncome = (i: number, patch: Partial<TaxInput["incomes"][number]>) => tx.setProfile({ incomes: p.incomes.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
   const setAdj = (i: number, patch: Partial<TaxInput["adjustments"][number]>) => tx.setProfile({ adjustments: p.adjustments.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
   return (
@@ -105,7 +105,7 @@ export default function Estimator() {
             {p.incomes.map((x, i) => (
               <div key={i} className="tx-line">
                 <Select size="sm" value={x.kind} onValueChange={(v) => setIncome(i, { kind: v })} options={INCOME_KINDS} className="flex-1" aria-label="Income type" />
-                <MoneyField size="sm" value={x.amount} onChange={(v) => setIncome(i, { amount: v ?? "0" })} wrapperClassName="w-[140px]" aria-label="Amount" />
+                <MoneyField size="sm" currency={tx.currency} value={x.amount} onChange={(v) => setIncome(i, { amount: v ?? "0" })} wrapperClassName="w-[140px]" aria-label="Amount" />
                 <IconButton icon={X} size="sm" label="Remove" onClick={() => tx.setProfile({ incomes: p.incomes.filter((_, j) => j !== i) })} />
                 {x.source ? (
                   <span className="tx-source">
@@ -141,13 +141,13 @@ export default function Estimator() {
             {p.adjustments.map((x, i) => (
               <div key={i} className="tx-line">
                 <Select size="sm" value={x.kind} onValueChange={(v) => setAdj(i, { kind: v })} options={ADJ_KINDS} className="flex-1" aria-label="Adjustment" />
-                <MoneyField size="sm" value={x.amount} onChange={(v) => setAdj(i, { amount: v ?? "0" })} wrapperClassName="w-[140px]" aria-label="Amount" />
+                <MoneyField size="sm" currency={tx.currency} value={x.amount} onChange={(v) => setAdj(i, { amount: v ?? "0" })} wrapperClassName="w-[140px]" aria-label="Amount" />
                 <IconButton icon={X} size="sm" label="Remove" onClick={() => tx.setProfile({ adjustments: p.adjustments.filter((_, j) => j !== i) })} />
               </div>
             ))}
             <div className="grid grid-cols-2 gap-3 mt-2">
-              <MoneyField label="Withholding (full year)" value={p.withheld} onChange={(v) => tx.setProfile({ withheld: v ?? "0" })} />
-              <MoneyField label="Estimated payments made" value={tx.input?.estimatedPaid ?? p.estimatedPaid} onChange={(v) => tx.setProfile({ estimatedPaid: v ?? "0" })} helper="From the Estimated payments database" readOnly />
+              <MoneyField label="Withholding (full year)" currency={tx.currency} value={p.withheld} onChange={(v) => tx.setProfile({ withheld: v ?? "0" })} />
+              <MoneyField label="Estimated payments made" currency={tx.currency} value={tx.input?.estimatedPaid ?? p.estimatedPaid} onChange={(v) => tx.setProfile({ estimatedPaid: v ?? "0" })} helper="From the Estimated payments database" readOnly />
             </div>
             <div className="mt-2">
               <div className="text-caption text-secondary mb-1.5" style={{ fontWeight: 500 }}>Deductions</div>
@@ -159,15 +159,15 @@ export default function Estimator() {
       </div>
 
       <div className="fh-span-7 flex flex-col gap-4">
-        <Result est={shownEst ?? undefined} loading={tx.estimating && !est} unsure={p.unsure} scrubbing={dragging} />
+        <Result est={shownEst ?? undefined} loading={tx.estimating && !est} unsure={p.unsure} scrubbing={dragging} live={dragging || preview !== null} />
         {shownEst ? <Brackets est={shownEst} scrubbing={dragging} /> : null}
         <Section title="What if">
           <div className="flex flex-col gap-3">
-            <div className="tx-scrub">
+            <div>
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-body-sm font-medium">If your wages change by</span>
                 <span className="tabular text-body-sm font-semibold" data-sensitive="">
-                  <RollingNumber value={wageDelta} format={(n) => (Math.round(n) === 0 ? "$0" : fmtWhole(Math.round(n), { signed: true }))} scrubbing={dragging} countUp={false} sensitive />
+                  <RollingNumber value={wageDelta} format={(n) => (Math.round(n) === 0 ? fmtWhole(0) : fmtWhole(Math.round(n), { signed: true }))} scrubbing={dragging} countUp={false} sensitive />
                 </span>
               </div>
               <div className="mt-3" onPointerUp={() => setDragging(false)} onBlur={() => setDragging(false)}>
@@ -186,7 +186,7 @@ export default function Estimator() {
                 />
               </div>
               <div className="flex justify-between text-caption text-tertiary mt-1.5" style={{ fontWeight: 400 }}>
-                <span>−$30k</span>
+                <span>{compact(-30000)}</span>
                 {wageDelta !== 0 ? (
                   <button type="button" className="tx-reset" onClick={() => setWageDelta(0)}>
                     Reset to your figures
@@ -194,15 +194,15 @@ export default function Estimator() {
                 ) : (
                   <span>Drag to see the estimate and brackets move</span>
                 )}
-                <span>+$30k</span>
+                <span>{compact(30000, true)}</span>
               </div>
             </div>
             <div className="fh-groove" />
-            <ScenarioRow on={scenario.se} onChange={(v) => setScenario((s) => ({ ...s, se: v }))} label="+$5,000 self-employment income" />
+            <ScenarioRow on={scenario.se} onChange={(v) => setScenario((s) => ({ ...s, se: v }))} label={`+${fmtWhole(5000)} self-employment income`} />
             <div className="flex items-center gap-3">
               <Switch size="sm" checked={scenario.retire} onCheckedChange={(v) => setScenario((s) => ({ ...s, retire: v }))} aria-label="Retirement contribution" />
               <span className="text-body-sm flex-1">Contribute to a traditional IRA</span>
-              <MoneyField size="sm" value={scenario.retireAmt} onChange={(v) => setScenario((s) => ({ ...s, retireAmt: v ?? "0" }))} wrapperClassName="w-[120px]" aria-label="Contribution" />
+              <MoneyField size="sm" currency={tx.currency} value={scenario.retireAmt} onChange={(v) => setScenario((s) => ({ ...s, retireAmt: v ?? "0" }))} wrapperClassName="w-[120px]" aria-label="Contribution" />
             </div>
             <AnimatePresence initial={false} mode="popLayout">
               {alt.data && est ? (
@@ -233,7 +233,12 @@ function ScenarioRow({ on, onChange, label }: { on: boolean; onChange: (v: boole
   );
 }
 
-export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxEstimate | undefined; loading?: boolean; unsure?: boolean; compact?: boolean; scrubbing?: boolean }) {
+/**
+ * The estimate figure. It is set as plain text on arrival and on every refetch; it rolls only while the wage slider
+ * is being scrubbed (`live`), where the movement is the point.
+ */
+export function Result({ est, loading, unsure, compact, scrubbing, live }: { est: TaxEstimate | undefined; loading?: boolean; unsure?: boolean; compact?: boolean; scrubbing?: boolean; live?: boolean }) {
+  const { whole: fmtWhole } = taxMoney(taxCurrency(est));
   const bal = est ? num(est.balance) : 0;
   const refund = bal < 0;
   // owe ⇄ refund crossing: the figure does one pop (1 → 1.04 → 1) and the status pill flips colour
@@ -245,17 +250,13 @@ export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxE
     prevRefund.current = refund;
   }, [refund, est]);
   const reduced = useReducedMotionPref();
-  if (loading || !est) return <Skeleton height={compact ? 178 : 260} radius={14} />;
+  if (loading || !est) return <Skeleton height={compact ? 178 : 260} radius={10} />;
   return (
-    <section className="fh-card tx-result" data-refund={refund ? "" : undefined} data-light="">
-      <EdgeLight specular />
+    <section className="fh-card tx-result" data-refund={refund ? "" : undefined}>
       <div className="flex items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="tx-flip" data-refund={refund ? "" : undefined}>
-              {refund ? "Refund" : "Owe"}
-            </span>
-            <span className="text-caption text-secondary" style={{ fontWeight: 500 }}>
+            <span className="tx-status" data-refund={refund ? "" : undefined}>
               {refund ? "Estimated refund" : "Estimated balance due"}
             </span>
             <Badge tone="outline" icon={Calculator}>Estimate</Badge>
@@ -265,7 +266,7 @@ export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxE
             {est.range || unsure ? <span className="tx-approx">≈</span> : null}
             {/* The figure discloses its own working (N-MO3): AGI, deduction, taxable income and the engine's lines. */}
             <Figure id="tax.due" block inputs={taxWorking(est)}>
-              <RollingNumber value={Math.abs(Math.round(bal))} format={(n) => fmtWhole(n)} scrubbing={scrubbing} sensitive countUp={false} />
+              {live ? <RollingNumber value={Math.abs(Math.round(bal))} format={(n) => fmtWhole(n)} scrubbing={scrubbing} sensitive countUp={false} /> : <span>{fmtWhole(Math.abs(Math.round(bal)))}</span>}
             </Figure>
           </m.div>
           {est.range ? (
@@ -313,6 +314,7 @@ export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxE
  * deduction" that disagrees with the pack's standard figure.
  */
 function DeductionLine({ est }: { est: TaxEstimate }) {
+  const { whole: fmtWhole } = taxMoney(taxCurrency(est));
   const amount = num(est.deduction.amount);
   const std = num(est.deduction.standardWouldBe);
   const extra = est.deduction.kind === "standard" ? Math.round(amount - std) : 0;
@@ -334,6 +336,7 @@ function DeductionLine({ est }: { est: TaxEstimate }) {
 
 /** The working behind the estimate, as popover rows (replaces the old "Show math" toggle). */
 function taxWorking(est: TaxEstimate) {
+  const { whole: fmtWhole, money: fmtMoney } = taxMoney(taxCurrency(est));
   return [
     { label: "Gross income", value: fmtWhole(est.gross) },
     { label: "Adjusted gross income", value: fmtWhole(est.agi) },
@@ -355,6 +358,10 @@ function Fig({ label, value, plain, figure, inputs }: { label: string; value: st
 
 /** Ordinary-income brackets as a staircase: segment width = bracket span, fill = income taxed there. */
 export function Brackets({ est, scrubbing }: { est: TaxEstimate; scrubbing?: boolean }) {
+  const { whole: fmtWhole, compact } = taxMoney(taxCurrency(est));
+  // Compact labels keep the tax figure inside narrow (low-bracket) segments.
+  const fmtCompactTax = (n: number) => compact(n);
+  const fmtCompactK = (n: number) => compact(n >= 1000 ? Math.round(n / 1000) * 1000 : Math.round(n));
   const taxable = num(est.taxable);
   const pref = num(est.preferentialTax) > 0;
   const bands = est.brackets.filter((b, i) => num(b.taxed) > 0 || i === 0 || num(b.from) <= taxable * 1.25);
@@ -394,14 +401,4 @@ export function Brackets({ est, scrubbing }: { est: TaxEstimate; scrubbing?: boo
       </div>
     </Section>
   );
-}
-
-/** "$1.2k" keeps the tax label inside narrow (low-bracket) segments. */
-function fmtCompactTax(n: number): string {
-  return n >= 1000 ? `$${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : `$${Math.round(n)}`;
-}
-
-function fmtCompactK(n: number): string {
-  if (n >= 1000) return `$${Math.round(n / 1000)}k`;
-  return `$${Math.round(n)}`;
 }

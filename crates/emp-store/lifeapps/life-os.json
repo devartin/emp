@@ -2,7 +2,7 @@
   "id": "life-os",
   "version": "1.0.0",
   "title": "Life OS",
-  "tagline": "Tasks, projects and areas with a daily plan and a weekly review.",
+  "tagline": "Tasks, projects and a daily plan.",
   "icon": "kanban",
   "color": "blue",
   "category": "planning",
@@ -205,15 +205,12 @@
       "kind": "dashboard",
       "optional": false,
       "spec": {
-        "title": "Today",
+        "title": "Life OS",
         "icon": "lucide:kanban",
-        "subtitle": "Your agenda, top 3, due tasks and insights from every app.",
+        "subtitle": "Tasks, projects and goals.",
         "tabs": [
-          "Today",
-          "Inbox",
-          "Upcoming",
+          "Tasks",
           "Projects",
-          "Areas",
           "Review"
         ],
         "tiles": [
@@ -245,7 +242,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "## Due and scheduled"
+            "md": "## Due"
           },
           {
             "t": "database",
@@ -286,7 +283,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "## Capture everything\nAnything on your mind goes to the **Inbox** — quick add understands dates like “tomorrow 3pm” and tags like `#home`. Capturing is not committing; it gets things out of your head.\n\n## Clarify and organise\nWhen you process the inbox, decide for each item:\n- **Is it actionable?** No → delete it, file it as a resource, or move it to *Someday*.\n- **Takes under two minutes?** Do it now.\n- **Waiting on someone?** Status *Waiting*, and note who.\n- **Has a date?** Give it a *Due* date only when there is a real deadline; use *Scheduled* for when you plan to do it.\n- **More than one step?** It is a **Project**; give it an outcome and one *Next* action.\n\n## Prioritise\n{{if(answers.priority == \"eisenhower\", \"You chose the Eisenhower matrix: do urgent + important now, schedule important, delegate urgent, drop the rest. The Eisenhower board groups tasks by quadrant.\", if(answers.priority == \"top3\", \"You chose Top 3 per day: pick the three tasks that would make today a success in your morning plan; everything else is a bonus.\", \"You chose P1–P4: P1 is today-critical, P2 this week, P3 soon, P4 whenever. Keep P1 to a handful.\"))}}\n\n## Plan the day, then shut down\nEach morning look at **Today**, choose your top 3 and give focus work a time block. At the end of the day run the shutdown checklist so work stays at work.\n\n## Weekly review\nOnce a week: get clear (inbox to zero), get current (calendar, projects without a next action, waiting list) and get creative (someday list). This is what keeps the system trusted."
+            "md": "## Capture everything\nAnything on your mind goes to the **Inbox**. Quick add understands dates like “tomorrow 3pm” and tags like `#home`. Capturing is not committing; it gets things out of your head.\n\n## Clarify and organise\nWhen you process the inbox, decide for each item:\n- **Is it actionable?** No → delete it, file it as a resource, or move it to *Someday*.\n- **Takes under two minutes?** Do it now.\n- **Waiting on someone?** Status *Waiting*, and note who.\n- **Has a date?** Give it a *Due* date only when there is a real deadline; use *Scheduled* for when you plan to do it.\n- **More than one step?** It is a **Project**; give it an outcome and one *Next* action.\n\n## Prioritise\n{{if(answers.priority == \"eisenhower\", \"You chose the Eisenhower matrix: do urgent + important now, schedule important, delegate urgent, drop the rest. The Eisenhower board groups tasks by quadrant.\", if(answers.priority == \"top3\", \"You chose Top 3 per day: pick the three tasks that would make today a success in your morning plan; everything else is a bonus.\", \"You chose P1–P4: P1 is today-critical, P2 this week, P3 soon, P4 whenever. Keep P1 to a handful.\"))}}\n\n## Plan the day, then shut down\nEach morning look at **Due** on the Life OS page, choose your top 3 and give focus work a time block. At the end of the day run the shutdown checklist so work stays at work.\n\n## Weekly review\nOnce a week: get clear (inbox to zero), get current (calendar, projects without a next action, waiting list) and get creative (someday list). This is what keeps the system trusted."
           }
         ]
       }
@@ -341,7 +338,7 @@
           {
             "t": "checklist",
             "items": [
-              "Review the Someday list — promote or delete",
+              "Review the Someday list: promote or delete",
               "Choose next week's top 3"
             ]
           },
@@ -592,7 +589,7 @@
           },
           {
             "key": "today",
-            "name": "Today",
+            "name": "Due",
             "layout": "table",
             "filter": {
               "and": [
@@ -1166,15 +1163,15 @@
       "id": "inbox-20",
       "when": "metrics.inbox_count > 20",
       "severity": "tip",
-      "title": "{{metrics.inbox_count}} items in your inbox",
-      "body": "A quick processing pass keeps the system trusted: decide, delegate, schedule or delete.",
+      "title": "{{metrics.inbox_count}} items in Inbox",
+      "body": "",
       "mathMetrics": [
         "inbox_count"
       ],
       "actions": [
         {
           "label": "Process inbox",
-          "route": "db:tasks:inbox"
+          "route": "app:tasks"
         }
       ]
     },
@@ -1182,15 +1179,15 @@
       "id": "project-no-next",
       "when": "metrics.projects_without_next > 0",
       "severity": "tip",
-      "title": "{{metrics.projects_without_next}} project(s) have no next action",
-      "body": "A project without a Next task tends to stall. Add the very next physical step.",
+      "title": "{{metrics.projects_without_next}} {{if(metrics.projects_without_next == 1, \"project has\", \"projects have\")}} no next task",
+      "body": "",
       "mathMetrics": [
         "projects_without_next"
       ],
       "actions": [
         {
-          "label": "Projects",
-          "route": "db:projects:active"
+          "label": "Open projects",
+          "route": "app:projects"
         }
       ]
     },
@@ -1198,15 +1195,15 @@
       "id": "overdue-5",
       "when": "metrics.overdue_count > 5",
       "severity": "warn",
-      "title": "{{metrics.overdue_count}} tasks are overdue",
-      "body": "Consider rescheduling honestly, or dropping what no longer matters.",
+      "title": "{{metrics.overdue_count}} overdue tasks",
+      "body": "Reschedule or drop the ones that no longer matter.",
       "mathMetrics": [
         "overdue_count"
       ],
       "actions": [
         {
-          "label": "Today",
-          "route": "db:tasks:today"
+          "label": "Review overdue",
+          "route": "app:tasks"
         }
       ]
     },
@@ -1215,15 +1212,15 @@
       "when": "metrics.today_scheduled_min > metrics.working_min_today",
       "severity": "warn",
       "title": "Today is overbooked",
-      "body": "{{metrics.today_scheduled_min}} minutes are scheduled but you work {{metrics.working_min_today}}. Consider moving something to tomorrow.",
+      "body": "{{metrics.today_scheduled_min}} minutes of tasks are scheduled into {{metrics.working_min_today}} working minutes.",
       "mathMetrics": [
         "today_scheduled_min",
         "working_min_today"
       ],
       "actions": [
         {
-          "label": "Today",
-          "route": "db:tasks:today"
+          "label": "Open tasks",
+          "route": "app:tasks"
         }
       ]
     },
@@ -1231,14 +1228,14 @@
       "id": "review-missed",
       "when": "metrics.days_since_review > 7",
       "severity": "tip",
-      "title": "Your weekly review is due",
-      "body": "It has been {{metrics.days_since_review}} days. Thirty minutes now saves hours of scrambling.",
+      "title": "Weekly review is due",
+      "body": "It has been {{metrics.days_since_review}} days since your last review.",
       "mathMetrics": [
         "days_since_review"
       ],
       "actions": [
         {
-          "label": "Weekly review",
+          "label": "Start review",
           "route": "page:weekly"
         }
       ]

@@ -1,4 +1,4 @@
-/** Mock-only: Life OS generator (§16.6) — Today dashboard, Tasks / Projects / Areas / Daily notes databases, views. */
+/** Mock-only: Life OS generator (§16.6): the Life OS hub, Tasks / Projects / Areas / Daily notes databases, views. */
 import type { Id } from '@/backend/types';
 import { createReminder } from '@/backend/mock/commands/reminder';
 import { LIFE_AREAS } from '../engine/manifests';
@@ -147,16 +147,16 @@ export async function installLifeOs(env: Env): Promise<void> {
     icon: lucide('repeat'),
     blocks: md(`> [!tip] About 30 minutes, ideally ${ritualLabel(answers, 'weekly', 'Friday 4:00 PM')}. Tick items as you go.
 ## 1 · Get clear
-- [ ] Empty your inbox to zero — every item becomes Next, Someday, Waiting or Done
+- [ ] Empty your inbox to zero: every item becomes Next, Someday, Waiting or Done
 - [ ] Clear your desk, downloads and notes
 ## 2 · Get current
 - [ ] Look back over last week's calendar for loose ends
 - [ ] Look ahead at the next two weeks
 - [ ] Every active project has a next action
-- [ ] Review the Waiting list — nudge anyone overdue
+- [ ] Review the Waiting list: nudge anyone overdue
 - [ ] Read this week's insights
 ## 3 · Get creative
-- [ ] Skim Someday — promote anything that now matters
+- [ ] Skim Someday: promote anything that now matters
 - [ ] Capture new ideas
 ## 4 · Choose next week's Top 3
 1.
@@ -174,7 +174,7 @@ export async function installLifeOs(env: Env): Promise<void> {
       while (fire <= env.now) fire += everyDays * DAY;
       createReminder(ctx, { fireAt: fire, targetKind: 'page', targetId: root, text, instanceId: env.inst.id, everyMs: everyDays * DAY });
     };
-    mk(0, ritualTime(answers, 'daily', '08:30'), 'Plan your day — pick today’s Top 3', 1);
+    mk(0, ritualTime(answers, 'daily', '08:30'), 'Plan your day: pick today’s Top 3', 1);
     mk(0, ritualTime(answers, 'shutdown', '17:30'), 'Shutdown: capture loose ends and plan tomorrow', 1);
     mk(daysUntil(env.now, 5), ritualTime(answers, 'weekly', '16:00'), 'Weekly review', 7);
     mk(daysUntilMonthStart(env.now), ritualTime(answers, 'monthly', '09:00'), 'Monthly reset', 30);

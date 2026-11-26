@@ -2,13 +2,13 @@
   "id": "tax-organizer",
   "version": "1.0.0",
   "title": "Tax Organizer",
-  "tagline": "Documents, deadlines and deductions in one place — and an estimate of what you owe.",
+  "tagline": "Documents, deadlines and a running estimate.",
   "icon": "receipt-text",
   "color": "amber",
   "category": "tax",
   "sensitivity": "high",
   "estMinutes": 5,
-  "disclaimer": "Estimates for planning only — not tax advice, and Ultra Note never files returns or makes payments. Confirm figures with official forms or a tax professional.",
+  "disclaimer": "Estimates for planning. This is not a filed return; rules change, so check figures with the IRS or a tax professional.",
   "steps": [
     {
       "id": "jurisdiction",
@@ -70,7 +70,7 @@
       "title": "What kinds of income did you have?",
       "quick": true,
       "skippable": false,
-      "help": "We use this to list the documents to expect.",
+      "help": "Used to list the documents to expect.",
       "default": [
         "employment"
       ],
@@ -207,7 +207,7 @@
         {
           "value": "not_sure",
           "label": "Not sure",
-          "description": "We compare as you log deductions."
+          "description": "Both are compared as you log deductions."
         },
         {
           "value": "standard",
@@ -258,7 +258,7 @@
         {
           "value": "professional",
           "label": "A professional",
-          "description": "We create a preparer packet."
+          "description": "A preparer packet is generated for you."
         },
         {
           "value": "not_sure",
@@ -446,7 +446,7 @@
           },
           {
             "t": "md",
-            "md": "## How the estimate works\n1. **Total tax** starts from last year's total tax as a baseline (safe-harbor style) until income for this year is entered.\n2. **Minus** withholding so far and expected remaining withholding.\n3. **Minus** estimated payments recorded on the Estimated payments page.\n4. A positive result is an estimated balance due; a negative one an estimated refund.\n\nUse **Show math** on each tile to see every line.\n\n## Scenarios\n- *+$5,000 self-employment income:* adds income tax at your marginal rate plus about 14.1% self-employment tax (15.3% × 92.35%).\n- *+$X retirement contribution:* a traditional (pre-tax) contribution lowers taxable income by X; a Roth contribution does not.\n\n## Standard vs itemized\nItemizing helps only when mortgage interest, state and local taxes (capped), charitable gifts and large medical costs add up to more than the standard deduction. The advisor tells you when you get within 10%."
+            "md": "## How the estimate works\n1. **Total tax** starts from last year's total tax as a baseline (safe-harbor style) until income for this year is entered.\n2. **Minus** withholding so far and expected remaining withholding.\n3. **Minus** estimated payments recorded on the Estimated payments page.\n4. A positive result is an estimated balance due; a negative one an estimated refund.\n\nClick any figure to see every line of the working.\n\n## Scenarios\n- *+$5,000 self-employment income:* adds income tax at your marginal rate plus about 14.1% self-employment tax (15.3% × 92.35%).\n- *+$X retirement contribution:* a traditional (pre-tax) contribution lowers taxable income by X; a Roth contribution does not.\n\n## Standard vs itemized\nItemizing helps only when mortgage interest, state and local taxes (capped), charitable gifts and large medical costs add up to more than the standard deduction. The advisor tells you when you get within 10%."
           },
           {
             "t": "disclaimer"
@@ -464,7 +464,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "## Who pays estimated tax\nIf tax is not withheld from some income — self-employment, rentals, large investment gains — consider quarterly estimated payments. In the US the penalty generally applies when you owe **$1,000 or more** at filing.\n\n## Deadlines (US federal)\n| Period | Income earned | Due |\n|---|---|---|\n| Q1 | Jan 1 – Mar 31 | April 15 |\n| Q2 | Apr 1 – May 31 | June 15 |\n| Q3 | Jun 1 – Aug 31 | September 15 |\n| Q4 | Sep 1 – Dec 31 | January 15 (next year) |\n\nDeadlines that fall on a weekend or holiday move to the next business day.\n\n## Safe harbor (common guideline)\nYou generally avoid the underpayment penalty if withholding plus estimates cover at least:\n- **100% of last year's total tax** (110% if last year's AGI was over $150,000), or\n- **90% of this year's tax**.\n\nThe suggested amounts below split the prior-year safe harbor, minus withholding, into four payments."
+            "md": "## Who pays estimated tax\nIf tax is not withheld from some income (self-employment, rentals, large investment gains), quarterly estimated payments cover it. In the US the penalty generally applies when you owe **$1,000 or more** at filing.\n\n## Deadlines (US federal)\n| Period | Income earned | Due |\n|---|---|---|\n| Q1 | Jan 1 – Mar 31 | April 15 |\n| Q2 | Apr 1 – May 31 | June 15 |\n| Q3 | Jun 1 – Aug 31 | September 15 |\n| Q4 | Sep 1 – Dec 31 | January 15 (next year) |\n\nDeadlines that fall on a weekend or holiday move to the next business day.\n\n## Safe harbor\nYou generally avoid the underpayment penalty if withholding plus estimates cover at least:\n- **100% of last year's total tax** (110% if last year's AGI was over $150,000), or\n- **90% of this year's tax**.\n\nThe suggested amounts below split the prior-year safe harbor, minus withholding, into four payments."
           },
           {
             "t": "database",
@@ -528,7 +528,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "Before December 31, consider:"
+            "md": "Before December 31:"
           },
           {
             "t": "checklist",
@@ -558,7 +558,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "How long to keep tax records — a common guideline based on how long the tax authority can review a return (US):\n\n| Record | Keep for |\n|---|---|\n| Returns and supporting documents | **3 years** from filing (or the due date, if later) |\n| Employment tax records | **4 years** after the tax is due or paid |\n| If income was under-reported by more than 25% | **6 years** |\n| Bad debt or worthless securities | **7 years** |\n| Property and investment basis records | Until **3 years after you sell** |\n| Returns themselves | Many people keep them indefinitely |\n\nThe *Keep until* column of the document checklist applies the 3-year rule to each document. Store originals encrypted in Ultra Note and keep the paper only when you must."
+            "md": "How long to keep tax records, based on how long the tax authority can review a return (US):\n\n| Record | Keep for |\n|---|---|\n| Returns and supporting documents | **3 years** from filing (or the due date, if later) |\n| Employment tax records | **4 years** after the tax is due or paid |\n| If income was under-reported by more than 25% | **6 years** |\n| Bad debt or worthless securities | **7 years** |\n| Property and investment basis records | Until **3 years after you sell** |\n| Returns themselves | Many people keep them indefinitely |\n\nThe *Keep until* column of the document checklist applies the 3-year rule to each document. Store originals encrypted in Ultra Note and keep the paper only when you must."
           },
           {
             "t": "disclaimer"
@@ -1456,7 +1456,7 @@
       "when": "metrics.days_to_next_deadline <= 3",
       "severity": "warn",
       "title": "A tax deadline is in {{metrics.days_to_next_deadline}} days",
-      "body": "Next up: check the Deadlines page and finish what is left.",
+      "body": "Check the Deadlines page for what is left.",
       "mathMetrics": [
         "days_to_next_deadline"
       ],
@@ -1472,7 +1472,7 @@
       "when": "metrics.days_to_next_deadline <= 14 and metrics.days_to_next_deadline > 3",
       "severity": "tip",
       "title": "A tax deadline is in {{metrics.days_to_next_deadline}} days",
-      "body": "Plenty of time if you start now. Check which documents are still expected.",
+      "body": "Check the document list.",
       "mathMetrics": [
         "days_to_next_deadline"
       ],
@@ -1488,7 +1488,7 @@
       "when": "metrics.doc_late_count > 0",
       "severity": "tip",
       "title": "{{metrics.doc_late_count}} document(s) are late",
-      "body": "Issuers usually send forms by their deadline; two weeks late is a good time to download them from the issuer's site or ask for a copy.",
+      "body": "More than two weeks past the usual issue date. Most issuers offer a download or a copy on request.",
       "mathMetrics": [
         "doc_late_count"
       ],
@@ -1503,8 +1503,8 @@
       "id": "se-no-estimates",
       "when": "answers.income_self_employment and metrics.quarterly_next > 1000 and metrics.estimates_paid_count == 0",
       "severity": "warn",
-      "title": "Consider a quarterly estimated payment",
-      "body": "Self-employment income suggests about {{fmt_money(metrics.quarterly_next)}} per quarter and no payment is recorded yet. Paying on time can avoid an underpayment penalty.",
+      "title": "No estimated payment recorded",
+      "body": "Self-employment income implies about {{fmt_money(metrics.quarterly_next)}} per quarter. Paying on time avoids an underpayment penalty.",
       "mathMetrics": [
         "quarterly_next",
         "estimates_paid_count"
@@ -1520,7 +1520,7 @@
       "id": "itemize-close",
       "when": "metrics.standard_deduction > 0 and metrics.deductions_total >= 0.9 * metrics.standard_deduction",
       "severity": "info",
-      "title": "Itemizing may beat the standard deduction",
+      "title": "Itemised deductions are close to the standard deduction",
       "body": "Deductions logged ({{fmt_money(metrics.deductions_total)}}) are within 10% of the standard deduction ({{fmt_money(metrics.standard_deduction)}}).",
       "mathMetrics": [
         "deductions_total",
@@ -1537,8 +1537,8 @@
       "id": "pack-stale",
       "when": "metrics.pack_stale",
       "severity": "warn",
-      "title": "Tax rules may be out of date",
-      "body": "The tax pack was verified a while ago or is for an earlier year. Estimates may be off until it is updated.",
+      "title": "Tax figures may be out of date",
+      "body": "The tax pack is for a different year or was verified more than 13 months ago.",
       "mathMetrics": [],
       "actions": [
         {
@@ -1567,8 +1567,8 @@
       "id": "setaside-short",
       "when": "coalesce(metrics.taxes_fund, -1) >= 0 and metrics.taxes_fund < metrics.est_balance",
       "severity": "info",
-      "title": "Your Taxes fund is below the estimated balance due",
-      "body": "Money HQ's Taxes fund holds {{fmt_money(metrics.taxes_fund)}}; the estimate is {{fmt_money(metrics.est_balance)}}. Consider topping it up.",
+      "title": "Taxes fund is below the estimated balance due",
+      "body": "Money HQ's Taxes fund holds {{fmt_money(metrics.taxes_fund)}}; the estimate is {{fmt_money(metrics.est_balance)}}.",
       "mathMetrics": [
         "taxes_fund",
         "est_balance"

@@ -270,7 +270,7 @@ export const Callout = Node.create({
   content: 'inline*',
   addAttributes() {
     return {
-      icon: jsonAttr('icon', { t: 'emoji', v: '💡' }),
+      icon: jsonAttr('icon', { t: 'lucide', v: 'lightbulb' }),
       color: {
         default: 'gray',
         parseHTML: (el) => (isColor(el.getAttribute('data-tone')) ? el.getAttribute('data-tone') : 'gray'),

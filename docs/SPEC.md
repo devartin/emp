@@ -3563,6 +3563,15 @@ When inputs are incomplete (some questions answered "not sure"), `range` is comp
 >   is smaller (the election of IRC §63(e), https://www.law.cornell.edu/uscode/text/26/63) and still reports
 >   `standardWouldBe`. Bare `'standard'` / `'auto'` carry no entries, so no charitable deduction applies: a client
 >   that knows the entries sends the object form with `mode`.
+> - *Amended 2026-11-26 (additive, integration lane A):* `TaxPackInfo` (`tax_packs`) and `TaxEstimate` gain
+>   `currency?:string`, the ISO 4217 code every amount is in: the pack's `currency` field, else `USD` for a pack whose
+>   `country` is `US`; absent for the generic pack (user-entered figures, so the client falls back to the workspace
+>   base currency). Rust: `TaxPack::currency_code` (`crates/emp-finance/src/tax/pack.rs`); mock: `currencyOf`
+>   (`src/backend/mock/commands/tax.ts`). The Tax Organizer formats every figure with it.
+> - *Note 2026-11-26:* `taxded.pct` (Deductible %) is a fraction on both backends (1 = 100%; number property with
+>   format `percent`, which displays ×100). Desktop `taxded.category` option ids are generated, so clients map a row's
+>   option to its category by id, then by name (`src/backend/taxDeductions.ts`). `taxded.receipt` is a `files`
+>   property on desktop and a checkbox in the mock; clients treat a ticked box or any attached file as kept.
 
 **Quarterly payments.**
 - *Safe harbor:* `max(0, priorYearPct × priorTax)`, or `highIncomePct` when prior AGI is above the threshold, minus expected withholding, divided by the remaining periods.

@@ -145,7 +145,7 @@ function shift(day: string, n: number): string {
 
 function SummaryTile({ id, label, value, currency, emphasis, inputs, note }: { id: "assets" | "debts" | "networth"; label: string; value: number | null; currency: string; emphasis?: boolean; inputs?: { label: string; value: string }[]; note?: string }) {
   return (
-    <div className="fh-card" style={{ padding: "14px 18px" }}>
+    <div className="fh-card">
       <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
         {label}
       </div>

@@ -100,7 +100,7 @@ export default function Budget() {
                 <HeroMoney value={tba} currency={bm.data.currency} />
               </Figure>
             ) : (
-              <Skeleton width={180} height={36} radius={8} />
+              <Skeleton width={180} height={36} radius={6} />
             )}
             {bm.data && Math.abs(tba) <= 0.004 ? (
               <m.span className="fh-balanced" initial={false} animate={{ scale: 1, opacity: 1 }} transition={spring.pop}>
@@ -201,7 +201,7 @@ export default function Budget() {
                               ) : null}
                             </span>
                             <span className="fh-bud-num">
-                              <MoneyField size="sm" value={c.assigned.toFixed(2)} onChange={(v) => v !== null && Math.abs(num(v) - c.assigned) > 0.004 && void assign(c.id, v)} aria-label={`Assigned to ${c.name}`} wrapperClassName="fh-bud-input" />
+                              <MoneyField size="sm" value={c.assigned.toFixed(2)} onChange={noop} onCommit={(v) => v !== null && Math.abs(num(v) - c.assigned) > 0.004 && void assign(c.id, v)} aria-label={`Assigned to ${c.name}`} wrapperClassName="fh-bud-input" />
                             </span>
                             <span className="fh-bud-num text-secondary">
                               <Amount value={toMoney(c.activity)} align="end" />
@@ -249,3 +249,6 @@ function patchLocal(prev: BudgetMonth, categoryId: string, amount: string): Budg
     categories: prev.categories.map((c) => (c.categoryId === categoryId ? { ...c, assigned: num(amount).toFixed(2), available: (num(c.available) + d).toFixed(2) } : c)),
   };
 }
+
+/** The Assigned field writes on commit only (blur / Enter), not per keystroke. */
+const noop = () => undefined;

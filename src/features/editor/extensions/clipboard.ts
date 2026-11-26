@@ -107,7 +107,7 @@ function dropForeignAssets(nodes: TipTapNode[]): TipTapNode[] {
     if (n.type === 'image' || n.type === 'file') {
       return { type: 'paragraph', content: [{ type: 'text', text: n.type === 'image' ? '[Image from another vault]' : '[File from another vault]', marks: [{ type: 'italic' }] }] };
     }
-    if (n.type === 'callout' && (n.attrs?.icon as { t?: string } | undefined)?.t === 'asset') return { ...n, attrs: { ...n.attrs, icon: { t: 'emoji', v: '💡' } } };
+    if (n.type === 'callout' && (n.attrs?.icon as { t?: string } | undefined)?.t === 'asset') return { ...n, attrs: { ...n.attrs, icon: { t: 'lucide', v: 'lightbulb' } } };
     return n.content ? { ...n, content: n.content.map(fix) } : n;
   };
   return nodes.map(fix);

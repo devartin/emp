@@ -231,7 +231,7 @@ pub fn money_hq(c: &MoneyHqContext) -> Vec<Finding> {
             "ef-below-target",
             "ef",
             Severity::Tip,
-            "Keep building your emergency fund".into(),
+            "Emergency fund is below target".into(),
             format!("{} saved of {}.", money(c.ef_balance), money(c.ef_target)),
             vec![
                 m("Saved", money(c.ef_balance)),
@@ -264,7 +264,7 @@ pub fn money_hq(c: &MoneyHqContext) -> Vec<Finding> {
                     name,
                     Severity::Tip,
                     format!("{name} renews in {d} days"),
-                    format!("Next charge on {next}. Still using it?"),
+                    format!("Next charge on {next}."),
                     vec![m("Next charge", next)],
                 ));
             }
@@ -276,7 +276,7 @@ pub fn money_hq(c: &MoneyHqContext) -> Vec<Finding> {
             "txns",
             Severity::Info,
             format!("{} transactions need a category", c.uncategorized),
-            "Categorise them so budgets and reports stay accurate.".into(),
+            "Uncategorised rows are not in any budget figure.".into(),
             vec![m("Uncategorised", c.uncategorized)],
         ));
     }
@@ -287,8 +287,8 @@ pub fn money_hq(c: &MoneyHqContext) -> Vec<Finding> {
                     "reconcile-30d",
                     acct,
                     Severity::Tip,
-                    format!("Reconcile {acct}"),
-                    "It has not been reconciled in the last 30 days.".into(),
+                    format!("{acct} is due for reconciling"),
+                    "Not reconciled in the last 30 days.".into(),
                     vec![m(
                         "Last reconciled",
                         last.map_or_else(|| "never".to_string(), |d| d.to_string()),
@@ -304,7 +304,7 @@ pub fn money_hq(c: &MoneyHqContext) -> Vec<Finding> {
                 card,
                 Severity::Tip,
                 format!("{card} utilisation is {}", pct(*u)),
-                "Keeping card balances under 30% of the limit can help your credit score.".into(),
+                "Under 30% of the limit is the usual target.".into(),
                 vec![m("Utilisation", pct(*u))],
             ));
         }
@@ -321,7 +321,7 @@ pub fn money_hq(c: &MoneyHqContext) -> Vec<Finding> {
             "debt",
             Severity::Info,
             "Savings are growing while high-interest debt remains".into(),
-            "Paying the debt down may save more than the savings earn.".into(),
+            "Paying down debt saves its APR in interest, more than most savings earn.".into(),
             vec![m(
                 "Highest APR",
                 format!("{}%", c.max_debt_apr.unwrap_or_default().normalize()),
@@ -345,7 +345,7 @@ pub fn money_hq(c: &MoneyHqContext) -> Vec<Finding> {
             "dupes",
             Severity::Tip,
             format!("{} possible duplicate(s) to review", c.possible_duplicates),
-            "Keep or skip them in the import review.".into(),
+            "Same date, amount and description as another transaction.".into(),
             vec![m("Possible duplicates", c.possible_duplicates)],
         ));
     }
@@ -381,7 +381,7 @@ pub fn portfolio(c: &PortfolioContext) -> Vec<Finding> {
                 class,
                 Severity::Warn,
                 format!("{class} is outside its band"),
-                format!("Drift is {drift:+.1} pp. Consider the rebalance planner (Ultra Note never places trades)."),
+                format!("Drift is {drift:+.1} pp. The rebalance planner lists trades; Ultra Note never places them."),
                 vec![m("Drift (pp)", format!("{drift:+.1}"))],
             ));
         }
@@ -394,7 +394,7 @@ pub fn portfolio(c: &PortfolioContext) -> Vec<Finding> {
                 sym,
                 Severity::Tip,
                 format!("{sym} is {} of the portfolio", pct(*w)),
-                "A single position above 10% concentrates risk.".into(),
+                "A single position above 10% adds single-company or single-fund risk.".into(),
                 vec![m("Weight", pct(*w))],
             ));
         }
@@ -404,7 +404,7 @@ pub fn portfolio(c: &PortfolioContext) -> Vec<Finding> {
                 sym,
                 Severity::Info,
                 format!("{sym} has a {} expense ratio", pct(to_f64(er))),
-                "Lower-cost funds with similar exposure may exist.".into(),
+                "Above 0.5% a year. Broad index funds often charge under 0.1%.".into(),
                 vec![m("Expense ratio", pct(to_f64(er)))],
             ));
         }
@@ -418,7 +418,8 @@ pub fn portfolio(c: &PortfolioContext) -> Vec<Finding> {
             "cash",
             Severity::Info,
             "Cash has been above 5% for 60 days".into(),
-            "Uninvested cash can drag on long-term returns.".into(),
+            "Uninvested cash lowers long-term returns unless it is set aside for a purchase."
+                .into(),
             vec![m("Days", c.cash_above_5pct_days)],
         ));
     }
@@ -428,7 +429,7 @@ pub fn portfolio(c: &PortfolioContext) -> Vec<Finding> {
             "prices",
             Severity::Info,
             format!("{stale} price(s) are more than 3 days old"),
-            "Values may be out of date.".into(),
+            "Values use the last cached prices.".into(),
             vec![m("Stale", stale)],
         ));
     }
@@ -438,8 +439,8 @@ pub fn portfolio(c: &PortfolioContext) -> Vec<Finding> {
                 "ips-review",
                 "ips",
                 Severity::Tip,
-                "Time to review your Investment Policy Statement".into(),
-                "An annual check keeps it aligned with your goals.".into(),
+                "Investment Policy Statement review is due".into(),
+                "Last reviewed more than a year ago.".into(),
                 vec![],
             ));
         }
@@ -448,8 +449,8 @@ pub fn portfolio(c: &PortfolioContext) -> Vec<Finding> {
                 "harvest-review",
                 "harvest",
                 Severity::Info,
-                "Review unrealised losses before year end".into(),
-                format!("Taxable accounts hold about {} in unrealised losses. Wash-sale rules apply; this is not tax advice.", money(c.taxable_unrealized_losses)),
+                "Unrealised losses before year end".into(),
+                format!("Taxable accounts hold about {} in unrealised losses. Losses realised before year end can offset gains; wash-sale rules apply.", money(c.taxable_unrealized_losses)),
                 vec![m("Unrealised losses", money(c.taxable_unrealized_losses))],
             ));
         }
@@ -517,8 +518,7 @@ pub fn tax(c: &TaxContext) -> Vec<Finding> {
             doc,
             Severity::Tip,
             format!("{doc} hasn't arrived"),
-            "It is more than 14 days past when it is usually available. Check the issuer's portal."
-                .into(),
+            "More than 14 days past its usual issue date. Most issuers offer a download.".into(),
             vec![],
         ));
     }
@@ -530,9 +530,9 @@ pub fn tax(c: &TaxContext) -> Vec<Finding> {
             "se-no-estimates",
             "se",
             Severity::Warn,
-            "Self-employment income suggests quarterly estimated payments".into(),
+            "No estimated payment recorded".into(),
             format!(
-                "The estimated next payment is about {} and none are recorded.",
+                "Self-employment income implies a next payment of about {}.",
                 money(s)
             ),
             vec![m("Suggested payment (estimate)", money(s))],
@@ -547,11 +547,7 @@ pub fn tax(c: &TaxContext) -> Vec<Finding> {
             "itemize",
             Severity::Info,
             "Itemised deductions are close to the standard deduction".into(),
-            format!(
-                "Itemised {} vs standard {}. Bunching deductions could help.",
-                money(it),
-                money(st)
-            ),
+            format!("Itemised {} vs standard {}.", money(it), money(st)),
             vec![m("Itemised", money(it)), m("Standard", money(st))],
         ));
     }

@@ -670,7 +670,7 @@ export function targetAttrs(t: TurnIntoTarget, prev: PMNode | null): Record<stri
     case 'toggle':
       return { collapsed: false };
     case 'callout':
-      return prev?.type.name === 'callout' ? prev.attrs : { icon: { t: 'emoji', v: '💡' }, color: 'gray' };
+      return prev?.type.name === 'callout' ? prev.attrs : { icon: { t: 'lucide', v: 'lightbulb' }, color: 'gray' };
     case 'codeBlock':
       return { language: 'plain', wrap: false, caption: '' };
     case 'numberedItem':

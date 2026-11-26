@@ -916,7 +916,7 @@
   to { transform: translateX(340%); }
 }
 :root[data-motion="reduced"] .emp-progress[data-indeterminate] .emp-progress-fill { animation: none; width: 100%; opacity: 0.4; }
-.emp-progress-pace { position: absolute; top: 50%; width: 2px; height: 10px; margin-top: -5px; margin-left: -1px; border-radius: 1px; background: var(--text-secondary); box-shadow: 0 0 0 1.5px var(--bg-canvas); }
+.emp-progress-pace { position: absolute; top: 50%; width: 2px; height: 10px; margin-top: -5px; margin-left: -1px; background: var(--text-secondary); outline: 1.5px solid var(--bg-canvas); }
 .emp-budget { position: relative; padding-block: 4px; }
 .emp-budget .emp-progress { overflow: hidden; }
 .emp-budget-lap {

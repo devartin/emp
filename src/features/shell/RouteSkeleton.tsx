@@ -33,7 +33,7 @@ function DocSkeleton() {
   return (
     <div className="mx-auto w-full max-w-[720px] px-6 pt-16">
       <Skeleton width={52} height={52} radius={12} />
-      <Skeleton width="58%" height={30} radius={8} className="mt-6" />
+      <Skeleton width="58%" height={30} radius={6} className="mt-6" />
       <div className="mt-8 flex flex-col gap-5">
         <SkeletonText lines={3} />
         <SkeletonText lines={2} />
@@ -48,7 +48,7 @@ function TableSkeleton() {
   return (
     <div className="w-full px-12 pt-14">
       <Skeleton width={44} height={44} radius={10} />
-      <Skeleton width={260} height={26} radius={8} className="mt-5" />
+      <Skeleton width={260} height={26} radius={6} className="mt-5" />
       <div className="mt-6 flex gap-2">
         {[72, 64, 80].map((w, i) => (
           <Skeleton key={i} width={w} height={24} radius={6} />
@@ -71,7 +71,7 @@ function TableSkeleton() {
 function DashboardSkeleton() {
   return (
     <div className="w-full px-12 pt-12">
-      <Skeleton width={220} height={28} radius={8} />
+      <Skeleton width={220} height={28} radius={6} />
       <Skeleton width={160} height={12} className="mt-3" />
       <div className="mt-8 grid grid-cols-4 gap-4">
         {Array.from({ length: 4 }, (_, i) => (
@@ -85,7 +85,7 @@ function DashboardSkeleton() {
       <div className="mt-4 grid grid-cols-3 gap-4">
         <div className="col-span-2 rounded-xl border border-subtle bg-surface-1 p-4">
           <Skeleton width={140} height={12} />
-          <Skeleton width="100%" height={220} radius={8} className="mt-4" />
+          <Skeleton width="100%" height={220} radius={6} className="mt-4" />
         </div>
         <div className="rounded-xl border border-subtle bg-surface-1 p-4">
           <Skeleton width={110} height={12} />
@@ -118,11 +118,11 @@ function GridSkeleton() {
 function ListSkeleton() {
   return (
     <div className="mx-auto w-full max-w-[760px] px-6 pt-14">
-      <Skeleton width={180} height={26} radius={8} />
+      <Skeleton width={180} height={26} radius={6} />
       <div className="mt-8 flex flex-col gap-2">
         {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="flex h-11 items-center gap-3 rounded-lg px-2">
-            <Skeleton width={20} height={20} radius={5} />
+            <Skeleton width={20} height={20} radius={4} />
             <Skeleton width={`${54 - ((i * 11) % 24)}%`} height={11} />
             <Skeleton width={64} height={10} className="ml-auto" />
           </div>
@@ -136,8 +136,8 @@ function CalendarSkeleton() {
   return (
     <div className="w-full px-10 pt-10">
       <div className="flex items-center gap-3">
-        <Skeleton width={180} height={24} radius={8} />
-        <Skeleton width={120} height={28} radius={8} className="ml-auto" />
+        <Skeleton width={180} height={24} radius={6} />
+        <Skeleton width={120} height={28} radius={6} className="ml-auto" />
       </div>
       <div className="mt-6 grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-subtle bg-[var(--border-subtle)]">
         {Array.from({ length: 35 }, (_, i) => (
@@ -160,7 +160,7 @@ function SettingsSkeleton() {
         ))}
       </div>
       <div className="flex-1 px-12 pt-12">
-        <Skeleton width={200} height={24} radius={8} />
+        <Skeleton width={200} height={24} radius={6} />
         <div className="mt-8 flex flex-col gap-6">
           {Array.from({ length: 5 }, (_, i) => (
             <div key={i} className="flex items-center gap-4">
@@ -168,7 +168,7 @@ function SettingsSkeleton() {
                 <Skeleton width={160} height={12} />
                 <Skeleton width={260} height={10} className="mt-2" />
               </div>
-              <Skeleton width={120} height={28} radius={8} />
+              <Skeleton width={120} height={28} radius={6} />
             </div>
           ))}
         </div>

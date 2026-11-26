@@ -45,6 +45,17 @@ export function privateSummary(summary: string, title?: string): string {
 
 const DEFAULT_EMPTY = "Add 2+ transactions to see your trend";
 
+/** ≥30% of the box is inside the viewport (the IntersectionObserver threshold below, checked synchronously). */
+function inView(el: HTMLElement): boolean {
+  const r = el.getBoundingClientRect();
+  if (r.height <= 0 || r.width <= 0) return false;
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  const vw = window.innerWidth || document.documentElement.clientWidth;
+  const visH = Math.min(r.bottom, vh) - Math.max(r.top, 0);
+  const visW = Math.min(r.right, vw) - Math.max(r.left, 0);
+  return visH > 0 && visW > 0 && visH >= r.height * 0.3;
+}
+
 /**
  * Chart wrapper (§13.5): measures its box, runs the entry animation once when ≥30% is in view, and provides the
  * shared states — loading skeleton, insufficient data (ghost dashed line + copy), cached/offline chip, aria summary,
@@ -73,6 +84,14 @@ export function ChartFrame({ height, summary: rawSummary, title, loading, empty,
     return () => ro.disconnect();
   }, []);
 
+  // A chart already on screen when its data arrives reveals with that first paint, not an observer callback a few
+  // frames later (which drew its axis labels and line after `emp:route-ready`).
+  useLayoutEffect(() => {
+    if (phase !== "pending" || loading || empty) return;
+    const el = ref.current;
+    if (el && inView(el)) setPhase("entering");
+  }, [phase, loading, empty]);
+
   useEffect(() => {
     if (phase !== "pending" || loading || empty) return;
     const el = ref.current;
@@ -93,7 +112,7 @@ export function ChartFrame({ height, summary: rawSummary, title, loading, empty,
   // First data load only: the line reveals in 220ms (CSS on [data-entering]); then the chart is still. No pen dot.
   useEffect(() => {
     if (phase !== "entering") return;
-    const id = window.setTimeout(() => setPhase("done"), 280);
+    const id = window.setTimeout(() => setPhase("done"), 230);
     return () => window.clearTimeout(id);
   }, [phase]);
 

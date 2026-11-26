@@ -77,7 +77,7 @@ export async function installMoneyHq(env: Env): Promise<void> {
     icon: lucide('book-open'),
     blocks: md(`> [!info] Method: **${methodLabel[method] ?? method}**. You can change it any time with a tune-up.
 ## The idea
-${fifty ? 'Split take-home pay into three buckets: about **50% for needs**, **30% for wants** and **20% for savings and debt**. It is simple enough to keep.' : method === 'zero_based' ? 'Give every dollar a job before the month starts. Income minus everything you assign should equal **zero** — not because you spend it all, but because savings and debt payments get jobs too.' : method === 'pay_yourself_first' ? 'Move savings out on payday, then spend the rest freely. The savings transfer is the budget.' : method === 'envelopes' ? 'Each category is an envelope with a fixed amount. When it is empty, it is empty — or you move money from another envelope.' : 'No targets — just a clear picture of where money goes. Most people start here.'}
+${fifty ? 'Split take-home pay into three buckets: about **50% for needs**, **30% for wants** and **20% for savings and debt**. It is simple enough to keep.' : method === 'zero_based' ? 'Assign all income to categories before the month starts. Income minus everything you assign should equal **zero** — not because you spend it all, but because savings and debt payments get jobs too.' : method === 'pay_yourself_first' ? 'Move savings out on payday, then spend the rest freely. The savings transfer is the budget.' : method === 'envelopes' ? 'Each category is an envelope with a fixed amount. When it is empty, it is empty — or you move money from another envelope.' : 'No targets — just a clear picture of where money goes. Most people start here.'}
 ## How to use it
 - Each category belongs to one group (see **Categories**).
 - The Budget tab compares what you assigned with what you spent.
@@ -86,14 +86,14 @@ ${disclaimer}`),
   });
   env.page('order', {
     title: 'Financial order of operations',
-    icon: lucide('list-ordered'),
+    icon: lucide('list-todo'),
     blocks: md(`Where the next dollar goes. Tick steps as you reach them.
 - [ ] 1. Budget plus a starter emergency fund (about one month of essentials)
 - [ ] 2. Capture any employer retirement match
 - [ ] 3. Pay down high-interest debt (above ~10% APR)
 - [ ] 4. Build the full emergency fund (3–6 months)
 - [ ] 5. Tax-advantaged saving (IRA, HSA, 401(k))
-- [ ] 6. Other goals — sinking funds, a home, education
+- [ ] 6. Other goals: sinking funds, a home, education
 - [ ] 7. Taxable investing
 ${disclaimer}`),
   });
@@ -172,7 +172,8 @@ ${disclaimer}`),
       P.text('Memo', 'txn.memo'),
       P.status('Cleared', [{ name: 'Uncleared', color: 'gray', group: 'todo' }, { name: 'Cleared', color: 'blue', group: 'in_progress' }, { name: 'Reconciled', color: 'green', group: 'complete' }], 'txn.cleared'),
       P.multi('Tags', ['Reimbursable', 'Tax', 'Shared']),
-      P.select('Source', ['Manual', 'Import', 'Rule']),
+      P.select('Source', ['Manual', 'Import', 'Rule'], 'txn.source'),
+      P.check('Reviewed', 'txn.reviewed'),
       P.hidden(P.text('Import ID', 'txn.import_id')),
     ],
     firstView: { name: 'All transactions', layout: 'table' },
@@ -429,7 +430,7 @@ ${rebalance === 'calendar' ? 'Check once a quarter and rebalance back to targets
 ## Signature
 Signed ____________________  Date ____________`),
   });
-  env.page('rebalance', { title: 'Rebalance planner', icon: lucide('scale'), blocks: md('Compare current weights with targets. Cash-flow first: direct contributions to underweight classes before selling anything.\n- [ ] Check drift\n- [ ] Plan contributions\n- [ ] Only then consider trades (minimum trade: $50)') });
+  env.page('rebalance', { title: 'Rebalance planner', icon: lucide('scale'), blocks: md('Compare current weights with targets. Cash-flow first: direct contributions to underweight classes before selling anything.\n- [ ] Check drift\n- [ ] Plan contributions\n- [ ] Only then plan trades (minimum trade: $50)') });
   if (env.on('annual')) env.page('annual', { title: 'Annual investing review', icon: lucide('calendar'), blocks: md('- [ ] Re-read the IPS\n- [ ] Update targets for age and goals\n- [ ] Review fees and expense ratios\n- [ ] Check beneficiaries\n- [ ] Tax-loss harvesting review (December)') });
 
   if (provisioned(env, 'portfolio.provision', { accounts: 'inv_accounts', securities: 'securities', txns: 'inv_txns', targets: 'targets_db' })) {
@@ -556,7 +557,7 @@ export async function installTax(env: Env): Promise<void> {
   if (env.on('quarterly')) env.page('quarterly', { title: 'Quarterly payments', icon: lucide('calendar'), blocks: md(`Estimated payments for tax year ${year}: April 15 · June 15 · September 15 · January 15.\n- [ ] Q1 paid\n- [ ] Q2 paid\n- [ ] Q3 paid\n- [ ] Q4 paid\n${disclaimer}`) });
   if (env.on('packet')) env.page('packet', { title: 'Preparer packet', icon: lucide('package'), blocks: md('Everything your preparer needs, in one place. Export to PDF from the page menu.\n## Documents received\n## Income summary\n## Deductions & credits\n## Estimated payments\n## Questions for my preparer') });
   env.page('yearend', { title: 'Year-end planning checklist', icon: lucide('circle-check'), blocks: md(`- [ ] Max out retirement contributions you planned\n- [ ] Use HSA / FSA balances\n- [ ] Bunch charitable gifts if close to itemizing\n- [ ] Review unrealized losses (December)\n- [ ] Confirm Q4 estimated payment\n${disclaimer}`) });
-  if (env.on('retention')) env.page('retention', { title: 'Record retention guide', icon: lucide('archive'), blocks: md('| Record | Keep for |\n|---|---|\n| Returns and supporting documents | 3 years after filing (common guideline) |\n| Records for unreported income > 25% | 6 years |\n| Property and investment basis records | Until 3 years after you sell |\n| Employment tax records | 4 years |') });
+  if (env.on('retention')) env.page('retention', { title: 'Record retention guide', icon: lucide('archive'), blocks: md('| Record | Keep for |\n|---|---|\n| Returns and supporting documents | 3 years after filing |\n| Records for unreported income > 25% | 6 years |\n| Property and investment basis records | Until 3 years after you sell |\n| Employment tax records | 4 years |') });
 
   const delegated = provisioned(env, 'tax.provision', { documents: 'documents_db', deductions: 'deductions_db', payments: 'estimates_db' });
   if (delegated) {
@@ -609,7 +610,7 @@ export async function installTax(env: Env): Promise<void> {
   }
   if (env.sample) {
     await env.step('Adding sample deductions');
-    const list: [string, string, number, number][] = [['Food bank donation', 'Charitable', 250, 40], ['Dental crown', 'Medical', 1180, 95], ['Home office chair', 'Home office', 329, 120], ['Design software', 'Business expense', 54.99, 30], ['Roth IRA contribution', 'Retirement contribution', 3000, 200], ['Animal shelter', 'Charitable', 120, 60]];
+    const list: [string, string, number, number][] = [['Food bank donation', 'Charitable', 250, 40], ['Dental crown', 'Medical', 1180, 95], ['Home office chair', 'Home office', 329, 120], ['Design software', 'Business expense', 54.99, 30], ['Animal shelter', 'Charitable', 120, 60]];
     for (const [d, cat, amt, ago] of list) env.row(deductions, { Description: c.text(d), Date: c.date(isoDay(env.now - ago * DAY)), Category: sel(cat), Amount: c.money(amt), 'Deductible %': c.num(1), 'Tax year': c.num(year) });
     if (mileage) for (let i = 0; i < 5; i++) env.row(mileage, { Trip: c.text(['Client meeting — Acme', 'Supplier pickup', 'Workshop venue', 'Client meeting — Northside', 'Post office'][i]), Date: c.date(isoDay(env.now - (6 + i * 9) * DAY)), Miles: c.num([18.4, 7.2, 22, 12.5, 3.1][i]), Purpose: c.text('Business') });
   }

@@ -2,13 +2,13 @@
   "id": "money-hq",
   "version": "1.0.0",
   "title": "Money HQ",
-  "tagline": "Budget, accounts, goals and bills — with a plan for every dollar.",
+  "tagline": "Budget, accounts and bills.",
   "icon": "wallet",
   "color": "jade",
   "category": "finance",
   "sensitivity": "high",
   "estMinutes": 6,
-  "disclaimer": "Ultra Note provides estimates and common guidelines for education, not financial advice. Check important decisions with a qualified professional.",
+  "disclaimer": "Estimates for planning. Check important decisions with a qualified professional.",
   "steps": [
     {
       "id": "currency",
@@ -75,7 +75,7 @@
       "title": "Who shares this budget?",
       "quick": false,
       "skippable": true,
-      "help": "Partners can keep joint, separate or split money; we add a Shared group when it helps.",
+      "help": "Partners can keep joint, separate or split money; a Shared group is added when it helps.",
       "default": {
         "mode": "single",
         "dependents": 0,
@@ -89,17 +89,17 @@
         },
         {
           "value": "partner_joint",
-          "label": "With partner — joint",
+          "label": "With partner: joint",
           "icon": "users"
         },
         {
           "value": "partner_separate",
-          "label": "With partner — separate",
+          "label": "With partner: separate",
           "icon": "users"
         },
         {
           "value": "partner_split",
-          "label": "With partner — split %",
+          "label": "With partner: split %",
           "icon": "percent"
         }
       ],
@@ -170,7 +170,7 @@
         {
           "value": "zero_based",
           "label": "Zero-based",
-          "description": "Give every dollar a job before the month starts.",
+          "description": "Assign all income to categories before the month starts.",
           "icon": "target"
         },
         {
@@ -188,7 +188,7 @@
         {
           "value": "track_only",
           "label": "Track only",
-          "description": "No budget — just see where money goes.",
+          "description": "No budget. See where the money goes.",
           "icon": "eye"
         }
       ]
@@ -199,7 +199,7 @@
       "title": "Which bills do you pay?",
       "quick": false,
       "skippable": true,
-      "help": "Add your regular bills. We create recurring items and remind you before each one is due.",
+      "help": "Add your regular bills. Each becomes a recurring item with a reminder before it is due.",
       "default": [],
       "options": [
         {
@@ -307,13 +307,13 @@
         {
           "value": "avalanche",
           "label": "Avalanche",
-          "description": "Highest APR first — least interest.",
+          "description": "Highest APR first; least interest.",
           "icon": "trending-down"
         },
         {
           "value": "snowball",
           "label": "Snowball",
-          "description": "Smallest balance first — quickest wins.",
+          "description": "Smallest balance first; quickest first payoff.",
           "icon": "snowflake"
         },
         {
@@ -338,7 +338,7 @@
       "quick": false,
       "skippable": true,
       "help": "Tell us what you have saved for emergencies and pick a target.",
-      "why": "Common guideline: 3–6 months of essential expenses; 9–12 if income is irregular.",
+      "why": "3–6 months of essential expenses; 9–12 if income is irregular.",
       "recommend": "recommend_ef_months",
       "default": {
         "current": 0,
@@ -430,7 +430,7 @@
         {
           "value": "sample",
           "label": "Use sample data",
-          "icon": "sparkles"
+          "icon": "flask-conical"
         }
       ]
     },
@@ -453,7 +453,7 @@
       "quick": false,
       "skippable": true,
       "help": "A short weekly check-in and a monthly review keep the budget honest.",
-      "why": "Ten minutes a week is a common guideline for staying on track.",
+      "why": "Ten minutes a week keeps it current.",
       "default": {
         "weekly": {
           "rrule": "FREQ=WEEKLY;BYDAY=SU",
@@ -564,7 +564,7 @@
           },
           {
             "t": "md",
-            "md": "## Needs attention"
+            "md": "## To categorise"
           },
           {
             "t": "database",
@@ -625,7 +625,7 @@
           },
           {
             "t": "md",
-            "md": "## The idea\nSplit take-home pay into three buckets: about **50% for needs**, **30% for wants** and **20% for savings and debt**. It is a common guideline because it is simple enough to keep.\n\n## With your numbers\nThe paychecks you entered add up to **{{fmt_money(answers.income_items_amount_sum)}}** per pay period. As a common guideline, aim for these shares of each month's take-home pay:\n\n| Bucket | Share | What goes here |\n|---|---|---|\n| Needs | 50% | Rent or mortgage, utilities, groceries, insurance, minimum debt payments, transport to work |\n| Wants | 30% | Dining out, entertainment, shopping, travel, subscriptions |\n| Savings & Debt | 20% | Emergency fund, extra debt payments, retirement, sinking funds |\n\n## How to use it\n- Each category belongs to one group (see **Categories**). The Budget tab compares each group with its share.\n- If needs are above 50% (common in high-cost areas), consider trimming wants first rather than savings.\n- Review the split monthly; it is a starting point, not a rule."
+            "md": "## The idea\nSplit take-home pay into three buckets: about **50% for needs**, **30% for wants** and **20% for savings and debt**. It is simple enough to keep up.\n\n## With your numbers\nThe paychecks you entered add up to **{{fmt_money(answers.income_items_amount_sum)}}** per pay period. The split applies to each month's take-home pay:\n\n| Bucket | Share | What goes here |\n|---|---|---|\n| Needs | 50% | Rent or mortgage, utilities, groceries, insurance, minimum debt payments, transport to work |\n| Wants | 30% | Dining out, entertainment, shopping, travel, subscriptions |\n| Savings & Debt | 20% | Emergency fund, extra debt payments, retirement, sinking funds |\n\n## How to use it\n- Each category belongs to one group (see **Categories**). The Budget tab compares each group with its share.\n- If needs are above 50% (common in high-cost areas), trim wants before savings.\n- Review the split monthly; it is a starting point, not a rule."
           },
           {
             "t": "disclaimer"
@@ -650,7 +650,7 @@
           },
           {
             "t": "md",
-            "md": "## The idea\nBefore the month starts, **assign every dollar of income a job** — bills, spending, savings, debt — until *To be assigned* reaches zero. Nothing is left unplanned.\n\n## Why it was suggested\nZero-based budgeting is a common guideline when income is irregular, debt has a high APR, or cash is tight: you only budget money you already have.\n\n## How to use it\n1. When income arrives, it lands in **To be assigned** on the Money HQ dashboard.\n2. Assign it to categories on the **Budgets** page until To be assigned is 0.\n3. Overspent a category? Move money from another category — the budget always balances.\n4. With irregular income, consider **budgeting last month's income**: hold this month's pay in a \"Next month\" buffer category."
+            "md": "## The idea\nBefore the month starts, **assign all income to categories** (bills, spending, savings, debt) until *To be assigned* reaches zero. Nothing is left unplanned.\n\n## Why it was suggested\nZero-based budgeting suits irregular income, debt has a high APR, or cash is tight: you only budget money you already have.\n\n## How to use it\n1. When income arrives, it lands in **To be assigned** on the Money HQ dashboard.\n2. Assign it to categories on the **Budgets** page until To be assigned is 0.\n3. Overspent a category? Move money from another category; the budget always balances.\n4. With irregular income, **budget last month's income**: hold this month's pay in a \"Next month\" buffer category."
           },
           {
             "t": "disclaimer"
@@ -675,7 +675,7 @@
           },
           {
             "t": "md",
-            "md": "## The idea\nMove savings out **as soon as you are paid** — emergency fund, retirement, goals — then spend what is left without tracking every category.\n\n## Why it was suggested\nYour income is stable with room after bills, so automating a savings rate of 20% or more is a common guideline that keeps things simple.\n\n## How to use it\n- Set up automatic transfers on payday (see **Recurring**, kind *Savings*).\n- Watch two numbers on the dashboard: **Savings rate (3 months)** and **Left to spend**.\n- If the savings rate drifts down for three months, the advisor will let you know."
+            "md": "## The idea\nMove savings out **as soon as you are paid** (emergency fund, retirement, goals), then spend what is left without tracking every category.\n\n## Why it was suggested\nYour income is stable with room after bills, so an automatic savings rate of 20% or more keeps things simple.\n\n## How to use it\n- Set up automatic transfers on payday (see **Recurring**, kind *Savings*).\n- Watch two numbers on the dashboard: **Savings rate (3 months)** and **Left to spend**.\n- If the savings rate drifts down for three months, the advisor flags it."
           },
           {
             "t": "disclaimer"
@@ -725,7 +725,7 @@
           },
           {
             "t": "md",
-            "md": "## The idea\nNo limits — just **see where your money goes**. Many people track for a month or two before choosing a budgeting method.\n\n## How to use it\n- Import or enter transactions and give each one a category.\n- Use the **Spending by category** chart and **Monthly cash flow** to spot patterns.\n- When you are ready, run a tune-up and switch to 50/30/20 or zero-based."
+            "md": "## The idea\nNo limits: **see where your money goes**. Many people track for a month or two before choosing a budgeting method.\n\n## How to use it\n- Import or enter transactions and give each one a category.\n- Use the **Spending by category** chart and **Monthly cash flow** to spot patterns.\n- When you are ready, run a tune-up and switch to 50/30/20 or zero-based."
           },
           {
             "t": "disclaimer"
@@ -744,7 +744,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "A common guideline for **what to do with the next dollar**. Work down the list; it is fine to split money between two steps."
+            "md": "Where **the next dollar** goes. Work down the list; it is fine to split money between two steps."
           },
           {
             "t": "checklist",
@@ -778,7 +778,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "## Target\nYour target is **{{coalesce(answers.emergency_months, 6)}} months** of *essential* expenses — rent or mortgage, utilities, groceries, insurance, minimum payments and transport. It is not a share of income.\n\n| Situation | Common guideline |\n|---|---|\n| Two stable incomes, no dependents | 3 months |\n| One income, or dependents | 6 months |\n| Irregular, commission or self-employed income | 9–12 months |\n\n## Start small\nA **starter fund** of {{fmt_money(coalesce(answers.emergency_starter, 1000))}} (about one month of essentials, or a common $1,000 minimum) comes before paying extra on debt.\n\n## Where to keep it\n- A separate, high-yield **savings account** — easy to reach, but not in your daily checking.\n- Not invested in stocks: the point is that it is there when markets and jobs are bad at the same time.\n\n## When to use it\nJob loss, medical bills, urgent car or home repairs. Not for predictable costs — those are sinking funds in **Goals**."
+            "md": "## Target\nYour target is **{{coalesce(answers.emergency_months, 6)}} months** of *essential* expenses: rent or mortgage, utilities, groceries, insurance, minimum payments and transport. It is not a share of income.\n\n| Situation | Typical target |\n|---|---|\n| Two stable incomes, no dependents | 3 months |\n| One income, or dependents | 6 months |\n| Irregular, commission or self-employed income | 9–12 months |\n\n## Start small\nA **starter fund** of {{fmt_money(coalesce(answers.emergency_starter, 1000))}} (about one month of essentials, or a common $1,000 minimum) comes before paying extra on debt.\n\n## Where to keep it\n- A separate, high-yield **savings account**: easy to reach, but not in your daily checking.\n- Not invested in stocks: the point is that it is there when markets and jobs are bad at the same time.\n\n## When to use it\nJob loss, medical bills, urgent car or home repairs. Predictable costs belong in sinking funds in **Goals**."
           },
           {
             "t": "database",
@@ -801,7 +801,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "## Two ways to pay down debt\nAlways pay the **minimum on every debt**. Then put every extra dollar on one *target* debt; when it is paid off, roll its payment into the next.\n\n| | Avalanche | Snowball |\n|---|---|---|\n| Order | Highest APR first | Smallest balance first |\n| Interest paid | Least | More |\n| Motivation | Slower first win | Quick wins |\n\nYou chose **{{if(answers.debt_strategy == \"snowball\", \"snowball\", if(answers.debt_strategy == \"hybrid\", \"hybrid\", \"avalanche\"))}}** with **{{fmt_money(coalesce(answers.debt_extra, 0))}}** extra per month. The dashboard shows your estimated debt-free date.\n\n## Good to know\n- **Hybrid** clears the two smallest balances first for momentum, then switches to avalanche.\n- Consider a balance transfer or refinancing only if the fees are lower than the interest you save.\n- Card utilization under about 30% of the limit is a common guideline for credit scores."
+            "md": "## Two ways to pay down debt\nAlways pay the **minimum on every debt**. Then put every extra dollar on one *target* debt; when it is paid off, roll its payment into the next.\n\n| | Avalanche | Snowball |\n|---|---|---|\n| Order | Highest APR first | Smallest balance first |\n| Interest paid | Least | More |\n| Motivation | Slower first win | Quick wins |\n\nYou chose **{{if(answers.debt_strategy == \"snowball\", \"snowball\", if(answers.debt_strategy == \"hybrid\", \"hybrid\", \"avalanche\"))}}** with **{{fmt_money(coalesce(answers.debt_extra, 0))}}** extra per month. The dashboard shows your estimated debt-free date.\n\n## Good to know\n- **Hybrid** clears the two smallest balances first for momentum, then switches to avalanche.\n- A balance transfer or refinance helps only when its fees are lower than the interest saved.\n- Credit scores typically favour card utilization under about 30% of the limit."
           },
           {
             "t": "database",
@@ -865,7 +865,7 @@
               "Reconcile every account with the bank statement",
               "Review spending by category versus budget",
               "Check savings rate and net worth trend",
-              "Review subscriptions — cancel what you do not use",
+              "Review subscriptions: cancel what you do not use",
               "Set next month's budget",
               "Update goal balances"
             ]
@@ -2919,8 +2919,8 @@
       "id": "cat-90pct",
       "when": "metrics.cat_90pct_count > 0",
       "severity": "tip",
-      "title": "{{metrics.cat_90pct_count}} categories are almost spent",
-      "body": "These categories have used 90% or more of their budget with at least 10 days left. Consider slowing down or moving money from a category with room.",
+      "title": "{{metrics.cat_90pct_count}} {{if(metrics.cat_90pct_count == 1, \"category is\", \"categories are\")}} almost spent",
+      "body": "90% or more used, with at least 10 days left this month.",
       "mathMetrics": [
         "cat_90pct_count"
       ],
@@ -2935,8 +2935,8 @@
       "id": "cat-over",
       "when": "metrics.cat_over_count > 0",
       "severity": "warn",
-      "title": "{{metrics.cat_over_count}} categories are overspent",
-      "body": "Spending is above what you assigned. Consider covering it from another category so the rest of the budget stays accurate.",
+      "title": "{{metrics.cat_over_count}} {{if(metrics.cat_over_count == 1, \"category is\", \"categories are\")}} over budget",
+      "body": "Cover it from a category with money left.",
       "mathMetrics": [
         "cat_over_count"
       ],
@@ -2952,7 +2952,7 @@
       "when": "metrics.forecast_breach",
       "severity": "warn",
       "title": "Cash may dip below your threshold within 30 days",
-      "body": "The estimate based on recurring bills and income dips to {{fmt_money(metrics.forecast_min_balance_30d)}}, below your low-balance threshold of {{fmt_money(metrics.low_balance_threshold)}}. Consider moving a bill or topping up checking.",
+      "body": "Recurring bills and income take the balance to {{fmt_money(metrics.forecast_min_balance_30d)}}, below the low-balance threshold of {{fmt_money(metrics.low_balance_threshold)}}.",
       "mathMetrics": [
         "forecast_min_balance_30d",
         "low_balance_threshold"
@@ -2968,8 +2968,8 @@
       "id": "ef-below-starter",
       "when": "metrics.ef_balance < metrics.ef_starter",
       "severity": "warn",
-      "title": "Build a starter emergency fund",
-      "body": "You have {{fmt_money(metrics.ef_balance)}} set aside. A starter fund of {{fmt_money(metrics.ef_starter)}} is a common guideline before paying extra on debt.",
+      "title": "Emergency fund is below the starter amount",
+      "body": "{{fmt_money(metrics.ef_balance)}} saved of a {{fmt_money(metrics.ef_starter)}} starter fund.",
       "mathMetrics": [
         "ef_balance",
         "ef_starter"
@@ -2985,8 +2985,8 @@
       "id": "ef-below-target",
       "when": "metrics.ef_balance >= metrics.ef_starter and metrics.ef_balance < metrics.ef_target",
       "severity": "tip",
-      "title": "Your emergency fund covers {{fmt_months(metrics.ef_months)}}",
-      "body": "Your target is {{fmt_money(metrics.ef_target)}} ({{coalesce(answers.emergency_months, 6)}} months of essentials). Consider a monthly transfer until you get there.",
+      "title": "Emergency fund: {{fmt_months(metrics.ef_months)}}",
+      "body": "Below your target of {{fmt_money(metrics.ef_target)}} ({{coalesce(answers.emergency_months, 6)}} months of essentials).",
       "mathMetrics": [
         "ef_balance",
         "ef_target",
@@ -3004,7 +3004,7 @@
       "when": "metrics.sub_price_up_count > 0",
       "severity": "info",
       "title": "A subscription changed price",
-      "body": "{{metrics.sub_price_up_count}} subscription(s) changed price in the last 30 days. Worth a look.",
+      "body": "{{metrics.sub_price_up_count}} subscription(s) changed price in the last 30 days.",
       "mathMetrics": [
         "sub_price_up_count"
       ],
@@ -3020,7 +3020,7 @@
       "when": "metrics.sub_renewal_14d_count > 0",
       "severity": "tip",
       "title": "{{metrics.sub_renewal_14d_count}} subscription(s) renew within 14 days",
-      "body": "Cancel before the renewal date if you no longer use them.",
+      "body": "",
       "mathMetrics": [
         "sub_renewal_14d_count"
       ],
@@ -3035,8 +3035,8 @@
       "id": "uncategorized",
       "when": "metrics.uncategorized_count >= 10",
       "severity": "info",
-      "title": "{{metrics.uncategorized_count}} transactions need a category",
-      "body": "Categorising keeps the budget and reports accurate. Rules can do it automatically next time.",
+      "title": "{{metrics.uncategorized_count}} transactions to categorise",
+      "body": "",
       "mathMetrics": [
         "uncategorized_count"
       ],
@@ -3051,8 +3051,8 @@
       "id": "reconcile-30d",
       "when": "metrics.days_since_reconcile > 30",
       "severity": "tip",
-      "title": "Time to reconcile",
-      "body": "An on-budget account has not been reconciled for {{metrics.days_since_reconcile}} days. Compare it with your bank statement.",
+      "title": "An account is due for reconciling",
+      "body": "Not reconciled for {{metrics.days_since_reconcile}} days.",
       "mathMetrics": [
         "days_since_reconcile"
       ],
@@ -3068,7 +3068,7 @@
       "when": "metrics.utilization_max > 0.3",
       "severity": "tip",
       "title": "Card utilization is {{fmt_pct(metrics.utilization_max)}}",
-      "body": "Keeping card balances under about 30% of the limit is a common guideline for credit scores.",
+      "body": "Under 30% is the usual target.",
       "mathMetrics": [
         "utilization_max"
       ],
@@ -3084,7 +3084,7 @@
       "when": "metrics.max_debt_apr >= 10 and metrics.savings_grew_3m",
       "severity": "info",
       "title": "Savings are growing while {{metrics.max_debt_apr}}% debt remains",
-      "body": "Beyond your emergency fund, paying down high-interest debt is a guaranteed return equal to its APR. Consider redirecting some savings.",
+      "body": "Paying down debt at {{metrics.max_debt_apr}}% APR saves that rate in interest, more than most savings earn.",
       "mathMetrics": [
         "max_debt_apr"
       ],
@@ -3099,8 +3099,8 @@
       "id": "savings-rate-down-3m",
       "when": "metrics.savings_rate_down_3m",
       "severity": "info",
-      "title": "Your savings rate fell three months in a row",
-      "body": "It is now {{fmt_pct(metrics.savings_rate_3m)}} over the last three months. A quick look at spending by category may show why.",
+      "title": "Savings rate down three months in a row",
+      "body": "{{fmt_pct(metrics.savings_rate_3m)}} over the last three months.",
       "mathMetrics": [
         "savings_rate_3m"
       ],
@@ -3116,7 +3116,7 @@
       "when": "metrics.possible_dupes > 0",
       "severity": "tip",
       "title": "Possible duplicate transactions",
-      "body": "{{metrics.possible_dupes}} group(s) of transactions share a date, amount and description. Check whether one is a double import.",
+      "body": "{{metrics.possible_dupes}} group(s) of transactions share a date, amount and description.",
       "mathMetrics": [
         "possible_dupes"
       ],

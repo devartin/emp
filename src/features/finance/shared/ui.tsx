@@ -5,7 +5,7 @@
 import {
   AlertTriangle, ArrowLeftRight, Banknote, BellRing, Briefcase, Calculator, CandlestickChart, Car, CircleDollarSign, Clapperboard,
   CreditCard, Fuel, Gift, GraduationCap, HandCoins, HeartPulse, Home, Info, Landmark, Laptop, LifeBuoy, Lightbulb, LineChart as LineIcon, Palette,
-  Palmtree, PiggyBank, Plane, Percent, Receipt, ReceiptText, Repeat, Shield, ShoppingBag, ShoppingBasket, Sofa, Target, Coins, Droplet,
+  Palmtree, PiggyBank, Plane, Percent, Receipt, ReceiptText, Repeat, Shield, ShoppingBag, ShoppingBasket, Sofa, Target,
   TrainFront, TrendingUp, Umbrella, Utensils, Wallet, Wifi, Zap, ChevronRight, X,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -18,15 +18,15 @@ import { IconButton } from "@/ui/IconButton";
 import { Tabs, type TabItem } from "@/ui/Tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
 import { Tooltip } from "@/ui/Tooltip";
-import { blockBg, blockText } from "./format";
+import { Glyph as KitGlyph, hasGlyph } from "@/ui/icons/Icon";
 import "./finance.css";
 
 // ───────────────────────────────────────────────────────────────────────────── glyphs
 
 const GLYPHS: Record<string, IconComponent> = {
-  briefcase: Briefcase, sparkles: Coins, percent: Percent, home: Home, zap: Zap, wifi: Wifi, shield: Shield, repeat: Repeat,
+  briefcase: Briefcase, percent: Percent, home: Home, zap: Zap, wifi: Wifi, shield: Shield, repeat: Repeat,
   "train-front": TrainFront, "shopping-basket": ShoppingBasket, utensils: Utensils, fuel: Fuel, sofa: Sofa, "heart-pulse": HeartPulse,
-  sparkle: Droplet, clapperboard: Clapperboard, "shopping-bag": ShoppingBag, plane: Plane, gift: Gift, palette: Palette, "life-buoy": LifeBuoy,
+  clapperboard: Clapperboard, "shopping-bag": ShoppingBag, plane: Plane, gift: Gift, palette: Palette, "life-buoy": LifeBuoy,
   palmtree: Palmtree, car: Car, umbrella: Umbrella, "trending-up": TrendingUp, landmark: Landmark, laptop: Laptop, wallet: Wallet,
   "credit-card": CreditCard, "piggy-bank": PiggyBank, banknote: Banknote, "graduation-cap": GraduationCap, target: Target, receipt: Receipt,
   "receipt-text": ReceiptText, "candlestick-chart": CandlestickChart, "line-chart": LineIcon, "arrow-left-right": ArrowLeftRight,
@@ -51,12 +51,31 @@ export const ACCOUNT_GLYPH: Record<string, string> = {
   other_liability: "receipt",
 };
 
-/** Rounded glyph tile tinted with a block colour (§3.4). */
-export function Glyph({ name, color = "gray", size = 28, className }: { name?: string; color?: string; size?: number; className?: string }) {
-  const I = glyphFor(name);
+/** Finance glyph names the kit registry spells differently (seed and stored categories keep their old names). */
+const KIT_ALIAS: Record<string, string> = {
+  home: "house", palmtree: "tree-palm", "line-chart": "chart-line", "candlestick-chart": "chart-column",
+  "receipt-text": "receipt", "circle-dollar-sign": "dollar-sign",
+};
+
+/** The kit registry name a finance glyph resolves to, or null when only the local set has it. */
+export function kitGlyphName(name: string | undefined): string | null {
+  if (!name) return null;
+  const n = KIT_ALIAS[name] ?? name;
+  return hasGlyph(n) ? n : null;
+}
+
+/**
+ * A category / account glyph in the one glyph language (DESIGN v3 §1.5, §8): a monochrome Lucide line glyph in
+ * secondary ink, absoluteStrokeWidth, from the kit registry first. No tinted tile, never a "?" placeholder. `color` is
+ * accepted for API compatibility and ignored (identity colour only appears as a 6px dot in charts).
+ */
+export function Glyph({ name, size = 28, className }: { name?: string; color?: string; size?: number; className?: string }) {
+  const px = Math.max(14, Math.min(20, Math.round(size * 0.55)));
+  const kit = kitGlyphName(name);
+  const I = kit ? null : glyphFor(name);
   return (
-    <span className={cn("fh-glyph", className)} style={{ width: size, height: size, color: blockText(color), background: blockBg(color), borderRadius: Math.round(size * 0.3) }} aria-hidden>
-      <I size={Math.round(size * 0.55)} strokeWidth={1.75} />
+    <span className={cn("fh-glyph text-secondary", className)} style={{ width: size, height: size }} aria-hidden>
+      {kit ? <KitGlyph name={kit} size={px} /> : I ? <I size={px} strokeWidth={(1.25 * 24) / px} /> : null}
     </span>
   );
 }
@@ -64,11 +83,12 @@ export function Glyph({ name, color = "gray", size = 28, className }: { name?: s
 // ───────────────────────────────────────────────────────────────────────────── hub page
 
 export type HubTone = "jade" | "ocean" | "amber" | "iris";
-const TONE: Record<HubTone, string> = { jade: "green", ocean: "blue", amber: "yellow", iris: "purple" };
 
 export interface HubPageProps<T extends string> {
-  icon: IconComponent;
-  tone: HubTone;
+  /** @deprecated v3 draws no icon beside hub titles (no icons in headings); accepted and ignored. */
+  icon?: IconComponent;
+  /** @deprecated accepted and ignored. */
+  tone?: HubTone;
   title: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
@@ -80,15 +100,11 @@ export interface HubPageProps<T extends string> {
   wide?: boolean;
 }
 
-export function HubPage<T extends string>({ icon: I, tone, title, subtitle, actions, tabs, tab, onTab, children, footer, wide }: HubPageProps<T>) {
-  const c = TONE[tone];
+export function HubPage<T extends string>({ title, subtitle, actions, tabs, tab, onTab, children, footer, wide }: HubPageProps<T>) {
   // Tab changes are constant-class (K3 C0): the new panel is present at frame 1, no slide or fade.
   return (
     <div className={cn("fh-page", wide && "fh-page-wide")}>
       <header className="fh-head">
-        <span className="fh-head-icon" style={{ color: blockText(c), ["--fh-mark-bg" as string]: blockBg(c) }} aria-hidden>
-          <I size={21} strokeWidth={1.75} />
-        </span>
         <div className="min-w-0 flex-1">
           <h1 className="fh-title">{title}</h1>
           {subtitle ? <div className="fh-subtitle">{subtitle}</div> : null}
@@ -108,7 +124,7 @@ export function Section({ title, subtitle, actions, children, className, pad = t
   return (
     <section className={cn("fh-card", !pad && "fh-card-flush", className)} id={id}>
       {title || actions ? (
-        <div className={cn("fh-card-head", !pad && "px-4 pt-4")}>
+        <div className="fh-card-head">
           <div className="min-w-0 flex-1">
             {title ? <h2 className="fh-card-title">{title}</h2> : null}
             {subtitle ? <div className="fh-card-sub">{subtitle}</div> : null}
@@ -204,7 +220,7 @@ export function InsightCard({ insight, onMute, compact }: { insight: Insight; on
   return (
     <article className="fh-insight" data-sev={insight.severity} data-compact={compact ? "" : undefined}>
       <span className="fh-insight-icon" aria-hidden>
-        <I size={15} strokeWidth={2} />
+        <I size={16} strokeWidth={1.875} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
@@ -243,7 +259,7 @@ export function InsightCard({ insight, onMute, compact }: { insight: Insight; on
         {insight.actions.length ? (
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             {insight.actions.slice(0, 2).map((a) => (
-              <Button key={a.label} size="xs" variant="secondary" iconRight={ChevronRight} onClick={() => navigate(a.route)}>
+              <Button key={a.label} size="xs" variant="ghost" iconRight={ChevronRight} onClick={() => navigate(a.route)}>
                 {a.label}
               </Button>
             ))}
@@ -273,7 +289,7 @@ export function Quiet({ icon: I = Info, title, body, action }: { icon?: IconComp
   return (
     <div className="fh-quiet">
       <span className="fh-quiet-icon" aria-hidden>
-        <I size={18} strokeWidth={1.75} />
+        <I size={24} strokeWidth={1.25} />
       </span>
       <div className="fh-quiet-title">{title}</div>
       {body ? <div className="fh-quiet-body">{body}</div> : null}

@@ -1,4 +1,4 @@
-/** Money HQ wizard steps — mirrored from crates/emp-store/lifeapps/money-hq.json (§16.2) so the browser preview asks exactly what the desktop app asks. */
+/** Money HQ wizard steps, mirrored from crates/emp-store/lifeapps/money-hq.json (§16.2) so the browser preview asks exactly what the desktop app asks. */
 import type { Step } from '@/backend/types';
 
 export const MONEY_HQ_STEPS: Step[] = [
@@ -81,17 +81,17 @@ export const MONEY_HQ_STEPS: Step[] = [
    },
    {
     "value": "partner_joint",
-    "label": "With partner — joint",
+    "label": "With partner: joint",
     "icon": "users"
    },
    {
     "value": "partner_separate",
-    "label": "With partner — separate",
+    "label": "With partner: separate",
     "icon": "users"
    },
    {
     "value": "partner_split",
-    "label": "With partner — split %",
+    "label": "With partner: split %",
     "icon": "percent"
    }
   ],
@@ -180,7 +180,7 @@ export const MONEY_HQ_STEPS: Step[] = [
    {
     "value": "track_only",
     "label": "Track only",
-    "description": "No budget — just see where money goes.",
+    "description": "No budget. See where the money goes.",
     "icon": "eye"
    }
   ]
@@ -299,13 +299,13 @@ export const MONEY_HQ_STEPS: Step[] = [
    {
     "value": "avalanche",
     "label": "Avalanche",
-    "description": "Highest APR first — least interest.",
+    "description": "Highest APR first; least interest.",
     "icon": "trending-down"
    },
    {
     "value": "snowball",
     "label": "Snowball",
-    "description": "Smallest balance first — quickest wins.",
+    "description": "Smallest balance first; quickest first payoff.",
     "icon": "snowflake"
    },
    {
@@ -422,7 +422,7 @@ export const MONEY_HQ_STEPS: Step[] = [
    {
     "value": "sample",
     "label": "Use sample data",
-    "icon": "sparkles"
+    "icon": "flask-conical"
    }
   ]
  },

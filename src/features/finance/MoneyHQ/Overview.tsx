@@ -15,24 +15,22 @@ import type { SankeyData } from "@/backend/types";
 import { Amount } from "@/ui/Amount";
 import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
-import { DeltaPill } from "@/ui/DeltaPill";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
+import { Delta } from "@/ui/Delta";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { addMonths, assignColors, dayLabel, fmtMoney, fmtPct, monthLabel, num, relDays, toMoney, todayIso, fmtWhole } from "../shared/format";
+import { addMonths, assignColors, dayLabel, fmtPct, monthLabel, num, relDays, toMoney, todayIso, fmtWhole } from "../shared/format";
 import { allSpending, budgetLeft, budgetSpent, keptFromSankey } from "../shared/definitions";
 import { isSavingGroup, spendingBudget } from "../shared/figures";
 import { Figure } from "../shared/Figure";
 import { loadDebtPlanChoice, STRATEGY_LABEL, useDebtPlanChoice } from "../shared/debtPlanChoice";
 import { useAsync, useDbChanged, useScrubIdx, useScrubStore, type ScrubStore } from "../shared/hooks";
 import { InsightCard, Quiet, Section } from "../shared/ui";
-import { SpendWheel, WheelLegendRow } from "../shared/SpendWheel";
 import { localInsights } from "./insights";
 import { debtInputs, debtPlanStart, useLedgerCtx } from "./ledger";
 import { useMoney } from "./MoneyHQ";
-import { BudgetRing, Envelope, HeroMoney, MetricCard, TxnLine, type EnvelopeData } from "./widgets";
+import { Envelope, HeroMoney, MetricCard, TxnLine, type EnvelopeData } from "./widgets";
 
 type Range = "6m" | "1y" | "3y" | "5y";
 
@@ -102,8 +100,7 @@ function NetWorthHero() {
   // The scrub index lives outside this component's state: only the readouts re-render while scrubbing, not the chart.
   const scrub = useScrubStore();
   return (
-    <section className="fh-card fh-hero" data-light="" ref={scrub.hostRef} style={{ paddingBottom: 10 }}>
-      <EdgeLight specular />
+    <section className="fh-card fh-hero" ref={scrub.hostRef}>
       <div className="flex items-start justify-between gap-4">
         <NetWorthReadout scrub={scrub} data={data} periodLabel={sinceLabel(data)} overview={overview} onAccounts={() => go("accounts")} />
         <Segmented
@@ -135,10 +132,10 @@ function NetWorthHero() {
           hero
         />
       </div>
-      <div className="fh-groove -mx-5 mt-1" />
+      <div className="fh-groove mt-1" />
       <div className="flex items-center gap-5 pt-2.5">
         <NetWorthMinis scrub={scrub} data={data} />
-        <span className="ml-auto text-caption text-tertiary" style={{ fontWeight: 400 }}>
+        <span className="ml-auto text-caption text-tertiary">
           {overview ? (
             <>
               <Figure id="networth.30d">
@@ -163,30 +160,25 @@ function NetWorthReadout({ scrub, data, periodLabel, overview, onAccounts }: { s
   const currency = overview?.netWorth.currency;
   return (
     <div className="min-w-0">
-      <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
-        Net worth
-      </div>
-      <div className="mt-1 h-[48px] flex items-center">
+      <div className="text-body-sm text-secondary">Net worth</div>
+      <div className="mt-1 h-[40px] flex items-center">
         {cur ? (
           <Figure id="networth" block inputs={netWorthInputs(overview)} action={{ label: "See accounts", onSelect: onAccounts }}>
             <HeroMoney value={cur.net} cents={false} currency={currency} scrubbing={scrubbing} />
           </Figure>
         ) : (
-          <Skeleton width={220} height={38} radius={8} />
+          <Skeleton width={220} height={34} radius={6} />
         )}
       </div>
       <div className="flex items-center gap-2 h-6 mt-1">
         {cur ? (
           <>
-            <DeltaPill value={change} />
-            <span className="text-caption tabular" style={{ fontWeight: 500, color: delta >= 0 ? "var(--gain-text)" : "var(--loss-text)" }} data-sensitive="">
+            <span className="text-body-sm">
               <Figure id="networth.change" inputs={first ? [{ label: dayLabel(first.t, true), value: fmtWhole(first.net, { currency }) }, { label: dayLabel(cur.t, true), value: fmtWhole(cur.net, { currency }) }] : undefined}>
-                <RollingNumber value={delta} format={(n) => fmtWhole(n, { signed: true, currency })} scrubbing={scrubbing} countUp={false} sensitive />
+                <Delta money={toMoney(delta, currency)} percent={change} />
               </Figure>
             </span>
-            <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-              {scrubbing ? dayLabel(cur.t, true) : periodLabel}
-            </span>
+            <span className="text-body-sm text-secondary">{scrubbing ? dayLabel(cur.t, true) : periodLabel}</span>
           </>
         ) : null}
       </div>
@@ -210,10 +202,8 @@ function NetWorthMinis({ scrub, data }: { scrub: ScrubStore; data: NwPoint[] }) 
 function MiniStat({ id, label, value, scrubbing }: { id: "assets" | "debts"; label: string; value: number | undefined; scrubbing?: boolean }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">
-      <span className="text-caption text-tertiary" style={{ fontWeight: 500 }}>
-        {label}
-      </span>
-      <span className="text-body-sm font-medium tabular" data-sensitive="">
+      <span className="text-caption text-secondary">{label}</span>
+      <span className="text-body-sm tabular" data-sensitive="">
         {value === undefined ? (
           "—"
         ) : (
@@ -272,7 +262,7 @@ function SideMetrics() {
     return (
       <div className="flex flex-col gap-3 h-full">
         {[0, 1, 2, 3].map((k) => (
-          <Skeleton key={k} height={90} radius={14} />
+          <Skeleton key={k} height={64} radius={6} />
         ))}
       </div>
     );
@@ -283,14 +273,14 @@ function SideMetrics() {
   // While the scenario is still loading the label names no scenario (it would otherwise guess "at minimum payments").
   const dfLabel = debtFree.month === undefined ? "Debt-free" : debtFree.kind === "plan" ? "Debt-free with your plan" : "Debt-free at minimum payments";
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div className="fh-metrics flex flex-col -mt-3">
       {tba !== null ? (
         <MetricCard
           label="To be assigned"
           tone={tba < 0 ? "warn" : undefined}
           value={
             <Figure id="budget.toAssign" action={{ label: "Open budget", onSelect: () => go("budget") }}>
-              <Sensitive>{fmtMoney(tba, ov.toBeAssigned?.currency ?? cur)}</Sensitive>
+              <Amount value={toMoney(tba, ov.toBeAssigned?.currency ?? cur)} />
             </Figure>
           }
           sub={tba > 0.005 ? "Not in a category yet" : tba < -0.005 ? "More assigned than you have" : "All assigned"}
@@ -302,7 +292,7 @@ function SideMetrics() {
             ) : tba < -0.005 ? (
               <Badge tone="warning">Fix</Badge>
             ) : (
-              <CheckCircle2 size={18} className="text-gain" />
+              <CheckCircle2 size={16} strokeWidth={1.875} className="text-secondary" />
             )
           }
         />
@@ -311,7 +301,7 @@ function SideMetrics() {
           label="Left this month"
           value={
             <Figure id="budget.left">
-              <Sensitive>{fmtWhole(budgetLeft(ov.budget), { currency: cur })}</Sensitive>
+              <Amount value={toMoney(budgetLeft(ov.budget), cur)} noCents />
             </Figure>
           }
         />
@@ -324,7 +314,6 @@ function SideMetrics() {
           </Figure>
         }
         sub="Income minus spending"
-        visual={<BudgetRing ratio={Math.max(0, Math.min(1, rate))} size={40} stroke={4} color="var(--chart-line)" />}
       />
       <MetricCard
         label="Emergency fund"
@@ -334,7 +323,6 @@ function SideMetrics() {
           </Figure>
         }
         sub={ov.efMonths >= 6 ? "of essentials · goal reached" : "of essentials · goal 6 months"}
-        visual={<BudgetRing ratio={Math.min(1, ov.efMonths / 6)} size={40} stroke={4} color={efColor(ov.efMonths)} />}
       />
       <MetricCard
         label={dfLabel}
@@ -354,8 +342,6 @@ function SideMetrics() {
     </div>
   );
 }
-
-const efColor = (months: number) => (months >= 6 ? "var(--gain)" : months >= 3 ? "var(--chart-line)" : "var(--warning)");
 
 // ───────────────────────────────────────────────────────────────────────────── envelopes
 
@@ -401,11 +387,11 @@ function Envelopes() {
       {!ov ? (
         <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: 8 }, (_, k) => (
-            <Skeleton key={k} height={63} radius={12} />
+            <Skeleton key={k} height={44} radius={6} />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1 -mx-2">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 -mx-2">
           {list.map((e, i) => (
             <Envelope key={e.category.id} e={e} index={i} onClick={() => go("budget")} />
           ))}
@@ -439,21 +425,22 @@ function SpendingDonut() {
     if (rest > 0) out.push({ id: "__other", label: "Everything else", value: rest, color: t.other });
     return out;
   }, [rows, t]);
-  const [active, setActive] = useState<string | null>(null);
   const { go, overview: ov } = useMoney();
+  const max = slices.reduce((a, x) => Math.max(a, x.value), 0) || 1;
+  const open = (id: string) => go("transactions", id === "uncategorized" ? { filter: "uncategorized" } : undefined);
   return (
     <Section
       title="Spending by category"
       subtitle={
         s.data ? (
-          <span className="inline-flex items-center gap-2">
+          <span className="inline-flex items-center gap-2 flex-wrap">
             <span>
               <Figure id="spending.all" inputs={[{ label: "Spent in budget", value: fmtWhole(budgetSpent(ov?.budget)) }, ...rows.filter((x) => x.key === "uncategorized").map((x) => ({ label: "Uncategorised", value: fmtWhole(x.amount) })), { label: "All spending", value: fmtWhole(total) }]}>
                 <Sensitive>{fmtWhole(total)}</Sensitive>
               </Figure>{" "}
               all spending in {monthLabel(month, true)}
             </span>
-            {prev > 0 ? <DeltaPill value={(total - prev) / prev} invert plain label="vs last month" /> : null}
+            {prev > 0 ? <Delta percent={(total - prev) / prev} invert label="vs last month" /> : null}
           </span>
         ) : (
           "\u00a0"
@@ -461,32 +448,27 @@ function SpendingDonut() {
       }
     >
       {s.loading && !s.data ? (
-        <div className="flex items-center gap-5 h-[222px]">
-          <Skeleton width={160} height={160} radius={80} />
-          <div className="flex-1 flex flex-col gap-2">{[0, 1, 2, 3, 4].map((k) => <Skeleton key={k} height={14} />)}</div>
-        </div>
+        <div className="flex flex-col gap-3 h-[222px]">{[0, 1, 2, 3, 4].map((k) => <Skeleton key={k} height={24} radius={4} />)}</div>
       ) : slices.length === 0 ? (
         <Quiet icon={CheckCircle2} title="No spending yet this month" />
       ) : (
-        <div className="flex items-center gap-5">
-          <SpendWheel
-            data={slices}
-            size={164}
-            thickness={17}
-            active={active}
-            onActive={setActive}
-            onSelect={(id) => go("transactions", id === "uncategorized" ? { filter: "uncategorized" } : undefined)}
-            centerLabel="All spending"
-            format={(n) => fmtWhole(n)}
-            total={total}
-            summary={`Spending by category, ${monthLabel(month)}: ${slices.map((x) => `${x.label} ${fmtWhole(x.value)}`).join(", ")}`}
-          />
-          <ul className="m-0 p-0 list-none flex-1 min-w-0 flex flex-col gap-0.5">
-            {slices.map((x) => (
-              <WheelLegendRow key={x.id} slice={x} active={active} onActive={setActive} onClick={() => go("transactions", x.id === "uncategorized" ? { filter: "uncategorized" } : undefined)} value={fmtWhole(x.value)} />
-            ))}
-          </ul>
-        </div>
+        <ul className="fh-share" aria-label={`Spending by category, ${monthLabel(month)}`}>
+          {slices.map((x) => (
+            <li key={x.id}>
+              <button type="button" className="fh-share-row" onClick={() => open(x.id)}>
+                <span className="fh-share-label">
+                  <span className="truncate">{x.label}</span>
+                </span>
+                <span className="fh-share-val" data-sensitive="">
+                  {fmtWhole(x.value)}
+                </span>
+                <span className="fh-share-bar" aria-hidden>
+                  <i style={{ transform: `scaleX(${x.value / max})` }} />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </Section>
   );
@@ -624,7 +606,7 @@ function Recent() {
         {l.loading && !l.txns.length
           ? Array.from({ length: 6 }, (_, k) => (
               <div key={k} className="flex items-center gap-3 px-3 py-2.5">
-                <Skeleton width={30} height={30} radius={9} />
+                <Skeleton width={24} height={24} radius={6} />
                 <div className="flex-1">
                   <Skeleton width="40%" height={11} />
                   <Skeleton width="25%" height={9} className="mt-2" />
@@ -678,8 +660,8 @@ function Upcoming() {
                   <b>{Number(u.due.slice(8, 10))}</b>
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-body-sm font-medium">{u.name}</span>
-                  <span className="block text-caption text-tertiary truncate" style={{ fontWeight: 400 }}>
+                  <span className="block truncate text-body-sm">{u.name}</span>
+                  <span className="block text-caption text-tertiary truncate">
                     {soon}
                     {cat ? ` · ${cat.name}` : ""}
                   </span>
@@ -689,7 +671,7 @@ function Upcoming() {
                     Autopay
                   </Badge>
                 ) : null}
-                <Amount value={toMoney(Math.abs(num(u.amount.amount)))} className="text-body-sm font-medium" align="end" />
+                <Amount value={toMoney(Math.abs(num(u.amount.amount)))} role="row" className="text-body-sm" align="end" />
               </li>
             );
           })}
@@ -724,9 +706,9 @@ function Insights() {
   return (
     <Section title="Insights">
       {!overview ? (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="flex flex-col gap-2">
           {[0, 1, 2].map((k) => (
-            <Skeleton key={k} height={160} radius={12} />
+            <Skeleton key={k} height={44} radius={6} />
           ))}
         </div>
       ) : list.length === 0 ? (

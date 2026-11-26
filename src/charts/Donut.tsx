@@ -68,10 +68,8 @@ export function Donut({ data, size = 200, format = "money", currency = "USD", ce
           startAngle={90}
           endAngle={-270}
           stroke="none"
-          isAnimationActive={!t.reducedMotion}
-          animationBegin={0}
-          animationDuration={700}
-          animationEasing="ease-out"
+          // No sweep on arrival: the sectors fade in with the frame's first-load reveal (ChartFrame [data-entering]).
+          isAnimationActive={false}
           onMouseEnter={(_, i) => setActive(i)}
           onMouseLeave={() => setActive(null)}
           onClick={onSliceClick ? (_, i) => onSliceClick(slices[i]) : undefined}

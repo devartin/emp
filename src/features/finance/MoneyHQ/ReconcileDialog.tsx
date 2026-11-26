@@ -2,6 +2,7 @@
  * The reconcile dialog for one account (Accounts tab), loaded on demand.
  */
 import { CheckCircle2, Scale } from "lucide-react";
+import { m } from "motion/react";
 import { useEffect, useState } from "react";
 import { api } from "@/backend";
 import { notify } from "@/stores/toasts";
@@ -9,6 +10,7 @@ import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { Input } from "@/ui/Input";
 import { MoneyField } from "@/ui/MoneyField";
+import { motionSeconds } from "@/ui/motion/register";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Sensitive } from "@/ui/Sensitive";
 import { baseCurrency } from "../shared/currency";
@@ -52,7 +54,8 @@ export default function ReconcileDialog({ account, onClose, onDone }: { account:
   const cmp = reconcileCompare(isDebt, statement, clearedAsOf(account, l.txns, asOf));
   useEffect(() => {
     if (!done) return;
-    const t = window.setTimeout(onDone, reduced ? 320 : 600);
+    // The C3 moment plays out, then holds for a beat before the dialog closes.
+    const t = window.setTimeout(onDone, Math.round(motionSeconds("reconcileSuccess", reduced) * 1000) + 400);
     return () => window.clearTimeout(t);
   }, [done, reduced, onDone]);
   const finish = async () => {
@@ -93,13 +96,7 @@ export default function ReconcileDialog({ account, onClose, onDone }: { account:
       }
     >
       {done ? (
-        <div className="fh-recon-done" data-reduced={reduced ? "" : undefined} role="status">
-          <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden>
-            <circle cx="22" cy="22" r="20" fill="none" strokeWidth="2" className="fh-recon-ring" />
-            <path d="M14 22.5l5.5 5.5L30 17" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="fh-recon-tick" pathLength={1} />
-          </svg>
-          <div className="text-body-sm font-medium">Reconciled to {dayLabel(asOf, true)}</div>
-        </div>
+        <ReconcileSuccess reduced={reduced} label={`Reconciled to ${dayLabel(asOf, true)}`} />
       ) : (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
@@ -137,5 +134,24 @@ export default function ReconcileDialog({ account, onClose, onDone }: { account:
         </div>
       )}
     </Dialog>
+  );
+}
+
+/**
+ * Reconcile success: the C3 signature moment from the motion register (`reconcileSuccess`, ≤ 600 ms). The ring fades
+ * in over the first 40%, then the tick draws; under reduced motion the whole mark crossfades in (150 ms), nothing
+ * travels or draws.
+ */
+function ReconcileSuccess({ reduced, label }: { reduced: boolean; label: string }) {
+  const t = motionSeconds("reconcileSuccess", reduced);
+  const ease = [0.2, 0, 0, 1] as const;
+  return (
+    <m.div className="fh-recon-done" role="status" initial={{ opacity: reduced ? 0 : 1 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? t : 0 }}>
+      <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden>
+        <m.circle cx="22" cy="22" r="20" fill="none" strokeWidth="2" className="fh-recon-ring" initial={{ opacity: reduced ? 0.28 : 0 }} animate={{ opacity: 0.28 }} transition={{ duration: reduced ? 0 : t * 0.4, ease }} />
+        <m.path d="M14 22.5l5.5 5.5L30 17" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="fh-recon-tick" initial={{ pathLength: reduced ? 1 : 0 }} animate={{ pathLength: 1 }} transition={{ duration: reduced ? 0 : t * 0.6, delay: reduced ? 0 : t * 0.4, ease }} />
+      </svg>
+      <div className="text-body-sm font-medium">{label}</div>
+    </m.div>
   );
 }

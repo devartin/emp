@@ -11,13 +11,11 @@ import type { Id, Insight, PerfRange, PortfolioSummary } from "@/backend/types";
 import { navigate } from "@/app/router";
 import { LineChart } from "@/charts/Line";
 import { Treemap } from "@/charts/Treemap";
-import { useChartTheme, seriesColor } from "@/charts/theme";
 import { notify } from "@/stores/toasts";
 import { useQuotes } from "@/stores/market";
 import { Amount } from "@/ui/Amount";
 import { Button } from "@/ui/Button";
 import { DeltaPill, GainLoss } from "@/ui/DeltaPill";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Segmented } from "@/ui/Segmented";
@@ -27,11 +25,10 @@ import type { TabItem } from "@/ui/Tabs";
 import { DivergingBars } from "../finance/shared/charts";
 import { Figure } from "../finance/shared/Figure";
 import { figureLabel, periodReturn, portfolioParts, rangeYears } from "../finance/shared/definitions";
-import { assignColors, fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney, fmtWhole } from "../finance/shared/format";
+import { fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney, fmtWhole } from "../finance/shared/format";
 import { useAsync, useScrubIdx, useScrubStore, type ScrubStore } from "../finance/shared/hooks";
 import { Disclaimer, HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
 import { HeroMoney, MetricCard } from "../finance/MoneyHQ/widgets";
-import { SpendWheel } from "../finance/shared/SpendWheel";
 import { ticker } from "../markets/data";
 import { CLASS_ORDER, usePortfolioSummary } from "./data";
 import "./portfolio.css";
@@ -72,7 +69,7 @@ export default function PortfolioDashboard({ instanceId, tab }: PortfolioDashboa
   };
   if (holding) {
     return (
-      <Suspense fallback={<div className="fh-page"><Skeleton height={420} radius={14} /></div>}>
+      <Suspense fallback={<div className="fh-page"><Skeleton height={420} radius={10} /></div>}>
         <HoldingPage instanceId={instanceId} symbol={holding} summary={summary.data} />
       </Suspense>
     );
@@ -106,7 +103,7 @@ export default function PortfolioDashboard({ instanceId, tab }: PortfolioDashboa
       onTab={go}
       footer={<Disclaimer>Example starting points, not recommendations. Ultra Note never places trades. Only ticker symbols leave this device — never quantities, cost basis, account names or balances.</Disclaimer>}
     >
-      <Suspense fallback={<Skeleton height={420} radius={14} />}>
+      <Suspense fallback={<Skeleton height={420} radius={10} />}>
         {current === "overview" ? <Overview instanceId={instanceId} summary={summary.data} go={go} /> : null}
         {current === "holdings" ? <Holdings instanceId={instanceId} summary={summary.data} /> : null}
         {current === "performance" ? <Performance instanceId={instanceId} summary={summary.data} /> : null}
@@ -201,8 +198,7 @@ function ValueHero({ instanceId, summary: s }: { instanceId: Id; summary?: Portf
   // The scrub index lives in a tiny store, so only the readouts re-render while scrubbing — never the chart.
   const scrub = useScrubStore();
   return (
-    <section className="fh-card fh-hero" data-light="" ref={scrub.hostRef} style={{ paddingBottom: 12 }}>
-      <EdgeLight specular />
+    <section className="fh-card fh-hero" ref={scrub.hostRef}>
       <div className="flex items-start justify-between gap-4">
         <HeroReadout scrub={scrub} data={data} summary={s} xf={xf} />
         <Segmented size="sm" value={range} onValueChange={setRange} options={RANGES} aria-label="Range" />
@@ -318,18 +314,13 @@ function HeroLegend({ scrub, data, summary: s, xirr, years, rangeLabel }: { scru
 }
 
 function Allocation({ summary: s, onRebalance }: { summary?: PortfolioSummary; onRebalance: () => void }) {
-  const t = useChartTheme();
   const rows = useMemo(() => {
     if (!s) return [];
     const list = s.allocation.slice().sort((a, b) => CLASS_ORDER.indexOf(a.assetClass) - CLASS_ORDER.indexOf(b.assetClass));
-    const colors = assignColors(list.map((x) => x.assetClass));
-    return list.map((x) => ({ ...x, cls: x.assetClass, color: seriesColor(t, colors.get(x.assetClass) ?? 0) }));
-  }, [s, t]);
+    return list.map((x) => ({ ...x, cls: x.assetClass }));
+  }, [s]);
   const outside = rows.filter((r) => r.status === "outside_band").length;
-  const [view, setView] = useState<"current" | "target">("current");
   const [active, setActive] = useState<string | null>(null);
-  const now = rows.map((r) => ({ id: r.cls, label: r.cls, value: r.current, color: r.color }));
-  const tgt = rows.map((r) => ({ id: r.cls, label: r.cls, value: r.target, color: r.color }));
   return (
     <Section
       title="Allocation vs target"
@@ -343,44 +334,26 @@ function Allocation({ summary: s, onRebalance }: { summary?: PortfolioSummary; o
       {!s ? (
         <Skeleton height={276} radius={10} />
       ) : (
-        <div className="flex items-center gap-6">
-          <div className="flex flex-col items-center gap-3 flex-none">
-            <SpendWheel
-              data={view === "current" ? now : tgt}
-              ghost={view === "current" ? tgt : now}
-              size={188}
-              thickness={20}
-              active={active}
-              onActive={setActive}
-              centerLabel={view === "current" ? "Max drift" : "Target mix"}
-              centerValue={view === "current" ? fmtPp(s.maxDrift) : `${rows.length} classes`}
-              format={(n) => `${n.toFixed(1)}%`}
-              summary={`Allocation ${view === "current" ? "now" : "at target"}: ${rows.map((r) => `${r.cls} ${(view === "current" ? r.current : r.target).toFixed(1)}%`).join(", ")}`}
-            />
-            <Segmented size="sm" value={view} onValueChange={setView} aria-label="Show allocation" options={[{ value: "current", label: "Now" }, { value: "target", label: "Target" }]} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <DivergingBars
-              rows={rows.map((r) => ({
-                key: r.cls,
-                label: (
-                  <span className="inline-flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-[2px]" style={{ background: r.color }} />
-                    {r.cls}
-                  </span>
-                ),
-                value: r.drift,
-                outside: r.status === "outside_band",
-              }))}
-              max={Math.max(6, ...rows.map((r) => Math.abs(r.drift)))}
-              format={(v) => fmtPp(v)}
-              active={active}
-              onActive={setActive}
-            />
-            <div className="text-caption text-tertiary mt-3" style={{ fontWeight: 400 }}>
-              Bars show drift from target in percentage points; amber is outside the band (±5 pp or 25% of target). The thin outer ring is the {view === "current" ? "target" : "current mix"}.
-            </div>
-          </div>
+        <div className="min-w-0">
+          {/* No ring (DESIGN §6.3): one ruled row per class, drift as a bar from the target line. */}
+          <DivergingBars
+            rows={rows.map((r) => ({
+              key: r.cls,
+              label: r.cls,
+              value: r.drift,
+              outside: r.status === "outside_band",
+              note: (
+                <span className="tabular">
+                  {r.current.toFixed(1)}% now · {r.target.toFixed(1)}% target
+                </span>
+              ),
+            }))}
+            max={Math.max(6, ...rows.map((r) => Math.abs(r.drift)))}
+            format={(v) => fmtPp(v)}
+            active={active}
+            onActive={setActive}
+          />
+          <div className="text-caption text-tertiary mt-3">Bars show drift from target in percentage points; amber is outside the band (±5 pp or 25% of target).</div>
         </div>
       )}
     </Section>

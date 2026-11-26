@@ -28,7 +28,7 @@ export const LICENCES: Licence[] = [
   { name: "Chrono", licence: "MIT", by: "Wanasit Tanakitrungruang", kind: "Data & charts" },
   { name: "decimal.js-light", licence: "MIT", by: "Michael Mclaughlin", kind: "Data & charts" },
   { name: "zxcvbn", licence: "MIT", by: "Dropbox, Inc.", kind: "Data & charts" },
-  { name: "Inter", licence: "OFL-1.1", by: "Rasmus Andersson", kind: "Fonts" },
+  { name: "IBM Plex Sans", licence: "OFL-1.1", by: "IBM Corp.", kind: "Fonts" },
   { name: "Newsreader", licence: "OFL-1.1", by: "Production Type", kind: "Fonts" },
   { name: "JetBrains Mono", licence: "OFL-1.1", by: "JetBrains s.r.o.", kind: "Fonts" },
   { name: "Atkinson Hyperlegible", licence: "OFL-1.1", by: "Braille Institute of America", kind: "Fonts" },

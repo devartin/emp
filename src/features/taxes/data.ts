@@ -5,10 +5,12 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
-import type { DbSchema, Id, RowDTO, TaxEstimate, TaxInput, TaxPackInfo } from "@/backend/types";
+import type { CellValue, DbSchema, Id, RowDTO, TaxEstimate, TaxInput, TaxPackInfo } from "@/backend/types";
+import { taxDeductionCategory } from "@/backend/taxDeductions";
 import { useWorkspace } from "@/stores/workspace";
 import { notify } from "@/stores/toasts";
-import { num } from "../finance/shared/format";
+import { fmtCompact, fmtMoney, fmtWhole, num } from "../finance/shared/format";
+import { baseCurrency } from "../finance/shared/currency";
 import { cell, queryAll, useAsync, useDbChanged, useRoleDbs, V } from "../finance/shared/hooks";
 import { usePortfolioBook } from "../portfolio/data";
 
@@ -49,12 +51,38 @@ export interface DedRow {
   id: Id;
   desc: string;
   date: string | null;
+  /** The row's `taxded.category` option id (a generated id on desktop, the key in the mock). */
   category: string;
   categoryName: string;
+  /** The category key (`TAX_DEDUCTION_CATEGORIES`), matched by option id then name; "other" when unknown. */
+  key: string;
+  /** The tax engine's itemised kind (charity, medical, salt, mortgage), or null when the category is not itemisable. */
+  kind: string | null;
   amount: number;
+  /** Deductible share as a fraction (1 = 100%), as stored on both backends. */
   pct: number;
   payee: string;
   receipt: boolean;
+}
+
+/** Itemisable engine kinds (TaxInput.deductions.itemized[].kind). */
+export const ITEMIZED_KINDS = ["charity", "medical", "salt", "mortgage"] as const;
+
+/**
+ * `taxded.pct` is a fraction (1 = 100%) on both backends (number property, format "percent"). A value above 1 can
+ * only be a whole percentage typed into the cell, so read it as one rather than multiplying an amount by 100.
+ */
+export function deductibleShare(v: number | null | undefined): number {
+  if (v == null || !Number.isFinite(v) || v < 0) return 1;
+  return v > 1 ? Math.min(v / 100, 1) : v;
+}
+
+/** `taxded.receipt` is a files property on desktop and a checkbox in the mock: either counts as kept. */
+export function hasReceipt(v: CellValue | null | undefined): boolean {
+  if (!v) return false;
+  if (v.t === "check") return v.v;
+  if (v.t === "files") return v.v.length > 0;
+  return false;
 }
 export interface PayRow {
   id: Id;
@@ -79,10 +107,33 @@ export interface TaxData {
   estimate: TaxEstimate | undefined;
   estimating: boolean;
   pack: TaxPackInfo | undefined;
+  /** ISO 4217 currency for every tax figure: the estimate's, else the pack's, else the workspace base currency. */
+  currency: string;
   reload: () => void;
   setDocStatus: (id: Id, status: string) => Promise<void>;
   addDeduction: (d: { desc: string; date: string; category: string; amount: number; payee: string; receipt: boolean }) => Promise<void>;
+  /** The `taxded.receipt` property's type: a checkbox (mock) is ticked from the log dialog, files (desktop) are attached in the database. */
+  receiptField: "checkbox" | "files" | null;
   recordPayment: (period: string, amount: number, date: string) => Promise<void>;
+}
+
+/** The currency tax figures are in: the estimate's, else the pack's (both additive), else the workspace base currency. */
+export function taxCurrency(est?: TaxEstimate | null, pack?: TaxPackInfo | null): string {
+  return est?.currency ?? pack?.currency ?? baseCurrency();
+}
+
+/** Money formatters bound to a tax currency (whole units, exact, compact). */
+export function taxMoney(currency: string) {
+  return {
+    whole: (v: string | number, o: { signed?: boolean } = {}) => fmtWhole(v, { ...o, currency }),
+    money: (v: string | number, o: { noCents?: boolean; signed?: boolean } = {}) => fmtMoney(v, currency, o),
+    compact: (v: number, signed = false) => fmtCompact(v, currency, signed),
+  };
+}
+
+function receiptFieldOf(s: DbSchema | undefined): TaxData["receiptField"] {
+  const t = s?.properties.find((p) => p.id === s.database.roles["taxded.receipt"])?.type;
+  return t === "checkbox" || t === "files" ? t : null;
 }
 
 export function useTaxData(instanceId: Id): TaxData {
@@ -141,16 +192,20 @@ export function useTaxData(instanceId: Id): TaxData {
     const deductions: DedRow[] = (rows.data?.x ?? [])
       .map((r) => {
         const c = cell.sel(r.values[X!.database.roles["taxded.category"]]) ?? "other";
+        const name = opt(X, "taxded.category", c);
+        const cat = taxDeductionCategory({ id: c, name });
         return {
           id: r.id,
           desc: cell.text(r.values[X!.database.primaryPropId]),
           date: cell.date(r.values[X!.database.roles["taxded.date"]]),
           category: c,
-          categoryName: opt(X, "taxded.category", c),
+          categoryName: name,
+          key: cat?.key ?? "other",
+          kind: cat && "kind" in cat ? cat.kind : null,
           amount: num(cell.money(r.values[X!.database.roles["taxded.amount"]])),
-          pct: cell.num(r.values[X!.database.roles["taxded.pct"]]) ?? 1,
+          pct: deductibleShare(cell.num(r.values[X!.database.roles["taxded.pct"]])),
           payee: cell.text(r.values[X!.database.roles["taxded.payee"]]),
-          receipt: cell.check(r.values[X!.database.roles["taxded.receipt"]]),
+          receipt: hasReceipt(r.values[X!.database.roles["taxded.receipt"]]),
         };
       })
       .sort((a, b) => ((a.date ?? "") < (b.date ?? "") ? 1 : -1));
@@ -192,8 +247,8 @@ export function useTaxData(instanceId: Id): TaxData {
 
   const input = useMemo<TaxInput | null>(() => {
     if (!profile) return null;
-    const itemized = parsed.deductions.filter((d) => ["charity", "medical", "salt", "mortgage"].includes(d.category));
-    const medical = itemized.filter((d) => d.category === "medical").reduce((a, d) => a + d.amount * d.pct, 0);
+    const itemized = parsed.deductions.filter((d) => d.kind !== null);
+    const medical = itemized.filter((d) => d.kind === "medical").reduce((a, d) => a + d.amount * d.pct, 0);
     const extra = profile.pullPortfolio ? pulled.map((p) => ({ kind: p.kind, amount: p.amount.toFixed(2), source: p.source })) : [];
     const paidEst = parsed.payments.reduce((a, p) => a + (p.paidOn ? p.amount : 0), 0);
     return {
@@ -207,7 +262,7 @@ export function useTaxData(instanceId: Id): TaxData {
       deductions:
         profile.deductions === "standard"
           ? "standard"
-          : { itemized: [...itemized.filter((d) => d.category !== "medical").map((d) => ({ kind: d.category, amount: (d.amount * d.pct).toFixed(2) })), ...(medical ? [{ kind: "medical", amount: medical.toFixed(2) }] : [])] },
+          : { itemized: [...itemized.filter((d) => d.kind !== "medical").map((d) => ({ kind: d.kind as string, amount: (d.amount * d.pct).toFixed(2) })), ...(medical ? [{ kind: "medical", amount: medical.toFixed(2) }] : [])] },
       credits: profile.credits,
       withheld: profile.withheld,
       estimatedPaid: String(paidEst || num(profile.estimatedPaid)),
@@ -219,6 +274,7 @@ export function useTaxData(instanceId: Id): TaxData {
   const est = useAsync(() => (input ? api.tax.estimate(input) : Promise.resolve(undefined)), [inputKey], { enabled: !!input });
   const packs = useAsync(() => api.tax.packs({}), []);
   const pack = packs.data?.find((p) => p.id === profile?.packId);
+  const currency = taxCurrency(est.data, pack);
 
   const setDocStatus = useCallback(
     async (id: Id, status: string) => {
@@ -239,15 +295,21 @@ export function useTaxData(instanceId: Id): TaxData {
       const X = schemas.deductions;
       if (!X) return;
       const r = X.database.roles;
+      // `d.category` is a category key; desktop option ids are generated, so find the option by key, then name.
+      const catProp = X.properties.find((p) => p.id === r["taxded.category"]);
+      const options = (catProp?.config.options as { id: string; name: string }[] | undefined) ?? [];
+      const option = options.find((o) => taxDeductionCategory(o)?.key === d.category);
+      // A checkbox receipt (mock) takes the answer; a files receipt (desktop) is attached in the database itself.
+      const receiptProp = X.properties.find((p) => p.id === r["taxded.receipt"]);
       try {
-        await api.db.rowCreate({ databaseId: X.database.id, values: { [X.database.primaryPropId]: V.text(d.desc), [r["taxded.date"]]: V.date(d.date), [r["taxded.category"]]: V.sel(d.category), [r["taxded.amount"]]: V.money(d.amount.toFixed(2)), [r["taxded.pct"]]: V.num(1), [r["taxded.payee"]]: V.text(d.payee), [r["taxded.receipt"]]: V.check(d.receipt), [r["taxded.year"]]: V.num(year) } });
+        await api.db.rowCreate({ databaseId: X.database.id, values: { [X.database.primaryPropId]: V.text(d.desc), [r["taxded.date"]]: V.date(d.date), ...(option ? { [r["taxded.category"]]: V.sel(option.id) } : {}), [r["taxded.amount"]]: V.money(d.amount.toFixed(2), currency), [r["taxded.pct"]]: V.num(1), [r["taxded.payee"]]: V.text(d.payee), ...(receiptProp?.type === "checkbox" ? { [r["taxded.receipt"]]: V.check(d.receipt) } : {}), [r["taxded.year"]]: V.num(year) } });
         notify.success("Deduction logged");
         rows.reload();
       } catch (e) {
         notify.fromError(e, "Couldn't log the deduction");
       }
     },
-    [schemas.deductions, rows, year],
+    [schemas.deductions, rows, year, currency],
   );
   const recordPayment = useCallback<TaxData["recordPayment"]>(
     async (period, amount, date) => {
@@ -256,15 +318,15 @@ export function useTaxData(instanceId: Id): TaxData {
       const r = P.database.roles;
       const existing = parsed.payments.find((p) => p.period === period);
       try {
-        if (existing) await api.db.rowsUpdate({ updates: [{ id: existing.id, values: { [r["taxpay.amount"]]: V.money(amount.toFixed(2)), [r["taxpay.date"]]: V.date(date), ...(r["taxpay.method"] ? { [r["taxpay.method"]]: V.sel("direct_pay") } : {}) } }] });
-        else await api.db.rowCreate({ databaseId: P.database.id, values: { [P.database.primaryPropId]: V.text(period), [r["taxpay.amount"]]: V.money(amount.toFixed(2)), [r["taxpay.date"]]: V.date(date) } });
+        if (existing) await api.db.rowsUpdate({ updates: [{ id: existing.id, values: { [r["taxpay.amount"]]: V.money(amount.toFixed(2), currency), [r["taxpay.date"]]: V.date(date), ...(r["taxpay.method"] ? { [r["taxpay.method"]]: V.sel("direct_pay") } : {}) } }] });
+        else await api.db.rowCreate({ databaseId: P.database.id, values: { [P.database.primaryPropId]: V.text(period), [r["taxpay.amount"]]: V.money(amount.toFixed(2), currency), [r["taxpay.date"]]: V.date(date) } });
         notify.success(`${period} payment recorded`);
         rows.reload();
       } catch (e) {
         notify.fromError(e, "Couldn't record the payment");
       }
     },
-    [schemas.payments, parsed.payments, rows],
+    [schemas.payments, parsed.payments, rows, currency],
   );
 
   return {
@@ -278,9 +340,11 @@ export function useTaxData(instanceId: Id): TaxData {
     estimate: est.data,
     estimating: est.loading,
     pack,
+    currency,
     reload: rows.reload,
     setDocStatus,
     addDeduction,
+    receiptField: receiptFieldOf(schemas.deductions),
     recordPayment,
   };
 }

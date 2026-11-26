@@ -803,7 +803,8 @@ impl Store {
         })
     }
 
-    fn local_today(&self) -> Result<chrono::NaiveDate> {
+    /// Today in the vault's time zone.
+    pub(crate) fn local_today(&self) -> Result<chrono::NaiveDate> {
         Ok(self
             .build_ctx("00000000-0000-0000-0000-000000000000", None)?
             .today())

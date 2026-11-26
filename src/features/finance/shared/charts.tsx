@@ -2,8 +2,8 @@
  * Finance-specific chart compositions on the shared chart kit (§13.5 tokens, ChartFrame states, tooltip card):
  * a stacked area (debt payoff, net-worth composition) and a diverging bar list (allocation drift).
  */
-import { useId, useMemo, type ReactNode } from "react";
-import { Area, AreaChart, CartesianGrid, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import { useMemo, type ReactNode } from "react";
+import { Area, AreaChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { MARGIN, X_AXIS_HEIGHT, niceDomain, tickFormatter, tickStyle, valueFormatter, type ValueFormat } from "@/charts/axis";
 import { ChartFrame } from "@/charts/ChartFrame";
 import { ChartTooltip } from "@/charts/Tooltip";
@@ -42,7 +42,6 @@ export function StackedAreaChart<T extends Record<string, unknown>>({
   curve?: "monotoneX" | "stepAfter" | "linear";
 }) {
   const t = useChartTheme();
-  const gid = useId().replace(/:/g, "");
   const fmt = valueFormatter(format);
   const colorOf = (s: StackSeries, i: number) => s.color ?? seriesColor(t, i);
   const totals = useMemo(() => data.map((d) => series.reduce((a, s) => a + (Number(d[s.key]) || 0), 0)), [data, series]);
@@ -61,20 +60,11 @@ export function StackedAreaChart<T extends Record<string, unknown>>({
         const yW = Math.max(28, Math.max(...ticks.map((v) => tf(v).length)) * 6.6 + 10);
         return (
           <AreaChart width={size.width} height={size.height} data={data} margin={MARGIN} accessibilityLayer>
-            <defs>
-              {series.map((s, i) => (
-                <linearGradient key={s.key} id={`${gid}-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={colorOf(s, i)} stopOpacity={t.dark ? 0.55 : 0.45} />
-                  <stop offset="100%" stopColor={colorOf(s, i)} stopOpacity={t.dark ? 0.2 : 0.14} />
-                </linearGradient>
-              ))}
-            </defs>
-            <CartesianGrid vertical={false} stroke={t.grid} />
             <XAxis dataKey={x as string} tickLine={false} axisLine={false} tick={tickStyle(t)} tickFormatter={(v) => xFormat(v)} height={X_AXIS_HEIGHT} tickMargin={8} minTickGap={40} interval="preserveStartEnd" />
             <YAxis orientation="right" width={yW} axisLine={false} tickLine={false} tick={tickStyle(t)} ticks={ticks} domain={domain} tickFormatter={tf} />
             {marker ? <ReferenceLine x={marker.x as string} stroke={t.textTertiary} strokeDasharray="3 3" label={{ value: marker.label, position: "insideTopRight", fontSize: 11, fill: t.textSecondary, fontFamily: t.fontFamily }} /> : null}
             {series.map((s, i) => (
-              <Area key={s.key} type={curve} dataKey={s.key} name={s.label} stackId="1" stroke={colorOf(s, i)} strokeWidth={1.5} fill={`url(#${gid}-${s.key})`} isAnimationActive={!t.reducedMotion} animationDuration={700} animationEasing="ease-out" activeDot={{ r: 4, fill: colorOf(s, i), stroke: t.canvas, strokeWidth: 2 }} />
+              <Area key={s.key} type={curve} dataKey={s.key} name={s.label} stackId="1" stroke={colorOf(s, i)} strokeWidth={1.5} fill={colorOf(s, i)} fillOpacity={0.08} isAnimationActive={false} activeDot={{ r: 4, fill: colorOf(s, i), stroke: t.canvas, strokeWidth: 2 }} />
             ))}
             <Tooltip
               cursor={{ stroke: t.textTertiary, strokeOpacity: 0.5, strokeDasharray: "3 3" }}

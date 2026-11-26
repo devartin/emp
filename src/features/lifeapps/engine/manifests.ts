@@ -51,7 +51,7 @@ const moneyHq: LifeAppManifest = {
   templates: [
     tpl('hq', 'dashboard', 'Money HQ', { icon: 'lucide:wallet', note: 'KPIs, Sankey, budget vs actual, forecast' }),
     tpl('how', 'page', 'How your budget works', { icon: 'book-open' }),
-    tpl('order', 'page', 'Financial order of operations', { icon: 'list-ordered' }),
+    tpl('order', 'page', 'Financial order of operations', { icon: 'list-todo' }),
     tpl('weekly', 'page', 'Weekly check-in', { icon: 'calendar', optional: true }),
     tpl('monthly', 'page', 'Monthly review', { icon: 'calendar', optional: true }),
     tpl('accounts', 'database', 'Accounts', { icon: 'landmark' }),
@@ -127,7 +127,7 @@ const portfolio: LifeAppManifest = {
       id: 'depth', kind: 'choice_cards', title: 'How much detail do you want to track?', quick: true, skippable: true, default: 'positions',
       options: [
         { value: 'positions', label: 'Positions only', description: 'Ticker, quantity and cost per position.', icon: 'list' },
-        { value: 'history', label: 'Full history', description: 'Every buy, sell and dividend — import a CSV or enter by hand.', icon: 'history' },
+        { value: 'history', label: 'Full history', description: 'Every buy, sell and dividend. Import a CSV or enter by hand.', icon: 'history' },
       ],
     },
     {
@@ -140,7 +140,7 @@ const portfolio: LifeAppManifest = {
     },
     {
       id: 'risk', kind: 'choice_cards', title: 'When will you need this money?', quick: false, skippable: true,
-      help: 'Together with how you react to drops, this suggests a stock/bond range — for education only.',
+      help: 'Four quick questions give an educational stock/bond range, not a recommendation.',
       default: { horizon: 'long', drop: 'hold' },
       itemSchema: { horizon: 'text', drop: 'enum(sell,hold,buy)' },
       options: [
@@ -176,7 +176,7 @@ const portfolio: LifeAppManifest = {
     },
     {
       id: 'market', kind: 'connect', title: 'Prices', quick: true, skippable: true, default: { provider: 'keyless' },
-      help: 'Only ticker symbols leave this device — never quantities, cost basis, account names or balances.',
+      help: 'Only ticker symbols leave this device. Never quantities, cost basis, account names or balances.',
       options: [
         { value: 'keyless', label: 'Keyless (delayed data)', description: 'Stooq end-of-day and CoinGecko. No account needed.' },
         { value: 'keys', label: 'Add provider keys', description: 'Finnhub or Tiingo for fresher quotes.' },
@@ -403,7 +403,7 @@ const lifeOs: LifeAppManifest = {
         { value: 'gtd', label: 'GTD', description: 'Inbox, next actions, waiting, someday.', icon: 'inbox' },
         { value: 'timeblock', label: 'Time-blocking', description: 'Schedule tasks into your calendar.', icon: 'calendar-clock' },
         { value: 'para', label: 'PARA', description: 'Projects, Areas, Resources, Archive.', icon: 'folders' },
-        { value: 'mix', label: 'Mix', description: 'A bit of each — recommended if unsure.', icon: 'shuffle' },
+        { value: 'mix', label: 'Mix', description: 'A bit of everything.', icon: 'shuffle' },
       ],
     },
     {
@@ -516,7 +516,7 @@ const habits: LifeAppManifest = {
       itemSchema: { name: 'text', type: 'enum(yes_no,count,duration,quantity,avoid)', schedule: 'enum(daily,x_per_week,weekdays,every_n_days)', target: 'number', unit: 'text', twoMinute: 'text', cue: 'text', timeOfDay: 'enum(morning,afternoon,evening,anytime)' },
       options: HABIT_LIBRARY.map(({ value, label, description }) => ({ value, label, description })),
     },
-    { id: 'identity', kind: 'text', title: 'I’m becoming someone who…', quick: false, skippable: true, default: '', help: 'Optional. Identity statements make habits stickier — “…moves every day”.' },
+    { id: 'identity', kind: 'text', title: 'I’m becoming someone who…', quick: false, skippable: true, default: '' },
     {
       id: 'grace', kind: 'choice_cards', title: 'How strict should streaks be?', quick: true, skippable: false, default: 'never_miss_twice',
       options: [

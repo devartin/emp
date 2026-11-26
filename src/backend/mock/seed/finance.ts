@@ -183,7 +183,7 @@ interface CatDef {
 /** Default taxonomy (BRAINSTORM §5.3, zero-based groups). Targets in dollars per month. */
 const CATEGORIES: CatDef[] = [
   { name: 'Paycheck', group: 'Income', color: 'green', target: 0, icon: 'briefcase' },
-  { name: 'Side income', group: 'Income', color: 'green', target: 0, icon: 'sparkles' },
+  { name: 'Side income', group: 'Income', color: 'green', target: 0, icon: 'coins' },
   { name: 'Interest earned', group: 'Income', color: 'green', target: 0, icon: 'percent' },
   { name: 'Rent', group: 'Bills', color: 'blue', target: 2150, essential: true, icon: 'home' },
   { name: 'Utilities', group: 'Bills', color: 'blue', target: 160, essential: true, icon: 'zap' },
@@ -196,7 +196,7 @@ const CATEGORIES: CatDef[] = [
   { name: 'Fuel', group: 'Everyday', color: 'yellow', target: 150, essential: true, icon: 'fuel' },
   { name: 'Household', group: 'Everyday', color: 'brown', target: 110, icon: 'sofa' },
   { name: 'Health', group: 'Everyday', color: 'red', target: 90, essential: true, icon: 'heart-pulse' },
-  { name: 'Personal care', group: 'Everyday', color: 'pink', target: 60, icon: 'sparkle' },
+  { name: 'Personal care', group: 'Everyday', color: 'pink', target: 60, icon: 'scissors' },
   { name: 'Entertainment', group: 'Fun', color: 'purple', target: 90, icon: 'clapperboard' },
   { name: 'Shopping', group: 'Fun', color: 'pink', target: 200, icon: 'shopping-bag' },
   { name: 'Travel', group: 'Fun', color: 'blue', target: 250, rollover: true, icon: 'plane' },

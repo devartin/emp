@@ -71,7 +71,7 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
   const reduced = useReducedMotionPref();
   // checklist complete → the Copy plate swaps to an "All done" badge that pops
   const allDone = !!plan?.trades.length && plan.trades.every((x) => done.has(`${x.accountId}|${x.symbol}|${x.side}`));
-  if (!s) return <Skeleton height={420} radius={14} />;
+  if (!s) return <Skeleton height={420} radius={10} />;
   return (
     <div className="flex flex-col gap-4">
       <div className="fh-grid">
@@ -88,7 +88,6 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
             {classes.map((c) => (
               <div key={c.assetClass} className="pf-ba-row">
                 <span className="pf-ba-label">
-                  <span className="w-2 h-2 rounded-[2px]" style={{ background: c.color }} />
                   {c.assetClass}
                 </span>
                 <div className="pf-ba-track">

@@ -13,6 +13,8 @@ import { Button } from '@/ui/Button';
 import { Dialog } from '@/ui/Dialog';
 import { EmptyState } from '@/ui/EmptyState';
 import { IconButton } from '@/ui/IconButton';
+import { IconPicker } from '@/ui/IconPicker';
+import { glyphName, PageGlyph } from '@/ui/icons/Icon';
 import { Select } from '@/ui/Select';
 import { transitions } from '@/ui/motion/presets';
 import { useDbView } from './context';
@@ -38,7 +40,7 @@ export function TemplatesDialog({ open, onOpenChange }: { open: boolean; onOpenC
   const cur = list.find((t) => t.id === sel) ?? null;
   const update = (patch: Partial<RowTemplate>) => setList((l) => l.map((t) => (t.id === sel ? { ...t, ...patch } : t)));
   const add = () => {
-    const t: RowTemplate = { id: `tpl_${Date.now().toString(36)}`, name: 'New template', icon: { t: 'emoji', v: '✨' }, values: {} };
+    const t: RowTemplate = { id: `tpl_${Date.now().toString(36)}`, name: 'New template', icon: { t: 'lucide', v: 'clipboard-list' }, values: {} };
     setList((l) => [...l, t]);
     setSel(t.id);
   };
@@ -84,7 +86,7 @@ export function TemplatesDialog({ open, onOpenChange }: { open: boolean; onOpenC
         <aside className="edb-tpl-list">
           {list.map((t) => (
             <button key={t.id} type="button" className={cn('emp-menu-item w-full', t.id === sel && 'is-sel')} onClick={() => setSel(t.id)}>
-              <span className="emp-menu-icon">{t.icon?.t === 'emoji' ? <span aria-hidden>{t.icon.v}</span> : <LayoutTemplate size={16} />}</span>
+              <span className="emp-menu-icon">{glyphName(t.icon) ? <PageGlyph icon={t.icon} context="row" /> : <LayoutTemplate size={16} />}</span>
               <span className="emp-menu-label text-left">{t.name}</span>
               {defId === t.id ? <Star size={12} className="text-accent-text" aria-label="Default" /> : null}
             </button>
@@ -98,7 +100,11 @@ export function TemplatesDialog({ open, onOpenChange }: { open: boolean; onOpenC
             {cur ? (
               <>
                 <div className="flex items-center gap-2">
-                  <input className="edb-input w-12 text-center" value={cur.icon?.t === 'emoji' ? cur.icon.v : ''} maxLength={4} onChange={(e) => update({ icon: e.target.value ? { t: 'emoji', v: e.target.value } : undefined })} aria-label="Icon" />
+                  <IconPicker value={glyphName(cur.icon)} onSelect={(name) => update({ icon: { t: 'lucide', v: name } })} onRemove={cur.icon ? () => update({ icon: undefined }) : undefined}>
+                    <button type="button" className="edb-input inline-flex w-12 items-center justify-center" aria-label="Template icon">
+                      {glyphName(cur.icon) ? <PageGlyph icon={cur.icon} context="row" /> : <LayoutTemplate size={16} className="text-tertiary" />}
+                    </button>
+                  </IconPicker>
                   <input className="edb-input flex-1 text-title" value={cur.name} onChange={(e) => update({ name: e.target.value })} aria-label="Template name" />
                   <Button size="sm" variant={defId === cur.id ? 'soft' : 'ghost'} icon={Star} onClick={() => setDefId(defId === cur.id ? undefined : cur.id)}>
                     {defId === cur.id ? 'Default' : 'Make default'}

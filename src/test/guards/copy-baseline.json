@@ -16,55 +16,19 @@
   },
   "totals": {
     "greeting": 0,
-    "coach_voice": 4,
-    "hedge": 44,
-    "show_math": 1,
-    "needs_attention": 1,
-    "dollar_job": 2,
-    "we_voice": 15,
-    "device_verb": 2,
+    "coach_voice": 0,
+    "hedge": 5,
+    "show_math": 0,
+    "needs_attention": 0,
+    "dollar_job": 0,
+    "we_voice": 8,
+    "device_verb": 0,
     "exclamation": 0,
-    "em_dash": 190,
+    "em_dash": 114,
     "coming_soon": 0,
     "title_case": 0
   },
   "files": {
-    "crates/emp-store/lifeapps/habits.json": {
-      "coach_voice": 4,
-      "em_dash": 2,
-      "hedge": 4
-    },
-    "crates/emp-store/lifeapps/life-os.json": {
-      "em_dash": 2,
-      "hedge": 2
-    },
-    "crates/emp-store/lifeapps/money-hq.json": {
-      "dollar_job": 1,
-      "em_dash": 12,
-      "hedge": 16,
-      "needs_attention": 1,
-      "we_voice": 2
-    },
-    "crates/emp-store/lifeapps/portfolio.json": {
-      "em_dash": 7,
-      "hedge": 3,
-      "we_voice": 1
-    },
-    "crates/emp-store/lifeapps/spreadsheet-studio.json": {
-      "em_dash": 2,
-      "hedge": 3
-    },
-    "crates/emp-store/lifeapps/tax-organizer.json": {
-      "em_dash": 4,
-      "hedge": 6,
-      "show_math": 1,
-      "we_voice": 3
-    },
-    "crates/emp-store/src/repo/tour.rs": {
-      "device_verb": 1,
-      "em_dash": 6,
-      "hedge": 1
-    },
     "src/backend/mock/commands/finance.ts": {
       "em_dash": 2
     },
@@ -102,9 +66,7 @@
       "em_dash": 1
     },
     "src/backend/mock/seed/core.ts": {
-      "device_verb": 1,
-      "em_dash": 39,
-      "hedge": 1,
+      "em_dash": 17,
       "we_voice": 3
     },
     "src/backend/mock/seed/databases.ts": {
@@ -135,9 +97,6 @@
     "src/features/databases/views/BoardView.tsx": {
       "em_dash": 1
     },
-    "src/features/editor/PageView.tsx": {
-      "hedge": 1
-    },
     "src/features/editor/page/ConflictSheet.tsx": {
       "em_dash": 1
     },
@@ -159,28 +118,11 @@
     "src/features/integrations/mock/sampleCalendar.ts": {
       "em_dash": 1
     },
-    "src/features/lifeapps/engine/manifests.ts": {
-      "em_dash": 5
-    },
-    "src/features/lifeapps/engine/moneyHqSteps.ts": {
-      "em_dash": 6
-    },
-    "src/features/lifeapps/engine/plan.ts": {
-      "em_dash": 4
-    },
     "src/features/lifeapps/mock/finance.ts": {
-      "dollar_job": 1,
-      "em_dash": 14,
-      "hedge": 2
-    },
-    "src/features/lifeapps/mock/habits.ts": {
-      "em_dash": 1
+      "em_dash": 13
     },
     "src/features/lifeapps/mock/lifeos.ts": {
-      "em_dash": 5
-    },
-    "src/features/lifeapps/mock/sheets.ts": {
-      "we_voice": 1
+      "em_dash": 3
     },
     "src/features/lifeapps/mock/workbooks.ts": {
       "em_dash": 5

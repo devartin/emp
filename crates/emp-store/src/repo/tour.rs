@@ -33,15 +33,15 @@ pub const UI_NAMESPACE_LOWER: &str = "ui.getting_started";
 pub const ITEMS: [(&str, &str); 7] = [
     (
         "create_page",
-        "**Create a page** — press `⌘N` or the + next to Pages.",
+        "**Create a page**: press `⌘N` or the + next to Pages.",
     ),
     (
         "try_slash",
-        "**Try /** — type `/` on an empty line to add any block.",
+        "**Try /**: type `/` on an empty line to add any block.",
     ),
     (
         "open_palette",
-        "**Open ⌘K** — search everything and run any command.",
+        "**Open ⌘K** to search everything and run any command.",
     ),
     (
         "add_transaction",
@@ -49,15 +49,15 @@ pub const ITEMS: [(&str, &str); 7] = [
     ),
     (
         "hide_numbers",
-        "**Try ⌘⇧H** — hide every number on screen when someone is looking.",
+        "**Hide numbers with ⌘⇧H** when someone can see your screen.",
     ),
     (
         "lock",
-        "**Lock with ⌘⇧L** — encrypted workspaces lock instantly.",
+        "**Lock with ⌘⇧L**: an encrypted workspace locks at once.",
     ),
     (
         "templates",
-        "**Explore Templates** — meeting notes, weekly reviews, trip plans and more.",
+        "**Browse templates** for meeting notes, weekly reviews, trip plans and more.",
     ),
 ];
 
@@ -95,7 +95,7 @@ const INTRO: &str = "Ultra Note keeps your notes, money, plans and life admin in
 This page is a short tour: the checklist below ticks itself as you try each thing.
 
 > [!note]
-> **Your workspace lives on your computer.** Ultra Note has no servers and no accounts, and we never receive your data. \
+> **Your workspace lives on your computer.** Ultra Note has no servers and no accounts, and your data never leaves this device. \
 Nothing connects to the internet unless you turn on an integration.
 
 ## Your first ten minutes
@@ -163,9 +163,7 @@ Databases, charts, KPIs, spreadsheet ranges and market watchlists can live insid
 `/chart`, `/kpi`, `/sheet` or `/watchlist`.
 ";
 
-const SHORTCUTS: &str =
-    "On Windows and Linux, `⌘` is `Ctrl` and `⌥` is `Alt`. Press `?` anywhere outside a text \
-field for the cheat sheet.
+const SHORTCUTS: &str = "Press `?` anywhere outside a text field for the cheat sheet.
 
 ## Everywhere
 
@@ -249,11 +247,11 @@ out of the way.
 
 ## How the advice works
 
-- Every number shows its maths: tap a figure to see where it came from.
-- Suggestions use common guidelines, never a sales pitch. Nothing is ever bought, filed or paid for you.
+- Every number shows its working: click a figure to see where it came from.
+- Suggestions name their source and never sell anything. Nothing is ever bought, filed or paid for you.
 
 > [!note]
-> Estimates for planning only. Not financial or tax advice. Verify with official sources or a qualified professional.
+> Estimates for planning. Check important decisions with official sources or a qualified professional.
 ";
 
 /// Resolves `[[Title]]` links between the tour pages.
@@ -265,9 +263,22 @@ impl Resolve for TitleLinks<'_> {
     }
 }
 
+/// Shortcut labels for the platform the tour is created on (mirrors the mock's `spellKeys`): macOS keeps the
+/// `⌘ ⌥ ⇧` glyphs; Windows and Linux get `Ctrl+Shift+L` spelling (and `↵` after a modifier becomes `Enter`).
+pub(crate) fn platform_keys(md: &str, mac: bool) -> String {
+    if mac {
+        return md.to_owned();
+    }
+    md.replace('⌘', "Ctrl+")
+        .replace('⌥', "Alt+")
+        .replace('⇧', "Shift+")
+        .replace("+↵", "+Enter")
+}
+
 fn render(md: &str, links: &BTreeMap<String, String>) -> Result<TipTapDoc> {
+    let md = platform_keys(md, cfg!(target_os = "macos"));
     let r = markdown::convert(
-        md,
+        &md,
         MdOptions {
             front_matter_callout: false,
             drop_first_h1: false,
@@ -451,4 +462,29 @@ impl Store {
 pub(crate) fn ui_item<'a>(ns: &str, key: &'a str, value: &Value) -> Option<&'a str> {
     ((ns == UI_NAMESPACE || ns == UI_NAMESPACE_LOWER) && !value.is_null() && value != &json!(false))
         .then_some(key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shortcut_labels_follow_the_platform() {
+        assert_eq!(platform_keys("Lock with `⌘⇧L`", true), "Lock with `⌘⇧L`");
+        assert_eq!(
+            platform_keys("Lock with `⌘⇧L`, tick with `⌘↵`, daily note `⌘⌥D`", false),
+            "Lock with `Ctrl+Shift+L`, tick with `Ctrl+Enter`, daily note `Ctrl+Alt+D`"
+        );
+    }
+
+    #[test]
+    fn tour_copy_has_no_em_dashes_or_we_voice() {
+        let all = [INTRO, OUTRO, WRITING, SHORTCUTS, PRIVACY, MONEY]
+            .into_iter()
+            .chain(ITEMS.iter().map(|(_, l)| *l))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(!all.contains('—'), "em dash in the tour copy");
+        assert!(!all.contains(" we "), "we-voice in the tour copy");
+    }
 }

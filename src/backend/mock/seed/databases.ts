@@ -338,7 +338,7 @@ function seedProjects(ctx: MockCtx, ws: Id, now: number, parentId: Id | null, cr
   );
   // Row templates (§8.6)
   const tpl = [
-    { id: 'tpl_feature', name: 'Feature project', icon: lucide('sparkle'), values: { [P.Status]: V.status('Planned'), [P.Priority]: V.sel('Medium'), [P.Tags]: V.multi('Engineering'), [P.Timeline]: '@today+14d', [P.Project]: 'New feature' } as Record<Id, CellValue | string>, doc: makeDoc([b.h2('Problem'), b.p(''), b.h2('Proposal'), b.p(''), b.h2('Success metrics'), b.bullet('')]) },
+    { id: 'tpl_feature', name: 'Feature project', icon: lucide('rocket'), values: { [P.Status]: V.status('Planned'), [P.Priority]: V.sel('Medium'), [P.Tags]: V.multi('Engineering'), [P.Timeline]: '@today+14d', [P.Project]: 'New feature' } as Record<Id, CellValue | string>, doc: makeDoc([b.h2('Problem'), b.p(''), b.h2('Proposal'), b.p(''), b.h2('Success metrics'), b.bullet('')]) },
     { id: 'tpl_research', name: 'Research study', icon: lucide('microscope'), values: { [P.Status]: V.status('Backlog'), [P.Tags]: V.multi('Research'), [P.Timeline]: '@today+7d' } as Record<Id, CellValue | string>, doc: makeDoc([b.h2('Questions'), b.bullet(''), b.h2('Participants'), b.p(''), b.h2('Findings'), b.p('')]) },
   ];
   ctx.db.table<{ id: Id; templates: unknown[]; defaultTemplateId?: Id }>('db_databases').update(db.id, (d) => {

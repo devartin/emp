@@ -214,7 +214,7 @@ export function CandleChart({ data, mode = "candles", sma: smaPeriods = [20, 50,
           {mode !== "line" && smaPeriods.length
             ? smaPeriods.map((p, i) => (
                 <span key={p} className="inline-flex items-center gap-1.5">
-                  <span style={{ width: 10, height: 2, borderRadius: 1, background: t.categorical[SMA_COLORS[i % 3]] }} />
+                  <span style={{ width: 10, height: 2, background: t.categorical[SMA_COLORS[i % 3]] }} />
                   SMA {p}
                 </span>
               ))

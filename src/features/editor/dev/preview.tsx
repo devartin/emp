@@ -97,7 +97,7 @@ async function openPreviewPage() {
       },
     ],
   };
-  const res = await api.page.create({ workspaceId: ws.id, parentId: null, kind: 'doc', title: 'Live blocks preview', icon: { t: 'emoji', v: '📈' }, doc: doc as never });
+  const res = await api.page.create({ workspaceId: ws.id, parentId: null, kind: 'doc', title: 'Live blocks preview', icon: { t: 'lucide', v: 'chart-line' }, doc: doc as never });
   useTree.getState().upsert([res.meta]);
   navigate({ t: 'page', id: res.meta.id });
 }

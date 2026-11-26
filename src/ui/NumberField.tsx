@@ -6,7 +6,13 @@ import { Input, type InputProps } from "./Input";
 
 export interface NumberFieldProps extends Omit<InputProps, "value" | "defaultValue" | "onChange" | "type"> {
   value: number | null;
+  /**
+   * Fires live on every keystroke with the parsed value (when the text parses and is within min/max; a pending `=`
+   * expression waits), and again with the committed value on blur, Enter and steps.
+   */
   onChange: (value: number | null) => void;
+  /** Fires only on commit (blur, Enter, steps, an evaluated `=` expression): use it for writes that persist. */
+  onCommit?: (value: number | null) => void;
   step?: number;
   min?: number;
   max?: number;
@@ -45,6 +51,7 @@ export function parseLocaleNumber(text: string): number | null {
 export function NumberField({
   value,
   onChange,
+  onCommit,
   step = 1,
   min,
   max,
@@ -72,6 +79,7 @@ export function NumberField({
   const commit = (n: number | null) => {
     const v = n === null ? null : clamp(n, min, max);
     onChange(v);
+    onCommit?.(v);
     setText(fmt(v));
   };
 
@@ -83,6 +91,7 @@ export function NumberField({
     textRef.current = String(next);
     setText(String(next));
     onChange(next);
+    onCommit?.(next);
   };
 
   const repeat = useRef<number | undefined>(undefined);
@@ -139,7 +148,18 @@ export function NumberField({
       className={rest.className ?? "tabular"}
       value={text}
       ghost={ghost}
-      onChange={(e) => setText(e.currentTarget.value)}
+      onChange={(e) => {
+        const t = e.currentTarget.value;
+        setText(t);
+        // Live value: parsed per keystroke so dependent figures update as you type (the reconcile difference). An
+        // unfinished `=` expression or text that does not parse (a lone "-") waits for the commit.
+        const trimmed = t.trim();
+        if (trimmed.startsWith("=")) return;
+        if (trimmed === "") return onChange(null);
+        const n = parse(trimmed);
+        if (n === null || (min !== undefined && n < min) || (max !== undefined && n > max)) return;
+        if (n !== value) onChange(n);
+      }}
       onFocus={(e) => {
         setEditing(true);
         if (value !== null && !text.startsWith("=")) setText(String(value));

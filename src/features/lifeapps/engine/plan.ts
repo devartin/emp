@@ -29,14 +29,14 @@ const RECOMMENDERS: Record<string, (a: Record<string, unknown>) => Recommendatio
     const accounts = list(a.accounts);
     const highApr = accounts.some((x) => ['credit_card', 'personal_loan'].includes(String(x.type)) && Number(x.apr ?? 0) >= 0.1 && Number(x.balance ?? 0) > 0);
     if (stability === 'irregular' || stability === 'variable')
-      return { value: 'zero_based', why: 'Your income varies, so each dollar is assigned as it arrives, with a small buffer.', source: 'Irregular income' };
+      return { value: 'zero_based', why: 'Your income varies, so each dollar is assigned as it arrives, with last month\'s income as a buffer.', source: 'Irregular income' };
     if (highApr)
       return { value: 'zero_based', why: 'You carry high-interest debt. Assigning every dollar makes room for extra payments.', source: 'Debt above about 10% APR' };
     if (a.simple === true) return { value: 'fifty_thirty_twenty', why: 'You asked for something simple: three buckets, no line items.', source: 'Your answer' };
     return { value: 'fifty_thirty_twenty', why: 'Stable income and no high-interest debt: three buckets are easy to keep up with.', source: '50% needs, 30% wants, 20% savings' };
   },
   recommend_debt_strategy() {
-    return { value: { strategy: 'avalanche' }, why: 'Paying the highest APR first minimises total interest.', source: 'Debt avalanche (mathematically optimal)' };
+    return { value: { strategy: 'avalanche' }, why: 'Paying the highest APR first minimises total interest. Snowball (smallest balance first) clears the first debt sooner.', source: 'Debt avalanche' };
   },
   recommend_ef_months(a) {
     const income = isObj(a.income) ? a.income : {};
@@ -51,9 +51,9 @@ const RECOMMENDERS: Record<string, (a: Record<string, unknown>) => Recommendatio
   recommend_allocation(a) {
     const risk = isObj(a.risk) ? a.risk : {};
     const horizon = String(risk.horizon ?? 'long');
-    if (horizon === 'short') return { value: 'sixty_forty', why: 'Money needed within 3 years usually holds more bonds to soften drops.', source: 'Education only — example starting point' };
-    if (risk.drop === 'sell') return { value: 'sixty_forty', why: 'You said you would sell after a 30% drop; a steadier mix may be easier to hold.', source: 'Education only — example starting point' };
-    return { value: 'three_fund', why: 'A long horizon can ride out drops; a broad three-fund mix is a common starting point.', source: 'Education only — example starting point' };
+    if (horizon === 'short') return { value: 'sixty_forty', why: 'Money needed within 3 years usually holds more bonds to soften drops.', source: 'Education only: an example starting point' };
+    if (risk.drop === 'sell') return { value: 'sixty_forty', why: 'You said you would sell after a 30% drop; a steadier mix may be easier to hold.', source: 'Education only: an example starting point' };
+    return { value: 'three_fund', why: 'A long horizon can ride out drops; a broad three-fund mix is a common starting point.', source: 'Education only: an example starting point' };
   },
 };
 
@@ -177,7 +177,7 @@ export function buildPlan(m: LifeAppManifest, user: Record<string, unknown>, mod
   }
   const warnings: string[] = [];
   if (m.sensitivity === 'high') warnings.push('This app holds sensitive data. Encryption is recommended.');
-  if (m.id === 'portfolio' && answers.targets === 'custom') warnings.push('Custom targets start empty — set them on the Target allocation page.');
+  if (m.id === 'portfolio' && answers.targets === 'custom') warnings.push('Custom targets start empty. Set them on the Target allocation page.');
   if (m.id === 'tax-organizer') {
     const j = isObj(answers.jurisdiction) ? answers.jurisdiction : {};
     if (j.country && j.country !== 'US') warnings.push('The estimator covers US federal tax in v1. Your organizer, documents and deadlines still work.');

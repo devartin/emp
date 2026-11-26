@@ -18,21 +18,21 @@
     "tofixed_finance": "toFixed( in finance features (use the money/number formatters)"
   },
   "totals": {
-    "color_literal": 522,
-    "shadow_literal": 567,
-    "gradient": 239,
+    "color_literal": 434,
+    "shadow_literal": 411,
+    "gradient": 146,
     "backdrop_filter": 20,
-    "keyframes": 74,
+    "keyframes": 72,
     "infinite_animation": 6,
     "transition_all": 0,
-    "font_weight_off_scale": 89,
-    "radius_off_scale": 296,
-    "uppercase": 36,
-    "inline_style": 464,
-    "usd_literal": 59,
-    "sparkles_import": 6,
-    "deltapill_import": 10,
-    "tofixed_finance": 62
+    "font_weight_off_scale": 45,
+    "radius_off_scale": 193,
+    "uppercase": 16,
+    "inline_style": 415,
+    "usd_literal": 58,
+    "sparkles_import": 3,
+    "deltapill_import": 9,
+    "tofixed_finance": 60
   },
   "files": {
     "src/App.css": {
@@ -53,7 +53,6 @@
     },
     "src/charts/Candles.tsx": {
       "inline_style": 3,
-      "radius_off_scale": 1,
       "usd_literal": 1
     },
     "src/charts/ChartFrame.tsx": {
@@ -90,7 +89,7 @@
     },
     "src/charts/Treemap.tsx": {
       "color_literal": 3,
-      "inline_style": 4,
+      "inline_style": 3,
       "usd_literal": 1
     },
     "src/charts/Waterfall.tsx": {
@@ -185,11 +184,11 @@
     },
     "src/features/editor/editor-v2.css": {
       "backdrop_filter": 8,
-      "color_literal": 28,
-      "gradient": 23,
+      "color_literal": 23,
+      "gradient": 22,
       "keyframes": 14,
-      "radius_off_scale": 5,
-      "shadow_literal": 51
+      "radius_off_scale": 3,
+      "shadow_literal": 46
     },
     "src/features/editor/menus/BlockHandle.tsx": {
       "inline_style": 1
@@ -225,34 +224,28 @@
       "radius_off_scale": 1
     },
     "src/features/finance/DebtPlanner.tsx": {
-      "font_weight_off_scale": 2,
-      "inline_style": 11,
-      "radius_off_scale": 1,
+      "inline_style": 7,
       "tofixed_finance": 1
     },
     "src/features/finance/DebtRace.tsx": {
       "inline_style": 9
     },
     "src/features/finance/Forecast.tsx": {
-      "font_weight_off_scale": 1,
-      "inline_style": 10
+      "inline_style": 8
     },
     "src/features/finance/ImportWizard/ImportWizard.tsx": {
-      "inline_style": 14
+      "inline_style": 10
     },
     "src/features/finance/MoneyHQ/Accounts.tsx": {
-      "inline_style": 11,
+      "inline_style": 10,
       "tofixed_finance": 1
     },
     "src/features/finance/MoneyHQ/Budget.tsx": {
       "inline_style": 4,
-      "radius_off_scale": 1,
       "tofixed_finance": 7
     },
     "src/features/finance/MoneyHQ/Goals.tsx": {
-      "font_weight_off_scale": 3,
-      "inline_style": 7,
-      "radius_off_scale": 1,
+      "inline_style": 3,
       "tofixed_finance": 6
     },
     "src/features/finance/MoneyHQ/MoneyHQ.tsx": {
@@ -262,15 +255,11 @@
       "deltapill_import": 1
     },
     "src/features/finance/MoneyHQ/Overview.tsx": {
-      "deltapill_import": 1,
-      "inline_style": 7,
-      "radius_off_scale": 4,
+      "inline_style": 1,
       "tofixed_finance": 1
     },
     "src/features/finance/MoneyHQ/Recurring.tsx": {
-      "font_weight_off_scale": 1,
-      "inline_style": 14,
-      "radius_off_scale": 1
+      "inline_style": 12
     },
     "src/features/finance/MoneyHQ/Transactions.tsx": {
       "inline_style": 5,
@@ -283,9 +272,7 @@
       "tofixed_finance": 5
     },
     "src/features/finance/MoneyHQ/widgets.tsx": {
-      "inline_style": 16,
-      "radius_off_scale": 3,
-      "tofixed_finance": 1
+      "inline_style": 8
     },
     "src/features/finance/Rules/RulesEditor.tsx": {
       "inline_style": 2
@@ -300,19 +287,15 @@
     },
     "src/features/finance/shared/finance.css": {
       "backdrop_filter": 2,
-      "color_literal": 37,
-      "font_weight_off_scale": 16,
-      "gradient": 42,
-      "keyframes": 5,
-      "radius_off_scale": 22,
-      "shadow_literal": 78,
-      "uppercase": 9
+      "color_literal": 4,
+      "gradient": 2,
+      "keyframes": 4
     },
     "src/features/finance/shared/format.ts": {
       "tofixed_finance": 3
     },
     "src/features/finance/shared/ui.tsx": {
-      "inline_style": 3
+      "inline_style": 2
     },
     "src/features/integrations/GoogleSetupSheet.tsx": {
       "inline_style": 2,
@@ -367,8 +350,7 @@
       "usd_literal": 2
     },
     "src/features/lifeapps/identity.ts": {
-      "color_literal": 7,
-      "sparkles_import": 1
+      "color_literal": 7
     },
     "src/features/lifeapps/lifeapps.css": {
       "color_literal": 28,
@@ -408,27 +390,17 @@
       "tofixed_finance": 1
     },
     "src/features/markets/markets.css": {
-      "backdrop_filter": 2,
-      "font_weight_off_scale": 5,
-      "gradient": 7,
-      "radius_off_scale": 4,
-      "shadow_literal": 12,
-      "uppercase": 1
-    },
-    "src/features/portfolio/Dividends.tsx": {
-      "inline_style": 1
+      "backdrop_filter": 2
     },
     "src/features/portfolio/HoldingPage.tsx": {
       "deltapill_import": 2,
-      "font_weight_off_scale": 1,
-      "inline_style": 3,
-      "radius_off_scale": 2,
+      "inline_style": 2,
+      "radius_off_scale": 1,
       "tofixed_finance": 1
     },
     "src/features/portfolio/Holdings.tsx": {
       "deltapill_import": 1,
       "inline_style": 4,
-      "radius_off_scale": 1,
       "tofixed_finance": 1
     },
     "src/features/portfolio/IPS.tsx": {
@@ -439,22 +411,15 @@
     },
     "src/features/portfolio/PortfolioDashboard.tsx": {
       "deltapill_import": 1,
-      "inline_style": 13,
-      "radius_off_scale": 3,
+      "inline_style": 10,
       "tofixed_finance": 8
     },
     "src/features/portfolio/RebalancePlanner.tsx": {
-      "inline_style": 6,
-      "radius_off_scale": 2,
+      "inline_style": 5,
       "tofixed_finance": 2
     },
     "src/features/portfolio/portfolio.css": {
-      "color_literal": 6,
-      "font_weight_off_scale": 4,
-      "gradient": 7,
-      "radius_off_scale": 4,
-      "shadow_literal": 13,
-      "uppercase": 1
+      "color_literal": 1
     },
     "src/features/search/CommandPalette.tsx": {
       "inline_style": 1
@@ -470,7 +435,6 @@
       "color_literal": 3,
       "gradient": 2,
       "keyframes": 2,
-      "radius_off_scale": 7,
       "shadow_literal": 5
     },
     "src/features/settings/SettingsPage.tsx": {
@@ -546,7 +510,7 @@
       "inline_style": 1
     },
     "src/features/shell/ImportDialog.tsx": {
-      "inline_style": 3
+      "inline_style": 2
     },
     "src/features/shell/OpenExternalPrompt.tsx": {
       "inline_style": 1
@@ -555,18 +519,15 @@
       "inline_style": 1
     },
     "src/features/shell/PageIcon.tsx": {
-      "inline_style": 3
+      "inline_style": 2
     },
     "src/features/shell/RightPanel.tsx": {
       "inline_style": 2,
-      "shadow_literal": 1,
-      "sparkles_import": 1,
-      "uppercase": 1
+      "shadow_literal": 1
     },
     "src/features/shell/RouteSkeleton.tsx": {
       "gradient": 2,
-      "inline_style": 1,
-      "radius_off_scale": 10
+      "inline_style": 1
     },
     "src/features/shell/Shell.tsx": {
       "inline_style": 1
@@ -588,49 +549,34 @@
       "inline_style": 1
     },
     "src/features/shell/TrashPage.tsx": {
-      "inline_style": 1,
-      "radius_off_scale": 1
+      "inline_style": 1
     },
     "src/features/shell/chrome.css": {
       "color_literal": 4
     },
-    "src/features/shell/icons.ts": {
-      "sparkles_import": 1
-    },
     "src/features/shell/shell.css": {
       "backdrop_filter": 2,
-      "color_literal": 23,
-      "gradient": 15,
+      "color_literal": 15,
+      "gradient": 7,
       "keyframes": 3,
-      "radius_off_scale": 13,
-      "shadow_literal": 22,
-      "uppercase": 3
+      "shadow_literal": 15
     },
     "src/features/taxes/Estimator.tsx": {
-      "inline_style": 13,
-      "radius_off_scale": 2,
-      "tofixed_finance": 2
+      "inline_style": 12,
+      "tofixed_finance": 1
     },
     "src/features/taxes/QuarterlyPlan.tsx": {
-      "font_weight_off_scale": 2,
-      "inline_style": 5,
-      "radius_off_scale": 1,
+      "inline_style": 1,
       "tofixed_finance": 2
     },
     "src/features/taxes/TaxHub.tsx": {
-      "inline_style": 10,
-      "radius_off_scale": 2
+      "inline_style": 7
     },
     "src/features/taxes/data.ts": {
       "tofixed_finance": 6
     },
     "src/features/taxes/taxes.css": {
-      "color_literal": 9,
-      "font_weight_off_scale": 4,
-      "gradient": 9,
-      "radius_off_scale": 6,
-      "shadow_literal": 22,
-      "uppercase": 2
+      "shadow_literal": 1
     },
     "src/features/vault/AppMark.tsx": {
       "color_literal": 36,
@@ -653,13 +599,9 @@
       "inline_style": 1
     },
     "src/features/vault/vault.css": {
-      "color_literal": 37,
-      "font_weight_off_scale": 5,
-      "gradient": 21,
+      "color_literal": 9,
       "infinite_animation": 1,
-      "keyframes": 1,
-      "radius_off_scale": 9,
-      "shadow_literal": 20
+      "shadow_literal": 1
     },
     "src/lib/format.ts": {
       "usd_literal": 1
@@ -674,8 +616,8 @@
       "color_literal": 30,
       "infinite_animation": 2,
       "keyframes": 4,
-      "radius_off_scale": 2,
-      "shadow_literal": 13
+      "radius_off_scale": 1,
+      "shadow_literal": 12
     },
     "src/styles/editor.css": {
       "color_literal": 4,
@@ -684,14 +626,13 @@
       "keyframes": 3,
       "radius_off_scale": 34,
       "shadow_literal": 39,
-      "uppercase": 2
+      "uppercase": 1
     },
     "src/styles/grid.css": {
       "font_weight_off_scale": 1,
       "gradient": 2,
       "radius_off_scale": 13,
-      "shadow_literal": 25,
-      "uppercase": 2
+      "shadow_literal": 25
     },
     "src/styles/material.css": {
       "gradient": 2,
@@ -740,9 +681,6 @@
     },
     "src/ui/Menu.tsx": {
       "inline_style": 1
-    },
-    "src/ui/MoneyField.tsx": {
-      "usd_literal": 1
     },
     "src/ui/Popover.tsx": {
       "inline_style": 1

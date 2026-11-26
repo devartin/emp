@@ -146,7 +146,7 @@ export function ImportDialog() {
                 onFiles={() => notify.info("Click to choose the file", { description: "In this preview, files are opened through the file picker." })}
                 icon={UploadCloud}
                 title="Choose a file to import"
-                hint="Markdown, Notion export (.zip), CSV, Excel, calendar (.ics), bank files (OFX, QFX)"
+                hint="Markdown, Notion export (.zip), CSV, Excel, calendar (.ics), bank files (OFX, QFX, QIF)"
                 accept={ACCEPT.map((e) => `.${e}`)}
               />
               <ul className="grid grid-cols-3 gap-2 text-caption text-tertiary" style={{ fontWeight: 400 }}>
@@ -262,16 +262,31 @@ function Ready({ grant, kind, onRun, onPickAgain, onClose }: { grant: FileGrant;
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-body font-medium text-primary">{grant.displayName}</p>
-          <p className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
+          <p className="text-caption text-tertiary">
             {info.label} · {formatBytes(grant.size)}
           </p>
         </div>
       </div>
-      <p className="text-body-sm text-secondary">{info.note}</p>
+      <p className="text-body-sm text-secondary">
+        {info.note}
+        {kind === "csv" && hasMoney ? " A bank statement exported as CSV can go into Money HQ instead." : null}
+      </p>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onPickAgain}>
           Choose another
         </Button>
+        {kind === "csv" && hasMoney ? (
+          <Button
+            variant="secondary"
+            icon={Landmark}
+            onClick={() => {
+              onClose();
+              openFinanceImport({ grantId: grant.grantId, displayName: grant.displayName });
+            }}
+          >
+            Import into Money HQ
+          </Button>
+        ) : null}
         <Button variant="primary" onClick={onRun} autoFocus>
           Import
         </Button>

@@ -27,7 +27,7 @@ export function FileImport({ step, value, onChange }: StepProps) {
   const options = step.options ?? [
     { value: "import", label: "Import files", icon: "upload" },
     { value: "blank", label: "Start blank", icon: "file" },
-    { value: "sample", label: "Use sample data", icon: "sparkles" },
+    { value: "sample", label: "Use sample data", icon: "flask-conical" },
   ];
   return (
     <div className="flex flex-col gap-4">

@@ -53,9 +53,9 @@
 .emp-sidebar[data-floating] {
   inset: calc(var(--topbar-h) + 4px) auto 8px 8px;
   z-index: var(--z-peek);
-  border-radius: 14px;
-  background: linear-gradient(180deg, var(--glass-fill-a), var(--glass-fill-b));
-  box-shadow: inset 0 1px 0 var(--glass-rim), var(--glass-shadow);
+  border-radius: 12px;
+  background: var(--bg-overlay);
+  box-shadow: var(--elev-3);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   overflow: hidden;
@@ -144,7 +144,7 @@
   flex: 1;
   height: 32px;
   padding: 0 6px;
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--text-primary);
   transition: background-color var(--dur-base) var(--ease-out);
 }
@@ -172,16 +172,14 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
-  font-weight: 700;
-  color: var(--slab-p-fg);
-  background: linear-gradient(180deg, var(--slab-p-face-a), var(--slab-p-face-b));
-  box-shadow: inset 0 1px 0 var(--slab-p-hl), inset 0 0 0 1px var(--slab-p-rim), 0 1px 0 var(--slab-p-side-b), 0 2px 3px -1px rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+  font-weight: 600;
+  color: var(--bg-canvas);
+  background: var(--text-primary);
 }
 .emp-ws-glyph[data-emoji] {
   color: inherit;
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
-  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 1px 0 var(--slab-s-side-b), 0 2px 3px -1px var(--slab-s-contact);
+  background: var(--bg-surface-2);
 }
 .emp-ws-button .name {
   min-width: 0;
@@ -239,7 +237,7 @@
   top: 0;
   left: 0;
   z-index: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   pointer-events: none;
   opacity: 0;
 }
@@ -384,7 +382,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: 5px;
+  border-radius: 4px;
   color: var(--text-tertiary);
   flex: none;
   transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
@@ -439,7 +437,7 @@
   height: 22px;
   margin: 0 -4px;
   padding: 0 4px;
-  border-radius: 5px;
+  border-radius: 4px;
   border: 1px solid var(--accent-solid);
   box-shadow: var(--focus-ring);
   background: var(--bg-canvas);
@@ -466,8 +464,7 @@
   font-size: calc(11rem / 14);
   line-height: calc(14 / 11);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  
   -webkit-user-select: none;
   user-select: none;
 }
@@ -478,7 +475,7 @@
   height: 22px;
   padding: 0 4px;
   margin-left: -4px;
-  border-radius: 5px;
+  border-radius: 4px;
   transition: color var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out);
 }
 .emp-sb-head > button:first-child:hover {
@@ -515,11 +512,10 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: 4px;
   color: #fff;
   flex: none;
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%, rgba(0, 0, 0, 0.12)) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), inset 0 0 0 1px rgba(0, 0, 0, 0.14), 0 1px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.16);
+
 }
 .emp-app-tile svg {
   width: 11px;
@@ -564,7 +560,7 @@
   background: var(--lit-b);
   box-shadow: 0 0 6px var(--lit-glow);
   transition: transform var(--dur-glide) var(--spring-glide);
-  border-radius: 1px;
+  border-radius: 0;
   pointer-events: none;
   z-index: 3;
   animation: emp-fade-in 80ms var(--ease-out);
@@ -591,9 +587,9 @@
   height: 28px;
   max-width: 240px;
   padding: 0 10px 0 8px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
-  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 2px 0 var(--slab-s-side-b), var(--panel-raise);
+  border-radius: 6px;
+  background: var(--bg-overlay);
+  box-shadow: var(--elev-2);
   color: var(--text-primary);
   font-size: calc(13rem / 14);
   font-weight: 500;
@@ -623,8 +619,8 @@
 .emp-sb-row[data-fav-dragging] {
   z-index: 3;
   color: var(--text-primary);
-  background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b)) !important;
-  box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 2px 0 var(--slab-s-side-b), var(--panel-raise);
+  background: var(--bg-overlay) !important;
+  box-shadow: var(--elev-2);
 }
 
 /* ─── Main column ─── */
@@ -636,7 +632,7 @@
   z-index: 1000;
   height: 32px;
   padding: 0 12px;
-  border-radius: 9px;
+  border-radius: 6px;
   font-size: calc(13rem / 14);
   font-weight: 600;
   color: var(--text-primary);
@@ -761,7 +757,7 @@
   max-width: 220px;
   height: 28px;
   padding: 0 7px;
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--text-secondary);
   font-size: calc(13rem / 14);
   font-weight: 500;
@@ -852,8 +848,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, var(--panel-top), var(--panel-bot));
-  box-shadow: inset 1px 0 0 var(--groove-lite), inset 2px 0 0 transparent;
+  background: var(--bg-canvas);
   border-left: 1px solid var(--groove-dark);
   contain: layout paint style;
 }
@@ -902,15 +897,14 @@
   padding: 0 10px;
   font-size: calc(11rem / 14);
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  
   color: var(--text-tertiary);
 }
 .emp-trash-group::after {
   content: "";
   flex: 1;
-  height: 2px;
-  background: linear-gradient(180deg, var(--groove-dark) 0 1px, var(--groove-lite) 1px 2px);
+  height: 1px;
+  background: var(--border);
 }
 .emp-trash-row {
   position: relative;
@@ -1011,8 +1005,7 @@
   font-size: calc(11rem / 14);
   line-height: 16px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  
   color: var(--text-tertiary);
 }
 .emp-keys-where {
@@ -1061,7 +1054,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 14px;
-  border-radius: 13px;
+  border-radius: 12px;
   text-align: left;
 }
 .emp-tpl-card .tile {

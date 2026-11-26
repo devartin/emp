@@ -29,7 +29,7 @@ export default function Dividends({ instanceId, summary: s }: { instanceId: Id; 
           { l: `Paid in ${year}`, v: fmtWhole(paid), sub: `${rows.filter((r) => r.paid > 0).length} months with payouts` },
           { l: `Still expected in ${year}`, v: fmtWhole(proj), sub: "based on last year's calendar" },
         ].map((k) => (
-          <div key={k.l} className="fh-card" style={{ padding: "14px 16px" }}>
+          <div key={k.l} className="fh-card">
             <Stat label={k.l} value={<Sensitive>{k.v}</Sensitive>} sub={k.sub} size="lg" />
           </div>
         ))}

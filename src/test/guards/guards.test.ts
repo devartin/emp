@@ -110,14 +110,15 @@ describe('Phase 0 ratchets', () => {
     const r = ratchet('src/test/guards/style-baseline.json', 'Style ratchet (PROGRAMME-v3 K6). Per-file maxima; may only fall.', STYLE_METRICS, s.style);
     report('style', r, s.style, STYLE_METRICS);
     expect(r.increases, failMessage('Style', r)).toEqual([]);
-  });
+    // The first scan walks and parses every source file; under a loaded machine it can exceed vitest's 5s default.
+  }, 30_000);
 
   test('copy lint: banned phrases and Title Case labels never rise', () => {
     const s = scan();
     const r = ratchet('src/test/guards/copy-baseline.json', 'Copy lint (PROGRAMME-v3 K6). Per-file offending UI strings; each area reaches 0 when its sweep closes.', COPY_METRICS, s.copy);
     report('copy', r, s.copy, COPY_METRICS);
     expect(r.increases, failMessage('Copy', r)).toEqual([]);
-  });
+  }, 30_000);
 
   test('emoji lint: emoji clusters in src, manifests and Rust strings never rise (target 0)', () => {
     const s = scan();
@@ -125,7 +126,7 @@ describe('Phase 0 ratchets', () => {
     report('emoji', r, s.emoji, EMOJI_METRICS);
     if (REPORT) console.info(`[guards] emoji codepoints: ${[...s.emojiChars.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([e, n]) => `${e} ${n}`).join('  ')}`);
     expect(r.increases, failMessage('Emoji', r)).toEqual([]);
-  });
+  }, 30_000);
 });
 
 // ───────────────────────────────────────────────────────────────── the matchers catch what they claim to

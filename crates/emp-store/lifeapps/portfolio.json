@@ -2,13 +2,13 @@
   "id": "portfolio",
   "version": "1.0.0",
   "title": "Portfolio",
-  "tagline": "Track holdings, allocation and performance — with a plan for when markets fall.",
+  "tagline": "Holdings and allocation across accounts.",
   "icon": "candlestick-chart",
   "color": "ocean",
   "category": "investing",
   "sensitivity": "high",
   "estMinutes": 7,
-  "disclaimer": "Education and estimates, not investment advice. Example allocations are starting points, not recommendations. Ultra Note never places trades.",
+  "disclaimer": "Estimates for planning. Check important decisions with a qualified professional.",
   "steps": [
     {
       "id": "experience",
@@ -16,7 +16,7 @@
       "title": "How experienced are you with investing?",
       "quick": true,
       "skippable": false,
-      "help": "This controls how much detail and jargon we show. Indicators appear at Advanced.",
+      "help": "This only changes which indicators and explanations you see.",
       "default": "beginner",
       "options": [
         {
@@ -106,7 +106,7 @@
       "title": "Your risk profile",
       "quick": false,
       "skippable": true,
-      "help": "Four quick questions give an educational stock/bond range — not a recommendation.",
+      "help": "Four quick questions give an educational stock/bond range, not a recommendation.",
       "default": {
         "horizon": "3to10",
         "drop": "hold",
@@ -154,7 +154,7 @@
         {
           "value": "all_equity",
           "label": "All-equity",
-          "description": "Stocks only — highest volatility."
+          "description": "100% stocks; highest volatility."
         },
         {
           "value": "custom",
@@ -199,7 +199,8 @@
           "label": "Hybrid (default)",
           "description": "Check on a schedule, trade only outside the bands."
         }
-      ]
+      ],
+      "why": "Check on a schedule; act only when drift leaves the band."
     },
     {
       "id": "contrib",
@@ -219,7 +220,7 @@
       "title": "Market data",
       "quick": true,
       "skippable": true,
-      "help": "Only ticker symbols leave this device — never quantities, cost basis, account names or balances.",
+      "help": "Only ticker symbols leave this device. Never quantities, cost basis, account names or balances.",
       "default": {
         "provider": "keyless"
       },
@@ -277,7 +278,7 @@
       "spec": {
         "title": "Portfolio",
         "icon": "lucide:candlestick-chart",
-        "subtitle": "Holdings, allocation, performance and dividends — Ultra Note never places trades.",
+        "subtitle": "Holdings, allocation, performance and dividends. Ultra Note never places trades.",
         "tabs": [
           "Overview",
           "Holdings",
@@ -415,7 +416,7 @@
           },
           {
             "t": "md",
-            "md": "## Goal\n**{{if(answers.risk_goal == \"\", \"Long-term growth\", answers.risk_goal)}}** over a horizon of **{{if(answers.risk_horizon == \"gt10\", \"more than 10 years\", if(answers.risk_horizon == \"lt3\", \"under 3 years\", \"3–10 years\"))}}**.\n\n## Target allocation\nPreset: **{{answers.targets_preset}}** — an example starting point, not a recommendation. The targets live in the Target allocation table below and must add up to 100%.\n\n## Rebalancing\n- Method: **{{answers.rebalance_mode}}**, checked **{{answers.rebalance_calendar}}**.\n- Bands: rebalance a class when it drifts more than **{{answers.rebalance_bandabs}} percentage points** or **{{answers.rebalance_bandrel}}% of its target** away.\n- New money first: direct contributions to the most underweight class before selling anything.\n- Avoid selling in taxable accounts when a tax-advantaged account can do the job.\n\n## Rules I follow when markets fall\n1. I do not sell because prices dropped; I check my bands instead.\n2. I keep my emergency fund outside the portfolio so I am never a forced seller.\n3. I keep contributing on schedule — lower prices buy more shares.\n4. I wait 48 hours before any change that is not in this document.\n5. I review this statement once a year, not after every headline.\n\n## Costs\nPrefer low-cost, diversified funds. An expense ratio above 0.5% is flagged by the advisor.\n\n---\nSigned: ____________________   Date: ____________"
+            "md": "## Goal\n**{{if(answers.risk_goal == \"\", \"Long-term growth\", answers.risk_goal)}}** over a horizon of **{{if(answers.risk_horizon == \"gt10\", \"more than 10 years\", if(answers.risk_horizon == \"lt3\", \"under 3 years\", \"3–10 years\"))}}**.\n\n## Target allocation\nPreset: **{{answers.targets_preset}}**, an example starting point, not a recommendation. The targets live in the Target allocation table below and must add up to 100%.\n\n## Rebalancing\n- Method: **{{answers.rebalance_mode}}**, checked **{{answers.rebalance_calendar}}**.\n- Bands: rebalance a class when it drifts more than **{{answers.rebalance_bandabs}} percentage points** or **{{answers.rebalance_bandrel}}% of its target** away.\n- New money first: direct contributions to the most underweight class before selling anything.\n- Avoid selling in taxable accounts when a tax-advantaged account can do the job.\n\n## Rules I follow when markets fall\n1. I do not sell because prices dropped; I check my bands instead.\n2. I keep my emergency fund outside the portfolio so I am never a forced seller.\n3. I keep contributing on schedule; lower prices buy more shares.\n4. I wait 48 hours before any change that is not in this document.\n5. I review this statement once a year, not after every headline.\n\n## Costs\nPrefer low-cost, diversified funds. An expense ratio above 0.5% is flagged by the advisor.\n\n---\nSigned: ____________________   Date: ____________"
           },
           {
             "t": "database",
@@ -438,7 +439,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "## How rebalancing bands work\nEach asset class has a **target** and two bands. A class is *outside its band* when its drift (current % − target %) is more than:\n- the **absolute band** — {{answers.rebalance_bandabs}} percentage points, or\n- the **relative band** — {{answers.rebalance_bandrel}}% of the target (for a 20% target, 5 points).\n\nThis \"5/25\" rule is a common guideline: small drifts are left alone, which keeps trading and taxes low.\n\n## Steps, in order\n1. **New cash first.** Put contributions and dividends into the most underweight classes.\n2. **Tax-advantaged accounts next.** Trades inside IRAs and 401(k)s do not create taxable gains.\n3. **Taxable sells last**, and only if you allow them: losses first, then the highest-basis lots.\n4. Skip trades smaller than **{{fmt_money(coalesce(answers.rebalance_mintrade, 50))}}**.\n\nUltra Note suggests trades; it never places them."
+            "md": "## How rebalancing bands work\nEach asset class has a **target** and two bands. A class is *outside its band* when its drift (current % − target %) is more than:\n- the **absolute band**: {{answers.rebalance_bandabs}} percentage points, or\n- the **relative band**: {{answers.rebalance_bandrel}}% of the target (for a 20% target, 5 points).\n\nWith this \"5/25\" rule small drifts are left alone, which keeps trading and taxes low.\n\n## Steps, in order\n1. **New cash first.** Put contributions and dividends into the most underweight classes.\n2. **Tax-advantaged accounts next.** Trades inside IRAs and 401(k)s do not create taxable gains.\n3. **Taxable sells last**, and only if you allow them: losses first, then the highest-basis lots.\n4. Skip trades smaller than **{{fmt_money(coalesce(answers.rebalance_mintrade, 50))}}**.\n\nUltra Note suggests trades; it never places them."
           },
           {
             "t": "database",
@@ -1623,8 +1624,8 @@
       "id": "drift-band",
       "when": "metrics.out_of_band_count > 0",
       "severity": "warn",
-      "title": "{{metrics.out_of_band_count}} asset class(es) drifted outside their band",
-      "body": "Max drift is {{metrics.max_drift}} percentage points. Consider directing new money to the underweight class first.",
+      "title": "{{metrics.out_of_band_count}} {{if(metrics.out_of_band_count == 1, \"asset class\", \"asset classes\")}} drifted outside the band",
+      "body": "Max drift is {{metrics.max_drift}} percentage points. Put new contributions into the underweight class first.",
       "mathMetrics": [
         "max_drift",
         "out_of_band_count"
@@ -1641,7 +1642,7 @@
       "when": "metrics.max_position_pct > 0.1",
       "severity": "tip",
       "title": "One position is {{fmt_pct(metrics.max_position_pct)}} of your portfolio",
-      "body": "Positions above about 10% add single-company or single-fund risk. A broad fund counts as diversified, but check what it holds.",
+      "body": "Positions above about 10% add single-company or single-fund risk. A broad fund is already diversified; check what it holds.",
       "mathMetrics": [
         "max_position_pct"
       ],
@@ -1657,7 +1658,7 @@
       "when": "metrics.cash_pct > 0.05",
       "severity": "info",
       "title": "Cash is {{fmt_pct(metrics.cash_pct)}} of the portfolio",
-      "body": "Cash above 5% for a long time can drag on returns. Consider whether it has a job (upcoming purchase, emergency fund).",
+      "body": "Cash above 5% for a long time lowers long-term returns unless it is set aside for a purchase or the emergency fund.",
       "mathMetrics": [
         "cash_pct"
       ],
@@ -1705,8 +1706,8 @@
       "id": "ips-review",
       "when": "metrics.days_since_install >= 365",
       "severity": "tip",
-      "title": "Your yearly IPS review is due",
-      "body": "Re-read your Investment Policy Statement and check that it still fits your goals.",
+      "title": "Yearly IPS review is due",
+      "body": "Last reviewed more than a year ago.",
       "mathMetrics": [
         "days_since_install"
       ],
@@ -1722,7 +1723,7 @@
       "when": "metrics.month == 12 and metrics.taxable_losses < 0",
       "severity": "info",
       "title": "Tax-loss harvesting check",
-      "body": "Taxable accounts hold {{fmt_money(metrics.taxable_losses)}} of unrealised losses. Selling before year-end may offset gains; watch wash-sale rules.",
+      "body": "Taxable accounts hold {{fmt_money(metrics.taxable_losses)}} of unrealised losses. Losses realised before year-end can offset gains; wash-sale rules apply.",
       "mathMetrics": [
         "taxable_losses"
       ],

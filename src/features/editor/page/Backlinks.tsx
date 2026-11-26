@@ -12,6 +12,7 @@ import type { Backlink, Id } from '@/backend/types';
 import { navigate } from '@/app/router';
 import { cn } from '@/lib/cn';
 import { spring } from '@/ui/motion/tokens';
+import { PageGlyph } from '@/ui/icons/Icon';
 
 export function Backlinks({ pageId, open, onOpenChange }: { pageId: Id; open: boolean; onOpenChange: (open: boolean) => void }) {
   const [links, setLinks] = useState<Backlink[] | null>(null);
@@ -59,7 +60,7 @@ export function Backlinks({ pageId, open, onOpenChange }: { pageId: Id; open: bo
             {links.map((l, i) => (
               <li key={`${l.sourceId}:${l.blockId ?? i}`}>
                 <button type="button" className="emp-backlink" onClick={() => navigate(l.blockId ? { t: 'page', id: l.sourceId, blockId: l.blockId } : { t: 'page', id: l.sourceId })}>
-                  <span className="emp-backlink-icon">{l.sourceIcon?.t === 'emoji' ? l.sourceIcon.v : '📄'}</span>
+                  <span className="emp-backlink-icon"><PageGlyph icon={l.sourceIcon?.t === 'asset' ? null : l.sourceIcon} context="inline" fallback="file" /></span>
                   <span className="emp-backlink-body">
                     <span className="emp-backlink-title">
                       {l.sourceTitle}

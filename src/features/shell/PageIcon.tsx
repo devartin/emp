@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 import { api } from "@/backend";
 import type { Icon, Id, PageKind } from "@/backend/types";
 import { cn } from "@/lib/cn";
-import { glyphForEmoji, iconSetPending, lucideByName, useLucide } from "./icons";
+import { PageGlyphWith, requestedGlyph } from "@/ui/icons/glyphCore";
+import { iconSetPending, lucideByName, useLucide } from "./icons";
 
 const assetUrls = new Map<Id, string>();
 const pending = new Map<Id, Promise<string | null>>();
@@ -60,11 +61,17 @@ export interface PageIconProps {
   className?: string;
 }
 
+/**
+ * Delegates to the kit's `PageGlyph` logic (`PageGlyphWith`, src/ui/icons): lucide names and legacy emoji both map
+ * through the one registry and render as monochrome Lucide line glyphs in secondary ink, so no emoji ever reaches
+ * the sidebar, breadcrumbs or tabs. The lookup is the shell's boot set plus the lazily loaded kit registry, so the
+ * boot chunk stays small; a named glyph that is still loading keeps its box empty rather than flash the kind glyph.
+ */
 export function PageIcon({ icon, kind = "doc", size = 18, className }: PageIconProps) {
   const box = { width: size, height: size };
-  // Emoji icons (older vaults, imports) render as their mapped glyph: the app's own chrome shows no emoji.
-  const name = icon?.t === "lucide" ? icon.v : icon?.t === "emoji" ? glyphForEmoji(icon.v) ?? undefined : undefined;
-  const Named = useLucide(name);
+  const want = requestedGlyph(icon);
+  const Named = useLucide(want ?? undefined);
+  const px = Math.round(size * 0.89);
   if (icon?.t === "asset") {
     return (
       <span className={cn("emp-page-icon inline-flex flex-none", className)} style={box} aria-hidden>
@@ -72,19 +79,14 @@ export function PageIcon({ icon, kind = "doc", size = 18, className }: PageIconP
       </span>
     );
   }
-  // A named glyph that is still loading keeps its box empty rather than flashing the kind glyph.
-  const L = Named ?? (name && !lucideByName(name) && iconSetPending() ? null : KIND_ICON[kind] ?? FileText);
-  const color =
-    icon?.t === "lucide" && icon.color
-      ? icon.color === "accent"
-        ? "var(--accent-text)"
-        : `var(--block-${icon.color}-text)`
-      : undefined;
+  const waiting = !!want && !Named && iconSetPending();
   return (
-    <span className={cn("emp-page-icon inline-flex flex-none items-center justify-center text-tertiary", className)} style={{ ...box, color }} aria-hidden>
-      {L ? <L size={Math.round(size * 0.86)} strokeWidth={1.75} /> : null}
+    <span className={cn("emp-page-icon inline-flex flex-none items-center justify-center", className)} style={box} aria-hidden>
+      {waiting ? null : <PageGlyphWith icon={Named ? icon : null} context="row" size={px} fallback="file" lookup={lookup} kindFallback={KIND_ICON[kind] ?? FileText} />}
     </span>
   );
 }
+
+const lookup = (name: string) => lucideByName(name);
 
 export default PageIcon;

@@ -158,7 +158,7 @@ export default function TrashPage() {
           <div className="mt-6 flex flex-col gap-2" aria-hidden>
             {Array.from({ length: 4 }, (_, i) => (
               <div key={i} className="flex h-[52px] items-center gap-3 px-2.5">
-                <Skeleton width={32} height={32} radius={8} />
+                <Skeleton width={32} height={32} radius={6} />
                 <div className="flex-1">
                   <Skeleton width={`${50 - i * 6}%`} height={11} />
                   <Skeleton width={120} height={9} className="mt-2" />

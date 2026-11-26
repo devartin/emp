@@ -32,6 +32,8 @@ interface PackJson {
   tier: 'estimator' | 'organizer' | 'custom';
   version: string;
   verifiedOn: string | null;
+  country?: string;
+  currency?: string;
   filingStatuses: string[];
   brackets: StatusMap<{ upTo: Dec | null; rate: Dec }[]>;
   standardDeduction: StatusMap<Dec>;
@@ -64,8 +66,14 @@ function packFor(id: string): PackJson | undefined {
   return PACKS.find((p) => p.id === id);
 }
 
+/** Rust `TaxPack::currency_code`: the explicit currency, else USD for a US pack, else none (user-entered figures). */
+function currencyOf(p: PackJson): string | undefined {
+  return p.currency?.trim() || (p.country === 'US' ? 'USD' : undefined);
+}
+
 function infoOf(p: PackJson, selectedYear: number, today: string): TaxPackInfo {
-  return { id: p.id, name: p.name, year: p.year, tier: p.tier as TaxPackInfo['tier'], version: p.version, verifiedOn: p.verifiedOn ?? '', stale: isStale(p, selectedYear, today) };
+  const currency = currencyOf(p);
+  return { id: p.id, name: p.name, year: p.year, tier: p.tier as TaxPackInfo['tier'], version: p.version, verifiedOn: p.verifiedOn ?? '', stale: isStale(p, selectedYear, today), ...(currency ? { currency } : {}) };
 }
 
 /** Rust `TaxPack::is_stale`: another year, unverified, or verified more than 13 months before today. */
@@ -364,6 +372,7 @@ export function estimate(input: TaxInput, today: string): TaxEstimate {
     verifiedOn: p.verifiedOn ?? '',
     stale: isStale(p, input.year, today),
     disclaimer: `Estimates for planning only, based on ${p.name} v${p.version} verified ${p.verifiedOn ?? 'unverified'}. Not tax advice. Verify with official sources or a qualified professional.`,
+    ...(currencyOf(p) ? { currency: currencyOf(p) } : {}),
   };
 }
 

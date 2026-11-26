@@ -176,7 +176,7 @@ How would you rate the week out of 5?`),
       const [h, m] = (TOD_TIME[item.timeOfDay ?? 'anytime'] ?? '12:00').split(':').map(Number);
       let fire = Math.floor(env.now / DAY) * DAY + (h * 60 + m) * 60_000;
       while (fire <= env.now) fire += DAY;
-      createReminder(ctx, { fireAt: fire, targetKind: 'row', targetId: id, text: `${item.name}${item.twoMinute ? ` — or just: ${item.twoMinute.toLowerCase()}` : ''}`, instanceId: env.inst.id, everyMs: DAY });
+      createReminder(ctx, { fireAt: fire, targetKind: 'row', targetId: id, text: `${item.name}${item.twoMinute ? `, or just ${item.twoMinute.toLowerCase()}` : ''}`, instanceId: env.inst.id, everyMs: DAY });
     }
   }
 

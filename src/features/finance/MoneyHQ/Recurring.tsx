@@ -73,11 +73,11 @@ export default function Recurring() {
 
 function Tile({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
-    <div className="fh-card" style={{ padding: "14px 16px" }}>
+    <div className="fh-card">
       <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
         {label}
       </div>
-      <div className="tabular mt-1" style={{ fontSize: 20, lineHeight: "26px", fontWeight: 620, letterSpacing: "-0.018em" }}>
+      <div className="tabular mt-1 text-kpi">
         <Sensitive>{value}</Sensitive>
       </div>
       <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
@@ -276,5 +276,5 @@ function Detected({ list, onAccepted }: { list: RecurringCandidate[]; onAccepted
 }
 
 export function RecurringSkeleton() {
-  return <Skeleton height={300} radius={14} />;
+  return <Skeleton height={300} radius={10} />;
 }

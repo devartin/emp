@@ -1,5 +1,7 @@
 /** Searchable page / database picker (Move to…, link a database, choose a sheet or watchlist source). */
 import { Database, FileText, Search, Sheet as SheetIcon } from 'lucide-react';
+import { PageGlyphWith } from '@/ui/icons/glyphCore';
+import { GLYPHS } from '@/ui/icons/glyphs';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/backend';
 import type { Id, SearchHit, SearchHitKind } from '@/backend/types';
@@ -97,7 +99,7 @@ export function PagePicker({ open, anchor, title, kinds = ['page'], excludeId, o
               onClick={() => onPick(h.id, h)}
             >
               <span className="emp-picker-icon">
-                {h.icon?.t === 'emoji' ? h.icon.v : h.kind === 'database' ? <Database size={15} /> : h.kind === 'sheet' ? <SheetIcon size={15} /> : <FileText size={15} />}
+                <PageGlyphWith icon={h.icon} size={15} fallback="file" kindFallback={h.kind === 'database' ? Database : h.kind === 'sheet' ? SheetIcon : FileText} lookup={(n) => GLYPHS[n]} />
               </span>
               <span className="emp-picker-title">{h.title || 'Untitled'}</span>
               {h.path.length ? <span className="emp-picker-path">{h.path.join(' / ')}</span> : null}

@@ -31,6 +31,7 @@ export const PAGE_ICON_GROUPS: PageIconGroup[] = [
     ['scroll-text', 'policy contract terms'],
     ['clipboard-list', 'checklist list agenda'],
     ['list-todo', 'tasks todo checklist'],
+    ['list-ordered', 'steps numbered list order sequence'],
     ['files', 'pages collection'],
     ['folder', 'folder directory'],
     ['folder-open', 'folder open'],
@@ -47,6 +48,7 @@ export const PAGE_ICON_GROUPS: PageIconGroup[] = [
     ['kanban', 'board project tracker'],
     ['calendar', 'calendar schedule date'],
     ['calendar-check', 'deadline due'],
+    ['calendar-clock', 'schedule appointment reminder due soon'],
     ['clock', 'time hours'],
     ['users', 'team people group'],
     ['handshake', 'meeting deal partner client'],
@@ -69,6 +71,7 @@ export const PAGE_ICON_GROUPS: PageIconGroup[] = [
     ['scale', 'balance law fair net worth'],
     ['trending-up', 'invest portfolio stocks growth'],
     ['chart-pie', 'allocation budget split'],
+    ['chart-area', 'net worth trend balance chart'],
     ['hand-coins', 'pay give spend'],
     ['shopping-cart', 'shopping groceries buy'],
     ['tag', 'price label category'],
@@ -156,6 +159,7 @@ export const PAGE_ICON_GROUPS: PageIconGroup[] = [
     ['gem', 'gem precious'],
     ['zap', 'quick energy power'],
     ['settings', 'settings config'],
+    ['sliders-horizontal', 'controls options adjust preferences'],
   ]),
 ];
 

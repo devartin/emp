@@ -189,11 +189,11 @@ fn spend_by(
         }
         let (key, label) = match by {
             BreakdownBy::Category => cat
-                .map_or(("uncategorized".into(), "Uncategorized".into()), |c| {
+                .map_or(("uncategorized".into(), "Uncategorised".into()), |c| {
                     (c.id.clone(), c.name.clone())
                 }),
             BreakdownBy::Group => cat
-                .map_or(("uncategorized".into(), "Uncategorized".into()), |c| {
+                .map_or(("uncategorized".into(), "Uncategorised".into()), |c| {
                     (c.group.clone(), c.group.clone())
                 }),
             BreakdownBy::Payee => (payee_key(&t.payee), t.payee.clone()),
@@ -312,9 +312,9 @@ pub fn cashflow_sankey(
             None if t.amount > Decimal::ZERO => {}
             None => {
                 *groups
-                    .entry("Uncategorized".into())
+                    .entry("Uncategorised".into())
                     .or_default()
-                    .entry("Uncategorized".into())
+                    .entry("Uncategorised".into())
                     .or_default() -= t.amount
             }
         }

@@ -5,6 +5,8 @@
  * Second-level lists: Turn into…, Color…, Linked view (database picker), Move to… (page picker).
  */
 import type { Editor } from '@tiptap/core';
+import { PageGlyphWith } from '@/ui/icons/glyphCore';
+import { GLYPHS } from '@/ui/icons/glyphs';
 import { ArrowLeft, CornerDownLeft, Database, FileText, Search } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api } from '@/backend';
@@ -76,8 +78,8 @@ function Tile({ children, swatch }: { children?: ReactNode; swatch?: SlashItem['
 }
 
 function pageGlyph(icon: PageIconT | undefined, kind: 'page' | 'database' = 'page') {
-  if (icon?.t === 'emoji') return <span className="emp-slash-emoji">{icon.v}</span>;
-  return kind === 'database' ? <Database size={18} strokeWidth={1.75} /> : <FileText size={18} strokeWidth={1.75} />;
+  // The kit's glyph language: lucide icons and mapped legacy emoji render as glyphs; an emoji is never drawn.
+  return <PageGlyphWith icon={icon} size={18} fallback="file" kindFallback={kind === 'database' ? Database : FileText} lookup={(n) => GLYPHS[n]} />;
 }
 
 type Sub = null | 'turnInto' | 'color' | 'linkedDb' | 'moveTo';

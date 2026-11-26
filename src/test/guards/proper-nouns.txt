@@ -24,6 +24,7 @@ United Kingdom
 Getting started
 # Area names of the app (Notion and macOS keep these capitalised: "Move to Trash", "Add to Favorites")
 Trash
+Home
 Favorites
 Favourites
 Inbox

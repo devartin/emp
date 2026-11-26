@@ -91,7 +91,7 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
         <div className="fh-span-4 flex flex-col gap-3">
           <div className="fh-card">
             <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>Your position</div>
-            <div className="tabular mt-1" style={{ fontSize: 26, lineHeight: "32px", fontWeight: 640, letterSpacing: "-0.022em" }}>
+            <div className="tabular mt-1 text-kpi-xl">
               <Sensitive>{h ? fmtWhole(value) : "—"}</Sensitive>
             </div>
             {h ? (
@@ -183,7 +183,7 @@ function ResearchNote({ symbol }: { symbol: string }) {
       t.current = setTimeout(() => api.kv.set({ ns: "ui.portfolio", key, value: next }).then(() => setState("saved")).catch(() => setState("idle")), 500);
       return next;
     });
-  if (!note) return <Skeleton height={240} radius={14} />;
+  if (!note) return <Skeleton height={240} radius={10} />;
   return (
     <Section title={<span className="inline-flex items-center gap-2"><NotebookPen size={14} />Research note</span>} subtitle={state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Why you own it — in your own words"}>
       <div className="flex flex-col gap-2.5">

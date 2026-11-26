@@ -9,7 +9,6 @@ import type { Id } from "@/backend/types";
 import { FanChart } from "@/charts/Fan";
 import { Badge } from "@/ui/Badge";
 import { Segmented } from "@/ui/Segmented";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
@@ -134,15 +133,14 @@ function shift(day: string, n: number): string {
 
 function Fact({ label, value, sub, icon }: { label: string; value: number | null; sub?: string; icon?: React.ReactNode }) {
   return (
-    <div className="fh-card" style={{ padding: "14px 16px" }} data-light="">
-      <EdgeLight />
+    <div className="fh-card">
       <div className="flex items-center justify-between">
         <span className="text-caption text-secondary" style={{ fontWeight: 500 }}>
           {label}
         </span>
         {icon}
       </div>
-      <div className="tabular mt-1" style={{ fontSize: 22, lineHeight: "28px", fontWeight: 620, letterSpacing: "-0.02em" }}>
+      <div className="tabular mt-1 text-kpi">
         {value === null ? (
           <Skeleton width={120} height={22} />
         ) : (

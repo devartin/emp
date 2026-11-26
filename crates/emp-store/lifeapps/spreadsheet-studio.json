@@ -2,7 +2,7 @@
   "id": "spreadsheet-studio",
   "version": "1.0.0",
   "title": "Spreadsheet Studio",
-  "tagline": "Calculators and trackers with best-practice structure, checks and charts.",
+  "tagline": "Calculators and trackers built on sheets.",
   "icon": "sheet",
   "color": "iris",
   "category": "sheets",
@@ -174,7 +174,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "Workbooks built with best-practice structure:\n\n- **Inputs** hold every assumption in blue cells, named so formulas read like sentences (`=PMT(Rate/PPY, Years*PPY, -Principal)`).\n- **Calculations** reference inputs by name — no hard-coded constants.\n- **Output** summarises results in bold for readers.\n- **Checks** turn the tab green when everything adds up, red when something is off.\n- **Changelog** records what changed and why.\n\nHeader rows are frozen and dates are ISO (YYYY-MM-DD). The advisor runs sheet checks and points out `#REF!`, `#DIV/0!`, circular references, numbers stored as text and other common mistakes."
+            "md": "Workbooks built with best-practice structure:\n\n- **Inputs** hold every assumption in blue cells, named so formulas read like sentences (`=PMT(Rate/PPY, Years*PPY, -Principal)`).\n- **Calculations** reference inputs by name, with no hard-coded constants.\n- **Output** summarises results in bold for readers.\n- **Checks** turn the tab green when everything adds up, red when something is off.\n- **Changelog** records what changed and why.\n\nHeader rows are frozen and dates are ISO (YYYY-MM-DD). The advisor runs sheet checks and points out `#REF!`, `#DIV/0!`, circular references, numbers stored as text and other common mistakes."
           },
           {
             "t": "checklist",
@@ -1998,7 +1998,7 @@
                 "at": "A1",
                 "rows": [
                   [
-                    "Split expenses — people"
+                    "Split expenses: people"
                   ],
                   [
                     "Legend: blue cells are inputs · bold cells are outputs · the Checks tab turns green when everything adds up"
@@ -2608,7 +2608,7 @@
                     "Calculations"
                   ],
                   [
-                    "Reference inputs by name — never type a constant into a formula."
+                    "Reference inputs by name. Never type a constant into a formula."
                   ],
                   [
                     "Example",
@@ -2824,7 +2824,7 @@
                     "Calculations"
                   ],
                   [
-                    "Reference inputs by name — never type a constant into a formula."
+                    "Reference inputs by name. Never type a constant into a formula."
                   ],
                   [
                     "Example",
@@ -3050,7 +3050,7 @@
       "when": "metrics.lint_div0 > 0",
       "severity": "warn",
       "title": "{{metrics.lint_div0}} × Division by zero",
-      "body": "A formula divides by zero or an empty cell. Consider IFERROR or a check that the divisor is not 0.",
+      "body": "A formula divides by zero or an empty cell. Wrap it in IFERROR or check that the divisor is not 0.",
       "mathMetrics": [
         "lint_div0"
       ],
@@ -3082,7 +3082,7 @@
       "when": "metrics.lint_hardcoded_constant > 0",
       "severity": "tip",
       "title": "{{metrics.lint_hardcoded_constant}} × Hard-coded constants",
-      "body": "A number typed into a formula is easy to miss when assumptions change. Consider moving it to a named input cell.",
+      "body": "A number typed into a formula is easy to miss when assumptions change. A named input cell keeps it visible.",
       "mathMetrics": [
         "lint_hardcoded_constant"
       ],
@@ -3098,7 +3098,7 @@
       "when": "metrics.lint_inconsistent_formula > 0",
       "severity": "tip",
       "title": "{{metrics.lint_inconsistent_formula}} × Inconsistent column formulas",
-      "body": "One cell in a column uses a different formula than its neighbours — often a copy-paste slip.",
+      "body": "One cell in a column uses a different formula than its neighbours, often a copy-paste slip.",
       "mathMetrics": [
         "lint_inconsistent_formula"
       ],
@@ -3130,7 +3130,7 @@
       "when": "metrics.lint_merged_in_data > 0",
       "severity": "info",
       "title": "{{metrics.lint_merged_in_data}} × Merged cells in data",
-      "body": "Merged cells inside a data range break sorting and filtering. Consider Center Across Selection instead.",
+      "body": "Merged cells inside a data range break sorting and filtering. Center Across Selection gives the same look.",
       "mathMetrics": [
         "lint_merged_in_data"
       ],

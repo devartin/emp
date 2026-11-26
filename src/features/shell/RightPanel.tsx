@@ -3,7 +3,7 @@
  * `page_outline` (refreshed on `page:changed`), Page info shows dates, kind and backlinks, and Guide hosts the
  * life-app checklists (ticks via `lifeapp_checklist_tick`).
  */
-import { Check, Link2, ListTree, ScrollText, Sparkles, X } from "lucide-react";
+import { Check, LayoutGrid, Link2, ListTree, ScrollText, X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { navigate, routePageId, useRoute } from "@/app/router";
@@ -159,7 +159,7 @@ function InfoTab({ meta }: { meta: PageMeta }) {
         ) : null}
       </dl>
       <section aria-labelledby="bl-h">
-        <h3 id="bl-h" className="mb-2 flex items-center gap-1.5 text-micro uppercase text-tertiary">
+        <h3 id="bl-h" className="mb-2 flex items-center gap-1.5 text-caption text-tertiary">
           <Link2 size={12} aria-hidden /> Backlinks {links ? <span className="tabular">· {links.length}</span> : null}
         </h3>
         {!links ? (
@@ -196,7 +196,7 @@ function GuideTab({ instance }: { instance?: LifeAppInstance }) {
   if (!list.length) {
     return (
       <EmptyState
-        icon={Sparkles}
+        icon={LayoutGrid}
         title="Guides live in life apps"
         body="Install a life app and its setup checklist will show up here."
         actions={

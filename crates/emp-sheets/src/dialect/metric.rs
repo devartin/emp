@@ -247,6 +247,15 @@ mod tests {
             eval("if(metrics.buffer > 1, \"ok\", \"low\")", &c),
             Ok(RowValue::Text("ok".into()))
         );
+        // Advisor titles pick singular / plural this way (lifeapps/*.json).
+        assert_eq!(
+            interpolate("{{if(metrics.buffer == 12500, \"one\", \"many\")}}", &c),
+            "one"
+        );
+        assert_eq!(
+            interpolate("{{if(metrics.buffer == 1, \"one\", \"many\")}}", &c),
+            "many"
+        );
         assert!(eval("prop(\"x\")", &c).is_err());
         assert!(validate("rows.x").is_err());
         assert!(validate("foo").is_err());

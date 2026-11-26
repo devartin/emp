@@ -22,7 +22,7 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
   const quotes = useQuotes((s?.holdings ?? []).map((h) => h.symbol));
   // opening/closing lots: the rows below glide (translate FLIP); the lots fade and rise — no height animation
   const bodyRef = useFlip<HTMLTableSectionElement>(open);
-  if (!s) return <Skeleton height={420} radius={14} />;
+  if (!s) return <Skeleton height={420} radius={10} />;
   const totalCost = s.holdings.reduce((a, h) => a + num(h.costBasis.amount), 0);
   return (
     <Section title="All holdings" subtitle={<>Cost basis <Sensitive>{fmtWhole(totalCost)}</Sensitive> · lots matched first-in, first-out</>} pad={false}>

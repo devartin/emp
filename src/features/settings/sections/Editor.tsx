@@ -12,7 +12,7 @@ import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Group, Row, SectionHeader } from "../parts";
 
 const FONTS: { id: PageFont; name: string; family: string; note: string }[] = [
-  { id: "sans", name: "Default", family: "var(--font-ui)", note: "Inter · crisp and neutral" },
+  { id: "sans", name: "Default", family: "var(--font-ui)", note: "IBM Plex Sans · the interface font" },
   { id: "serif", name: "Serif", family: "var(--font-serif-page)", note: "Newsreader · for long reads" },
   { id: "mono", name: "Mono", family: "var(--font-mono-code)", note: "JetBrains Mono · for drafts" },
 ];

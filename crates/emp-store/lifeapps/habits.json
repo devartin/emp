@@ -2,7 +2,7 @@
   "id": "habits",
   "version": "1.0.0",
   "title": "Habits",
-  "tagline": "Build habits that stick — small steps, kind streaks, weekly reflection.",
+  "tagline": "Daily habits and streaks.",
   "icon": "heart-pulse",
   "color": "ruby",
   "category": "health",
@@ -155,9 +155,9 @@
       "spec": {
         "title": "Habits",
         "icon": "lucide:heart-pulse",
-        "subtitle": "Small daily actions, tracked kindly.",
+        "subtitle": "Daily check-ins, streaks and a weekly review.",
         "tabs": [
-          "Today",
+          "Check-in",
           "Habits",
           "Log",
           "Review"
@@ -235,7 +235,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "## Make it obvious\nTie each habit to a **cue** you already have: *After I pour my coffee, I will meditate for one minute.* Put the trigger where you will see it.\n\n## Make it easy\nEvery habit has a **two-minute version** — the smallest step that still counts. On a bad day, do that. Showing up matters more than intensity.\n\n## Never miss twice\nMissing once is an accident; missing twice is the start of a new habit. {{if(answers.grace == \"strict\", \"You chose strict streaks: any miss resets the count.\", if(answers.grace == \"skip_days\", \"You chose skip days: mark rest or sick days as frozen and they will not break the streak.\", \"Your streaks forgive a single miss but not two in a row.\"))}}\n\n## Adjust, do not quit\nIf a habit stays under 40% for three weeks, make it smaller. If it stays above 90% for three weeks, consider levelling it up. The advisor will suggest both.\n\n## Fewer, better\nMore than five or six new habits at once is a common reason all of them fail. Add a new one when the last one feels automatic."
+            "md": "## Make it obvious\nTie each habit to a **cue** you already have: *After I pour my coffee, I will meditate for one minute.* Put the trigger where you will see it.\n\n## Make it easy\nEvery habit has a **two-minute version**: the smallest step that still counts. On a bad day, do that. Showing up matters more than intensity.\n\n## Never miss twice\nMissing once is an accident; missing twice is the start of a new habit. {{if(answers.grace == \"strict\", \"You chose strict streaks: any miss resets the count.\", if(answers.grace == \"skip_days\", \"You chose skip days: mark rest or sick days as frozen and they will not break the streak.\", \"Your streaks forgive a single miss but not two in a row.\"))}}\n\n## Adjust, do not quit\nIf a habit stays under 40% for three weeks, make it smaller. If it stays above 90% for three weeks, raise the target. The advisor flags both.\n\n## Fewer, better\nMore than five or six new habits at once tend to fail together. Add a new one when the last one feels automatic."
           }
         ]
       }
@@ -259,7 +259,7 @@
               "Which habit felt easiest this week? Why?",
               "Which one did I skip most? What got in the way?",
               "Is any habit too big? Shrink it to the two-minute version.",
-              "Anything to level up?",
+              "Any habit ready for a bigger target?",
               "One thing to try next week"
             ]
           },
@@ -698,15 +698,15 @@
       "id": "dont-miss-twice",
       "when": "metrics.missed_yesterday_count > 0",
       "severity": "tip",
-      "title": "Don't miss twice",
-      "body": "{{metrics.missed_yesterday_count}} habit(s) were missed yesterday. Today, even the two-minute version keeps the streak alive.",
+      "title": "{{metrics.missed_yesterday_count}} {{if(metrics.missed_yesterday_count == 1, \"habit\", \"habits\")}} missed yesterday",
+      "body": "The two-minute version counts for today.",
       "mathMetrics": [
         "missed_yesterday_count"
       ],
       "actions": [
         {
           "label": "Check in",
-          "route": "app:Today"
+          "route": "app:checkin"
         }
       ]
     },
@@ -714,14 +714,14 @@
       "id": "make-smaller",
       "when": "metrics.low_rate_3w_count > 0",
       "severity": "tip",
-      "title": "Make it smaller",
-      "body": "{{metrics.low_rate_3w_count}} habit(s) have been under 40% for three weeks. Consider shrinking the target or changing the cue.",
+      "title": "{{metrics.low_rate_3w_count}} {{if(metrics.low_rate_3w_count == 1, \"habit\", \"habits\")}} under 40% for 3 weeks",
+      "body": "A smaller target or a different cue may stick better.",
       "mathMetrics": [
         "low_rate_3w_count"
       ],
       "actions": [
         {
-          "label": "Habits",
+          "label": "Edit habit",
           "route": "db:habits:all"
         }
       ]
@@ -730,14 +730,14 @@
       "id": "level-up",
       "when": "metrics.high_rate_21d_count > 0",
       "severity": "info",
-      "title": "Ready to level up?",
-      "body": "{{metrics.high_rate_21d_count}} habit(s) have been at 90% or more for 21 days. Consider raising the target a little.",
+      "title": "{{metrics.high_rate_21d_count}} {{if(metrics.high_rate_21d_count == 1, \"habit\", \"habits\")}} at 90% for 21 days",
+      "body": "",
       "mathMetrics": [
         "high_rate_21d_count"
       ],
       "actions": [
         {
-          "label": "Habits",
+          "label": "Raise the target",
           "route": "db:habits:all"
         }
       ]
@@ -746,8 +746,8 @@
       "id": "too-many",
       "when": "metrics.new_active_14d_count > 6",
       "severity": "tip",
-      "title": "That's a lot of new habits",
-      "body": "{{metrics.new_active_14d_count}} habits started in the last two weeks. Consider pausing a few until the first ones feel automatic.",
+      "title": "{{metrics.new_active_14d_count}} habits started in 2 weeks",
+      "body": "New habits stick better one at a time.",
       "mathMetrics": [
         "new_active_14d_count"
       ],

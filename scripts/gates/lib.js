@@ -9,11 +9,12 @@
 const DEFAULT_ROUTES = ['home', 'money'];
 /** Demo-seed aliases (ids are deterministic in ?seed=demo). */
 const ALIASES = {
+  debt: '/app/01a0f6b1-2757-71b8-8c81-3a4143032a79/debt',
   home: '/home',
   money: '/app/01a0f6b1-2757-71b8-8c81-3a4143032a79',
   'money-hq': '/app/01a0f6b1-2757-71b8-8c81-3a4143032a79',
-  portfolio: '/app/01a0f6b1-2978-7eec-88f4-d59b704c64c2',
-  taxes: '/app/01a0f6b1-2b55-7b49-969e-78be62408c14',
+  portfolio: '/app/01a0f6b1-2979-7e6b-a1d3-aec1a8516ed3',
+  taxes: '/app/01a0f6b1-2b56-73c7-8415-113de60e4dc0',
   markets: '/markets',
   calendar: '/calendar',
   lifeapps: '/lifeapps',

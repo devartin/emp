@@ -13,7 +13,6 @@ import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { Input } from "@/ui/Input";
 import { MoneyField } from "@/ui/MoneyField";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { Sensitive } from "@/ui/Sensitive";
@@ -41,10 +40,10 @@ export default function Goals() {
   const totalSaved = l.goals.reduce((a, g) => a + Math.min(g.target, saved(g)), 0);
   const monthly = (plans.data ?? []).reduce((a, p) => a + (p ? num(p.monthlyRequired) : 0), 0);
 
-  if (l.loading) return <Skeleton height={360} radius={14} />;
+  if (l.loading) return <Skeleton height={360} radius={10} />;
   return (
     <div className="flex flex-col gap-4">
-      <section className="fh-card flex items-center gap-6" style={{ padding: "20px 24px" }}>
+      <section className="fh-card flex items-center gap-6">
         <BudgetRing ratio={totalTarget ? totalSaved / totalTarget : 0} size={76} stroke={7} color="var(--chart-line)">
           <span className="text-body-sm font-semibold tabular">
             <RollingNumber value={totalTarget ? Math.round((totalSaved / totalTarget) * 100) : 0} format={(n) => `${Math.round(n)}%`} countUp={false} />
@@ -54,7 +53,7 @@ export default function Goals() {
           <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
             Saved toward {l.goals.length} goals
           </div>
-          <div className="tabular" style={{ fontSize: 26, lineHeight: "32px", fontWeight: 640, letterSpacing: "-0.022em" }}>
+          <div className="tabular text-kpi-xl">
             <span data-sensitive="">
               <RollingNumber value={totalSaved} format={(n) => fmtWhole(Math.round(n))} sensitive countUp={false} />
             </span>
@@ -151,8 +150,7 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
   };
 
   return (
-    <article className="fh-goal panel" data-raise="" data-light="" data-done={done ? "" : undefined}>
-      <EdgeLight />
+    <article className="fh-goal" data-done={done ? "" : undefined}>
       <div className="flex items-start gap-3">
         <div ref={ringRef} className="relative flex-none">
           <BudgetRing ratio={ratio} size={64} stroke={6} color={done ? "var(--gain)" : "var(--chart-line)"}>
@@ -177,7 +175,7 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
             {g.kind === "emergency" ? "Emergency fund" : g.kind === "sinking" ? "Sinking fund" : "Savings goal"}
             {g.accountId ? ` · ${l.acct.get(g.accountId)?.name ?? ""}` : ""}
           </div>
-          <div className="mt-2 tabular text-title" style={{ fontWeight: 640 }}>
+          <div className="mt-2 tabular text-kpi">
             <span data-sensitive="">
               <RollingNumber value={Math.min(s, g.target)} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive />
             </span>
@@ -192,7 +190,7 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
             Funded
           </Badge>
         ) : (
-          <span className="text-caption text-secondary tabular" style={{ fontWeight: 620 }}>
+          <span className="text-caption text-secondary tabular font-semibold">
             <RollingNumber value={Math.round(ratio * 100)} format={(n) => `${Math.round(n)}%`} countUp={false} />
           </span>
         )}

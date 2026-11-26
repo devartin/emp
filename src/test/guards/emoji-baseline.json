@@ -4,38 +4,11 @@
     "emoji": "emoji cluster (\\p{Extended_Pictographic}, flags, keycaps; ©®™ allowed)"
   },
   "totals": {
-    "emoji": 12
+    "emoji": 2
   },
   "files": {
-    "src/features/databases/FormulaEditor.tsx": {
-      "emoji": 2
-    },
-    "src/features/databases/TemplatesDialog.tsx": {
-      "emoji": 1
-    },
-    "src/features/editor/dev/preview.tsx": {
-      "emoji": 1
-    },
-    "src/features/editor/extensions/clipboard.ts": {
-      "emoji": 1
-    },
-    "src/features/editor/lib/blocks.ts": {
-      "emoji": 1
-    },
-    "src/features/editor/nodeviews/dom.ts": {
-      "emoji": 1
-    },
-    "src/features/editor/page/Backlinks.tsx": {
-      "emoji": 1
-    },
-    "src/features/editor/schema.ts": {
-      "emoji": 1
-    },
     "src/features/integrations/mock/sampleCalendar.ts": {
       "emoji": 2
-    },
-    "src/features/sheets/engine/functions.ts": {
-      "emoji": 1
     }
   }
 }

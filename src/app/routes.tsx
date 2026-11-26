@@ -198,7 +198,7 @@ function PageMissing({ deleted }: { deleted?: boolean }) {
         actions={
           <>
             <Button variant="primary" onClick={() => navigate({ t: deleted ? "trash" : "home" }, { replace: true })}>
-              {deleted ? "Open Trash" : "Go home"}
+              {deleted ? "Open Trash" : "Open Home"}
             </Button>
           </>
         }

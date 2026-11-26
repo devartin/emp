@@ -12,6 +12,8 @@ import { navigate } from '@/app/router';
 import { formatBytes } from '@/lib/format';
 import { formatDateValue } from '@/lib/dates';
 import { css } from '@/ui/motion/tokens';
+import { glyphSvg } from '@/ui/icons/domGlyph';
+import { glyphName } from '@/ui/icons/Icon';
 import { isToggleLike } from '../lib/blockTypes';
 import { allBlocks, infoAt, makeContainer } from '../lib/blocks';
 import { cachedAsset, loadAsset, pickFiles, uploadBlob } from '../lib/assets';
@@ -313,19 +315,53 @@ export const todoView: NodeViewRenderer = ({ node, getPos, editor }) => {
 
 // ───────────────────────────────────────────────────────────────────────────── callout
 
-export function iconGlyph(icon: Icon | null | undefined, fallback = '💡'): HTMLElement {
+/** Glyph SVGs already rendered once (cloned synchronously from the kit's cache afterwards). */
+const glyphReady = new Set<string>();
+
+/**
+ * Fills `host` with the registry glyph `name`. The kit renders a glyph through React the first time, which cannot
+ * happen while React is rendering (node views are built inside EditorContent's render), so a first-time glyph is
+ * drawn in a microtask; later ones are cloned synchronously.
+ */
+function putGlyph(host: HTMLElement, name: string, size: number): void {
+  const key = `${name}|${size}`;
+  if (glyphReady.has(key)) {
+    const svg = glyphSvg(name, 'inline', size);
+    if (svg) host.replaceChildren(svg);
+    return;
+  }
+  queueMicrotask(() => {
+    const svg = glyphSvg(name, 'inline', size);
+    if (!svg) return;
+    glyphReady.add(key);
+    host.replaceChildren(svg);
+  });
+}
+
+/**
+ * A page / callout icon as a DOM node: a Lucide glyph (`{t:'lucide'}`, or a legacy emoji mapped through the kit's
+ * emoji map), an uploaded image, else the `fallback` glyph (none when null). Never renders an emoji.
+ */
+export function iconGlyph(icon: Icon | null | undefined, fallback: string | null = 'lightbulb', size = 16): HTMLElement {
   const span = el('span', 'emp-icon-glyph');
-  if (!icon || icon.t === 'emoji') span.textContent = icon?.v || fallback;
-  else if (icon.t === 'asset') {
+  if (icon?.t === 'asset') {
     const img = el('img', 'emp-icon-img', { alt: '', draggable: 'false' });
     const a = cachedAsset(icon.assetId);
     if (a) img.src = a.url;
     else void loadAsset(icon.assetId).then((x) => x && (img.src = x.url));
     span.appendChild(img);
-  } else {
-    span.textContent = fallback;
+    return span;
   }
+  const name = glyphName(icon) ?? fallback;
+  if (name) putGlyph(span, name, size);
   return span;
+}
+
+/** A page's own glyph in `host` when it has one (lucide or a mapped emoji); otherwise `fallback()` stays. */
+function pageGlyphInto(host: HTMLElement, icon: Icon | null | undefined, size: number, fallback: () => HTMLElement | SVGElement): void {
+  const name = glyphName(icon);
+  host.replaceChildren(fallback());
+  if (name) putGlyph(host, name, size);
 }
 
 export const calloutView: NodeViewRenderer = ({ node, getPos, editor }) => {
@@ -483,7 +519,7 @@ function pageBlockView(variant: 'ref' | 'link'): NodeViewRenderer {
         return;
       }
       dom.removeAttribute('data-missing');
-      icon.replaceChildren(meta.icon?.t === 'emoji' ? iconGlyph(meta.icon) : domIcon(meta.kind === 'database' ? 'listTree' : 'fileText', 18));
+      pageGlyphInto(icon, meta.icon, 18, () => domIcon(meta.kind === 'database' ? 'listTree' : 'fileText', 18));
       title.textContent = meta.title || 'Untitled';
       dom.toggleAttribute('data-untitled', !meta.title);
     };
@@ -878,7 +914,7 @@ export const columnListView: NodeViewRenderer = ({ node, editor, getPos }) => {
 
 // ───────────────────────────────────────────────────────────────────────────── inline: mention, emoji, maths
 
-function mentionLabel(node: PMNode): { text: string; kind: 'page' | 'date' | 'missing' | 'loading'; emoji?: string } {
+function mentionLabel(node: PMNode): { text: string; kind: 'page' | 'date' | 'missing' | 'loading'; icon?: Icon } {
   if (node.attrs.kind === 'date') {
     const d = node.attrs.date as DateValue | null;
     return { text: d?.start ? formatDateValue(d) : 'Date', kind: 'date' };
@@ -886,7 +922,7 @@ function mentionLabel(node: PMNode): { text: string; kind: 'page' | 'date' | 'mi
   const meta = pageInfo(node.attrs.pageId as string | null);
   if (meta === undefined) return { text: '…', kind: 'loading' };
   if (!meta) return { text: 'Deleted page', kind: 'missing' };
-  return { text: meta.title || 'Untitled', kind: 'page', emoji: meta.icon?.t === 'emoji' ? meta.icon.v : undefined };
+  return { text: meta.title || 'Untitled', kind: 'page', icon: meta.icon ?? undefined };
 }
 
 export const mentionView: NodeViewRenderer = ({ node, editor, getPos }) => {
@@ -901,12 +937,11 @@ export const mentionView: NodeViewRenderer = ({ node, editor, getPos }) => {
       dom.append(domIcon(current.attrs.reminderId ? 'bell' : 'calendar', 14));
       const past = dateAttr?.start ? new Date(dateAttr.start).getTime() < Date.now() - 86_400_000 : false;
       dom.toggleAttribute('data-past', past);
-    } else if (l.emoji) {
-      const e = el('span', 'emp-mention-emoji');
-      e.textContent = l.emoji;
-      dom.append(e);
     } else {
-      dom.append(domIcon('fileText', 14));
+      // The page's own glyph (lucide, or a legacy emoji through the kit map), else the generic page icon.
+      const g = el('span', 'emp-mention-glyph');
+      pageGlyphInto(g, l.icon, 14, () => domIcon('fileText', 14));
+      dom.append(g);
     }
     const t = el('span', 'emp-mention-text');
     t.textContent = l.text;

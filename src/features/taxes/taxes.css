@@ -1,83 +1,60 @@
-/* Tax Organizer */
+/* Tax Organizer (DESIGN v3: paper and ink, flat at rest, ruled rows; depth only on keys). */
 .tx-disclaimer { margin-bottom: 2px; }
 .tx-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tx-source { flex-basis: 100%; display: inline-flex; align-items: center; gap: 4px; margin: -2px 0 2px 2px; font-size: calc(11rem / 14); color: var(--accent-text); }
-.tx-pulled { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
-.tx-delta { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
+/* Sub-blocks inside a section are ruled off with a hairline, never a second frame. */
+.tx-pulled,
+.tx-delta,
+.tx-deduction { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.tx-delta { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 0; }
+.tx-deduction { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 
-/* No owe/refund wash behind the figure (DESIGN §4.8): the OWE/REFUND pill carries the colour. */
-.tx-result { padding: 22px 24px; }
-.tx-flip { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 9999px; font-size: calc(11rem / 14); font-weight: 680; letter-spacing: 0.02em; text-transform: uppercase; color: var(--warning-text); background: var(--warning-soft); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warning) 30%, transparent); transition: color 200ms var(--ease-out), background-color 200ms var(--ease-out), box-shadow 200ms var(--ease-out); }
-.tx-flip[data-refund] { color: var(--gain-text); background: var(--gain-soft); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--gain) 30%, transparent); }
-.tx-scrub { padding: 14px 16px 12px; border-radius: 12px; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
-.tx-reset { color: var(--text-secondary); font-weight: 560; border-radius: 6px; padding: 0 4px; transition: color 120ms var(--ease-out), background-color 120ms var(--ease-out); }
+/* No owe/refund wash behind the figure (DESIGN §4.8): the status line carries the colour. */
+.tx-result { padding-left: 0; padding-right: 0; }
+.tx-status { font-size: calc(12rem / 14); line-height: 16px; font-weight: 500; color: var(--warning-text); transition: color 200ms var(--ease-out); }
+.tx-status[data-refund] { color: var(--gain-text); }
+.tx-reset { color: var(--text-secondary); font-weight: 500; border-radius: 4px; padding: 0 4px; transition: color 120ms var(--ease-out), background-color 120ms var(--ease-out); }
 .tx-reset:hover { color: var(--text-primary); background: var(--ghost-hover); }
 .tx-reset:focus-visible { outline: 2px solid var(--ring); }
-.tx-big { margin-top: 6px; display: flex; align-items: baseline; font-size: calc(44rem / 14); line-height: 1.1; font-weight: 660; letter-spacing: -0.035em; color: var(--text-primary); }
+.tx-big { margin-top: 6px; display: flex; align-items: baseline; font-size: calc(40rem / 14); line-height: 48px; font-weight: 600; letter-spacing: -0.02em; color: var(--text-primary); }
 .tx-sym { font-size: 0.55em; color: var(--text-secondary); font-weight: 500; margin-right: 2px; align-self: flex-start; margin-top: 0.3em; }
 .tx-approx { font-size: 0.6em; color: var(--text-tertiary); margin-right: 6px; font-weight: 500; }
-.tx-deduction { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding: 10px 12px; border-radius: 10px; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
-.tx-math-toggle { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; height: 28px; padding: 0 8px 0 4px; border-radius: 8px; font-size: calc(13rem / 14); font-weight: 500; color: var(--text-secondary); }
-.tx-math-toggle { transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out); }
-.tx-math-toggle:hover { background: var(--ghost-hover); color: var(--text-primary); }
-.tx-math-toggle:active { background: var(--ghost-press); }
-.tx-math-toggle svg { transition: transform var(--dur-release) var(--spring-release); }
-.tx-math-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
-.tx-math { overflow: hidden; margin: 6px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
-.tx-math-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: calc(13rem / 14); color: var(--text-secondary); }
-.tx-math-row dd { margin: 0; color: var(--text-primary); }
-.tx-math-row.is-strong { font-weight: 600; color: var(--text-primary); }
-.tx-ref { margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10px; font-family: var(--font-mono-code); color: var(--text-tertiary); background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b)); box-shadow: inset 0 0 0 1px var(--slab-s-rim), 0 1px 0 var(--slab-s-side-b); }
 
+/* Brackets: flat bars; ink deepens with the rate, a 1px rule marks where taxable income stops. */
 .tx-brackets { display: flex; align-items: flex-end; gap: 3px; min-height: 120px; }
 .tx-br { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; min-width: 58px; }
-.tx-br-rate { font-size: calc(12rem / 14); font-weight: 650; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.tx-br-rate { font-size: calc(12rem / 14); font-weight: 600; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .tx-br-rate[data-active] { color: var(--text-primary); }
-.tx-br-bar { position: relative; border-radius: 7px 7px 4px 4px; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); overflow: hidden; }
-/* lit fill: ink deepens with the rate; a bright leading edge shows where your income stops */
-.tx-br-bar i { position: absolute; inset: 2px; border-radius: 5px 5px 2px 2px; transform-origin: left; background: linear-gradient(180deg, color-mix(in oklab, var(--lit-b) calc(var(--a, 1) * 100%), var(--well-bg)), color-mix(in oklab, var(--lit-a) calc(var(--a, 1) * 100%), var(--well-bg))); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22); }
-.tx-br-bar i:not([data-full])::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 2px; border-radius: 1px; background: var(--chart-line); box-shadow: 0 0 8px color-mix(in oklab, var(--chart-line) 40%, transparent); }
+.tx-br-bar { position: relative; border-radius: 4px; background: var(--well-bg); overflow: hidden; }
+.tx-br-bar i { position: absolute; inset: 0; transform-origin: left; background: color-mix(in oklab, var(--chart-line) calc(var(--a, 1) * 55%), var(--well-bg)); }
+.tx-br-bar i:not([data-full])::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 1px; background: var(--text-primary); }
 .tx-br-range { font-size: calc(11rem / 14); color: var(--text-tertiary); }
 .tx-br-taxed { min-height: 14px; font-size: calc(11rem / 14); font-weight: 600; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.tx-next { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
-.tx-timeline { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; position: relative; }
-.tx-timeline::before { content: ""; position: absolute; left: 24px; right: 24px; top: 12px; height: 4px; border-radius: 2px; background: var(--well-bg); box-shadow: inset 0 1px 1px var(--well-in), inset 0 0 0 1px var(--well-rim); }
-.tx-q { position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: 0 4px; }
-.tx-q-dot { z-index: 1; width: 28px; height: 28px; margin-bottom: 10px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text-secondary); background: linear-gradient(180deg, var(--thumb-a), var(--thumb-b)); box-shadow: var(--dome-shadow); }
-.tx-q.is-paid .tx-q-dot { background: transparent; box-shadow: none; }
-.tx-q[data-status="due_soon"] .tx-q-dot { color: var(--warning-text); box-shadow: var(--dome-shadow), 0 0 0 2px var(--warning); }
-.tx-q[data-status="late"] .tx-q-dot { color: #fff; background: linear-gradient(180deg, color-mix(in oklab, var(--loss) 75%, white), var(--loss)); }
-.tx-paid { position: relative; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
-.tx-paid svg { position: absolute; inset: 0; }
-.tx-paid-check { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(180deg, color-mix(in oklab, var(--gain) 75%, white), var(--gain)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 0 color-mix(in oklab, var(--gain) 55%, black); }
-.tx-paid[data-fresh] .tx-paid-check { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 0 color-mix(in oklab, var(--gain) 55%, black), var(--glow-gain); }
+/* Next payment: a plain block beside the inputs. */
+.tx-next { display: flex; flex-direction: column; gap: 2px; padding-left: 12px; border-left: 1px solid var(--border); }
 
-.tx-countdown { width: 56px; height: 56px; margin-bottom: 3px; flex: none; border-radius: 16px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; color: var(--warning-text); background: linear-gradient(180deg, color-mix(in oklab, var(--warning) 8%, var(--slab-s-face-a)), color-mix(in oklab, var(--warning) 16%, var(--slab-s-face-b))); box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px color-mix(in oklab, var(--warning) 30%, transparent), 0 3px 0 color-mix(in oklab, var(--warning) 40%, var(--slab-s-side-b)), 0 5px 12px -4px color-mix(in oklab, var(--warning) 40%, transparent); }
-.tx-countdown b { font-size: 20px; line-height: 22px; font-weight: 700; color: var(--text-primary); }
-.tx-countdown span { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+/* Overview "Next up": 36px ruled rows (label left, fact right). */
+.tx-rows { display: flex; flex-direction: column; }
+.tx-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: var(--row-list, 36px); padding: 6px 8px; margin: 0 -8px; border-radius: 6px; text-align: left; transition: background-color 120ms var(--ease-out); }
+/* the hairline spans the section's width, not the row's hover inset */
+.tx-row + .tx-row::before { content: ""; position: absolute; left: 8px; right: 8px; top: 0; height: 1px; background: var(--border); }
+.tx-row:hover { background: var(--ghost-hover); }
+.tx-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 
-.tx-mini-tl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.tx-mini-q { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; position: relative; background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
-.tx-mini-dot { position: absolute; top: 10px; right: 10px; width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(180deg, var(--thumb-a), var(--thumb-b)); box-shadow: var(--dome-shadow); color: #fff; }
-.tx-mini-q[data-status="paid"] .tx-mini-dot { background: linear-gradient(180deg, color-mix(in oklab, var(--gain) 75%, white), var(--gain)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 0 color-mix(in oklab, var(--gain) 55%, black); }
-.tx-mini-q[data-status="due_soon"] { background: color-mix(in oklab, var(--warning) 9%, var(--well-bg)); }
-
-.tx-doc { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-top: 1px solid color-mix(in oklab, var(--groove-dark) 70%, transparent); transition: background-color 140ms var(--ease-out); }
+/* Documents: ruled rows, a plain status glyph (no tile). */
+.tx-doc { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--border); transition: background-color 120ms var(--ease-out); }
 .tx-doc:hover { background: var(--ghost-hover); }
 .tx-doc:first-child { border-top: 0; }
-.tx-doc-icon { width: 34px; height: 34px; border-radius: 10px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--text-tertiary); background: var(--well-bg); box-shadow: inset 0 1px 2px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); transition: color 200ms var(--ease-out), background 200ms var(--ease-out); }
-.tx-doc-icon[data-status="received"], .tx-doc-icon[data-status="reviewed"] { color: var(--accent-text); background: var(--accent-soft); }
-.tx-doc-icon[data-status="sent"] { color: var(--gain-text); background: var(--gain-soft); }
+.tx-doc-icon { flex: none; display: inline-flex; color: var(--text-tertiary); }
+.tx-doc-icon[data-status="received"], .tx-doc-icon[data-status="reviewed"] { color: var(--accent-text); }
+.tx-doc-icon[data-status="sent"] { color: var(--gain-text); }
 .tx-steps { display: flex; align-items: center; gap: 4px; }
-.tx-step { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; }
-.tx-step { transition: background-color 120ms var(--ease-out); }
+.tx-step { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; transition: background-color 120ms var(--ease-out); }
 .tx-step:hover { background: var(--ghost-hover); }
-.tx-step:active span { transform: scale(0.85); }
-/* steps are recessed sockets that fill with a lit dome as the checklist completes */
-.tx-step span { width: 11px; height: 11px; border-radius: 50%; background: var(--well-bg); box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim); transition: transform var(--dur-release) var(--spring-release); }
-.tx-step.is-done span { background: linear-gradient(180deg, var(--lit-b), var(--lit-a)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 8px var(--lit-glow); animation: fh-pop 380ms var(--spring-pop) both; }
-.tx-step.is-current span { transform: scale(1.3); }
+/* steps: hollow until reached, then filled with ink; the current step is a touch larger */
+.tx-step span { width: 10px; height: 10px; border-radius: 9999px; box-shadow: inset 0 0 0 1px var(--border-strong, var(--border)); }
+.tx-step.is-done span { background: var(--text-primary); box-shadow: none; }
+.tx-step.is-current span { width: 12px; height: 12px; }
 .tx-step:focus-visible { outline: 2px solid var(--ring); }
-:root[data-motion="reduced"] .tx-step.is-done span { animation: none; }
 .tx-step-label { width: 118px; margin-left: 6px; font-size: calc(12rem / 14); color: var(--text-secondary); }

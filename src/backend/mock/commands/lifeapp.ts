@@ -641,7 +641,7 @@ export const handlers: MockHandlers = {
       if (log && habits) {
         const items = habitItems(inst.answers);
         const title = Object.values(habits.props).find((p) => p.type === 'title');
-        const rows = db.rows(ctx, habits.id).map((r) => ({ id: r.id, item: items.find((i) => i.name === cellText(r, title)) ?? { name: cellText(r, title), icon: 'lucide:sparkle', type: 'yes_no', schedule: 'daily' } }));
+        const rows = db.rows(ctx, habits.id).map((r) => ({ id: r.id, item: items.find((i) => i.name === cellText(r, title)) ?? { name: cellText(r, title), icon: 'lucide:repeat', type: 'yes_no', schedule: 'daily' } }));
         sampleLog(env, log, rows);
         refreshHabitStats(ctx, db, inst);
       }

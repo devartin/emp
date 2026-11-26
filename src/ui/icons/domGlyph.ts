@@ -1,14 +1,16 @@
 /**
  * Lucide glyphs for plain-DOM node views (editor callouts, page links): the same registry and sizes as <Glyph>,
- * rendered once per (name, size, stroke) through React into a detached node and cloned from a cache afterwards.
- * Synchronous, no innerHTML. Returns null for names outside the registry.
+ * built once per (name, size, stroke) and cloned from a cache afterwards. Synchronous, no innerHTML, and no React
+ * render: the SVG is built from the icon's own node data with createElementNS, so it is safe to call from inside a
+ * React lifecycle or a ProseMirror node view (a flushSync render there is deferred and returned nothing).
+ * Returns null for names outside the registry.
  */
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import type { Icon } from "@/backend/types";
 import { GLYPHS } from "./glyphs";
-import { glyphName, type GlyphContext } from "./Icon";
+import { canonicalGlyph, glyphName, type GlyphContext } from "./Icon";
 
 const SIZE: Record<GlyphContext, { size: number; stroke: number }> = {
   row: { size: 16, stroke: 1.25 },
@@ -16,10 +18,87 @@ const SIZE: Record<GlyphContext, { size: number; stroke: number }> = {
   header: { size: 40, stroke: 1.75 },
 };
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+type IconElement = [string, Record<string, string | number>, IconElement[]?];
+type IconNode = IconElement[];
+interface IconData {
+  name?: string;
+  size?: number;
+  node: IconNode;
+}
+
 const cache = new Map<string, SVGSVGElement>();
+
+/**
+ * The icon's node data. A lucide-react icon is a forwardRef whose render function only wraps its data in an element
+ * (no hooks), so calling it is pure.
+ */
+function iconData(G: unknown): IconData | null {
+  const render = (G as { render?: (props: object, ref: null) => { props?: { icon?: IconData } } | null }).render;
+  if (typeof render !== "function") return null;
+  try {
+    const icon = render({}, null)?.props?.icon;
+    return icon && Array.isArray(icon.node) ? icon : null;
+  } catch {
+    return null;
+  }
+}
+
+function appendNodes(parent: Element, nodes: IconNode) {
+  for (const [tag, attrs, children] of nodes) {
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) if (k !== "key") el.setAttribute(k, String(v));
+    if (children?.length) appendNodes(el, children);
+    parent.appendChild(el);
+  }
+}
+
+/** The SVG attributes lucide-react's <Icon> sets with `absoluteStrokeWidth`, for this size and stroke. */
+function svgAttrs(data: IconData, px: number, stroke: number): Record<string, string> {
+  const vb = data.size ?? 24;
+  return {
+    width: String(px),
+    height: String(px),
+    viewBox: `0 0 ${vb} ${vb}`,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": String((stroke * vb) / px),
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    class: data.name ? `lucide lucide-${data.name}` : "lucide",
+    "aria-hidden": "true",
+  };
+}
+
+/** What `glyphSvg` builds, as data (no DOM): the root attributes and the child nodes. Null outside the registry. */
+export function glyphSpec(name: string, context: GlyphContext = "inline", size?: number): { attrs: Record<string, string>; node: IconNode } | null {
+  const G = GLYPHS[canonicalGlyph(name)];
+  const data = G ? iconData(G) : null;
+  if (!data) return null;
+  const s = SIZE[context];
+  return { attrs: svgAttrs(data, size ?? s.size, s.stroke), node: data.node };
+}
+
+function buildSvg(data: IconData, px: number, stroke: number): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  for (const [k, v] of Object.entries(svgAttrs(data, px, stroke))) svg.setAttribute(k, v);
+  appendNodes(svg, data.node);
+  return svg;
+}
+
+/** Fallback for an icon whose data can't be read: render it once through React (outside a lifecycle only). */
+function renderSvg(G: (typeof GLYPHS)[string], px: number, stroke: number): SVGSVGElement | null {
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  flushSync(() => root.render(createElement(G, { size: px, strokeWidth: stroke, absoluteStrokeWidth: true, "aria-hidden": true })));
+  const made = host.querySelector("svg");
+  root.unmount();
+  return made;
+}
 
 /** An SVG element for a registered glyph name, or null. */
 export function glyphSvg(name: string, context: GlyphContext = "inline", size?: number): SVGSVGElement | null {
+  name = canonicalGlyph(name);
   const G = GLYPHS[name];
   if (!G || typeof document === "undefined") return null;
   const s = SIZE[context];
@@ -27,11 +106,8 @@ export function glyphSvg(name: string, context: GlyphContext = "inline", size?: 
   const key = `${name}|${px}|${s.stroke}`;
   let svg = cache.get(key);
   if (!svg) {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    flushSync(() => root.render(createElement(G, { size: px, strokeWidth: s.stroke, absoluteStrokeWidth: true, "aria-hidden": true })));
-    const made = host.querySelector("svg");
-    root.unmount();
+    const data = iconData(G);
+    const made = data ? buildSvg(data, px, s.stroke) : renderSvg(G, px, s.stroke);
     if (!made) return null;
     svg = made;
     cache.set(key, svg);

@@ -2,6 +2,7 @@
   "id": "us-federal-2026",
   "name": "US Federal",
   "country": "US",
+  "currency": "USD",
   "year": 2026,
   "tier": "estimator",
   "version": "1.1.0",

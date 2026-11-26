@@ -3,7 +3,7 @@ import {
   Area, ComposedChart, Line, ReferenceLine, Tooltip, XAxis, YAxis, useActiveTooltipDataPoints, useIsTooltipActive,
 } from "recharts";
 import { lttb } from "@/lib/lttb";
-import { summarizeSeries } from "./a11y";
+import { spanLabel, summarizeSeries } from "./a11y";
 import { MARGIN, X_AXIS_HEIGHT, edgeAwareTick, niceDomain, tickFormatter, tickStyle, valueFormatter, type ValueFormat } from "./axis";
 import { ChartFrame, type ChartTable } from "./ChartFrame";
 import { defaultSeriesColor, resolveColor, useChartTheme, seriesColor, type ChartTheme } from "./theme";
@@ -175,7 +175,12 @@ export function LineChart<T extends Datum>({
   const morphUntil = useRef(0);
   if (prevData.current !== data) {
     const p = prevData.current;
-    if (p.length !== data.length || p.some((d, i) => d !== data[i])) morphUntil.current = performance.now() + 300;
+    // Compare plotted values, not row identity: callers often rebuild equal rows (a recomputed plan, a refetch), and
+    // that must not morph the line after the route has settled.
+    const keys = [x as string, ...series.map((s) => s.key as string)];
+    const same = (a: T, b: T) => a === b || keys.every((k) => (a as Record<string, unknown>)[k] === (b as Record<string, unknown>)[k]);
+    // The first real data (from nothing) is the reveal's job, not a morph.
+    if (p.length >= 2 && (p.length !== data.length || p.some((d, i) => !same(d, data[i])))) morphUntil.current = performance.now() + 300;
     prevData.current = data;
   }
   const dataMorph = performance.now() < morphUntil.current;
@@ -334,7 +339,9 @@ export function LineChart<T extends Datum>({
   const summary = useMemo(() => {
     const s = visible[0];
     if (!s) return summaryLabel;
-    return summarizeSeries(summaryLabel, data.map((d) => Number(d[s.key])), fmt, data[0] ? xFormat(data[0][x]) : undefined, data.length ? xFormat(data[data.length - 1][x]) : undefined);
+    // The span names years when the range needs them ("from Dec 2025 to Nov 2026"), not the axis's short labels.
+    const span = data.length ? spanLabel(data[0][x], data[data.length - 1][x], (v) => xFormat(v)) : "";
+    return summarizeSeries(summaryLabel, data.map((d) => Number(d[s.key])), fmt, undefined, undefined, span);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, summaryLabel]);
 

@@ -194,20 +194,18 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
             {step === "file" ? (
               <div className="flex flex-col gap-4">
                 <FileDropZone title={busy ? "Reading the statement…" : "Drop a bank statement or click to choose"} hint="CSV, OFX, QFX or QIF · nothing leaves this device" progress={busy ? null : undefined} onBrowse={() => void pick()} onFiles={() => void pick()} disabled={busy} />
-                <div className="grid grid-cols-3 gap-3">
+                <ul className="fh-notes">
                   {[
                     { t: "Sniffs the format", d: "CSV delimiters, OFX 1 & 2, QFX and QIF are detected automatically." },
                     { t: "Never double-counts", d: "Exact repeats are skipped; near-matches wait for your review." },
                     { t: "Learns as you go", d: "Rules and past choices categorise most rows for you." },
-                  ].map((x, i) => (
-                    <div key={x.t} className="fh-fact fh-cascade" style={{ ["--i" as string]: i * 3 }}>
-                      <div className="text-body-sm font-semibold">{x.t}</div>
-                      <div className="text-caption text-tertiary mt-0.5" style={{ fontWeight: 400 }}>
-                        {x.d}
-                      </div>
-                    </div>
+                  ].map((x) => (
+                    <li key={x.t}>
+                      <span className="text-body-sm font-semibold">{x.t}</span>
+                      <span className="text-body-sm text-secondary"> {x.d}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
                 {busy ? (
                   <div className="flex items-center gap-2 text-body-sm text-secondary">
                     <Spinner /> Sniffing the file…
@@ -227,7 +225,7 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
             {step === "rules" && preview && start ? (
               <div className="flex flex-col gap-4">
                 <Summary preview={preview} skip={skip} />
-                <div className="fh-card" style={{ boxShadow: "none" }}>
+                <div className="fh-card">
                   <div className="flex items-center gap-3">
                     <Switch checked={saveProfile} onCheckedChange={setSaveProfile} aria-label="Save mapping as a profile" />
                     <div className="flex-1">
@@ -515,7 +513,7 @@ function RuleSuggestions({ preview, instanceId, ledger, overrides }: { preview: 
     }
   };
   return (
-    <div className="fh-card" style={{ boxShadow: "none" }}>
+    <div className="fh-card">
       <div className="flex items-center gap-2 mb-1">
         <Wand2 size={15} className="text-accent-text" />
         <span className="text-body-sm font-semibold">Turn repeats into rules</span>
