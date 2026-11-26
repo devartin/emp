@@ -21,7 +21,6 @@ import { Skeleton } from '@/ui/Skeleton';
 import { transitions } from '@/ui/motion/presets';
 import { Editor } from '@/features/editor/Editor';
 import '@/styles/editor.css';
-import '../editor/editor-v2.css';
 import { plainText, rt } from './engine/values';
 import { RowProperties } from './properties/RowProperties';
 import { peekNeighbours, useSchema } from './store';

@@ -25,7 +25,6 @@ import { EmptyState } from '@/ui/EmptyState';
 import { Skeleton, useSkeletonDelay } from '@/ui/Skeleton';
 import { spring } from '@/ui/motion/tokens';
 import '@/styles/editor.css';
-import './editor-v2.css';
 import { Editor } from './Editor';
 import { existingSaver } from './useDocSave';
 import { REMOTE_META, type ConflictInfo, type DocSaver, type SaverSnapshot } from './useDocSave';
@@ -311,7 +310,7 @@ export default function PageView({ pageId, blockId }: PageViewProps) {
         {showSkeleton ? (
           <div className="emp-page-column">
             <div className="emp-page-head">
-              <Skeleton height={40} width="55%" radius={8} className="mt-16" />
+              <Skeleton height={40} width="55%" radius={6} className="mt-16" />
             </div>
             <div className="mt-8 flex flex-col gap-3">
               {[92, 84, 96, 60, 88, 72].map((w, i) => (

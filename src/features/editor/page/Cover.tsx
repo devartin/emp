@@ -2,7 +2,6 @@
  * Page cover (§6.1): 280px tall (≤ 30vh). Gradients (aurora, dusk, mint, sand, slate, rose) or an uploaded image with
  * drag-to-reposition (posY 0..1). Hover shows Change / Reposition.
  */
-import { m } from 'motion/react';
 import { ImagePlus, Move, Trash2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Cover as CoverT, CoverGradient, Id } from '@/backend/types';
@@ -129,14 +128,11 @@ export function Cover({ cover, workspaceId, readOnly, onChange }: { cover: Cover
   };
 
   return (
-    <m.div
+    <div
       ref={ref}
       className={cn('emp-cover', repositioning && 'is-repositioning')}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1, transition: { duration: 0.16 } }}
       onPointerDown={startDrag}
     >
-      {/* the art lives on its own layer so it can settle in from 1.02 (S22) without the cover box overflowing */}
       {cover.t === 'gradient' ? <div key={cover.v} className="emp-cover-art" data-gradient={cover.v} aria-hidden /> : null}
       {cover.t === 'asset' ? (
         url ? (
@@ -188,6 +184,6 @@ export function Cover({ cover, workspaceId, readOnly, onChange }: { cover: Cover
           )}
         </div>
       ) : null}
-    </m.div>
+    </div>
   );
 }

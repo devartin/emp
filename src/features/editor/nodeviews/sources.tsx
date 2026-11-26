@@ -2,7 +2,7 @@
  * Data sources for chart / KPI blocks (§7.1): `{kind:'db', databaseId, viewId?}`, `{kind:'sheet', workbookId, range}`,
  * `{kind:'metric', instanceId, metric}`. Loading helpers plus the setup form shared by both blocks.
  */
-import { BarChart3, Database, LineChart as LineIcon, PieChart, Sheet, Sparkles, AreaChart as AreaIcon } from 'lucide-react';
+import { BarChart3, Database, LineChart as LineIcon, PieChart, Sheet, LayoutGrid, AreaChart as AreaIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/backend';
 import type { AggFn, ChartData, ChartSpec, ChartType, DbSchema, Id, LifeAppMetric, Property } from '@/backend/types';
@@ -290,7 +290,7 @@ export function SourceSetup({ mode, initial, onDone, onCancel }: { mode: 'chart'
           {metrics === null ? <div className="emp-source-hint">Loading life apps…</div> : null}
           {metrics && !metrics.length ? (
             <div className="emp-source-hint">
-              <Sparkles size={14} /> Install a life app (Money HQ, Habits…) to use its metrics here.
+              <LayoutGrid size={14} absoluteStrokeWidth strokeWidth={1.25} /> Install a life app (Money HQ, Habits…) to use its metrics here.
             </div>
           ) : null}
           <div className="emp-source-metrics">
