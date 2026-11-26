@@ -82,6 +82,13 @@ export function fmtPrice(p: number | null | undefined, currency = baseCurrency()
   return formatNumber(p, { style: "currency", currency, currencyDisplay: "narrowSymbol", minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
+/** A price change, unsigned, at the decimals of the price it changes ($283.62 moves by $0.09, a $0.4123 coin by $0.0021). */
+export function fmtPriceMove(change: number, price: number, currency = baseCurrency()): string {
+  if (!Number.isFinite(change)) return "—";
+  const digits = Math.abs(price) < 2 ? 4 : 2;
+  return formatNumber(Math.abs(change), { style: "currency", currency, currencyDisplay: "narrowSymbol", minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** '2026-11' → 'Nov 2026'; short → 'Nov' */

@@ -1,14 +1,15 @@
 /**
- * Goals (§15.5, §16.2): emergency fund and sinking funds as progress rings with the monthly amount each needs
+ * Goals (§15.5, §16.2): emergency fund and sinking funds as 4px progress bars with the monthly amount each needs
  * (`finance_goal_plan`, annuity form when a yield is set), on-track status, and a quick "add goal".
  */
-import { CalendarDays, Check, CheckCircle2, ExternalLink, Plus, Target } from "lucide-react";
+import { CalendarDays, Check, ExternalLink, Plus, Target } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/backend";
 import { navigate } from "@/app/router";
 import { notify } from "@/stores/toasts";
-import { Badge } from "@/ui/Badge";
+import { cn } from "@/lib/cn";
+import { formatNumber } from "@/lib/format";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { Input } from "@/ui/Input";
@@ -17,12 +18,11 @@ import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { dayLabel, daysBetween, num, todayIso, fmtWhole } from "../shared/format";
+import { dayLabel, daysBetween, fmtPct, num, todayIso, fmtWhole } from "../shared/format";
 import { useAsync, V } from "../shared/hooks";
 import { Glyph, Quiet } from "../shared/ui";
 import { useLedgerCtx, type GoalRow } from "./ledger";
 import { useMoney } from "./MoneyHQ";
-import { BudgetRing } from "./widgets";
 
 export default function Goals() {
   const l = useLedgerCtx();
@@ -43,31 +43,25 @@ export default function Goals() {
   if (l.loading) return <Skeleton height={360} radius={10} />;
   return (
     <div className="flex flex-col gap-4">
-      <section className="fh-card flex items-center gap-6">
-        <BudgetRing ratio={totalTarget ? totalSaved / totalTarget : 0} size={76} stroke={7} color="var(--chart-line)">
-          <span className="text-body-sm font-semibold tabular">
-            <RollingNumber value={totalTarget ? Math.round((totalSaved / totalTarget) * 100) : 0} format={(n) => `${Math.round(n)}%`} countUp={false} />
-          </span>
-        </BudgetRing>
-        <div className="flex-1">
-          <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
-            Saved toward {l.goals.length} goals
-          </div>
-          <div className="tabular text-kpi-xl">
-            <span data-sensitive="">
+      {/* No ring (DESIGN §6.3: zero rings in Money): a labelled figure over one 4px bar. */}
+      <section className="fh-card flex items-start gap-6">
+        <div className="flex-1 min-w-0">
+          <div className="text-caption text-secondary font-medium">Saved toward {l.goals.length} goals</div>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span data-sensitive="" className="emp-amount" data-role="hero">
               <RollingNumber value={totalSaved} format={(n) => fmtWhole(Math.round(n))} sensitive countUp={false} />
             </span>
-            <span className="text-tertiary" style={{ fontSize: 16, fontWeight: 500 }}>
-              {" "}
-              of <Sensitive>{fmtWhole(totalTarget)}</Sensitive>
+            <span className="text-body text-tertiary">
+              of <Sensitive>{fmtWhole(totalTarget)}</Sensitive> · {fmtPct(totalTarget ? totalSaved / totalTarget : 0, 0)}
             </span>
           </div>
-          <div className="text-body-sm text-tertiary">
+          <GoalBar ratio={totalTarget ? totalSaved / totalTarget : 0} className="mt-3 max-w-[480px]" />
+          <div className="text-body-sm text-tertiary mt-2">
             Needs about <Sensitive>{fmtWhole(monthly)}</Sensitive> a month across dated goals
-            {overview ? ` · emergency fund covers ${overview.efMonths.toFixed(1)} months of essentials` : ""}
+            {overview ? ` · emergency fund covers ${formatNumber(overview.efMonths, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} months of essentials` : ""}
           </div>
         </div>
-        <Button variant="primary" size="sm" icon={Plus} iconMotion="plus" onClick={() => setAdding(true)}>
+        <Button variant="primary" size="sm" icon={Plus} onClick={() => setAdding(true)}>
           New goal
         </Button>
       </section>
@@ -98,12 +92,10 @@ type Plan = Awaited<ReturnType<typeof api.finance.goalPlan>> | null;
 
 /**
  * A goal plate. Unlinked goals take contributions inline ("Add money"); the one that crosses its target gets the S8
- * moment: the ring settles full, the figure rolls, the centre check pops with --glow-gain, then mini-slabs burst from
- * the ring and a toast follows at +400ms.
+ * confirmation: the bar fills, the figure rolls (after your own edit) and a toast follows. No particles.
  */
 function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan }) {
   const l = useLedgerCtx();
-  const ringRef = useRef<HTMLDivElement>(null);
   const [adding, setAdding] = useState(false);
   const [amount, setAmountState] = useState<string | null>(null);
   // the money field commits on blur/Enter; mirror it in a ref so submit can read the committed value at once
@@ -152,26 +144,14 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
   return (
     <article className="fh-goal" data-done={done ? "" : undefined}>
       <div className="flex items-start gap-3">
-        <div ref={ringRef} className="relative flex-none">
-          <BudgetRing ratio={ratio} size={64} stroke={6} color={done ? "var(--gain)" : "var(--chart-line)"}>
-            <AnimatePresence initial={false} mode="popLayout">
-              {done ? (
-                <m.span key="done" className="fh-goal-check" initial={moment ? { scale: 0.2, opacity: 0 } : false} animate={{ scale: 1, opacity: 1 }} transition={{ ...spring.pop, delay: moment ? 0.5 : 0 }}>
-                  <Check size={18} strokeWidth={3} />
-                </m.span>
-              ) : (
-                <m.span key="glyph" exit={{ scale: 0.6, opacity: 0, transition: { duration: 0.12 } }}>
-                  <Glyph name={g.icon} color={g.kind === "emergency" ? "green" : g.kind === "sinking" ? "blue" : "purple"} size={32} />
-                </m.span>
-              )}
-            </AnimatePresence>
-          </BudgetRing>
-        </div>
+        <span className="flex-none mt-0.5 text-secondary" aria-hidden>
+          {done ? <Check size={16} absoluteStrokeWidth strokeWidth={1.25} /> : <Glyph name={g.icon} size={16} />}
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <h3 className="m-0 truncate text-body font-semibold">{g.name}</h3>
           </div>
-          <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
+          <div className="text-caption text-tertiary">
             {g.kind === "emergency" ? "Emergency fund" : g.kind === "sinking" ? "Sinking fund" : "Savings goal"}
             {g.accountId ? ` · ${l.acct.get(g.accountId)?.name ?? ""}` : ""}
           </div>
@@ -184,13 +164,12 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
               / <Sensitive>{fmtWhole(g.target)}</Sensitive>
             </span>
           </div>
+          <GoalBar ratio={ratio} className="mt-2" />
         </div>
         {done ? (
-          <Badge tone="gain" icon={CheckCircle2}>
-            Funded
-          </Badge>
+          <span className="text-caption text-secondary">Funded</span>
         ) : (
-          <span className="text-caption text-secondary tabular font-semibold">
+          <span className="text-caption text-secondary tabular font-medium">
             <RollingNumber value={Math.round(ratio * 100)} format={(n) => `${Math.round(n)}%`} countUp={false} />
           </span>
         )}
@@ -310,5 +289,15 @@ function AddGoal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </Dialog>
+  );
+}
+
+/** Goal progress: a 4px ink bar on a flat track (no ring). Set, not animated, on arrival. */
+function GoalBar({ ratio, className }: { ratio: number; className?: string }) {
+  const r = Math.max(0, Math.min(1, Number.isFinite(ratio) ? ratio : 0));
+  return (
+    <div className={cn("fh-meter", className)} role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(r * 100)} aria-label="Saved toward target">
+      <i style={{ transform: `scaleX(${r})` }} />
+    </div>
   );
 }

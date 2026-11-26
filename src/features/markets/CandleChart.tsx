@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import type { SymbolKey } from "@/backend/types";
 import { CandleChart as LwCandles, type CandleMode, type Ohlcv } from "@/charts/Candles";
-import { cn } from "@/lib/cn";
+import { Delta } from "@/ui/Delta";
 import { Segmented } from "@/ui/Segmented";
 import { fmtPrice } from "../finance/shared/format";
 import { baseCurrency } from "../finance/shared/currency";
@@ -31,7 +31,7 @@ export interface PriceChartProps {
   onRangeChange?: (r: ChartRange, bars: Ohlcv[]) => void;
 }
 
-export default function PriceChart({ symbol, currency = baseCurrency(), height = 340, defaultRange = "6m", defaultMode = "area", indicators = true }: PriceChartProps) {
+export default function PriceChart({ symbol, currency = baseCurrency(), height = 340, defaultRange = "6m", defaultMode = "line", indicators = true }: PriceChartProps) {
   const [range, setRange] = useState<ChartRange>(defaultRange);
   const [mode, setMode] = useState<CandleMode>(defaultMode);
   const [smas, setSmas] = useState<number[]>([20, 50]);
@@ -62,11 +62,8 @@ export default function PriceChart({ symbol, currency = baseCurrency(), height =
               <i>C</i>
               {fmtPrice(shown.close, currency)}
             </span>
-            <span className={cn(change >= 0 ? "emp-gain" : "emp-loss")} style={{ fontWeight: 600 }}>
-              {change >= 0 ? "+" : "−"}
-              {Math.abs(changePct * 100).toFixed(2)}%
-            </span>
-            {hover ? <span className="text-tertiary">{new Date(Number(hover.time) * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span> : <span className="text-tertiary">{RANGES.find((r) => r.value === range)?.label} change</span>}
+            {/* A return over the range: one decimal, written as a delta (DESIGN §6.2). */}
+            <Delta percent={changePct} label={hover ? new Date(Number(hover.time) * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : `${RANGES.find((r) => r.value === range)?.label} change`} />
           </>
         ) : null}
       </div>

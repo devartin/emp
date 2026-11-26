@@ -254,7 +254,7 @@ export default function Transactions() {
           <span className="ml-auto inline-flex items-center gap-4 tabular">
             <span>
               <span className="text-tertiary">In </span>
-              <Amount value={toMoney(totals.inflow)} className="text-gain-text font-medium" />
+              <Amount value={toMoney(totals.inflow)} className="font-medium" />
             </span>
             <span>
               <span className="text-tertiary">Out </span>
@@ -360,7 +360,7 @@ function TxnRow({ t, newDay, selected, onToggle, onDisclose, onCategorize, onSpl
           {acct?.name ?? "—"}
         </span>
         <span className="fh-txn-amt">
-          <Amount value={toMoney(t.amount)} colored={t.amount > 0} signed={t.amount > 0} dimCents className="text-body-sm font-medium" align="end" />
+          <Amount value={toMoney(t.amount)} signed={t.amount > 0} dimCents className="text-body-sm font-medium" align="end" />
         </span>
         <span className="w-8 flex items-center justify-end gap-0.5">
           <Menu>
@@ -534,7 +534,7 @@ function SplitDialog({ txn, onClose }: { txn: Txn; onClose: () => void }) {
           <Button size="sm" variant="ghost" icon={Plus} onClick={() => setParts((ps) => [...ps, { categoryId: "", amount: Math.max(0, remaining).toFixed(2) }])}>
             Add part
           </Button>
-          <span className={cn("ml-auto text-body-sm tabular", Math.abs(remaining) < 0.005 ? "text-gain-text" : "text-warning-text")}>
+          <span className={cn("ml-auto text-body-sm tabular", Math.abs(remaining) < 0.005 ? "text-secondary" : "text-warning-text")}>
             {Math.abs(remaining) < 0.005 ? (
               <span className="inline-flex items-center gap-1">
                 <Check size={14} /> Balanced

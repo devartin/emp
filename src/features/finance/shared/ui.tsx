@@ -297,3 +297,12 @@ export function Quiet({ icon: I = Info, title, body, action }: { icon?: IconComp
     </div>
   );
 }
+
+/**
+ * A signed figure coloured by gain / loss (table change columns, unrealised gains). The same output as the kit's
+ * `GainLoss`, kept here so finance screens no longer import from `@/ui/DeltaPill` (DESIGN §6.2: new code uses `Delta`).
+ */
+export function Signed({ value, children, invert, className }: { value: number; children: ReactNode; invert?: boolean; className?: string }) {
+  const up = value > 0 !== !!invert;
+  return <span className={cn(value === 0 ? "text-secondary" : up ? "emp-gain" : "emp-loss", "tabular", className)}>{children}</span>;
+}

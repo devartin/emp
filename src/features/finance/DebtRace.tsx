@@ -4,12 +4,11 @@
  * counts what each lane has paid so far. At the line the lane with less interest takes the trophy (pop + gain glow).
  * Click or any key skips to the end; reduced motion shows the finished race.
  */
-import { RotateCcw, Trophy } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { animate, m, useMotionValue, useMotionValueEvent, useTransform, type MotionValue } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DebtPlan } from "@/backend/types";
 import { Button } from "@/ui/Button";
-import { spring } from "@/ui/motion/tokens";
 import { isReducedMotion, usePrivacy } from "@/ui/motion/useReducedEffects";
 import { monthLabel, num, fmtWhole } from "./shared/format";
 
@@ -103,7 +102,7 @@ export function DebtRace({ plans, debts, minimumLabel }: { plans: Record<string,
         <span>{monthLabel(lanes[winner].payoff)}</span>
       </div>
       {lanes.map((l, i) => (
-        <RaceLane key={l.id} lane={l} clock={clock} maxMonths={maxMonths} won={done && i === winner} lost={done && i !== winner} replayed={run > 0} />
+        <RaceLane key={l.id} lane={l} clock={clock} maxMonths={maxMonths} won={done && i === winner} lost={done && i !== winner} />
       ))}
       <div className="fh-race-foot">
         <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
@@ -137,7 +136,7 @@ export function DebtRace({ plans, debts, minimumLabel }: { plans: Record<string,
   );
 }
 
-function RaceLane({ lane, clock, maxMonths, won, lost, replayed }: { lane: Lane; clock: MotionValue<number>; maxMonths: number; won: boolean; lost: boolean; replayed: boolean }) {
+function RaceLane({ lane, clock, maxMonths, won, lost }: { lane: Lane; clock: MotionValue<number>; maxMonths: number; won: boolean; lost: boolean }) {
   const privacy = usePrivacy();
   const end = lane.months / maxMonths;
   const t = useTransform(clock, (c) => Math.min(c, lane.months));
@@ -183,11 +182,8 @@ function RaceLane({ lane, clock, maxMonths, won, lost, replayed }: { lane: Lane;
       </div>
       <div className="fh-race-result tabular">
         <span>{monthLabel(lane.payoff)}</span>
-        {won ? (
-          <m.span className="fh-race-trophy" initial={replayed ? { scale: 0.6, opacity: 0 } : false} animate={{ scale: 1, opacity: 1 }} transition={spring.pop}>
-            <Trophy size={12} strokeWidth={2.4} />
-          </m.span>
-        ) : null}
+        {/* The winner is named in words, not a trophy: routine results get no celebration (DESIGN §7). */}
+        {won ? <span className="text-caption text-secondary font-normal">least interest</span> : null}
       </div>
     </div>
   );

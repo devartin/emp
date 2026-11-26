@@ -41,6 +41,28 @@ export function loadDebtPlanChoice(instanceId: Id): Promise<void> {
   return store.getState().load(instanceId);
 }
 
+/** What the planner shows before any choice is saved. Shown, never written: opening or computing saves nothing. */
+export const DEFAULT_DEBT_PLAN: DebtPlanChoice = { strategy: "avalanche", extra: 200 };
+
+/**
+ * The choice to save after a user action in the planner, or `null` when the action is not a real edit (owner decision,
+ * Phase 2): nothing is written unless the committed strategy or extra differs from what the planner showed before the
+ * action — the saved choice, or `DEFAULT_DEBT_PLAN` when there is none. Releasing the slider where it started,
+ * re-picking the selected strategy, a custom order, or an edited what-if (debts that are not the ledger's) save nothing.
+ */
+export function choiceToSave(saved: DebtPlanChoice | null | undefined, next: { strategy: string; extra: number }, isLedgerDebts: boolean): DebtPlanChoice | null {
+  if (!isLedgerDebts) return null;
+  const c = parseChoice(next);
+  if (!c) return null;
+  const base = saved ?? DEFAULT_DEBT_PLAN;
+  return c.strategy === base.strategy && c.extra === base.extra ? null : c;
+}
+
+/** Which Debt-free scenario the Overview shows: "plan" only once a choice was saved by an edit, else "minimum". */
+export function debtFreeKind(saved: DebtPlanChoice | null | undefined): "plan" | "minimum" {
+  return saved ? "plan" : "minimum";
+}
+
 /** Save the user's choice (call only from a user action). No write when it is unchanged. */
 export function saveDebtPlanChoice(instanceId: Id, c: DebtPlanChoice): Promise<void> {
   const prev = store.getState().values[instanceId];

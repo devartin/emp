@@ -314,7 +314,7 @@ function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts
         <span className="text-body-sm text-secondary">
           {start.rowCount.toLocaleString()} rows · {start.encoding}
         </span>
-        {start.profileMatch ? <Badge tone="gain">Profile: {start.profileMatch.name}</Badge> : null}
+        {start.profileMatch ? <Badge tone="neutral">Profile: {start.profileMatch.name}</Badge> : null}
         {previewing ? <Spinner size={14} className="ml-auto" /> : null}
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -359,12 +359,12 @@ function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts
           How Ultra Note reads it
         </div>
         <div className="fh-parsed">
-          {(preview?.rows ?? []).slice(0, 4).map((r, i) => (
-            <div key={`${r.idx}:${r.payee}:${r.amount}`} className="flex items-center gap-3 text-body-sm fh-decode" style={{ ["--i" as string]: i }}>
-              <Check size={13} strokeWidth={2.6} className="fh-decode-tick" />
+          {(preview?.rows ?? []).slice(0, 4).map((r) => (
+            <div key={`${r.idx}:${r.payee}:${r.amount}`} className="flex items-center gap-3 text-body-sm">
+              <Check size={14} absoluteStrokeWidth strokeWidth={1.25} className="flex-none text-secondary" />
               <span className="w-[86px] text-tertiary tabular">{dayLabel(r.date, true)}</span>
               <span className="flex-1 truncate font-medium">{r.payee}</span>
-              <Amount value={toMoney(r.amount)} colored={num(r.amount) > 0} signed={num(r.amount) > 0} align="end" />
+              <Amount value={toMoney(r.amount)} signed={num(r.amount) > 0} align="end" />
             </div>
           ))}
           {!preview?.rows.length ? <div className="text-body-sm text-tertiary">Pick at least a date, an amount and a payee column.</div> : null}
@@ -386,8 +386,8 @@ function Summary({ preview, skip }: { preview: FinanceImportPreview; skip: Set<n
   ];
   return (
     <div className="fh-import-sum">
-      {items.map((x, i) => (
-        <div key={x.l} className="fh-import-stat fh-cascade" data-tone={x.tone} style={{ ["--i" as string]: i * 2 }}>
+      {items.map((x) => (
+        <div key={x.l} className="fh-import-stat" data-tone={x.tone}>
           <span className="tabular">
             <RollingNumber value={x.n} format={(n) => Math.round(n).toLocaleString()} countUp={false} />
           </span>
@@ -433,12 +433,12 @@ function ReviewStep({ preview, skip, setSkip, overrides, setOverrides, ledger }:
         ]}
       />
       <div className="fh-review">
-        {rows.slice(0, 400).map((r, ri) => {
+        {rows.slice(0, 400).map((r) => {
           const catId = overrides[r.idx]?.categoryId ?? r.categoryId;
           const cat = catId ? ledger.cat.get(catId) : undefined;
           const skipped = skip.has(r.idx);
           return (
-            <div key={r.idx} className={cn("fh-review-row", ri < 14 && "fh-cascade")} style={ri < 14 ? { ["--i" as string]: Math.min(12, ri) } : undefined} data-skipped={skipped ? "" : undefined}>
+            <div key={r.idx} className="fh-review-row" data-skipped={skipped ? "" : undefined}>
               <Checkbox checked={!skipped} onCheckedChange={() => toggle(r.idx)} aria-label={skipped ? "Include" : "Skip"} disabled={!!r.duplicateOf} />
               <span className="w-[64px] text-caption text-tertiary tabular">{dayLabel(r.date)}</span>
               <span className="flex-1 min-w-0">
@@ -478,7 +478,7 @@ function ReviewStep({ preview, skip, setSkip, overrides, setOverrides, ledger }:
                 />
               )}
               <span className="w-[96px] flex justify-end">
-                <Amount value={toMoney(r.amount)} colored={num(r.amount) > 0} signed={num(r.amount) > 0} className="text-body-sm font-medium" align="end" />
+                <Amount value={toMoney(r.amount)} signed={num(r.amount) > 0} className="text-body-sm font-medium" align="end" />
               </span>
             </div>
           );

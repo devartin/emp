@@ -2,7 +2,7 @@
  * Recurring & subscriptions (§15.4, §16.2): a 30-day cash calendar, bills and income on a schedule, subscriptions
  * with annual cost and price-rise flags, and detected recurring payments to accept with one click.
  */
-import { ArrowUpRight, CalendarClock, Check, ExternalLink, Plus, Radar, Repeat, TrendingUp } from "lucide-react";
+import { ArrowUpRight, CalendarClock, Check, ExternalLink, Plus, Radar, Repeat } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useMemo, useState } from "react";
 import { api } from "@/backend";
@@ -13,8 +13,9 @@ import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
+import { Delta } from "@/ui/Delta";
 import { Tooltip } from "@/ui/Tooltip";
-import { dayLabel, fmtMoney, fmtPct, relDays, toMoney, todayIso, fmtWhole } from "../shared/format";
+import { dayLabel, fmtMoney, relDays, toMoney, todayIso, fmtWhole } from "../shared/format";
 import { useAsync, useDbChanged } from "../shared/hooks";
 import { Glyph, Quiet, Section } from "../shared/ui";
 import { useLedgerCtx, type RecurringRow } from "./ledger";
@@ -120,7 +121,7 @@ function List({ rows }: { rows: { r: RecurringRow; next: string | null }[] }) {
               </div>
             </div>
             <div className="w-[96px] flex justify-end">
-              <Amount value={toMoney(r.amount)} colored={r.amount > 0} signed={r.amount > 0} className="text-body-sm font-semibold" align="end" />
+              <Amount value={toMoney(r.amount)} signed={r.amount > 0} className="text-body-sm font-medium" align="end" />
             </div>
           </div>
         );
@@ -143,7 +144,7 @@ function SubRow({ r, next, share }: { r: RecurringRow; next: string | null; shar
           {rise ? (
             <Tooltip content={`Was ${fmtMoney(Math.abs(r.prevAmount!))} · +${fmtMoney((Math.abs(r.amount) - Math.abs(r.prevAmount!)) * 12)} a year`}>
               <span className="fh-rise" tabIndex={0}>
-                <TrendingUp size={11} />+{fmtPct((Math.abs(r.amount) - Math.abs(r.prevAmount!)) / Math.abs(r.prevAmount!), 0)}
+                <Delta percent={(Math.abs(r.amount) - Math.abs(r.prevAmount!)) / Math.abs(r.prevAmount!)} digits={0} invert />
               </span>
             </Tooltip>
           ) : null}
@@ -252,7 +253,7 @@ function Detected({ list, onAccepted }: { list: RecurringCandidate[]; onAccepted
                   ) : null}
                 </div>
               </div>
-              <Amount value={c.amount} colored={Number(c.amount.amount) > 0} className="text-body-sm font-semibold w-[90px] text-right" align="end" />
+              <Amount value={c.amount} signed={Number(c.amount.amount) > 0} className="text-body-sm font-medium w-[90px] text-right" align="end" />
               {Number(c.amount.amount) > 0 ? (
                 <Button size="xs" variant="secondary" icon={Plus} loading={busy === c.payee} onClick={() => accept(c, "income")}>
                   Income

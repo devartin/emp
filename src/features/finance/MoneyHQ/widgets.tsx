@@ -1,10 +1,8 @@
-/** Money HQ widgets: budget ring + envelope, metric card, hero money, transaction row. */
+/** Money HQ widgets: budget envelope, metric card, hero money, transaction row. */
 import { Split } from "lucide-react";
-import { m } from "motion/react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Amount } from "@/ui/Amount";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Sensitive } from "@/ui/Sensitive";
 import { Tooltip } from "@/ui/Tooltip";
 import { dayLabel, toMoney, fmtWhole } from "../shared/format";
@@ -17,49 +15,6 @@ export function budgetTone(ratio: number): string {
   return ratio > 1 ? "var(--loss)" : ratio >= 0.75 ? "var(--warning)" : "var(--accent-solid)";
 }
 
-/**
- * Progress ring with a pace tick and an overflow "second lap" at .5 (§5.10 budget bar, as a ring). Final from the
- * first frame (K3: no draw-in on arrival); a change while mounted (your own edit) eases over 240 ms.
- */
-export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children, className }: { ratio: number; pace?: number | null; size?: number; stroke?: number; color?: string; children?: ReactNode; delay?: number; className?: string }) {
-  const reduced = useReducedMotionPref();
-  const change = reduced ? { duration: 0 } : { duration: 0.24, ease: [0.2, 0, 0, 1] as const };
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const first = Math.max(0, Math.min(1, ratio));
-  const lap = ratio > 1 ? Math.min(1, ratio - 1) : 0;
-  const tone = color ?? budgetTone(ratio);
-  const theta = pace !== undefined && pace !== null ? Math.max(0, Math.min(1, pace)) * Math.PI * 2 : null;
-    return (
-    <span className={cn("fh-ring-wrap relative inline-flex items-center justify-center flex-none", className)} style={{ width: size, height: size }} role="img" aria-label={`${Math.round(ratio * 100)}% used`}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden style={{ transform: "rotate(-90deg)", overflow: "visible" }}>
-        {/* flat track (v3: no engraved groove) */}
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} style={{ stroke: "var(--bg-surface-3)" }} />
-        <m.circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          style={{ stroke: tone }}
-          strokeDasharray={c}
-          initial={false}
-          animate={{ strokeDashoffset: c * (1 - first) }}
-          transition={change}
-        />
-        {lap > 0 ? (
-          <m.circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" style={{ stroke: tone, opacity: 0.5 }} strokeDasharray={c} initial={false} animate={{ strokeDashoffset: c * (1 - lap) }} transition={change} />
-        ) : null}
-        {theta !== null ? (
-          /* pace marker: a small ink dome sitting on the track centre-line, not a line crossing the stroke */
-          <m.circle cx={size / 2 + r * Math.cos(theta)} cy={size / 2 + r * Math.sin(theta)} r={Math.max(1.75, stroke / 2)} style={{ fill: "var(--text-primary)", stroke: "var(--bg-surface-1)", strokeWidth: 1 }} initial={false} animate={{ opacity: 1 }} transition={change} />
-        ) : null}
-      </svg>
-      {children ? <span className="absolute inset-0 inline-flex items-center justify-center">{children}</span> : null}
-    </span>
-  );
-}
 
 export interface EnvelopeData {
   category: Category;

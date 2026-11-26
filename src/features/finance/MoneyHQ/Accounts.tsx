@@ -178,7 +178,7 @@ function AccountRow({ a, value, spark, viaPortfolio, pfInstance, onReconcile }: 
           {[a.institution, ACCOUNT_TYPE_LABEL[a.type], a.apr !== null ? `${a.apr.toFixed(2)}% APR` : null, debt && a.minPayment ? `min ${fmtWhole(a.minPayment)}/mo` : null].filter(Boolean).join(" · ")}
         </div>
       </div>
-      <div className="fh-acct-spark">{!viaPortfolio && spark.length > 1 ? <Sparkline data={spark} height={28} color={debt ? "accent" : "trend"} aria-label={`${a.name} balance, last 90 days`} /> : null}</div>
+      <div className="fh-acct-spark">{!viaPortfolio && spark.length > 1 ? <Sparkline data={spark} height={28} color="ink" aria-label={`${a.name} balance, last 90 days`} /> : null}</div>
       <div className="fh-acct-mid">
         {util !== null ? (
           <Tooltip content={`${fmtPct(util, 0)} of ${fmtWhole(a.limit ?? 0)} limit`}>

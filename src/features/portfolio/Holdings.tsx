@@ -6,13 +6,12 @@ import type { Id, PortfolioSummary } from "@/backend/types";
 import { navigate } from "@/app/router";
 import { useQuotes } from "@/stores/market";
 import { Badge } from "@/ui/Badge";
-import { GainLoss } from "@/ui/DeltaPill";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { daysBetween, dayLabel, fmtPct, fmtPrice, fmtQty, num, todayIso, fmtWhole } from "../finance/shared/format";
 import { useFlip } from "../finance/shared/hooks";
-import { disclose, Section } from "../finance/shared/ui";
+import { Section, Signed, disclose } from "../finance/shared/ui";
 import { ticker } from "../markets/data";
 import { usePortfolioBook } from "./data";
 
@@ -52,7 +51,6 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
                   <td>
                     <div className="flex items-center gap-2.5">
                       <ChevronRight size={14} className="text-tertiary" style={{ transform: isOpen ? "rotate(90deg)" : undefined, transition: "transform 160ms cubic-bezier(.2,0,0,1)" }} />
-                      <span className="pf-ticker-chip">{ticker(h.symbol).slice(0, 4)}</span>
                       <span className="min-w-0">
                         <button type="button" className="block font-medium hover:underline underline-offset-4" onClick={(e) => { e.stopPropagation(); navigate({ t: "app", instanceId, tab: `holding:${h.symbol}` }); }}>
                           {ticker(h.symbol)}
@@ -64,7 +62,7 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
                     </div>
                   </td>
                   <td>
-                    <Badge tone="outline">{h.assetClass}</Badge>
+                    <span className="text-secondary">{h.assetClass}</span>
                   </td>
                   <td className="num"><Sensitive align="end">{fmtQty(h.qty)}</Sensitive></td>
                   <td className="num">
@@ -73,7 +71,7 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
                   <td className="num font-medium"><Sensitive align="end">{fmtWhole(q ? q.price * num(h.qty) : h.value.amount)}</Sensitive></td>
                   <td className="num text-secondary"><Sensitive align="end">{fmtWhole(h.costBasis.amount, { currency: h.costBasis.currency })}</Sensitive></td>
                   <td className="num">
-                    <GainLoss value={num(h.gain.amount)}><Sensitive align="end">{fmtWhole(h.gain.amount, { signed: true, currency: h.gain.currency })}</Sensitive></GainLoss>
+                    <Signed value={num(h.gain.amount)}><Sensitive align="end">{fmtWhole(h.gain.amount, { signed: true, currency: h.gain.currency })}</Sensitive></Signed>
                     <div className="text-caption text-tertiary">{fmtPct(h.gainPct, 1, true)}</div>
                   </td>
                   <td className="num text-secondary">{(h.weight * 100).toFixed(1)}%</td>
@@ -112,7 +110,7 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
                                       <td className="num"><Sensitive align="end">{fmtQty(l.qty)}</Sensitive></td>
                                       <td className="num text-secondary">{fmtPrice(l.costPerUnit)}</td>
                                       <td className="num"><Sensitive align="end">{fmtWhole(l.costPerUnit * l.qty)}</Sensitive></td>
-                                      <td className="num"><GainLoss value={gain}><Sensitive align="end">{fmtWhole(gain, { signed: true })}</Sensitive></GainLoss></td>
+                                      <td className="num"><Signed value={gain}><Sensitive align="end">{fmtWhole(gain, { signed: true })}</Sensitive></Signed></td>
                                       <td>{l.taxTreatment === "taxable" ? <Badge tone={long ? "neutral" : "warning"}>{long ? "Long-term" : "Short-term"}</Badge> : <span className="text-tertiary text-caption">Sheltered</span>}</td>
                                     </tr>
                                   );

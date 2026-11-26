@@ -23,7 +23,7 @@ import type { TabItem } from "@/ui/Tabs";
 import { Tooltip } from "@/ui/Tooltip";
 import "../finance/shared/finance.css";
 import { daysBetween, dayLabel, num, todayIso } from "../finance/shared/format";
-import { HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
+import { Disclaimer, HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
 import { DOC_FLOW, DOC_LABEL, STATUS_LABEL, TaxCtx, dueAtFilingText, taxMoney, useTax, useTaxData, type DocRow } from "./data";
 import { Figure } from "../finance/shared/Figure";
 import { figureLabel, itemisedComparison, noPaymentNeeded, safeHarbourKnown, type FigureId } from "../finance/shared/definitions";
@@ -69,10 +69,15 @@ export default function TaxHub({ instanceId, tab }: TaxHubProps) {
         tabs={tabs}
         tab={current}
         onTab={go}
+        footer={current === "estimator" ? undefined : <Disclaimer>{disclaimer}</Disclaimer>}
       >
-        <Banner tone="warning" icon={ShieldAlert} inline className="tx-disclaimer">
-          {disclaimer}
-        </Banner>
+        {/* The disclaimer is on every tab (SPEC §15); the banner form sits on the Estimator only (PROGRAMME-v3 K4),
+            elsewhere it is the quiet footer every finance hub carries. */}
+        {current === "estimator" ? (
+          <Banner tone="warning" icon={ShieldAlert} inline className="tx-disclaimer">
+            {disclaimer}
+          </Banner>
+        ) : null}
         <Suspense fallback={<Skeleton height={420} radius={10} />}>
           {current === "overview" ? <Overview go={go} instanceId={instanceId} /> : null}
           {current === "estimator" ? <Estimator /> : null}
@@ -163,7 +168,7 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
                   <tr key={d.period} data-status={d.status}>
                     <td className="font-medium">{d.period}</td>
                     <td className="text-secondary">{dayLabel(d.date)}</td>
-                    <td className="text-secondary">{d.status === "paid" ? <span className="inline-flex items-center gap-1 text-gain-text"><Check size={13} /> Paid</span> : d.status === "late" ? <span className="text-loss-text">Past due</span> : d.status === "due_soon" ? <span className="text-warning-text">Due soon</span> : num(d.suggested) === 0 ? <span className={noPayment.needsInput ? "text-warning-text" : "text-tertiary"}>{noPayment.short}</span> : "Suggested"}</td>
+                    <td className="text-secondary">{d.status === "paid" ? <span className="inline-flex items-center gap-1 text-secondary"><Check size={13} /> Paid</span> : d.status === "late" ? <span className="text-loss-text">Past due</span> : d.status === "due_soon" ? <span className="text-warning-text">Due soon</span> : num(d.suggested) === 0 ? <span className={noPayment.needsInput ? "text-warning-text" : "text-tertiary"}>{noPayment.short}</span> : "Suggested"}</td>
                     <td className="num font-medium">{d.status !== "paid" && num(d.suggested) === 0 ? null : <Sensitive align="end">{fmtWhole(d.status === "paid" ? d.paid : d.suggested)}</Sensitive>}</td>
                   </tr>
                 ))}
@@ -176,9 +181,9 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
         <Section title="Deductions vs standard" actions={<Button size="xs" variant="ghost" iconRight={ChevronRight} onClick={() => go("deductions")}>Log</Button>}>
           {est ? (
             <div className="flex flex-col gap-3">
-              <DedBar figure={cmp?.id ?? "tax.logged"} label={figureLabel(cmp?.id ?? "tax.logged")} value={itemized} max={Math.max(std, itemized) * 1.08} tone={itemized > std ? "gain" : "neutral"} inputs={cmp?.id === "tax.itemised" ? [{ label: "Logged before floors and caps", value: fmtWhole(logged) }, ...(est ? [{ label: "AGI (medical floor 7.5%)", value: fmtWhole(est.agi) }] : [])] : undefined} />
-              <DedBar figure="tax.standard" label={figureLabel("tax.standard")} value={std} max={Math.max(std, itemized) * 1.08} tone="accent" inputs={cmp && cmp.nonItemiserCharity > 0.5 ? [{ label: "Standard deduction alone", value: fmtWhole(cmp.standardBase) }, { label: "Cash gifts (non-itemiser deduction)", value: fmtWhole(cmp.nonItemiserCharity) }] : undefined} />
-              <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
+              <DedBar figure={cmp?.id ?? "tax.logged"} label={figureLabel(cmp?.id ?? "tax.logged")} value={itemized} max={Math.max(std, itemized)} tone={itemized > std ? "gain" : "neutral"} inputs={cmp?.id === "tax.itemised" ? [{ label: "Logged before floors and caps", value: fmtWhole(logged) }, ...(est ? [{ label: "AGI (medical floor 7.5%)", value: fmtWhole(est.agi) }] : [])] : undefined} />
+              <DedBar figure="tax.standard" label={figureLabel("tax.standard")} value={std} max={Math.max(std, itemized)} tone="accent" inputs={cmp && cmp.nonItemiserCharity > 0.5 ? [{ label: "Standard deduction alone", value: fmtWhole(cmp.standardBase) }, { label: "Cash gifts (non-itemiser deduction)", value: fmtWhole(cmp.nonItemiserCharity) }] : undefined} />
+              <span className="text-caption text-tertiary">
                 {itemized > std ? "Itemising is larger this year." : `Itemising is ${fmtWhole(std - itemized)} short of the standard deduction.`}
               </span>
             </div>
@@ -214,9 +219,10 @@ function DedBar({ label, value, max, tone, figure, inputs }: { label: string; va
           </Figure>
         </span>
       </div>
-      <div className="fh-meter" style={{ height: 10 }}>
-        {/* Set, not animated: the bars follow the estimate as it arrives (no motion on arrival). */}
-        <i style={{ transform: `scaleX(${max ? value / max : 0})`, transition: "none", background: tone === "gain" ? "var(--gain)" : tone === "accent" ? "var(--accent-solid)" : "color-mix(in oklab, var(--text-primary) 35%, transparent)" }} />
+      {/* Both bars share one scale: the larger of the two fills the track, so $0 against $16,530 reads empty and full.
+          Set, not animated: the bars follow the estimate as it arrives (no motion on arrival). */}
+      <div className="fh-meter tx-ded-meter" data-tone={tone}>
+        <i style={{ transform: `scaleX(${max > 0 ? Math.min(1, Math.max(0, value / max)) : 0})` }} />
       </div>
     </div>
   );
@@ -358,7 +364,7 @@ function Deductions() {
                   </td>
                   <td><Badge tone="outline">{d.categoryName}</Badge></td>
                   <td className="text-secondary">{d.date ? dayLabel(d.date, true) : "—"}</td>
-                  <td>{d.receipt ? <span className="inline-flex items-center gap-1 text-caption text-gain-text"><Check size={13} /> Kept</span> : d.amount > 250 ? <Badge tone="warning">Missing</Badge> : <span className="text-caption text-tertiary">—</span>}</td>
+                  <td>{d.receipt ? <span className="inline-flex items-center gap-1 text-caption text-secondary"><Check size={14} absoluteStrokeWidth strokeWidth={1.25} /> Kept</span> : d.amount > 250 ? <Badge tone="warning">Missing</Badge> : <span className="text-caption text-tertiary">—</span>}</td>
                   <td className="num font-medium"><Sensitive align="end">{fmtMoney(d.amount * d.pct)}</Sensitive></td>
                 </tr>
               ))}
