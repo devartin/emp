@@ -457,6 +457,22 @@ pub fn run() {
             commands::sheet::sheet_import_file,
             commands::sheet::sheet_export,
             commands::sheet::sheet_to_database,
+            // ── Life apps
+            commands::lifeapp::lifeapp_list,
+            commands::lifeapp::lifeapp_manifest,
+            commands::lifeapp::lifeapp_recommend,
+            commands::lifeapp::lifeapp_preview,
+            commands::lifeapp::lifeapp_install,
+            commands::lifeapp::lifeapp_instances,
+            commands::lifeapp::lifeapp_tuneup_preview,
+            commands::lifeapp::lifeapp_tuneup_apply,
+            commands::lifeapp::lifeapp_detach,
+            commands::lifeapp::lifeapp_uninstall,
+            commands::lifeapp::lifeapp_metrics,
+            commands::lifeapp::lifeapp_insights,
+            commands::lifeapp::lifeapp_insight_mute,
+            commands::lifeapp::lifeapp_sample_data,
+            commands::lifeapp::lifeapp_checklist_tick,
             // ── END DOMAIN COMMANDS ───────────────────────────────────────────────────────────────────────────
         ]);
 

@@ -18,7 +18,6 @@ import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { Gauge } from "@/charts/Gauge";
 import { addMonths, dayLabel, fmtMoney, fmtPct, monthLabel, num, relDays, toMoney, todayIso } from "../shared/format";
 import { useAsync, useDbChanged } from "../shared/hooks";
 import { InsightCard, Quiet, Section } from "../shared/ui";
@@ -196,9 +195,9 @@ function SideMetrics() {
       <MetricCard
         label="Emergency fund"
         value={`${ov.efMonths.toFixed(1)} months`}
-        sub="of essential spending"
+        sub={ov.efMonths >= 6 ? "of essentials · fully funded" : "of essentials · goal 6 months"}
         onClick={() => go("goals")}
-        visual={<Gauge value={Math.min(9, ov.efMonths)} min={0} max={9} size={64} bands={[{ from: 0, to: 3, tone: "loss" }, { from: 3, to: 6, tone: "warning" }, { from: 6, to: 9, tone: "gain" }]} format={(n) => ""} />}
+        visual={<BudgetRing ratio={Math.min(1, ov.efMonths / 6)} size={40} stroke={4} color={ov.efMonths >= 6 ? "var(--gain)" : ov.efMonths >= 3 ? "var(--accent-solid)" : "var(--warning)"} />}
       />
       <MetricCard
         label="Debt-free"

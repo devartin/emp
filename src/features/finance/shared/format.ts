@@ -1,6 +1,6 @@
 /** Display helpers shared by Money HQ, Portfolio, Markets and Taxes. Money stays decimal strings until display. */
-import { formatCompact, formatNumber, formatPercent } from "@/lib/format";
-import { formatMoney, MINUS, type Money } from "@/lib/money";
+import { formatCompact, formatNumber, formatPercent, MINUS } from "@/lib/format";
+import { formatMoney, type Money } from "@/lib/money";
 
 export const toMoney = (amount: string | number, currency = "USD"): Money => ({
   amount: typeof amount === "number" ? (Number.isFinite(amount) ? amount.toFixed(2) : "0") : amount,
