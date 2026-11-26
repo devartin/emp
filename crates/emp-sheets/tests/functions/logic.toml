@@ -1,0 +1,111 @@
+[setup]
+A1 = 5
+A2 = 0
+A3 = "text"
+A4 = "=1/0"
+
+[[case]]
+f = "=IF(A1>3,\"big\",\"small\")"
+v = "big"
+[[case]]
+f = "=IF(A2,\"y\",\"n\")"
+v = "n"
+[[case]]
+f = "=IF(FALSE,1)"
+v = false
+[[case]]
+f = "=IF(TRUE,)"
+v = 0
+[[case]]
+f = "=IF(A3,1,2)"
+e = "#VALUE!"
+[[case]]
+f = "=IF(TRUE,1,1/0)"
+v = 1
+[[case]]
+f = "=IF({TRUE,FALSE},1,2)"
+v = [[1, 2]]
+[[case]]
+f = "=SUM(IF(A1>3,A1:A2,0))"
+v = 5
+[[case]]
+f = "=IFS(A1>10,\"a\",A1>3,\"b\",TRUE,\"c\")"
+v = "b"
+[[case]]
+f = "=IFS(A1>10,\"a\")"
+e = "#N/A"
+[[case]]
+f = "=IFERROR(A4,\"oops\")"
+v = "oops"
+[[case]]
+f = "=IFERROR(A1,\"oops\")"
+v = 5
+[[case]]
+f = "=IFERROR({1,#N/A},0)"
+v = [[1, 0]]
+[[case]]
+f = "=IFNA(NA(),\"none\")"
+v = "none"
+[[case]]
+f = "=IFNA(1/0,\"none\")"
+e = "#DIV/0!"
+[[case]]
+f = "=AND(TRUE,1)"
+v = true
+[[case]]
+f = "=AND(TRUE,0)"
+v = false
+[[case]]
+f = "=AND(A1:A3)"
+v = false
+[[case]]
+f = "=AND(\"x\")"
+e = "#VALUE!"
+[[case]]
+f = "=OR(FALSE,0)"
+v = false
+[[case]]
+f = "=OR(A1>1,A2>1)"
+v = true
+[[case]]
+f = "=XOR(TRUE,TRUE)"
+v = false
+[[case]]
+f = "=XOR(TRUE,FALSE,TRUE,TRUE)"
+v = true
+[[case]]
+f = "=NOT(TRUE)"
+v = false
+[[case]]
+f = "=NOT(0)"
+v = true
+[[case]]
+f = "=SWITCH(2,1,\"one\",2,\"two\",\"other\")"
+v = "two"
+[[case]]
+f = "=SWITCH(9,1,\"one\",\"other\")"
+v = "other"
+[[case]]
+f = "=SWITCH(9,1,\"one\")"
+e = "#N/A"
+[[case]]
+f = "=SWITCH(\"B\",\"a\",1,\"b\",2)"
+v = 2
+[[case]]
+f = "=TRUE()"
+v = true
+[[case]]
+f = "=FALSE()"
+v = false
+[[case]]
+f = "=LET(x,2,y,3,x*y)"
+v = 6
+[[case]]
+f = "=LET(x,A1,x+x)"
+v = 10
+[[case]]
+f = "=LET(r,A1:A2,SUM(r))"
+v = 5
+[[case]]
+f = "=LET(x,1,LET(x,2,x)+x)"
+v = 3

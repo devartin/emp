@@ -1,0 +1,544 @@
+/*
+ * Tailwind v4 mapping of EMP tokens (§3) + base layer + shared keyframes.
+ *
+ * Utility cheat-sheet (all theme-aware):
+ *   surfaces  bg-window bg-canvas bg-surface-1 bg-surface-2 bg-surface-3 bg-overlay bg-inverse bg-hover bg-active bg-selected
+ *   text      text-primary text-secondary text-tertiary text-disabled text-on-inverse
+ *   borders   border-subtle border-default border-strong  (width utility stays `border`)
+ *   accent    bg-accent bg-accent-hover text-accent-contrast text-accent bg-accent-soft border-accent ring-accent
+ *   finance   text-gain text-gain-text bg-gain-soft text-loss text-loss-text bg-loss-soft (+ warning/info/success/danger)
+ *   blocks    text-block-red bg-block-red-bg …        data-vis  text-cat-1…8 fill-cat-1…
+ *   type      text-display text-kpi-xl text-h1 text-kpi text-h2 text-h3 text-title text-body-lg text-body text-body-sm
+ *             text-caption text-micro text-mono (size + line-height + tracking + weight)
+ *   fonts     font-sans font-serif font-mono       radii rounded-xs…rounded-2xl     shadows shadow-elev-1…4
+ *   motion    ease-out ease-out-expo ease-in ease-in-out ease-spring   duration-120 etc.
+ *   z-index   use the numbers in §3.7 (z-40 menus, z-60 dialogs, z-80 toasts, z-90 tooltips)
+ */
+
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --ease-*: initial;
+  --spacing: 4px;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --breakpoint-medium: 900px;
+  --breakpoint-wide: 1280px;
+  --breakpoint-ultra: 1680px;
+
+  /* Type scale — rem relative to the UI base (html font-size = --ui-base = 14px default). */
+  --text-display: calc(40rem / 14);
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: -0.022em;
+  --text-display--font-weight: 700;
+  --text-kpi-xl: calc(44rem / 14);
+  --text-kpi-xl--line-height: calc(48 / 44);
+  --text-kpi-xl--letter-spacing: -0.024em;
+  --text-kpi-xl--font-weight: 600;
+  --text-h1: calc(30rem / 14);
+  --text-h1--line-height: calc(38 / 30);
+  --text-h1--letter-spacing: -0.021em;
+  --text-h1--font-weight: 650;
+  --text-kpi: 2rem;
+  --text-kpi--line-height: calc(32 / 28);
+  --text-kpi--letter-spacing: -0.02em;
+  --text-kpi--font-weight: 600;
+  --text-h2: calc(24rem / 14);
+  --text-h2--line-height: calc(32 / 24);
+  --text-h2--letter-spacing: -0.019em;
+  --text-h2--font-weight: 620;
+  --text-h3: calc(20rem / 14);
+  --text-h3--line-height: 1.4;
+  --text-h3--letter-spacing: -0.017em;
+  --text-h3--font-weight: 600;
+  --text-title: calc(17rem / 14);
+  --text-title--line-height: calc(24 / 17);
+  --text-title--letter-spacing: -0.013em;
+  --text-title--font-weight: 600;
+  --text-body-lg: calc(16rem / 14);
+  --text-body-lg--line-height: calc(26 / 16);
+  --text-body-lg--letter-spacing: -0.011em;
+  --text-body: 1rem;
+  --text-body--line-height: calc(20 / 14);
+  --text-body--letter-spacing: -0.006em;
+  --text-body-sm: calc(13rem / 14);
+  --text-body-sm--line-height: calc(18 / 13);
+  --text-body-sm--letter-spacing: -0.003em;
+  --text-caption: calc(12rem / 14);
+  --text-caption--line-height: calc(16 / 12);
+  --text-caption--letter-spacing: 0;
+  --text-caption--font-weight: 500;
+  --text-micro: calc(11rem / 14);
+  --text-micro--line-height: calc(14 / 11);
+  --text-micro--letter-spacing: 0.04em;
+  --text-micro--font-weight: 600;
+  --text-mono: calc(13rem / 14);
+  --text-mono--line-height: calc(20 / 13);
+  --text-mono--font-weight: 450;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-linear: linear;
+
+  --animate-spin: emp-spin 700ms linear infinite;
+  --animate-shimmer: emp-shimmer 1.6s linear infinite;
+  --animate-fade-in: emp-fade-in 160ms var(--ease-out) both;
+}
+
+@theme inline {
+  --color-window: var(--bg-window);
+  --color-canvas: var(--bg-canvas);
+  --color-surface-1: var(--bg-surface-1);
+  --color-surface-2: var(--bg-surface-2);
+  --color-surface-3: var(--bg-surface-3);
+  --color-overlay: var(--bg-overlay);
+  --color-inverse: var(--bg-inverse);
+  --color-hover: var(--state-hover);
+  --color-active: var(--state-active);
+  --color-selected: var(--state-selected);
+  --color-scrim: var(--scrim);
+
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-tertiary: var(--text-tertiary);
+  --color-disabled: var(--text-disabled);
+  --color-on-inverse: var(--text-on-inverse);
+
+  --color-subtle: var(--border-subtle);
+  --color-default: var(--border);
+  --color-strong: var(--border-strong);
+
+  --color-accent: var(--accent-solid);
+  --color-accent-hover: var(--accent-solid-hover);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-accent-ring: var(--accent-ring);
+
+  --color-gain: var(--gain);
+  --color-gain-text: var(--gain-text);
+  --color-gain-soft: var(--gain-soft);
+  --color-loss: var(--loss);
+  --color-loss-text: var(--loss-text);
+  --color-loss-soft: var(--loss-soft);
+  --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-text: var(--info-text);
+  --color-info-soft: var(--info-soft);
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-text: var(--danger-text);
+  --color-danger-soft: var(--danger-soft);
+
+  --color-block-gray: var(--block-gray-text);
+  --color-block-gray-bg: var(--block-gray-bg);
+  --color-block-brown: var(--block-brown-text);
+  --color-block-brown-bg: var(--block-brown-bg);
+  --color-block-orange: var(--block-orange-text);
+  --color-block-orange-bg: var(--block-orange-bg);
+  --color-block-yellow: var(--block-yellow-text);
+  --color-block-yellow-bg: var(--block-yellow-bg);
+  --color-block-green: var(--block-green-text);
+  --color-block-green-bg: var(--block-green-bg);
+  --color-block-blue: var(--block-blue-text);
+  --color-block-blue-bg: var(--block-blue-bg);
+  --color-block-purple: var(--block-purple-text);
+  --color-block-purple-bg: var(--block-purple-bg);
+  --color-block-pink: var(--block-pink-text);
+  --color-block-pink-bg: var(--block-pink-bg);
+  --color-block-red: var(--block-red-text);
+  --color-block-red-bg: var(--block-red-bg);
+
+  --color-cat-1: var(--cat-1);
+  --color-cat-2: var(--cat-2);
+  --color-cat-3: var(--cat-3);
+  --color-cat-4: var(--cat-4);
+  --color-cat-5: var(--cat-5);
+  --color-cat-6: var(--cat-6);
+  --color-cat-7: var(--cat-7);
+  --color-cat-8: var(--cat-8);
+  --color-cat-other: var(--cat-other);
+
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-serif-page);
+  --font-mono: var(--font-mono-code);
+
+  --shadow-elev-1: var(--elev-1);
+  --shadow-elev-2: var(--elev-2);
+  --shadow-elev-3: var(--elev-3);
+  --shadow-elev-4: var(--elev-4);
+  --shadow-primary-btn: var(--elev-primary-btn);
+  --shadow-none: none;
+
+  --ease-spring: var(--ease-spring-ui);
+}
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="midnight"], [data-theme="midnight"] *));
+@custom-variant reduced-motion (&:where([data-motion="reduced"], [data-motion="reduced"] *));
+@custom-variant reduced-effects (&:where([data-effects="reduced"], [data-effects="reduced"] *));
+@custom-variant compact (&:where([data-density="compact"], [data-density="compact"] *));
+@custom-variant privacy (&:where([data-privacy="on"], [data-privacy="on"] *));
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+@utility slashed {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+@utility no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+@utility drag-region {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+@utility contain-strict {
+  contain: layout paint style;
+}
+@utility sr-only-focusable {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  &:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    clip: auto;
+  }
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--border);
+  }
+  html {
+    font-size: var(--ui-base);
+    background: var(--bg-window);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-feature-settings: "cv05" 1, "cv08" 1, "calt" 1;
+    font-optical-sizing: auto;
+    font-variant-numeric: tabular-nums;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :root:is([data-theme="dark"], [data-theme="midnight"]) {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  :root[data-letter-spacing="wide"] body {
+    letter-spacing: 0.02em;
+    word-spacing: 0.06em;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-size: 1rem;
+    line-height: calc(20 / 14);
+    letter-spacing: -0.006em;
+    background: var(--bg-window);
+    color: var(--text-primary);
+  }
+  ::selection {
+    background: var(--text-selection);
+  }
+  :focus-visible {
+    outline: var(--focus-width) solid var(--accent-ring);
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  /* Desktop app convention: only links use the pointer cursor (§5.1). */
+  button,
+  [role="button"],
+  summary,
+  label {
+    cursor: default;
+  }
+  a[href] {
+    cursor: pointer;
+  }
+  img,
+  svg,
+  video,
+  canvas {
+    display: block;
+  }
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+  }
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono-code);
+  }
+  hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+  [hidden] {
+    display: none !important;
+  }
+
+  /* Overlay-style scrollbars (§5.11). ScrollArea adds the fade-after-idle behaviour. */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(var(--text-rgb), 0.22);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+    min-height: 32px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(var(--text-rgb), 0.36);
+    border-width: 2px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(var(--text-rgb), 0.22) transparent;
+    }
+  }
+}
+
+/* Accent switch: transition colour properties for 240ms (§3.2). bootPrefs adds the class briefly. */
+:root.emp-accent-switching,
+:root.emp-accent-switching *,
+:root.emp-accent-switching *::before,
+:root.emp-accent-switching *::after {
+  transition-property: background-color, border-color, color, fill, stroke !important;
+  transition-duration: var(--emp-switch-ms, 240ms) !important;
+  transition-timing-function: var(--ease-out) !important;
+}
+
+/* ─── Privacy: Hide numbers (§5.10). Real value is also removed from the a11y tree by <Sensitive>. ─── */
+:root[data-privacy="on"] [data-sensitive] {
+  position: relative;
+  color: transparent !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+:root[data-privacy="on"] [data-sensitive] * {
+  visibility: hidden;
+}
+:root[data-privacy="on"] [data-sensitive]::after {
+  content: "•••••";
+  visibility: visible;
+  position: absolute;
+  inset: 0.1em 0;
+  display: flex;
+  align-items: center;
+  justify-content: var(--mask-justify, flex-start);
+  overflow: hidden;
+  padding-inline: 0.2em;
+  border-radius: 0.3em;
+  background: rgba(var(--text-rgb), 0.06);
+  color: var(--text-tertiary);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  animation: emp-fade-in 160ms var(--ease-out);
+}
+:root[data-privacy="on"] [data-sensitive][data-align="end"] {
+  --mask-justify: flex-end;
+}
+
+/* ─── Aurora + grain (§3.8) — onboarding, lock, empty heroes, about only ─── */
+.emp-aurora {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(60% 50% at 20% 10%, color-mix(in oklab, var(--accent-solid) 38%, transparent), transparent 70%),
+    radial-gradient(50% 45% at 85% 25%, color-mix(in oklab, #a855f7 26%, transparent), transparent 70%),
+    radial-gradient(70% 60% at 50% 100%, color-mix(in oklab, #0ea5e9 18%, transparent), transparent 70%),
+    var(--bg-window);
+}
+.emp-aurora::after {
+  content: "";
+  position: absolute;
+  inset: -64px;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("./grain.png");
+  background-size: 128px 128px;
+  opacity: 0.025;
+  mix-blend-mode: normal;
+  animation: emp-grain-drift 426s linear infinite;
+}
+:root[data-theme="dark"] .emp-aurora::after,
+:root[data-theme="midnight"] .emp-aurora::after {
+  opacity: 0.04;
+}
+:root[data-motion="reduced"] .emp-aurora::after {
+  animation: none;
+}
+
+/* ─── Keyframes ─── */
+@keyframes emp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes emp-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes emp-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes emp-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes emp-grain-drift {
+  /* 0.3 px/s → 128px tile in ~426s */
+  to {
+    transform: translate3d(128px, 128px, 0);
+  }
+}
+@keyframes emp-pop-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--pop-x, 0), var(--pop-y, 0), 0) scale(0.96);
+  }
+}
+@keyframes emp-pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@keyframes emp-tip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes emp-sub-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-4px, 0, 0);
+  }
+}
+@keyframes emp-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes emp-flash {
+  from {
+    background-color: var(--flash-color, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+@keyframes emp-shake {
+  0% { transform: translateX(0); }
+  14% { transform: translateX(-8px); }
+  28% { transform: translateX(8px); }
+  42% { transform: translateX(-6px); }
+  57% { transform: translateX(6px); }
+  71% { transform: translateX(-3px); }
+  85% { transform: translateX(3px); }
+  100% { transform: translateX(0); }
+}
+@keyframes emp-pulse-halo {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(2.33);
+    opacity: 0;
+  }
+}
+@keyframes emp-draw {
+  from {
+    stroke-dashoffset: var(--len, 24);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes emp-reveal-x {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes emp-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+/* View-transition theme reveal (§4.2) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* Reduced motion: no transforms anywhere in our keyframes (§4.3) */
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  scroll-behavior: auto !important;
+}

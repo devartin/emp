@@ -1,0 +1,129 @@
+[setup]
+A1 = 5
+A2 = "'7"
+A3 = "abc"
+A4 = true
+
+[[case]]
+f = "=-2^2"
+v = 4
+[[case]]
+f = "=2^3^2"
+v = 64
+[[case]]
+f = "=1+2*3"
+v = 7
+[[case]]
+f = "=(1+2)*3"
+v = 9
+[[case]]
+f = "=\"1\"+1"
+v = 2
+[[case]]
+f = "=TRUE+1"
+v = 2
+[[case]]
+f = "=A2+A1"
+v = 12
+[[case]]
+f = "=A3+1"
+e = "#VALUE!"
+[[case]]
+f = "=A4*3"
+v = 3
+[[case]]
+f = "=1/0"
+e = "#DIV/0!"
+[[case]]
+f = "=50%"
+v = 0.5
+[[case]]
+f = "=10*10%"
+v = 1
+[[case]]
+f = "=\"a\"&\"b\"&1"
+v = "ab1"
+[[case]]
+f = "=1&TRUE"
+v = "1TRUE"
+[[case]]
+f = "=0.1+0.2=0.3"
+v = true
+[[case]]
+f = "=\"ABC\"=\"abc\""
+v = true
+[[case]]
+f = "=1<\"a\""
+v = true
+[[case]]
+f = "=\"z\"<TRUE"
+v = true
+[[case]]
+f = "=1=\"1\""
+v = false
+[[case]]
+f = "=Z99=0"
+v = true
+[[case]]
+f = "=Z99=\"\""
+v = true
+[[case]]
+f = "=A1<>5"
+v = false
+[[case]]
+f = "=A1>=5"
+v = true
+[[case]]
+f = "=#N/A+1"
+e = "#N/A"
+[[case]]
+f = "={1,2,3}*2"
+v = [[2, 4, 6]]
+[[case]]
+f = "={1;2}+{10,20}"
+v = [[11, 21], [12, 22]]
+[[case]]
+f = "={1,2}+{1,2,3}"
+v = [[2, 4, "#N/A"]]
+[[case]]
+f = "=SUM((A1:A2)*1)"
+v = 12
+[[case]]
+f = "=-A1"
+v = -5
+[[case]]
+f = "=+A3"
+v = "abc"
+[[case]]
+f = "=SUM(A1:A2 A1:B1)"
+v = 5
+[[case]]
+f = "=SUM(A1 B1)"
+e = "#NULL!"
+[[case]]
+f = "=SUM((A1,A2,A4))"
+v = 5
+[[case]]
+f = "=2^0.5"
+v = 1.4142135623730951
+[[case]]
+f = "=0^-1"
+e = "#DIV/0!"
+[[case]]
+f = "=(-1)^0.5"
+e = "#NUM!"
+[[case]]
+f = "=Data!A1"
+v = 0
+[[case]]
+f = "=Missing!A1"
+e = "#REF!"
+[[case]]
+f = "=UnknownName"
+e = "#NAME?"
+[[case]]
+f = "=NOSUCHFUNCTION(1)"
+e = "#NAME?"
+[[case]]
+f = "=A1:A2"
+v = [[5], ["7"]]

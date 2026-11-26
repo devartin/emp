@@ -1,0 +1,30 @@
+{
+  "id": "generic",
+  "name": "Generic / Custom",
+  "country": "*",
+  "year": 2026,
+  "tier": "custom",
+  "version": "1.0.0",
+  "verifiedOn": null,
+  "sources": [],
+  "notes": [
+    "Parameters are entered by the user (brackets, standard deduction or personal allowance, self-employment rate, deadlines) and stored in the instance answers; results carry \"custom\" badges.",
+    "Capital gains are taxed as ordinary income; no credits other than user-entered amounts.",
+    "All results are estimates."
+  ],
+  "filingStatuses": ["single", "joint"],
+  "brackets": { "*": [{ "upTo": null, "rate": "0" }] },
+  "standardDeduction": { "*": "0" },
+  "rounding": "cents_half_up",
+  "credits": [{ "id": "other", "label": "Other credits", "kind": "user_amount" }],
+  "retention": [{ "docType": "*", "years": 6, "note": "Retention rules vary by country; 6 years is a conservative default. Check your tax authority's guidance." }],
+  "documents": [],
+  "deadlines": [],
+  "tests": [
+    { "name": "custom brackets", "source": "Arithmetic check of user-entered parameters",
+      "input": { "packId": "generic", "year": 2026, "filingStatus": "single", "dependents": 0, "incomes": [{ "kind": "wages", "amount": "30000" }],
+                 "deductions": "standard", "credits": [], "withheld": "0", "estimatedPaid": "0",
+                 "custom": { "brackets": [{ "upTo": "10000", "rate": "0" }, { "upTo": null, "rate": "0.2" }], "standardDeduction": "5000" } },
+      "expect": { "taxable": "25000", "tax": "3000" } }
+  ]
+}

@@ -1,11 +1,22 @@
 [package]
 name = "emp-finance"
+description = "EMP finance engine: money/FX, statement import, rules, budgets, recurring detection, debt, forecast, net worth, goals, portfolio and tax estimation. Pure: no IO, no store dependency."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
-uuid.workspace = true
+rust_decimal = { version = "1.40", default-features = false, features = ["std", "serde", "maths"] }
+regex = { version = "1", default-features = false, features = ["std", "unicode-case", "unicode-perl"] }
+sha2 = "0.10"
+csv = "1"
+quick-xml = "0.38"
+encoding_rs = "0.8"
+chardetng = "0.1"
+strsim = "0.11"
+

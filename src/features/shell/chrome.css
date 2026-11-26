@@ -1,0 +1,33 @@
+/* Custom caption buttons (§6.1): 46×44, 10px glyphs; close hover #C42B1C with a white glyph. */
+.emp-wincontrols {
+  display: flex;
+  height: 44px;
+  z-index: 1;
+}
+.emp-wincontrol {
+  width: 46px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+}
+.emp-wincontrol:hover {
+  background: var(--state-hover);
+  color: var(--text-primary);
+  transition-duration: var(--dur-fast);
+}
+.emp-wincontrol:active {
+  background: var(--state-active);
+}
+.emp-wincontrol[data-close]:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+.emp-wincontrol[data-close]:active {
+  background: color-mix(in oklab, #c42b1c 86%, black);
+  color: #fff;
+}

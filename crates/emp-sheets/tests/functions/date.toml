@@ -1,0 +1,204 @@
+[setup]
+A1 = "2024-01-15"
+A2 = "2024-03-31"
+A3 = "2023-12-25"
+A4 = "2024-01-01"
+
+[[case]]
+f = "=DATE(2024,1,15)"
+v = 45306
+[[case]]
+f = "=DATE(2024,14,1)"
+v = 45689
+[[case]]
+f = "=DATE(2024,1,0)"
+v = 45291
+[[case]]
+f = "=DATE(1900,2,29)"
+v = 60
+[[case]]
+f = "=DATE(124,1,15)"
+v = 45306
+[[case]]
+f = "=DATE(10000,1,1)"
+e = "#NUM!"
+[[case]]
+f = "=TIME(12,0,0)"
+v = 0.5
+[[case]]
+f = "=TIME(25,30,0)"
+v = 0.0625
+[[case]]
+f = "=DATEVALUE(\"2024-01-15\")"
+v = 45306
+[[case]]
+f = "=DATEVALUE(\"15-Jan-2024\")"
+v = 45306
+[[case]]
+f = "=DATEVALUE(\"nope\")"
+e = "#VALUE!"
+[[case]]
+f = "=TIMEVALUE(\"6:00 PM\")"
+v = 0.75
+[[case]]
+f = "=YEAR(A1)"
+v = 2024
+[[case]]
+f = "=MONTH(A1)"
+v = 1
+[[case]]
+f = "=DAY(A1)"
+v = 15
+[[case]]
+f = "=DAY(60)"
+v = 29
+[[case]]
+f = "=MONTH(60)"
+v = 2
+[[case]]
+f = "=YEAR(0)"
+v = 1900
+[[case]]
+f = "=DAY(0)"
+v = 0
+[[case]]
+f = "=YEAR(-1)"
+e = "#NUM!"
+[[case]]
+f = "=HOUR(0.75)"
+v = 18
+[[case]]
+f = "=MINUTE(TIME(10,45,30))"
+v = 45
+[[case]]
+f = "=SECOND(TIME(10,45,30))"
+v = 30
+[[case]]
+f = "=WEEKDAY(A1)"
+v = 2
+[[case]]
+f = "=WEEKDAY(A1,2)"
+v = 1
+[[case]]
+f = "=WEEKDAY(A1,3)"
+v = 0
+[[case]]
+f = "=WEEKDAY(A1,16)"
+v = 3
+[[case]]
+f = "=WEEKDAY(1)"
+v = 1
+[[case]]
+f = "=WEEKNUM(A1)"
+v = 3
+[[case]]
+f = "=WEEKNUM(A1,2)"
+v = 3
+[[case]]
+f = "=WEEKNUM(A3)"
+v = 52
+[[case]]
+f = "=ISOWEEKNUM(A1)"
+v = 3
+[[case]]
+f = "=ISOWEEKNUM(DATE(2021,1,3))"
+v = 53
+[[case]]
+f = "=EDATE(A1,1)"
+v = 45337
+[[case]]
+f = "=EDATE(DATE(2024,1,31),1)"
+v = 45351
+[[case]]
+f = "=EDATE(A1,-12)"
+v = 44941
+[[case]]
+f = "=EOMONTH(A1,0)"
+v = 45322
+[[case]]
+f = "=EOMONTH(A1,1)"
+v = 45351
+[[case]]
+f = "=EOMONTH(A1,-1)"
+v = 45291
+[[case]]
+f = "=DATEDIF(A3,A2,\"Y\")"
+v = 0
+[[case]]
+f = "=DATEDIF(A3,A2,\"M\")"
+v = 3
+[[case]]
+f = "=DATEDIF(A3,A2,\"D\")"
+v = 97
+[[case]]
+f = "=DATEDIF(A3,A2,\"MD\")"
+v = 6
+[[case]]
+f = "=DATEDIF(A3,A2,\"YM\")"
+v = 3
+[[case]]
+f = "=DATEDIF(DATE(2020,6,15),DATE(2024,3,1),\"YD\")"
+v = 260
+[[case]]
+f = "=DATEDIF(A2,A3,\"D\")"
+e = "#NUM!"
+[[case]]
+f = "=DAYS(A2,A1)"
+v = 76
+[[case]]
+f = "=DAYS360(DATE(2024,1,30),DATE(2024,3,31))"
+v = 60
+[[case]]
+f = "=DAYS360(DATE(2024,1,31),DATE(2024,3,31),TRUE)"
+v = 60
+[[case]]
+f = "=NETWORKDAYS(A4,A2)"
+v = 65
+[[case]]
+f = "=NETWORKDAYS(A4,A2,A1)"
+v = 64
+[[case]]
+f = "=NETWORKDAYS(A2,A4)"
+v = -65
+[[case]]
+f = "=NETWORKDAYS.INTL(A4,DATE(2024,1,7),11)"
+v = 6
+[[case]]
+f = "=NETWORKDAYS.INTL(A4,DATE(2024,1,7),\"0000011\")"
+v = 5
+[[case]]
+f = "=WORKDAY(A4,10)"
+v = 45306
+[[case]]
+f = "=WORKDAY(A4,10,A1)"
+v = 45307
+[[case]]
+f = "=WORKDAY(A1,-1)"
+v = 45303
+[[case]]
+f = "=WORKDAY.INTL(A4,5,7)"
+v = 45299
+[[case]]
+f = "=YEARFRAC(A4,DATE(2024,7,1))"
+v = 0.5
+[[case]]
+f = "=YEARFRAC(A4,DATE(2024,7,1),1)"
+v = 0.4972677595628415
+[[case]]
+f = "=YEARFRAC(A4,DATE(2024,7,1),2)"
+v = 0.5055555555555555
+[[case]]
+f = "=YEARFRAC(A4,DATE(2024,7,1),3)"
+v = 0.4986301369863014
+[[case]]
+f = "=YEARFRAC(DATE(2023,1,31),DATE(2024,2,29),4)"
+v = 1.0805555555555556
+[[case]]
+f = "=TODAY()"
+v = 46352
+[[case]]
+f = "=NOW()"
+v = 46352.5
+[[case]]
+f = "=TEXT(TODAY(),\"yyyy-mm-dd\")"
+v = "2026-11-26"

@@ -2,6 +2,13 @@
 name = "emp-integrations"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+description = "EMP network integrations: NetGuard egress, Google OAuth/Calendar/Docs/Sheets, market data, ICS"
+
+[features]
+default = []
+# Unofficial Yahoo Finance provider ("Community source"). Off by default (SPEC §17.2, P1).
+yahoo = []
 
 [dependencies]
 serde.workspace = true
@@ -12,8 +19,21 @@ uuid.workspace = true
 tokio.workspace = true
 base64.workspace = true
 zeroize.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "charset"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-platform-verifier = "0.6"
+webpki-roots = "1"
 url = "2"
 sha2 = "0.10"
 rand_core = { version = "0.6", features = ["getrandom"] }
+subtle = "2.6"
 csv = "1"
+async-trait = "0.1"
+governor = { version = "0.10", default-features = false, features = ["std"] }
+rrule = "0.14"
+chrono-tz = "0.10"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

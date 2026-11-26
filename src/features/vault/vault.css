@@ -1,0 +1,464 @@
+/* Vault screens: lock (§6.3), onboarding (§6.2), password UX (§9.10). Tokens only; no hex outside the icon. */
+
+.emp-app-root {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+}
+.emp-phase {
+  position: absolute;
+  inset: 0;
+  min-height: 100vh;
+}
+
+.emp-wordmark {
+  display: inline-block;
+  font-weight: 720;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+}
+
+/* Full-window aurora stage shared by lock + onboarding. */
+.emp-stage {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-lock);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 24px;
+}
+.emp-stage > .emp-vault-card {
+  margin: auto;
+  flex: none;
+}
+.emp-stage-drag {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 44px;
+}
+/* A soft vignette keeps the aurora calm at the edges, and a faint dotted field adds depth. */
+.emp-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(var(--text-rgb), 0.06) 1px, transparent 1.4px) 0 0 / 24px 24px;
+  mask-image: radial-gradient(70% 60% at 50% 45%, #000 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 45%, #000 0%, transparent 100%);
+}
+
+/* ─── Glass panel (onboarding 560/720, lock 360) ─── */
+.emp-vault-card {
+  position: relative;
+  border-radius: 20px;
+  background: color-mix(in oklab, var(--bg-overlay) 92%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: var(--elev-3);
+  overflow: hidden;
+}
+.emp-vault-card::before {
+  /* hairline top light */
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  opacity: 0.6;
+  pointer-events: none;
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) .emp-vault-card::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  opacity: 1;
+}
+:root:is([data-effects="reduced"], [data-contrast="more"]) .emp-vault-card {
+  background: var(--bg-overlay);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ─── XL inputs (§6.3 password field xl) ─── */
+.emp-input.emp-input-xl {
+  --in-h: var(--control-xl);
+  --in-px: 14px;
+  border-radius: 12px;
+  font-size: calc(16rem / 14);
+}
+.emp-input.emp-input-xl .emp-input-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.emp-caps-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background: var(--warning-soft);
+  color: var(--warning-text);
+  font-size: calc(11rem / 14);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.emp-caps-chip svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* KDF shimmer inside the Unlock button (§6.3); removed under reduced motion (§4.3). */
+.emp-kdf-shimmer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.emp-kdf-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.28) 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: emp-shimmer 1.1s var(--ease-in-out) infinite;
+}
+:root[data-motion="reduced"] .emp-kdf-shimmer::after {
+  animation: none;
+  opacity: 0;
+}
+
+/* ─── Recovery words (§6.2 3b): 4×6 grid, mono 18/28, well surface-2 r12 p20 ─── */
+.emp-words {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px 10px;
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  counter-reset: word;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.emp-word {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-mono-code);
+  font-size: calc(18rem / 14);
+  line-height: calc(28 / 18);
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.emp-word-n {
+  flex: none;
+  width: 1.6em;
+  text-align: right;
+  font-size: calc(11rem / 14);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+:root[data-privacy="on"] .emp-words .emp-word-t {
+  filter: blur(6px);
+}
+
+/* Recovery-word entry grid on the lock screen. */
+.emp-word-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.emp-word-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--control-bg);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.emp-word-input:focus-within {
+  border-color: var(--accent-solid);
+  box-shadow: var(--focus-ring);
+}
+.emp-word-input[data-filled] {
+  background: var(--bg-surface-1);
+}
+.emp-word-input span {
+  flex: none;
+  width: 24px;
+  text-align: right;
+  padding-right: 6px;
+  font-size: calc(10rem / 14);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.emp-word-input input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: var(--font-mono-code);
+  font-size: calc(13rem / 14);
+  color: var(--text-primary);
+  padding-right: 6px;
+}
+
+/* ─── Onboarding ─── */
+.emp-onb-panel {
+  width: 560px;
+  max-width: calc(100vw - 48px);
+  padding: 40px;
+}
+.emp-onb-panel[data-wide] {
+  width: 640px;
+}
+.emp-onb-stepper {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 28px;
+}
+.emp-onb-stepper span {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(var(--text-rgb), 0.08);
+  overflow: hidden;
+}
+.emp-onb-stepper span i {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent-solid);
+  transform-origin: left center;
+}
+.emp-onb-title {
+  font-size: calc(24rem / 14);
+  line-height: calc(32 / 24);
+  font-weight: 650;
+  letter-spacing: -0.021em;
+  color: var(--text-primary);
+  outline: none;
+}
+.emp-onb-sub {
+  margin-top: 6px;
+  font-size: 1rem;
+  line-height: calc(22 / 14);
+  color: var(--text-secondary);
+}
+.emp-onb-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 32px;
+}
+
+/* Theme preview cards (160×100) */
+.emp-choice.emp-theme-card {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  padding: 10px 10px 12px;
+}
+.emp-theme-preview {
+  position: relative;
+  width: 100%;
+  height: 72px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  display: flex;
+}
+.emp-theme-preview .side {
+  width: 30%;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.emp-theme-preview .main {
+  flex: 1;
+  padding: 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.emp-theme-preview i {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+}
+.emp-theme-preview[data-t="light"] .side { background: #f7f7f8; }
+.emp-theme-preview[data-t="light"] .main { background: #ffffff; }
+.emp-theme-preview[data-t="light"] i { background: rgba(24, 24, 27, 0.12); }
+.emp-theme-preview[data-t="light"] i.a { background: var(--accent-solid); opacity: 0.9; }
+.emp-theme-preview[data-t="dark"] .side { background: #0b0b0e; }
+.emp-theme-preview[data-t="dark"] .main { background: #111114; }
+.emp-theme-preview[data-t="dark"] i { background: rgba(255, 255, 255, 0.14); }
+.emp-theme-preview[data-t="dark"] i.a { background: var(--accent-solid); }
+.emp-theme-preview[data-t="system"] { background: linear-gradient(118deg, #ffffff 0 50%, #111114 50% 100%); }
+.emp-theme-preview[data-t="system"] .side { background: linear-gradient(118deg, rgba(24, 24, 27, 0.035) 0 64%, rgba(0, 0, 0, 0.35) 64% 100%); }
+.emp-theme-preview[data-t="system"] .main { background: transparent; }
+.emp-theme-preview[data-t="system"] i { background: rgba(128, 128, 136, 0.35); }
+.emp-theme-preview[data-t="system"] i.a { background: var(--accent-solid); }
+
+.emp-onb-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.emp-onb-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--btn-secondary-bg);
+  text-align: left;
+  color: var(--text-primary);
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.emp-onb-chip:hover {
+  border-color: var(--border-strong);
+}
+.emp-onb-chip[aria-checked="true"] {
+  border-color: transparent;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent-solid);
+}
+.emp-onb-chip .tile {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+}
+.emp-onb-chip[aria-checked="true"] .tile {
+  background: var(--accent-solid);
+  color: var(--accent-contrast);
+}
+.emp-onb-chip .tile svg {
+  width: 16px;
+  height: 16px;
+}
+
+.emp-onb-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.emp-onb-row:first-child {
+  border-top: 0;
+}
+.emp-onb-row .ico {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.emp-build-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+.emp-build-row[data-state="pending"] {
+  color: var(--text-tertiary);
+}
+.emp-build-dot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  color: var(--text-tertiary);
+}
+.emp-build-row[data-state="done"] .emp-build-dot {
+  background: var(--accent-solid);
+  color: var(--accent-contrast);
+}
+.emp-build-row[data-state="pending"] .emp-build-dot {
+  border: 1.5px dashed var(--border-strong);
+}
+
+/* Lock card */
+.emp-lock-card {
+  width: 360px;
+  padding: 32px;
+}
+.emp-lock-card[data-wide] {
+  width: 520px;
+}
+
+/* Graphite (monochrome) accent: keep the aurora's first light soft instead of a grey smudge. */
+:root[data-accent="graphite"] .emp-stage.emp-aurora {
+  background:
+    radial-gradient(60% 50% at 20% 10%, color-mix(in oklab, #8b8bf8 16%, transparent), transparent 70%),
+    radial-gradient(50% 45% at 85% 25%, color-mix(in oklab, #a855f7 18%, transparent), transparent 70%),
+    radial-gradient(70% 60% at 50% 100%, color-mix(in oklab, #0ea5e9 14%, transparent), transparent 70%),
+    var(--bg-window);
+}
+:root[data-accent="graphite"]:is([data-theme="dark"], [data-theme="midnight"]) .emp-stage.emp-aurora {
+  background:
+    radial-gradient(60% 50% at 20% 10%, color-mix(in oklab, #8b8bf8 20%, transparent), transparent 70%),
+    radial-gradient(50% 45% at 85% 25%, color-mix(in oklab, #a855f7 20%, transparent), transparent 70%),
+    radial-gradient(70% 60% at 50% 100%, color-mix(in oklab, #0ea5e9 14%, transparent), transparent 70%),
+    var(--bg-window);
+}
+
+/* Lock avatar: a 64px squircle in the inverse surface (monochrome), or the workspace emoji on surface-2. */
+.emp-lock-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: var(--bg-inverse);
+  color: var(--text-on-inverse);
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  box-shadow: var(--elev-2);
+}
+.emp-onb-hero-mark,
+.emp-lock-card .emp-app-mark {
+  filter: drop-shadow(0 14px 22px rgba(10, 10, 20, 0.22));
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) .emp-onb-hero-mark,
+:root:is([data-theme="dark"], [data-theme="midnight"]) .emp-lock-card .emp-app-mark {
+  filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.12));
+}

@@ -1,0 +1,348 @@
+[setup]
+A1 = 1
+A2 = 2
+A3 = 3
+A4 = 4
+A5 = 5
+B1 = "x"
+B2 = true
+B3 = "'10"
+C1 = "apple"
+C2 = "banana"
+C3 = "apple"
+C4 = "cherry"
+C5 = "apricot"
+D1 = 10
+D2 = 20
+D3 = 30
+D4 = 40
+D5 = 50
+
+[[case]]
+f = "=SUM(A1:A5)"
+v = 15
+[[case]]
+f = "=SUM(A1:B5)"
+v = 15
+[[case]]
+f = "=SUM(1,\"2\",TRUE)"
+v = 4
+[[case]]
+f = "=SUM(\"x\")"
+e = "#VALUE!"
+[[case]]
+f = "=SUM(A:A)"
+v = 15
+[[case]]
+f = "=SUM(1,1/0)"
+e = "#DIV/0!"
+[[case]]
+f = "=SUMIF(C1:C5,\"apple\",D1:D5)"
+v = 40
+[[case]]
+f = "=SUMIF(C1:C5,\"ap*\",D1:D5)"
+v = 90
+[[case]]
+f = "=SUMIF(A1:A5,\">2\")"
+v = 12
+[[case]]
+f = "=SUMIF(A1:A5,\"<>3\")"
+v = 12
+[[case]]
+f = "=SUMIFS(D1:D5,C1:C5,\"a*\",A1:A5,\">1\")"
+v = 80
+[[case]]
+f = "=SUMIFS(D1:D5,C1:C5,\"zzz\")"
+v = 0
+[[case]]
+f = "=SUMPRODUCT(A1:A5,D1:D5)"
+v = 550
+[[case]]
+f = "=SUMPRODUCT((C1:C5=\"apple\")*D1:D5)"
+v = 40
+[[case]]
+f = "=SUMPRODUCT(A1:A2,D1:D3)"
+e = "#VALUE!"
+[[case]]
+f = "=SUMSQ(3,4)"
+v = 25
+[[case]]
+f = "=PRODUCT(A1:A5)"
+v = 120
+[[case]]
+f = "=QUOTIENT(7,2)"
+v = 3
+[[case]]
+f = "=QUOTIENT(-7,2)"
+v = -3
+[[case]]
+f = "=QUOTIENT(1,0)"
+e = "#DIV/0!"
+[[case]]
+f = "=MOD(3,2)"
+v = 1
+[[case]]
+f = "=MOD(-3,2)"
+v = 1
+[[case]]
+f = "=MOD(3,-2)"
+v = -1
+[[case]]
+f = "=MOD(5,0)"
+e = "#DIV/0!"
+[[case]]
+f = "=MOD(5.5,2)"
+v = 1.5
+[[case]]
+f = "=ABS(-2.5)"
+v = 2.5
+[[case]]
+f = "=SIGN(-5)"
+v = -1
+[[case]]
+f = "=SIGN(0)"
+v = 0
+[[case]]
+f = "=INT(-2.5)"
+v = -3
+[[case]]
+f = "=INT(2.9)"
+v = 2
+[[case]]
+f = "=TRUNC(-2.9)"
+v = -2
+[[case]]
+f = "=TRUNC(2.789,1)"
+v = 2.7
+[[case]]
+f = "=ROUND(2.675,2)"
+v = 2.68
+[[case]]
+f = "=ROUND(-2.5,0)"
+v = -3
+[[case]]
+f = "=ROUND(1234.5678,-2)"
+v = 1200
+[[case]]
+f = "=ROUND(0.5,0)"
+v = 1
+[[case]]
+f = "=ROUNDUP(3.2,0)"
+v = 4
+[[case]]
+f = "=ROUNDUP(-3.2,0)"
+v = -4
+[[case]]
+f = "=ROUNDDOWN(3.9,0)"
+v = 3
+[[case]]
+f = "=ROUNDDOWN(-3.14159,3)"
+v = -3.141
+[[case]]
+f = "=MROUND(10,3)"
+v = 9
+[[case]]
+f = "=MROUND(-10,-3)"
+v = -9
+[[case]]
+f = "=MROUND(5,-2)"
+e = "#NUM!"
+[[case]]
+f = "=CEILING(2.5,1)"
+v = 3
+[[case]]
+f = "=CEILING(-2.5,-2)"
+v = -4
+[[case]]
+f = "=CEILING(-2.5,2)"
+v = -2
+[[case]]
+f = "=CEILING(1.5,0.1)"
+v = 1.5
+[[case]]
+f = "=CEILING(2.5,-1)"
+e = "#NUM!"
+[[case]]
+f = "=CEILING.MATH(-5.5,2,-1)"
+v = -6
+[[case]]
+f = "=CEILING.MATH(-5.5)"
+v = -5
+[[case]]
+f = "=CEILING.MATH(24.3,5)"
+v = 25
+[[case]]
+f = "=FLOOR(3.7,2)"
+v = 2
+[[case]]
+f = "=FLOOR(-2.5,-2)"
+v = -2
+[[case]]
+f = "=FLOOR(-2.5,2)"
+v = -4
+[[case]]
+f = "=FLOOR.MATH(-5.5,2,-1)"
+v = -4
+[[case]]
+f = "=FLOOR.MATH(24.3,5)"
+v = 20
+[[case]]
+f = "=EVEN(1.5)"
+v = 2
+[[case]]
+f = "=EVEN(-1)"
+v = -2
+[[case]]
+f = "=EVEN(2)"
+v = 2
+[[case]]
+f = "=ODD(1.5)"
+v = 3
+[[case]]
+f = "=ODD(2)"
+v = 3
+[[case]]
+f = "=ODD(-1)"
+v = -1
+[[case]]
+f = "=SQRT(16)"
+v = 4
+[[case]]
+f = "=SQRT(-1)"
+e = "#NUM!"
+[[case]]
+f = "=POWER(2,10)"
+v = 1024
+[[case]]
+f = "=POWER(0,0)"
+e = "#NUM!"
+[[case]]
+f = "=POWER(-8,1/3)"
+v = -2
+[[case]]
+f = "=EXP(1)"
+v = 2.718281828459045
+[[case]]
+f = "=LN(100)"
+v = 4.605170185988092
+[[case]]
+f = "=LN(0)"
+e = "#NUM!"
+[[case]]
+f = "=LOG(8,2)"
+v = 3
+[[case]]
+f = "=LOG(100)"
+v = 2
+[[case]]
+f = "=LOG(10,1)"
+e = "#DIV/0!"
+[[case]]
+f = "=LOG10(1000)"
+v = 3
+[[case]]
+f = "=PI()"
+v = 3.141592653589793
+[[case]]
+f = "=GCD(24,36)"
+v = 12
+[[case]]
+f = "=GCD(5,0)"
+v = 5
+[[case]]
+f = "=GCD(-1,2)"
+e = "#NUM!"
+[[case]]
+f = "=LCM(4,6)"
+v = 12
+[[case]]
+f = "=LCM(3,0)"
+v = 0
+[[case]]
+f = "=FACT(5)"
+v = 120
+[[case]]
+f = "=FACT(0)"
+v = 1
+[[case]]
+f = "=FACT(5.9)"
+v = 120
+[[case]]
+f = "=FACT(-1)"
+e = "#NUM!"
+[[case]]
+f = "=COMBIN(5,2)"
+v = 10
+[[case]]
+f = "=COMBIN(2,5)"
+e = "#NUM!"
+[[case]]
+f = "=PERMUT(5,2)"
+v = 20
+[[case]]
+f = "=SUBTOTAL(9,A1:A5)"
+v = 15
+[[case]]
+f = "=SUBTOTAL(1,A1:A5)"
+v = 3
+[[case]]
+f = "=SUBTOTAL(109,A1:A5)"
+v = 15
+[[case]]
+f = "=SUBTOTAL(3,A1:C1)"
+v = 3
+[[case]]
+f = "=SUBTOTAL(4,D1:D5)"
+v = 50
+[[case]]
+f = "=AGGREGATE(9,6,A1:A5)"
+v = 15
+[[case]]
+f = "=AGGREGATE(14,6,D1:D5,2)"
+v = 40
+[[case]]
+f = "=AGGREGATE(15,6,D1:D5,1)"
+v = 10
+[[case]]
+f = "=DEGREES(PI())"
+v = 180
+[[case]]
+f = "=RADIANS(180)"
+v = 3.141592653589793
+[[case]]
+f = "=SIN(PI()/2)"
+v = 1
+[[case]]
+f = "=COS(0)"
+v = 1
+[[case]]
+f = "=TAN(PI()/4)"
+v = 1
+tol = 1e-12
+[[case]]
+f = "=ASIN(1)"
+v = 1.5707963267948966
+[[case]]
+f = "=ASIN(2)"
+e = "#NUM!"
+[[case]]
+f = "=ACOS(1)"
+v = 0
+[[case]]
+f = "=ATAN(1)"
+v = 0.7853981633974483
+[[case]]
+f = "=ATAN2(1,1)"
+v = 0.7853981633974483
+[[case]]
+f = "=ATAN2(-1,0)"
+v = 3.141592653589793
+[[case]]
+f = "=ATAN2(0,0)"
+e = "#DIV/0!"
+[[case]]
+f = "=RANDBETWEEN(3,3)"
+v = 3
+[[case]]
+f = "=AND(RAND()>=0,RAND()<1)"
+v = true

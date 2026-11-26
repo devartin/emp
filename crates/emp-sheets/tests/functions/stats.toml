@@ -1,0 +1,238 @@
+[setup]
+A1 = 2
+A2 = 4
+A3 = 4
+A4 = 4
+A5 = 5
+A6 = 5
+A7 = 7
+A8 = 9
+B1 = "x"
+B2 = true
+B3 = 3
+C1 = 1
+C2 = 2
+C3 = 3
+C4 = 4
+C5 = 5
+D1 = 2
+D2 = 4
+D3 = 5
+D4 = 4
+D5 = 5
+E1 = "a"
+E2 = "b"
+E3 = "a"
+E4 = ""
+E5 = "c"
+
+[[case]]
+f = "=AVERAGE(A1:A8)"
+v = 5
+[[case]]
+f = "=AVERAGE(B1:B3)"
+v = 3
+[[case]]
+f = "=AVERAGE(B1)"
+e = "#DIV/0!"
+[[case]]
+f = "=AVERAGEA(B1:B3)"
+v = 1.3333333333333333
+[[case]]
+f = "=AVERAGEIF(A1:A8,\">4\")"
+v = 6.5
+[[case]]
+f = "=AVERAGEIF(E1:E5,\"a\",C1:C5)"
+v = 2
+[[case]]
+f = "=AVERAGEIFS(C1:C5,E1:E5,\"a\",C1:C5,\">1\")"
+v = 3
+[[case]]
+f = "=AVERAGEIF(A1:A8,\">100\")"
+e = "#DIV/0!"
+[[case]]
+f = "=COUNT(A1:B3)"
+v = 4
+[[case]]
+f = "=COUNT(1,\"2\",\"x\",TRUE)"
+v = 3
+[[case]]
+f = "=COUNTA(B1:B5)"
+v = 3
+[[case]]
+f = "=COUNTA(1,\"\",FALSE)"
+v = 3
+[[case]]
+f = "=COUNTBLANK(B1:B5)"
+v = 2
+[[case]]
+f = "=COUNTBLANK(E1:E5)"
+v = 1
+[[case]]
+f = "=COUNTIF(A1:A8,4)"
+v = 3
+[[case]]
+f = "=COUNTIF(A1:A8,\">=5\")"
+v = 4
+[[case]]
+f = "=COUNTIF(E1:E5,\"a\")"
+v = 2
+[[case]]
+f = "=COUNTIF(E1:E5,\"<>a\")"
+v = 3
+[[case]]
+f = "=COUNTIF(E1:E5,\"\")"
+v = 1
+[[case]]
+f = "=COUNTIF(E1:E5,\"?\")"
+v = 4
+[[case]]
+f = "=COUNTIFS(E1:E5,\"a\",C1:C5,\">2\")"
+v = 1
+[[case]]
+f = "=COUNTIF(A1:A8,{4,5})"
+v = [[3, 2]]
+[[case]]
+f = "=MIN(A1:A8)"
+v = 2
+[[case]]
+f = "=MAX(A1:A8)"
+v = 9
+[[case]]
+f = "=MAX(B1)"
+v = 0
+[[case]]
+f = "=MINA(B1:B3)"
+v = 0
+[[case]]
+f = "=MAXA(B2,0.5)"
+v = 1
+[[case]]
+f = "=MINIFS(C1:C5,E1:E5,\"a\")"
+v = 1
+[[case]]
+f = "=MAXIFS(C1:C5,E1:E5,\"a\")"
+v = 3
+[[case]]
+f = "=MAXIFS(C1:C5,E1:E5,\"zz\")"
+v = 0
+[[case]]
+f = "=MEDIAN(A1:A8)"
+v = 4.5
+[[case]]
+f = "=MEDIAN(1,2,3)"
+v = 2
+[[case]]
+f = "=MODE.SNGL(A1:A8)"
+v = 4
+[[case]]
+f = "=MODE.SNGL(1,2,3)"
+e = "#N/A"
+[[case]]
+f = "=STDEV.P(A1:A8)"
+v = 2
+[[case]]
+f = "=STDEV.S(A1:A8)"
+v = 2.138089935299395
+[[case]]
+f = "=STDEV(1)"
+e = "#DIV/0!"
+[[case]]
+f = "=VAR.P(A1:A8)"
+v = 4
+[[case]]
+f = "=VAR.S(A1:A8)"
+v = 4.571428571428571
+[[case]]
+f = "=LARGE(A1:A8,2)"
+v = 7
+[[case]]
+f = "=SMALL(A1:A8,3)"
+v = 4
+[[case]]
+f = "=LARGE(A1:A8,9)"
+e = "#NUM!"
+[[case]]
+f = "=RANK.EQ(4,A1:A8)"
+v = 5
+[[case]]
+f = "=RANK.EQ(4,A1:A8,1)"
+v = 2
+[[case]]
+f = "=RANK.AVG(4,A1:A8,1)"
+v = 3
+[[case]]
+f = "=RANK.EQ(3,A1:A8)"
+e = "#N/A"
+[[case]]
+f = "=PERCENTILE.INC(C1:C5,0.3)"
+v = 2.2
+[[case]]
+f = "=PERCENTILE.EXC(C1:C5,0.3)"
+v = 1.8
+[[case]]
+f = "=PERCENTILE.INC(C1:C5,1.5)"
+e = "#NUM!"
+[[case]]
+f = "=QUARTILE.INC(C1:C5,1)"
+v = 2
+[[case]]
+f = "=QUARTILE.INC(C1:C5,3)"
+v = 4
+[[case]]
+f = "=PERCENTRANK.INC(C1:C5,2)"
+v = 0.25
+[[case]]
+f = "=PERCENTRANK.INC(C1:C5,2.5)"
+v = 0.375
+[[case]]
+f = "=CORREL(C1:C5,D1:D5)"
+v = 0.7745966692414834
+[[case]]
+f = "=COVARIANCE.S(C1:C5,D1:D5)"
+v = 1.5
+[[case]]
+f = "=SLOPE(D1:D5,C1:C5)"
+v = 0.6
+[[case]]
+f = "=INTERCEPT(D1:D5,C1:C5)"
+v = 2.2
+[[case]]
+f = "=RSQ(D1:D5,C1:C5)"
+v = 0.6
+[[case]]
+f = "=FORECAST.LINEAR(6,D1:D5,C1:C5)"
+v = 5.8
+[[case]]
+f = "=TREND(D1:D5,C1:C5,{6;7})"
+v = [[5.8], [6.4]]
+[[case]]
+f = "=GROWTH({1,2,4,8},{1,2,3,4},{5})"
+v = 16
+[[case]]
+f = "=GEOMEAN(2,8)"
+v = 4
+[[case]]
+f = "=GEOMEAN(2,-8)"
+e = "#NUM!"
+[[case]]
+f = "=NORM.DIST(1,0,1,TRUE)"
+v = 0.8413447460685429
+[[case]]
+f = "=NORM.DIST(1,0,1,FALSE)"
+v = 0.24197072451914337
+[[case]]
+f = "=NORM.S.DIST(1.96,TRUE)"
+v = 0.9750021048517795
+[[case]]
+f = "=NORM.INV(0.95,0,1)"
+v = 1.6448536269514722
+[[case]]
+f = "=NORM.INV(0.5,10,2)"
+v = 10
+[[case]]
+f = "=NORM.INV(1.5,0,1)"
+e = "#NUM!"
+[[case]]
+f = "=NORM.DIST(1,0,-1,TRUE)"
+e = "#NUM!"

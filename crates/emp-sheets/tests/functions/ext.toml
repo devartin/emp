@@ -1,0 +1,36 @@
+[[case]]
+f = "=STOCK(\"AAPL\")"
+v = 190.5
+[[case]]
+f = "=STOCK(\"aapl\",\"price\")"
+v = 190.5
+[[case]]
+f = "=STOCK(\"MSFT\")"
+e = "#FETCH!"
+[[case]]
+f = "=STOCK(\"AAPL\",\"bogus\")"
+e = "#VALUE!"
+[[case]]
+f = "=GOOGLEFINANCE(\"AAPL\",\"price\")"
+v = 190.5
+[[case]]
+f = "=FX(\"USD\",\"EUR\")"
+v = 0.92
+[[case]]
+f = "=FX(\"usd\",\"usd\")"
+v = 1
+[[case]]
+f = "=FX(\"USD\",\"GBP\")"
+e = "#FETCH!"
+[[case]]
+f = "=FX(\"US\",\"EUR\")"
+e = "#VALUE!"
+[[case]]
+f = "=CRYPTO(\"BTC\")"
+e = "#FETCH!"
+[[case]]
+f = "=IFERROR(STOCK(\"MSFT\"),0)"
+v = 0
+[[case]]
+f = "=WEBSERVICE(\"http://x\")"
+parse_error = true

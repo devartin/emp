@@ -1,20 +1,40 @@
 [package]
 name = "emp-crypto"
+description = "EMP vault cryptography: Argon2id KDF, keyslots, record envelopes, STREAM blobs, integrity MACs, recovery keys"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+# Accept the tiny `KdfParams::INSECURE_TEST` Argon2 parameters (m = 8 KiB, t = 1, p = 1) in addition to the §9.3
+# bounds. ONLY for downstream test suites: enable it from `[dev-dependencies]`, never from `[dependencies]`.
+insecure-test-kdf = []
 
 [dependencies]
 serde.workspace = true
-serde_json.workspace = true
 thiserror.workspace = true
 zeroize.workspace = true
-base64.workspace = true
-chacha20poly1305 = "0.10"
-argon2 = { version = "0.5", features = ["zeroize"] }
+chacha20poly1305 = { version = "0.10", features = ["stream"] }
+argon2 = { version = "0.5", default-features = false, features = ["alloc", "zeroize"] }
 hkdf = "0.12"
 sha2 = "0.10"
 hmac = "0.12"
 rand_core = { version = "0.6", features = ["getrandom"] }
 getrandom = "0.2"
-secrecy = "0.10"
+secrecy = { version = "0.10", features = ["serde"] }
 subtle = "2"
+bip39 = { version = "2", default-features = false, features = ["std", "zeroize"] }
+zstd = { version = "0.13", default-features = false }
+zxcvbn = { version = "3", default-features = false }
+unicode-normalization = "0.1"
+eff-wordlist = "1"
+
+[dev-dependencies]
+# Self dev-dependency: lets the integration tests in tests/ use the tiny `KdfParams::INSECURE_TEST` parameters.
+# Dev-only features are not unified into normal builds (resolver 2+).
+emp-crypto = { path = ".", features = ["insecure-test-kdf"] }
+serde_json.workspace = true
+hex = "0.4"
+proptest = "1"

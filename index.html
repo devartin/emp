@@ -1,12 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light" data-accent="graphite">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri + React + Typescript</title>
+    <meta name="color-scheme" content="light dark" />
+    <!-- Boot without flash (§3.9): the ONLY inline script; allowed by CSP hash sha256-KIiGnLzas/mcE3fMNMY16EKkFQkHhfwLE+EO9tpZXqI= -->
+    <script>(function(){try{var d=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem("emp.boot")||"{}")||{}}catch(e){}var q=function(s){return!!(window.matchMedia&&matchMedia(s).matches)};var t=p.theme;if(t!=="light"&&t!=="dark"&&t!=="midnight")t=q("(prefers-color-scheme: dark)")?"dark":"light";var A=["graphite","iris","ocean","jade","amber","ruby","orchid"];var m=p.motion==="reduced"||p.motion==="full"?p.motion:q("(prefers-reduced-motion: reduce)")?"reduced":"full";var u=navigator.userAgent,l=/Linux/.test(u)&&!/Android/.test(u);d.setAttribute("data-theme",t);d.setAttribute("data-accent",A.indexOf(p.accent)>=0?p.accent:"graphite");d.setAttribute("data-motion",m);d.setAttribute("data-density",p.density==="compact"?"compact":"comfortable");d.setAttribute("data-text-size",p.textSize==="s"||p.textSize==="l"?p.textSize:"m");d.setAttribute("data-effects",l||q("(prefers-reduced-transparency: reduce)")?"reduced":"full");d.setAttribute("data-contrast",q("(prefers-contrast: more)")?"more":"normal");d.setAttribute("data-numbers","standard");d.setAttribute("data-privacy","off");d.style.colorScheme=t==="light"?"light":"dark"}catch(e){}})();</script>
+    <style>html{background:#f7f7f8}html[data-theme=dark]{background:#0b0b0e}html[data-theme=midnight]{background:#000}</style>
+    <link rel="preload" href="/node_modules/@fontsource-variable/inter/files/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="icon" type="image/svg+xml" href="/emp.svg" />
+    <title>EMP</title>
   </head>
-
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

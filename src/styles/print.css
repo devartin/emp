@@ -1,0 +1,22 @@
+/* Print / PDF export: light theme, no chrome, no motion. */
+@media print {
+  :root {
+    --bg-window: #fff;
+    --bg-canvas: #fff;
+    --text-primary: #18181b;
+    --text-secondary: #52525b;
+    color-scheme: light;
+  }
+  html,
+  body { background: #fff !important; color: #18181b !important; }
+  [data-print-hide],
+  .emp-toaster,
+  .emp-tip,
+  .emp-scrim { display: none !important; }
+  .emp-card { box-shadow: none !important; border: 1px solid #e4e4e7 !important; break-inside: avoid; }
+  .emp-prose { max-width: none; }
+  .emp-prose pre { white-space: pre-wrap; }
+  * { animation: none !important; transition: none !important; }
+  :root[data-privacy="on"] [data-sensitive]::after { background: #f4f4f5; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #6e6e77; }
+}

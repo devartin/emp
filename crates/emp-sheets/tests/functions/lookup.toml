@@ -1,0 +1,238 @@
+[setup]
+A1 = "id"
+B1 = "name"
+C1 = "price"
+A2 = 1
+B2 = "apple"
+C2 = 1.5
+A3 = 2
+B3 = "banana"
+C3 = 0.25
+A4 = 3
+B4 = "cherry"
+C4 = 3
+A5 = 5
+B5 = "date"
+C5 = 7
+E1 = 10
+E2 = 20
+E3 = 30
+F1 = "B2"
+G1 = "=SEQUENCE(3)"
+
+[[case]]
+f = "=VLOOKUP(2,A2:C5,2,FALSE)"
+v = "banana"
+[[case]]
+f = "=VLOOKUP(4,A2:C5,2,TRUE)"
+v = "cherry"
+[[case]]
+f = "=VLOOKUP(4,A2:C5,2)"
+v = "cherry"
+[[case]]
+f = "=VLOOKUP(4,A2:C5,2,FALSE)"
+e = "#N/A"
+[[case]]
+f = "=VLOOKUP(0,A2:C5,2,TRUE)"
+e = "#N/A"
+[[case]]
+f = "=VLOOKUP(\"BAN*\",B2:C5,2,FALSE)"
+v = 0.25
+[[case]]
+f = "=VLOOKUP(2,A2:C5,4,FALSE)"
+e = "#REF!"
+[[case]]
+f = "=VLOOKUP(2,A2:C5,0,FALSE)"
+e = "#VALUE!"
+[[case]]
+f = "=HLOOKUP(\"price\",A1:C5,3,FALSE)"
+v = 0.25
+[[case]]
+f = "=HLOOKUP(\"nope\",A1:C5,3,FALSE)"
+e = "#N/A"
+[[case]]
+f = "=XLOOKUP(\"cherry\",B2:B5,C2:C5)"
+v = 3
+[[case]]
+f = "=XLOOKUP(\"kiwi\",B2:B5,C2:C5,\"none\")"
+v = "none"
+[[case]]
+f = "=XLOOKUP(\"kiwi\",B2:B5,C2:C5)"
+e = "#N/A"
+[[case]]
+f = "=XLOOKUP(4,A2:A5,B2:B5,,-1)"
+v = "cherry"
+[[case]]
+f = "=XLOOKUP(4,A2:A5,B2:B5,,1)"
+v = "date"
+[[case]]
+f = "=XLOOKUP(\"b*\",B2:B5,A2:A5,,2)"
+v = 2
+[[case]]
+f = "=XLOOKUP(2,A2:A5,B2:C5)"
+v = [["banana", 0.25]]
+[[case]]
+f = "=XLOOKUP(\"price\",A1:C1,A2:C5)"
+v = [[1.5], [0.25], [3], [7]]
+[[case]]
+f = "=SUM(XLOOKUP(2,A2:A5,C2:C5):C5)"
+v = 10.25
+[[case]]
+f = "=XLOOKUP(1,{1,2,1},{\"a\",\"b\",\"c\"},,0,-1)"
+v = "c"
+[[case]]
+f = "=LOOKUP(4,A2:A5,B2:B5)"
+v = "cherry"
+[[case]]
+f = "=LOOKUP(9,A2:A5)"
+v = 5
+[[case]]
+f = "=INDEX(A2:C5,2,3)"
+v = 0.25
+[[case]]
+f = "=INDEX(A2:C5,3,2)"
+v = "cherry"
+[[case]]
+f = "=INDEX(E1:E3,2)"
+v = 20
+[[case]]
+f = "=INDEX({1,2,3},2)"
+v = 2
+[[case]]
+f = "=SUM(INDEX(A2:C5,0,3))"
+v = 11.75
+[[case]]
+f = "=SUM(INDEX(A2:C5,2,0))"
+v = 2.25
+[[case]]
+f = "=INDEX(A2:C5,5,1)"
+e = "#REF!"
+[[case]]
+f = "=SUM(A2:INDEX(A2:A5,3))"
+v = 6
+[[case]]
+f = "=MATCH(\"cherry\",B2:B5,0)"
+v = 3
+[[case]]
+f = "=MATCH(4,A2:A5,1)"
+v = 3
+[[case]]
+f = "=MATCH(4,A2:A5)"
+v = 3
+[[case]]
+f = "=MATCH(25,{30,20,10},-1)"
+v = 1
+[[case]]
+f = "=MATCH(\"c?erry\",B2:B5,0)"
+v = 3
+[[case]]
+f = "=MATCH(\"kiwi\",B2:B5,0)"
+e = "#N/A"
+[[case]]
+f = "=MATCH(TRUE,E1:E3>15,0)"
+v = 2
+[[case]]
+f = "=XMATCH(\"date\",B2:B5)"
+v = 4
+[[case]]
+f = "=XMATCH(4,A2:A5,1)"
+v = 4
+[[case]]
+f = "=CHOOSE(2,\"a\",\"b\",\"c\")"
+v = "b"
+[[case]]
+f = "=CHOOSE(4,\"a\",\"b\",\"c\")"
+e = "#VALUE!"
+[[case]]
+f = "=SUM(CHOOSE(2,A2:A5,C2:C5))"
+v = 11.75
+[[case]]
+f = "=CHOOSE({1,2},\"x\",\"y\")"
+v = [["x", "y"]]
+[[case]]
+f = "=SUM(OFFSET(E1,1,0,2,1))"
+v = 50
+[[case]]
+f = "=OFFSET(A1,1,1)"
+v = "apple"
+[[case]]
+f = "=OFFSET(A1,-1,0)"
+e = "#REF!"
+[[case]]
+f = "=INDIRECT(F1)"
+v = "apple"
+[[case]]
+f = "=INDIRECT(\"C\"&4)"
+v = 3
+[[case]]
+f = "=SUM(INDIRECT(\"E1:E3\"))"
+v = 60
+[[case]]
+f = "=INDIRECT(\"R2C2\",FALSE)"
+v = "apple"
+[[case]]
+f = "=INDIRECT(\"nonsense!!\")"
+e = "#REF!"
+[[case]]
+f = "=ROW(C7)"
+v = 7
+[[case]]
+f = "=ROW()"
+v = 1
+[[case]]
+f = "=ROW(A2:A4)"
+v = [[2], [3], [4]]
+[[case]]
+f = "=COLUMN(D1)"
+v = 4
+[[case]]
+f = "=COLUMN(B1:D1)"
+v = [[2, 3, 4]]
+[[case]]
+f = "=ROWS(A1:C5)"
+v = 5
+[[case]]
+f = "=COLUMNS(A1:C5)"
+v = 3
+[[case]]
+f = "=ROWS(A:A)"
+v = 1048576
+[[case]]
+f = "=COLUMNS({1,2;3,4})"
+v = 2
+[[case]]
+f = "=ADDRESS(2,3)"
+v = "$C$2"
+[[case]]
+f = "=ADDRESS(2,3,4)"
+v = "C2"
+[[case]]
+f = "=ADDRESS(2,3,2)"
+v = "C$2"
+[[case]]
+f = "=ADDRESS(2,3,1,FALSE)"
+v = "R2C3"
+[[case]]
+f = "=ADDRESS(1,1,1,TRUE,\"My Sheet\")"
+v = "'My Sheet'!$A$1"
+[[case]]
+f = "=TRANSPOSE({1,2,3})"
+v = [[1], [2], [3]]
+[[case]]
+f = "=TRANSPOSE(A1:B2)"
+v = [["id", 1], ["name", "apple"]]
+[[case]]
+f = "=HYPERLINK(\"https://example.com\",\"Site\")"
+v = "Site"
+[[case]]
+f = "=HYPERLINK(\"https://example.com\")"
+v = "https://example.com"
+[[case]]
+f = "=SUM(G1#)"
+v = 6
+[[case]]
+f = "=ROWS(G1#)"
+v = 3
+[[case]]
+f = "=A1#"
+e = "#REF!"

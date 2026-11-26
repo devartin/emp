@@ -1,0 +1,688 @@
+/* App shell (§5.8 sidebar, §6.1 layout). Tokens only. */
+
+.emp-shell {
+  --sb-w: 248px;
+  --topbar-h: 44px;
+  position: relative;
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-window);
+}
+
+/* ─── Sidebar ─── */
+.emp-sidebar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  width: var(--sb-w);
+  background: var(--bg-window);
+  contain: layout paint style;
+}
+:root:is([data-theme="dark"], [data-theme="midnight"]) .emp-sidebar {
+  background: var(--bg-window);
+}
+.emp-sidebar[data-floating] {
+  inset: calc(var(--topbar-h) + 4px) auto 8px 8px;
+  z-index: var(--z-peek);
+  border-radius: 12px;
+  background: var(--bg-overlay);
+  box-shadow: var(--elev-3);
+  overflow: hidden;
+}
+.emp-sidebar-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.emp-sidebar-sep {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-subtle);
+  pointer-events: none;
+}
+.emp-sidebar[data-floating] .emp-sidebar-sep {
+  display: none;
+}
+.emp-sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 8px 12px;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+.emp-sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.emp-sidebar-scroll[data-scrolled] {
+  box-shadow: inset 0 1px 0 var(--border-subtle);
+}
+.emp-peek-zone {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 8px;
+  z-index: 16;
+}
+
+/* Workspace row (44px) */
+.emp-ws-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding: 0 8px 0 8px;
+  flex: none;
+}
+.emp-ws-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: var(--text-primary);
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+.emp-ws-button:hover,
+.emp-ws-button[data-state="open"] {
+  background: var(--state-hover);
+  transition-duration: var(--dur-fast);
+}
+.emp-ws-button .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Rows (28px, compact 24) */
+.emp-sb-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--row-sidebar);
+  padding: 0 4px 0 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: calc(13rem / 14);
+  line-height: calc(18 / 13);
+  font-weight: 500;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+  width: 100%;
+  text-align: left;
+}
+.emp-sb-row:hover {
+  background: var(--state-hover);
+  color: var(--text-primary);
+  transition-duration: var(--dur-fast);
+}
+.emp-sb-row:focus-visible {
+  outline: var(--focus-width) solid var(--accent-ring);
+  outline-offset: -2px;
+}
+.emp-sb-row[aria-current="page"],
+.emp-sb-row[aria-selected="true"] {
+  background: var(--state-active);
+  color: var(--text-primary);
+  font-weight: 550;
+}
+.emp-sb-row[data-drop="inside"] {
+  background: var(--state-selected);
+  box-shadow: inset 0 0 0 1px var(--accent-solid);
+  color: var(--text-primary);
+}
+.emp-sb-row[data-dragging] {
+  opacity: 0.4;
+}
+.emp-sb-row .label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emp-sb-row .ico {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-tertiary);
+}
+.emp-sb-row .ico svg {
+  width: 16px;
+  height: 16px;
+}
+.emp-sb-row[aria-current="page"] .ico {
+  color: var(--text-secondary);
+}
+.emp-sb-row .trail {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex: none;
+}
+.emp-sb-row .hover-only {
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.emp-sb-row:hover .hover-only,
+.emp-sb-row:focus-visible .hover-only,
+.emp-sb-row:has(:focus-visible) .hover-only,
+.emp-sb-row[data-menu-open] .hover-only {
+  opacity: 1;
+}
+.emp-sb-row .kbd-hint {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.emp-sb-mini {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--text-tertiary);
+  flex: none;
+  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+}
+.emp-sb-mini:hover {
+  background: var(--state-active);
+  color: var(--text-primary);
+  transition-duration: var(--dur-fast);
+}
+.emp-sb-mini svg {
+  width: 14px;
+  height: 14px;
+}
+.emp-sb-chevron {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.emp-sb-row:hover .emp-sb-chevron,
+.emp-sb-row:focus-visible .emp-sb-chevron {
+  opacity: 1;
+}
+.emp-sb-chevron:hover {
+  background: var(--state-active);
+  color: var(--text-primary);
+}
+.emp-sb-chevron svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.emp-sb-chevron[data-open] svg {
+  transform: rotate(90deg);
+}
+:root[data-motion="reduced"] .emp-sb-chevron svg {
+  transition: none;
+}
+.emp-sb-row:hover .ico.swap-on-hover,
+.emp-sb-row:focus-visible .ico.swap-on-hover {
+  opacity: 0;
+}
+.emp-sb-rename {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  border-radius: 5px;
+  border: 1px solid var(--accent-solid);
+  box-shadow: var(--focus-ring);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font: inherit;
+  outline: none;
+}
+
+/* Section headers (28px, micro, tertiary) */
+.emp-sb-section {
+  margin-top: 14px;
+}
+.emp-sb-section:first-child {
+  margin-top: 4px;
+}
+.emp-sb-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: calc(11rem / 14);
+  line-height: calc(14 / 11);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.emp-sb-head > button:first-child {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 4px;
+  margin-left: -4px;
+  border-radius: 5px;
+  transition: color var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out);
+}
+.emp-sb-head > button:first-child:hover {
+  color: var(--text-secondary);
+  background: var(--state-hover);
+}
+.emp-sb-head .caret {
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+.emp-sb-head:hover .caret {
+  opacity: 1;
+}
+.emp-sb-head[data-collapsed] .caret {
+  transform: rotate(-90deg);
+}
+.emp-sb-head .actions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.emp-sb-head:hover .actions,
+.emp-sb-head:focus-within .actions {
+  opacity: 1;
+}
+
+.emp-app-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  color: #fff;
+  flex: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.emp-app-tile svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* Footer (40px) */
+.emp-sb-footer {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  padding: 0 8px 0 12px;
+  border-top: 1px solid var(--border-subtle);
+  flex: none;
+}
+.emp-status-dot {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--gain);
+  flex: none;
+}
+.emp-status-dot[data-tone="off"] {
+  background: var(--text-disabled);
+}
+.emp-status-dot[data-pulse]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: emp-pulse-halo 1.6s var(--ease-out) 1;
+}
+
+/* Tree drop indicator (§4.2): 2px accent line + 6px circle cap */
+.emp-drop-line {
+  position: absolute;
+  height: 2px;
+  background: var(--accent-solid);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 3;
+  animation: emp-fade-in 80ms var(--ease-out);
+}
+.emp-drop-line::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  border: 1.5px solid var(--accent-solid);
+  background: var(--bg-window);
+  box-sizing: border-box;
+}
+.emp-drag-ghost {
+  position: fixed;
+  z-index: var(--z-drag);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  max-width: 240px;
+  padding: 0 10px 0 8px;
+  border-radius: 8px;
+  background: var(--bg-overlay);
+  box-shadow: var(--elev-4);
+  color: var(--text-primary);
+  font-size: calc(13rem / 14);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ─── Main column ─── */
+.emp-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-canvas);
+}
+.emp-content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.emp-route {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.emp-route > * {
+  flex: 1 0 auto;
+}
+
+/* ─── Top bar (44px) ─── */
+.emp-topbar {
+  position: relative;
+  z-index: var(--z-topbar);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--topbar-h);
+  padding: 0 8px 0 8px;
+  flex: none;
+  background: var(--bg-canvas);
+  contain: layout style;
+  transition: box-shadow var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out);
+}
+.emp-topbar[data-scrolled] {
+  box-shadow: 0 1px 0 var(--border-subtle);
+}
+:root:not([data-effects="reduced"]):not([data-contrast="more"]) .emp-topbar[data-scrolled][data-glass] {
+  background: color-mix(in oklab, var(--bg-canvas) 72%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+}
+.emp-topbar .grow {
+  flex: 1;
+  min-width: 12px;
+  align-self: stretch;
+}
+.emp-edited {
+  font-size: calc(12rem / 14);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  padding: 0 6px;
+}
+
+/* Breadcrumbs (§5.11): 28px ghost-sm items, "/" separators */
+.emp-crumbs {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.emp-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 220px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: calc(13rem / 14);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+}
+.emp-crumb > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.emp-crumb:hover {
+  background: var(--state-hover);
+  color: var(--text-primary);
+  transition-duration: var(--dur-fast);
+}
+.emp-crumb[aria-current="page"] {
+  color: var(--text-primary);
+}
+.emp-crumb-sep {
+  color: var(--text-disabled);
+  padding: 0 1px;
+  font-size: calc(13rem / 14);
+  flex: none;
+}
+
+/* Lock indicator ring countdown (last 60 s) */
+.emp-lock-ring {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.emp-lock-ring svg.ring {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+/* ─── Right panel ─── */
+.emp-rpanel {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-canvas);
+  border-left: 1px solid var(--border-subtle);
+  contain: layout paint style;
+}
+.emp-outline-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: calc(13rem / 14);
+  line-height: calc(18 / 13);
+  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+}
+.emp-outline-item:hover {
+  background: var(--state-hover);
+  color: var(--text-primary);
+  transition-duration: var(--dur-fast);
+}
+.emp-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: calc(13rem / 14);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.emp-info-row:last-child {
+  border-bottom: 0;
+}
+.emp-info-row dt {
+  color: var(--text-tertiary);
+}
+.emp-info-row dd {
+  color: var(--text-primary);
+  text-align: right;
+  margin: 0;
+}
+
+/* ─── Trash ─── */
+.emp-trash-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+.emp-trash-row:hover,
+.emp-trash-row:focus-within {
+  background: var(--state-hover);
+  transition-duration: var(--dur-fast);
+}
+.emp-trash-row .actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.emp-trash-row:hover .actions,
+.emp-trash-row:focus-within .actions {
+  opacity: 1;
+}
+.emp-trash-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  flex: none;
+}
+
+/* Shortcut sheet */
+.emp-keys-grid {
+  columns: 2;
+  column-gap: 32px;
+}
+.emp-keys-group {
+  margin-bottom: 20px;
+}
+.emp-keys-group h3 {
+  break-after: avoid;
+}
+.emp-keys-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 30px;
+  font-size: calc(13rem / 14);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  break-inside: avoid;
+}
+.emp-keys-row:last-child {
+  border-bottom: 0;
+}
+
+/* Template cards */
+.emp-tpl-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-1);
+  box-shadow: var(--elev-1);
+  text-align: left;
+  transition: border-color var(--dur-base) var(--ease-out), translate var(--dur-base) var(--ease-out);
+}
+.emp-tpl-card:hover {
+  border-color: var(--border-strong);
+  translate: 0 -1px;
+}
+.emp-tpl-card .tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Compact breakpoint: content padding tightens; peek-only sidebar handled in JS. */
+@media (max-width: 899px) {
+  .emp-topbar {
+    padding-left: 4px;
+  }
+}
+
+/* Rows that just appeared in the tree (expand, create): 200ms fade + small drop (§4.2 tree expand). */
+.emp-row-in {
+  animation: emp-row-in 200ms var(--ease-out) both;
+}
+@keyframes emp-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+:root[data-motion="reduced"] .emp-row-in {
+  animation: emp-fade-in 120ms var(--ease-out) both;
+}

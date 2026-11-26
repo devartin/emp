@@ -1,13 +1,28 @@
 [package]
 name = "emp-sheets"
+description = "EMP formula engine: Excel-dialect parser and evaluator, workbook model, recalculation, number formats, xlsx/csv IO, database and metric dialects"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+default = ["io"]
+io = ["dep:calamine", "dep:rust_xlsxwriter", "dep:csv", "dep:quick-xml", "dep:zip"]
 
 [dependencies]
-serde.workspace = true
+serde = { workspace = true, features = ["rc"] }
 serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
-calamine = "0.31"
-rust_xlsxwriter = "0.90"
-csv = "1"
+rustc-hash = "2"
+smallvec = { version = "1", features = ["serde"] }
+regex = { version = "1", default-features = false, features = ["std", "unicode-case", "unicode-perl"] }
+calamine = { version = "0.31", optional = true }
+rust_xlsxwriter = { version = "0.90", optional = true }
+csv = { version = "1", optional = true }
+quick-xml = { version = "0.38", optional = true }
+zip = { version = "4", optional = true, default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+toml = "0.8"

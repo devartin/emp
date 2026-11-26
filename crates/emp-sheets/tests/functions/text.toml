@@ -1,0 +1,230 @@
+[setup]
+A1 = "Hello World"
+A2 = "  lots   of   space  "
+A3 = 1234.567
+A4 = "a"
+A5 = "b"
+A7 = "c"
+
+[[case]]
+f = "=CONCAT(A4:A7)"
+v = "abc"
+[[case]]
+f = "=CONCAT(\"x\",1,TRUE)"
+v = "x1TRUE"
+[[case]]
+f = "=CONCATENATE(\"a\",\"b\",\"c\")"
+v = "abc"
+[[case]]
+f = "=TEXTJOIN(\",\",TRUE,A4:A7)"
+v = "a,b,c"
+[[case]]
+f = "=TEXTJOIN(\",\",FALSE,A4:A7)"
+v = "a,b,,c"
+[[case]]
+f = "=TEXTJOIN(\"-\",TRUE,{1,2},\"x\")"
+v = "1-2-x"
+[[case]]
+f = "=LEFT(A1,5)"
+v = "Hello"
+[[case]]
+f = "=LEFT(A1)"
+v = "H"
+[[case]]
+f = "=LEFT(A1,-1)"
+e = "#VALUE!"
+[[case]]
+f = "=RIGHT(A1,5)"
+v = "World"
+[[case]]
+f = "=RIGHT(\"abc\",10)"
+v = "abc"
+[[case]]
+f = "=MID(A1,7,5)"
+v = "World"
+[[case]]
+f = "=MID(A1,20,5)"
+v = ""
+[[case]]
+f = "=MID(A1,0,5)"
+e = "#VALUE!"
+[[case]]
+f = "=LEN(A1)"
+v = 11
+[[case]]
+f = "=LEN(1234.5)"
+v = 6
+[[case]]
+f = "=LEN(\"héllo\")"
+v = 5
+[[case]]
+f = "=FIND(\"o\",A1)"
+v = 5
+[[case]]
+f = "=FIND(\"o\",A1,6)"
+v = 8
+[[case]]
+f = "=FIND(\"O\",A1)"
+e = "#VALUE!"
+[[case]]
+f = "=SEARCH(\"O\",A1)"
+v = 5
+[[case]]
+f = "=SEARCH(\"w?r\",A1)"
+v = 7
+[[case]]
+f = "=SEARCH(\"z\",A1)"
+e = "#VALUE!"
+[[case]]
+f = "=SUBSTITUTE(\"a-b-c\",\"-\",\"+\")"
+v = "a+b+c"
+[[case]]
+f = "=SUBSTITUTE(\"a-b-c\",\"-\",\"+\",2)"
+v = "a-b+c"
+[[case]]
+f = "=SUBSTITUTE(\"aaa\",\"a\",\"bb\")"
+v = "bbbbbb"
+[[case]]
+f = "=REPLACE(\"abcdef\",2,3,\"X\")"
+v = "aXef"
+[[case]]
+f = "=UPPER(\"abc\")"
+v = "ABC"
+[[case]]
+f = "=LOWER(\"ÀBC\")"
+v = "àbc"
+[[case]]
+f = "=PROPER(\"hello wORLD-foo bar's\")"
+v = "Hello World-Foo Bar'S"
+[[case]]
+f = "=TRIM(A2)"
+v = "lots of space"
+[[case]]
+f = "=CLEAN(\"a\"&CHAR(7)&\"b\")"
+v = "ab"
+[[case]]
+f = "=TEXT(0.256,\"0.0%\")"
+v = "25.6%"
+[[case]]
+f = "=TEXT(1234.567,\"#,##0.00\")"
+v = "1,234.57"
+[[case]]
+f = "=TEXT(45306,\"yyyy-mm-dd\")"
+v = "2024-01-15"
+[[case]]
+f = "=TEXT(45306,\"dddd\")"
+v = "Monday"
+[[case]]
+f = "=TEXT(\"45306\",\"mmm d\")"
+v = "Jan 15"
+[[case]]
+f = "=TEXT(0.75,\"h:mm AM/PM\")"
+v = "6:00 PM"
+[[case]]
+f = "=TEXT(\"abc\",\"0.00\")"
+v = "abc"
+[[case]]
+f = "=TEXT(5,\"000\")"
+v = "005"
+[[case]]
+f = "=VALUE(\"1,234.5\")"
+v = 1234.5
+[[case]]
+f = "=VALUE(\"50%\")"
+v = 0.5
+[[case]]
+f = "=VALUE(\"2024-01-15\")"
+v = 45306
+[[case]]
+f = "=VALUE(\"abc\")"
+e = "#VALUE!"
+[[case]]
+f = "=NUMBERVALUE(\"1.234,5\",\",\",\".\")"
+v = 1234.5
+[[case]]
+f = "=NUMBERVALUE(\"12%\")"
+v = 0.12
+[[case]]
+f = "=FIXED(1234.567,1)"
+v = "1,234.6"
+[[case]]
+f = "=FIXED(1234.567,-1)"
+v = "1,230"
+[[case]]
+f = "=FIXED(1234.567,2,TRUE)"
+v = "1234.57"
+[[case]]
+f = "=DOLLAR(1234.567)"
+v = "$1,234.57"
+[[case]]
+f = "=DOLLAR(-1234.567,1)"
+v = "($1,234.6)"
+[[case]]
+f = "=EXACT(\"a\",\"A\")"
+v = false
+[[case]]
+f = "=EXACT(\"a\",\"a\")"
+v = true
+[[case]]
+f = "=REPT(\"ab\",3)"
+v = "ababab"
+[[case]]
+f = "=REPT(\"x\",0)"
+v = ""
+[[case]]
+f = "=CHAR(65)"
+v = "A"
+[[case]]
+f = "=CHAR(128)"
+v = "€"
+[[case]]
+f = "=CHAR(0)"
+e = "#VALUE!"
+[[case]]
+f = "=CODE(\"A\")"
+v = 65
+[[case]]
+f = "=CODE(\"€\")"
+v = 128
+[[case]]
+f = "=UNICHAR(9731)"
+v = "☃"
+[[case]]
+f = "=UNICODE(\"☃\")"
+v = 9731
+[[case]]
+f = "=T(\"x\")"
+v = "x"
+[[case]]
+f = "=T(1)"
+v = ""
+[[case]]
+f = "=TEXTBEFORE(\"a-b-c\",\"-\")"
+v = "a"
+[[case]]
+f = "=TEXTBEFORE(\"a-b-c\",\"-\",2)"
+v = "a-b"
+[[case]]
+f = "=TEXTBEFORE(\"a-b-c\",\"-\",-1)"
+v = "a-b"
+[[case]]
+f = "=TEXTAFTER(\"a-b-c\",\"-\")"
+v = "b-c"
+[[case]]
+f = "=TEXTAFTER(\"a-b-c\",\"-\",-1)"
+v = "c"
+[[case]]
+f = "=TEXTAFTER(\"a-b-c\",\"x\")"
+e = "#N/A"
+[[case]]
+f = "=TEXTAFTER(\"a-b-c\",\"x\",1,0,0,\"none\")"
+v = "none"
+[[case]]
+f = "=TEXTBEFORE(\"aXbxc\",\"x\",1,1)"
+v = "a"
+[[case]]
+f = "=LEN(REPT(\"x\",40000))"
+e = "#VALUE!"
+[[case]]
+f = "=UPPER({\"a\",\"b\"})"
+v = [["A", "B"]]

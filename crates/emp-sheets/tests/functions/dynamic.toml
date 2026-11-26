@@ -1,0 +1,151 @@
+[setup]
+A1 = "Name"
+B1 = "Score"
+C1 = "Team"
+A2 = "Ann"
+B2 = 82
+C2 = "red"
+A3 = "Bob"
+B3 = 95
+C3 = "blue"
+A4 = "Cid"
+B4 = 70
+C4 = "red"
+A5 = "Dee"
+B5 = 95
+C5 = "green"
+E1 = "a"
+E2 = "b"
+E3 = "a"
+E4 = "c"
+E5 = "b"
+
+[[case]]
+f = "=FILTER(A2:A5,B2:B5>80)"
+v = [["Ann"], ["Bob"], ["Dee"]]
+[[case]]
+f = "=FILTER(A2:B5,C2:C5=\"red\")"
+v = [["Ann", 82], ["Cid", 70]]
+[[case]]
+f = "=FILTER(A2:A5,B2:B5>100)"
+e = "#CALC!"
+[[case]]
+f = "=FILTER(A2:A5,B2:B5>100,\"none\")"
+v = "none"
+[[case]]
+f = "=FILTER(A1:C1,{1,0,1})"
+v = [["Name", "Team"]]
+[[case]]
+f = "=FILTER(A2:A5,(B2:B5>80)*(C2:C5=\"blue\"))"
+v = "Bob"
+[[case]]
+f = "=SORT(B2:B5)"
+v = [[70], [82], [95], [95]]
+[[case]]
+f = "=SORT(A2:B5,2,-1)"
+v = [["Bob", 95], ["Dee", 95], ["Ann", 82], ["Cid", 70]]
+[[case]]
+f = "=SORT({3,1,2},1,1,TRUE)"
+v = [[1, 2, 3]]
+[[case]]
+f = "=SORT(A2:B5,3)"
+e = "#VALUE!"
+[[case]]
+f = "=SORTBY(A2:A5,B2:B5,-1,A2:A5,-1)"
+v = [["Dee"], ["Bob"], ["Ann"], ["Cid"]]
+[[case]]
+f = "=SORTBY(A2:A5,C2:C5)"
+v = [["Bob"], ["Dee"], ["Ann"], ["Cid"]]
+[[case]]
+f = "=UNIQUE(E1:E5)"
+v = [["a"], ["b"], ["c"]]
+[[case]]
+f = "=UNIQUE(E1:E5,FALSE,TRUE)"
+v = "c"
+[[case]]
+f = "=UNIQUE({1,1,2},TRUE)"
+v = [[1, 2]]
+[[case]]
+f = "=ROWS(UNIQUE(C2:C5))"
+v = 3
+[[case]]
+f = "=SEQUENCE(3)"
+v = [[1], [2], [3]]
+[[case]]
+f = "=SEQUENCE(2,3,10,5)"
+v = [[10, 15, 20], [25, 30, 35]]
+[[case]]
+f = "=SEQUENCE(0)"
+e = "#CALC!"
+[[case]]
+f = "=SUM(SEQUENCE(100))"
+v = 5050
+[[case]]
+f = "=ROWS(RANDARRAY(3,2))"
+v = 3
+[[case]]
+f = "=AND(RANDARRAY(5,5,1,6,TRUE)>=1,RANDARRAY(5,5,1,6,TRUE)<=6)"
+v = true
+[[case]]
+f = "=TAKE(SEQUENCE(5),2)"
+v = [[1], [2]]
+[[case]]
+f = "=TAKE(SEQUENCE(5),-2)"
+v = [[4], [5]]
+[[case]]
+f = "=TAKE(SEQUENCE(3,3),2,-1)"
+v = [[3], [6]]
+[[case]]
+f = "=DROP(SEQUENCE(5),3)"
+v = [[4], [5]]
+[[case]]
+f = "=DROP(SEQUENCE(5),-4)"
+v = 1
+[[case]]
+f = "=DROP(SEQUENCE(2),5)"
+e = "#CALC!"
+[[case]]
+f = "=CHOOSECOLS(A1:C2,1,3)"
+v = [["Name", "Team"], ["Ann", "red"]]
+[[case]]
+f = "=CHOOSECOLS(A1:C2,-1)"
+v = [["Team"], ["red"]]
+[[case]]
+f = "=CHOOSECOLS(A1:C2,4)"
+e = "#VALUE!"
+[[case]]
+f = "=CHOOSEROWS(A1:A5,2,-1)"
+v = [["Ann"], ["Dee"]]
+[[case]]
+f = "=VSTACK({1,2},{3,4})"
+v = [[1, 2], [3, 4]]
+[[case]]
+f = "=VSTACK({1,2},{3})"
+v = [[1, 2], [3, "#N/A"]]
+[[case]]
+f = "=HSTACK({1;2},{3;4})"
+v = [[1, 3], [2, 4]]
+[[case]]
+f = "=TEXTSPLIT(\"a,b;c,d\",\",\",\";\")"
+v = [["a", "b"], ["c", "d"]]
+[[case]]
+f = "=TEXTSPLIT(\"a,,b\",\",\")"
+v = [["a", "", "b"]]
+[[case]]
+f = "=TEXTSPLIT(\"a,,b\",\",\",,TRUE)"
+v = [["a", "b"]]
+[[case]]
+f = "=TEXTSPLIT(\"a,b;c\",\",\",\";\")"
+v = [["a", "b"], ["c", "#N/A"]]
+[[case]]
+f = "=TEXTSPLIT(\"aXbxc\",\"x\",,,1)"
+v = [["a", "b", "c"]]
+[[case]]
+f = "=SUM(FILTER(B2:B5,C2:C5=\"red\"))"
+v = 152
+[[case]]
+f = "=XLOOKUP(MAX(B2:B5),B2:B5,A2:A5)"
+v = "Bob"
+[[case]]
+f = "=INDEX(SORT(B2:B5,1,-1),1)"
+v = 95

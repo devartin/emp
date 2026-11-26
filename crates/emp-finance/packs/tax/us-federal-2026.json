@@ -1,0 +1,154 @@
+{
+  "id": "us-federal-2026",
+  "name": "US Federal",
+  "country": "US",
+  "year": 2026,
+  "tier": "estimator",
+  "version": "1.0.0",
+  "verifiedOn": "2026-11-26",
+  "sources": [
+    { "label": "IRS Rev. Proc. 2025-32 (TY2026 inflation adjustments: brackets §4.01, capital gains §4.03, child tax credit §4.05, standard deduction §4.14)", "url": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf" },
+    { "label": "IRS IR-2025-103: tax inflation adjustments for tax year 2026", "url": "https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill" },
+    { "label": "SSA contribution and benefit base for 2026 ($184,500)", "url": "https://www.ssa.gov/oact/cola/cbb.html" },
+    { "label": "IRC §1411 net investment income tax (thresholds are statutory, not indexed)", "url": "https://www.irs.gov/individuals/net-investment-income-tax" },
+    { "label": "IRC §3101(b)(2) additional Medicare tax (thresholds are statutory, not indexed)", "url": "https://www.irs.gov/taxtopics/tc560" },
+    { "label": "IRC §164(b)(7) as amended by P.L. 119-21 (SALT limitation $40,400 / phase-down above $505,000 MAGI for 2026)", "url": "https://www.irs.gov/newsroom/one-big-beautiful-bill-provisions" },
+    { "label": "IRS Publication 915 (taxable Social Security base amounts)", "url": "https://www.irs.gov/publications/p915" },
+    { "label": "IRS Publication 505 (estimated tax, safe harbor)", "url": "https://www.irs.gov/publications/p505" },
+    { "label": "IRS: How long should I keep records?", "url": "https://www.irs.gov/businesses/small-businesses-self-employed/how-long-should-i-keep-records" }
+  ],
+  "notes": [
+    "Estimator scope: wages, self-employment, interest, dividends, capital gains, retirement, Social Security, unemployment, net rental and other income; standard or itemized deduction (SALT cap and medical floor applied); child tax credit; SE tax, additional Medicare tax and NIIT.",
+    "Not modelled: AMT, QBI deduction, EITC, education and other credits, the 2025–2028 senior/tips/overtime/car-loan deductions, passive-loss limits, credit for other dependents. Enter other credits as user amounts.",
+    "Tax is computed with the Rev. Proc. 2025-32 rate schedules (the Tax Computation Worksheet method); the IRS tax tables for income under $100,000 use $50 bands and can differ by a few dollars.",
+    "ordinary_dividends means non-qualified ordinary dividends (box 1a minus box 1b).",
+    "All results are estimates."
+  ],
+  "filingStatuses": ["single", "mfj", "mfs", "hoh", "qss"],
+  "brackets": {
+    "single": [
+      { "upTo": "12400", "rate": "0.10" }, { "upTo": "50400", "rate": "0.12" }, { "upTo": "105700", "rate": "0.22" },
+      { "upTo": "201775", "rate": "0.24" }, { "upTo": "256225", "rate": "0.32" }, { "upTo": "640600", "rate": "0.35" }, { "upTo": null, "rate": "0.37" }
+    ],
+    "mfj": [
+      { "upTo": "24800", "rate": "0.10" }, { "upTo": "100800", "rate": "0.12" }, { "upTo": "211400", "rate": "0.22" },
+      { "upTo": "403550", "rate": "0.24" }, { "upTo": "512450", "rate": "0.32" }, { "upTo": "768700", "rate": "0.35" }, { "upTo": null, "rate": "0.37" }
+    ],
+    "qss": [
+      { "upTo": "24800", "rate": "0.10" }, { "upTo": "100800", "rate": "0.12" }, { "upTo": "211400", "rate": "0.22" },
+      { "upTo": "403550", "rate": "0.24" }, { "upTo": "512450", "rate": "0.32" }, { "upTo": "768700", "rate": "0.35" }, { "upTo": null, "rate": "0.37" }
+    ],
+    "hoh": [
+      { "upTo": "17700", "rate": "0.10" }, { "upTo": "67450", "rate": "0.12" }, { "upTo": "105700", "rate": "0.22" },
+      { "upTo": "201750", "rate": "0.24" }, { "upTo": "256200", "rate": "0.32" }, { "upTo": "640600", "rate": "0.35" }, { "upTo": null, "rate": "0.37" }
+    ],
+    "mfs": [
+      { "upTo": "12400", "rate": "0.10" }, { "upTo": "50400", "rate": "0.12" }, { "upTo": "105700", "rate": "0.22" },
+      { "upTo": "201775", "rate": "0.24" }, { "upTo": "256225", "rate": "0.32" }, { "upTo": "384350", "rate": "0.35" }, { "upTo": null, "rate": "0.37" }
+    ]
+  },
+  "standardDeduction": { "single": "16100", "mfj": "32200", "mfs": "16100", "hoh": "24150", "qss": "32200" },
+  "additionalStdDeduction65OrBlind": { "single": "2050", "hoh": "2050", "mfj": "1650", "mfs": "1650", "qss": "1650" },
+  "preferentialRates": {
+    "ltcgQualifiedDiv": [
+      { "upTo": { "single": "49450", "mfj": "98900", "qss": "98900", "mfs": "49450", "hoh": "66200" }, "rate": "0" },
+      { "upTo": { "single": "545500", "mfj": "613700", "qss": "613700", "mfs": "306850", "hoh": "579600" }, "rate": "0.15" },
+      { "upTo": { "*": null }, "rate": "0.20" }
+    ]
+  },
+  "seTax": {
+    "netEarningsFactor": "0.9235", "ssRate": "0.124", "medicareRate": "0.029", "ssWageBase": "184500", "deductibleShare": "0.5",
+    "minimumNetEarnings": "400",
+    "addlMedicare": { "rate": "0.009", "threshold": { "single": "200000", "hoh": "200000", "qss": "200000", "mfj": "250000", "mfs": "125000" } }
+  },
+  "niit": { "rate": "0.038", "threshold": { "single": "200000", "hoh": "200000", "mfj": "250000", "qss": "250000", "mfs": "125000" } },
+  "credits": [
+    { "id": "child_tax_credit", "label": "Child tax credit", "kind": "per_dependent", "amount": "2200",
+      "phaseout": { "start": { "mfj": "400000", "*": "200000" }, "per1000": "50" },
+      "refundablePerDependent": "1700", "refundableEarnedThreshold": "2500", "refundableEarnedRate": "0.15" },
+    { "id": "other", "label": "Other credits", "kind": "user_amount" }
+  ],
+  "capitalLossLimit": { "mfs": "1500", "*": "3000" },
+  "socialSecurity": {
+    "base1": { "mfj": "32000", "mfs": "0", "*": "25000" },
+    "base2": { "mfj": "44000", "mfs": "0", "*": "34000" }
+  },
+  "itemizedRules": [
+    { "kind": "salt", "cap": { "mfs": "20200", "*": "40400" },
+      "capPhasedown": { "start": { "mfs": "252500", "*": "505000" }, "rate": "0.30", "floor": { "mfs": "5000", "*": "10000" } } },
+    { "kind": "medical", "agiFloorPct": "0.075" }
+  ],
+  "estimated": {
+    "periods": [ { "id": "Q1", "due": "2026-04-15" }, { "id": "Q2", "due": "2026-06-15" }, { "id": "Q3", "due": "2026-09-15" }, { "id": "Q4", "due": "2027-01-15" } ],
+    "safeHarbor": { "priorYearPct": "1.00", "highIncomePct": "1.10", "highIncomeAgi": { "single": "150000", "mfs": "75000", "*": "150000" }, "currentYearPct": "0.90" },
+    "minimumBalance": "1000"
+  },
+  "rounding": "whole_dollar_half_up",
+  "retention": [
+    { "docType": "*", "years": 3, "note": "Keep records 3 years from the date you filed (or the due date, if later)." },
+    { "docType": "property_basis", "rule": "until_sold_plus_3", "note": "Keep basis records until 3 years after you file for the year you dispose of the property." },
+    { "docType": "employment_tax", "years": 4, "note": "Employment tax records: at least 4 years after the tax is due or paid." },
+    { "docType": "unreported_income_over_25pct", "years": 6, "note": "6 years if you did not report income over 25% of the gross income shown." },
+    { "docType": "bad_debt_or_worthless_securities", "years": 7, "note": "7 years for a claim for a loss from worthless securities or bad debt." },
+    { "docType": "no_return_or_fraud", "rule": "indefinite", "note": "Keep indefinitely if a return was not filed or was fraudulent." }
+  ],
+  "documents": [
+    { "when": "income:employment", "docs": ["W-2"] },
+    { "when": "income:interest", "docs": ["1099-INT"] },
+    { "when": "income:dividends", "docs": ["1099-DIV"] },
+    { "when": "income:brokerage|income:crypto", "docs": ["1099-B", "Consolidated 1099"] },
+    { "when": "income:self_employment", "docs": ["1099-NEC", "1099-K"] },
+    { "when": "event:bought_home|deduction:mortgage", "docs": ["1098"] },
+    { "when": "event:education", "docs": ["1098-T"] },
+    { "when": "income:retirement", "docs": ["1099-R"] },
+    { "when": "income:social_security", "docs": ["SSA-1099"] },
+    { "when": "income:unemployment|event:job_loss", "docs": ["1099-G"] },
+    { "when": "income:k1", "docs": ["Schedule K-1"] },
+    { "when": "hsa", "docs": ["1099-SA", "5498-SA"] },
+    { "when": "marketplace_insurance", "docs": ["1095-A"] },
+    { "when": "event:sold_home", "docs": ["1099-S"] }
+  ],
+  "expectedBy": {
+    "W-2": "01-31", "1099-INT": "01-31", "1099-DIV": "01-31", "1099-NEC": "01-31", "1099-K": "01-31", "1098": "01-31", "1098-T": "01-31",
+    "1099-R": "01-31", "SSA-1099": "01-31", "1099-G": "01-31", "1099-SA": "01-31", "1095-A": "01-31",
+    "1099-B": "02-15", "Consolidated 1099": "02-15", "1099-S": "02-15", "Schedule K-1": "03-15", "5498-SA": "05-31"
+  },
+  "deadlines": [
+    { "name": "Employers furnish Form W-2", "date": "2027-01-31", "shiftWeekendHoliday": true },
+    { "name": "Brokers furnish Form 1099-B", "date": "2027-02-15", "shiftWeekendHoliday": true },
+    { "name": "Federal return due", "date": "2027-04-15", "shiftWeekendHoliday": true },
+    { "name": "Last day for 2026 IRA and HSA contributions", "date": "2027-04-15", "shiftWeekendHoliday": true },
+    { "name": "Extended return due", "date": "2027-10-15", "shiftWeekendHoliday": true }
+  ],
+  "tests": [
+    { "name": "single wages 80,000", "source": "Rev. Proc. 2025-32 §4.01 Table 3 and §4.14: 5,800 + 22% × (63,900 − 50,400)",
+      "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "single", "dependents": 0, "incomes": [{ "kind": "wages", "amount": "80000" }],
+                 "deductions": "standard", "credits": [], "withheld": "0", "estimatedPaid": "0" },
+      "expect": { "taxable": "63900", "tax": "8770" } },
+    { "name": "mfj wages 150,000 with two children", "source": "Rev. Proc. 2025-32 §4.01 Table 1, §4.05, §4.14: 11,600 + 22% × 17,000 − 2 × 2,200",
+      "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "mfj", "dependents": 2, "incomes": [{ "kind": "wages", "amount": "150000" }],
+                 "deductions": "standard", "credits": [], "withheld": "0", "estimatedPaid": "0" },
+      "expect": { "taxable": "117800", "ordinaryTax": "15340", "tax": "10940" } },
+    { "name": "hoh wages 60,000 with one child", "source": "Rev. Proc. 2025-32 §4.01 Table 2, §4.05, §4.14: 1,770 + 12% × 18,150 − 2,200",
+      "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "hoh", "dependents": 1, "incomes": [{ "kind": "wages", "amount": "60000" }],
+                 "deductions": "standard", "credits": [], "withheld": "0", "estimatedPaid": "0" },
+      "expect": { "taxable": "35850", "tax": "1748" } },
+    { "name": "single wages 300,000 (35% bracket, additional Medicare)", "source": "Rev. Proc. 2025-32 §4.01 Table 3: 58,448 + 35% × 27,675; IRC §3101(b)(2): 0.9% × 100,000",
+      "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "single", "dependents": 0, "incomes": [{ "kind": "wages", "amount": "300000" }],
+                 "deductions": "standard", "credits": [], "withheld": "0", "estimatedPaid": "0" },
+      "expect": { "ordinaryTax": "68134", "tax": "69034" } },
+    { "name": "mfs wages 400,000 (top of Table 4)", "source": "Rev. Proc. 2025-32 §4.01 Table 4: 58,448 + 35% × 127,675; IRC §3101(b)(2): 0.9% × 275,000",
+      "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "mfs", "dependents": 0, "incomes": [{ "kind": "wages", "amount": "400000" }],
+                 "deductions": "standard", "credits": [], "withheld": "0", "estimatedPaid": "0" },
+      "expect": { "ordinaryTax": "103134", "tax": "105609" } },
+    { "name": "single self-employment 50,000", "source": "Schedule SE method (92.35%, 12.4% + 2.9%, half deductible) with Rev. Proc. 2025-32 Table 3 and §4.14",
+      "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "single", "dependents": 0, "incomes": [{ "kind": "self_employment", "amount": "50000" }],
+                 "deductions": "standard", "credits": [], "withheld": "0", "estimatedPaid": "0" },
+      "expect": { "agi": "46468", "seTax": "7065", "tax": "10461" } },
+    { "name": "single wages 40,000 + long-term gains 20,000 (0% band)", "source": "Rev. Proc. 2025-32 §4.03 (0% up to 49,450) and Table 3",
+      "input": { "packId": "us-federal-2026", "year": 2026, "filingStatus": "single", "dependents": 0,
+                 "incomes": [{ "kind": "wages", "amount": "40000" }, { "kind": "ltcg", "amount": "20000" }],
+                 "deductions": "standard", "credits": [], "withheld": "0", "estimatedPaid": "0" },
+      "expect": { "taxable": "43900", "tax": "2620" } }
+  ]
+}

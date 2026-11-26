@@ -1,0 +1,33 @@
+!Account
+NEveryday Checking
+TBank
+^
+!Type:Bank
+D01/02'26
+T3,100.00
+PACME CORP PAYROLL
+LIncome:Salary
+CX
+^
+D01/03'26
+T-1,500.00
+N1042
+PRiverside Apartments
+MJanuary rent
+LHousing:Rent
+CX
+^
+D01/07'26
+T-82.17
+PWhole Foods
+SGroceries
+$-70.17
+SHousehold
+EPaper towels
+$-12.00
+^
+D01/10'26
+T-64.20
+PCity Power & Light
+LUtilities:Electric
+^

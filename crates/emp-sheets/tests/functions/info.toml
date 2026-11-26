@@ -1,0 +1,110 @@
+[setup]
+A1 = 1
+A2 = "x"
+A3 = true
+A4 = "=1/0"
+A5 = "=NA()"
+A6 = "=A1*2"
+
+[[case]]
+f = "=ISBLANK(B1)"
+v = true
+[[case]]
+f = "=ISBLANK(A1)"
+v = false
+[[case]]
+f = "=ISNUMBER(A1)"
+v = true
+[[case]]
+f = "=ISNUMBER(A2)"
+v = false
+[[case]]
+f = "=ISTEXT(A2)"
+v = true
+[[case]]
+f = "=ISNONTEXT(A1)"
+v = true
+[[case]]
+f = "=ISNONTEXT(B1)"
+v = true
+[[case]]
+f = "=ISLOGICAL(A3)"
+v = true
+[[case]]
+f = "=ISERROR(A4)"
+v = true
+[[case]]
+f = "=ISERROR(A1)"
+v = false
+[[case]]
+f = "=ISERR(A5)"
+v = false
+[[case]]
+f = "=ISERR(A4)"
+v = true
+[[case]]
+f = "=ISNA(A5)"
+v = true
+[[case]]
+f = "=ISREF(A1)"
+v = true
+[[case]]
+f = "=ISREF(1)"
+v = false
+[[case]]
+f = "=ISEVEN(4)"
+v = true
+[[case]]
+f = "=ISEVEN(-3)"
+v = false
+[[case]]
+f = "=ISODD(3.9)"
+v = true
+[[case]]
+f = "=ISEVEN(\"x\")"
+e = "#VALUE!"
+[[case]]
+f = "=ISFORMULA(A6)"
+v = true
+[[case]]
+f = "=ISFORMULA(A1)"
+v = false
+[[case]]
+f = "=N(TRUE)"
+v = 1
+[[case]]
+f = "=N(\"7\")"
+v = 0
+[[case]]
+f = "=N(A1)"
+v = 1
+[[case]]
+f = "=TYPE(1)"
+v = 1
+[[case]]
+f = "=TYPE(\"a\")"
+v = 2
+[[case]]
+f = "=TYPE(TRUE)"
+v = 4
+[[case]]
+f = "=TYPE(A4)"
+v = 16
+[[case]]
+f = "=TYPE({1,2})"
+v = 64
+[[case]]
+f = "=ERROR.TYPE(A4)"
+v = 2
+[[case]]
+f = "=ERROR.TYPE(A5)"
+v = 7
+[[case]]
+f = "=ERROR.TYPE(1)"
+e = "#N/A"
+[[case]]
+f = "=NA()"
+e = "#N/A"
+[[case]]
+f = "=ISNUMBER(A1:A3)"
+v = [[true], [false], [false]]
