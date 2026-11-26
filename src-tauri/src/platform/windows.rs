@@ -33,7 +33,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WTS_SESSION_LOCK,
 };
 
-use super::{SignalHandler, deliver};
+use super::{Delivery, SignalHandler, deliver};
 use crate::system_events::SystemEvent;
 
 const CLASS_NAME: &str = "EmpSystemSignalWindow";
@@ -75,7 +75,8 @@ fn wide(s: &str) -> Vec<u16> {
 fn dispatch(event: SystemEvent) {
     let handler = HANDLER.with(|h| h.borrow().clone());
     if let Some(handler) = handler {
-        deliver(&handler, event);
+        // This thread is ours (not the UI thread), so a sleep handler may hold it until the lock is done.
+        deliver(&handler, event, Delivery::MayBlock);
     }
 }
 

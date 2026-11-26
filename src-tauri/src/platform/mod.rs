@@ -61,12 +61,24 @@ mod macos;
 #[cfg(windows)]
 mod windows;
 
-/// Receives native power / session signals. Called on an OS-owned thread (the AppKit main thread on macOS, the
-/// signal window's thread on Windows); a [`SystemEvent::Sleep`](crate::system_events::SystemEvent::Sleep) call
-/// should return once the vault is locked (or a bounded wait elapsed), since returning lets the OS proceed.
+/// How the OS thread that delivers a signal may be treated by the [`SignalHandler`].
+#[cfg(any(target_os = "macos", windows))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Delivery {
+    /// A dedicated signal thread (the IOKit power thread on macOS, the signal window's thread on Windows). The OS
+    /// waits for the call to return before it suspends, so a
+    /// [`SystemEvent::Sleep`](crate::system_events::SystemEvent::Sleep) handler should return only once the vault
+    /// is locked (or a bounded wait elapsed).
+    MayBlock,
+    /// The UI main thread (AppKit observers). The handler must return at once: the lock's flush window (the
+    /// `vault:will-lock` event and the UI's final saves) needs that thread to keep running.
+    MustNotBlock,
+}
+
+/// Receives native power / session signals on an OS-owned thread, described by the [`Delivery`].
 #[cfg(any(target_os = "macos", windows))]
 pub type SignalHandler =
-    std::sync::Arc<dyn Fn(crate::system_events::SystemEvent) + Send + Sync + 'static>;
+    std::sync::Arc<dyn Fn(crate::system_events::SystemEvent, Delivery) + Send + Sync + 'static>;
 
 /// A live registration for native sleep / screen-lock signals. Dropping it unregisters every observer.
 #[cfg(any(target_os = "macos", windows))]
@@ -79,10 +91,13 @@ pub struct SignalWatcher {
 
 /// Registers for the platform's sleep and screen-lock signals and forwards them to `handler`.
 ///
-/// * macOS: `NSWorkspaceWillSleepNotification` (→ `Sleep`), `NSWorkspaceScreensDidSleepNotification` and
-///   `NSWorkspaceSessionDidResignActiveNotification` (fast user switching) on the shared workspace's notification
-///   center, and the distributed `com.apple.screenIsLocked` (→ `ScreenLocked`). Must be called on the main thread
-///   (the distributed notification is delivered through the registering thread's run loop).
+/// * macOS: IOKit `IORegisterForSystemPower` on a dedicated thread with its own run loop
+///   (`kIOMessageSystemWillSleep` → `Sleep`, acknowledged with `IOAllowPowerChange` once the handler returns);
+///   `NSWorkspaceScreensDidSleepNotification` and `NSWorkspaceSessionDidResignActiveNotification` (fast user
+///   switching) on the shared workspace's notification center, and the distributed `com.apple.screenIsLocked`
+///   (→ `ScreenLocked`). `NSWorkspaceWillSleepNotification` (→ `Sleep`, not waited for) is observed only when
+///   IOKit registration fails. Must be called on the main thread (the distributed notification is delivered
+///   through the registering thread's run loop).
 /// * Windows: a message-only window on a dedicated thread with its own message loop, registered with
 ///   `RegisterSuspendResumeNotification` (`WM_POWERBROADCAST` / `PBT_APMSUSPEND` → `Sleep`) and
 ///   `WTSRegisterSessionNotification` (`WTS_SESSION_LOCK`, `WTS_CONSOLE_DISCONNECT`, `WTS_REMOTE_DISCONNECT` →
@@ -101,8 +116,9 @@ pub fn watch_system_signals(handler: SignalHandler) -> Result<SignalWatcher, Str
 
 /// Runs a signal handler without letting a panic unwind into OS code (which would abort the process).
 #[cfg(any(target_os = "macos", windows))]
-fn deliver(handler: &SignalHandler, event: crate::system_events::SystemEvent) {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler(event)));
+fn deliver(handler: &SignalHandler, event: crate::system_events::SystemEvent, delivery: Delivery) {
+    let result =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler(event, delivery)));
     if result.is_err() {
         tracing::error!(?event, "system signal handler panicked");
     }

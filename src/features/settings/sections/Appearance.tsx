@@ -237,7 +237,7 @@ const TRANSPARENCY_NOTES: Record<GlassStatus, string> = {
   "forced-off": "Menus, dialogs and the command palette are solid. Every other effect stays.",
   "auto-on": "Frosted glass on menus, dialogs and the command palette, unless your system asks for less transparency.",
   "auto-probing": "Glass is on while EMP checks that menus and dialogs stay smooth on this computer.",
-  "auto-passed": "Glass is on — menus and dialogs are staying smooth on this computer.",
+  "auto-passed": "Glass is on. Menus and dialogs run smoothly with it on this computer.",
   "auto-stepped-down": "Turned off on this computer because menus and dialogs dropped frames with glass.",
   "auto-os": "Off because your system asks for reduced transparency.",
   "auto-effects": "Off while visual effects are reduced.",
