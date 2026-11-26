@@ -101,7 +101,11 @@ fn build_router(state: &AppState, store: &Store) -> ApiResult<MarketRouter> {
             )),
             None => KeyUpdate::Keep,
         };
-        let enabled = settings.enabled.get(&info.id).copied().unwrap_or(info.enabled);
+        let enabled = settings
+            .enabled
+            .get(&info.id)
+            .copied()
+            .unwrap_or(info.enabled);
         let priority = settings.priority.get(&info.id).copied();
         router.configure(&info.id, enabled, key, priority)?;
     }
@@ -143,7 +147,12 @@ pub fn symbol_key(field: &str, s: &str) -> ApiResult<String> {
 }
 
 fn provider_id(field: &str, s: &str) -> ApiResult<()> {
-    if s.is_empty() || s.len() > 32 || !s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') {
+    if s.is_empty()
+        || s.len() > 32
+        || !s
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    {
         return Err(ApiError::invalid(field, "invalid provider id"));
     }
     Ok(())
@@ -195,7 +204,10 @@ pub struct ConfigureReq {
 /// `market_provider_configure({ id, enabled, apiKey?: string|null, priority? }) → ProviderInfo`. A key is stored as a
 /// vault secret bound to the provider's hosts; `null` removes it.
 #[tauri::command]
-pub async fn market_provider_configure(app: AppHandle, req: ConfigureReq) -> ApiResult<ProviderInfo> {
+pub async fn market_provider_configure(
+    app: AppHandle,
+    req: ConfigureReq,
+) -> ApiResult<ProviderInfo> {
     provider_id("id", &req.id)?;
     if let Some(Some(k)) = &req.api_key {
         validate::non_empty("apiKey", emp_crypto::ExposeSecret::expose_secret(k), 512)?;
@@ -222,7 +234,9 @@ pub async fn market_provider_configure(app: AppHandle, req: ConfigureReq) -> Api
                 KeyUpdate::Clear
             }
             Some(Some(k)) => {
-                let value = emp_crypto::ExposeSecret::expose_secret(&k).trim().to_owned();
+                let value = emp_crypto::ExposeSecret::expose_secret(&k)
+                    .trim()
+                    .to_owned();
                 let existing = secret_id_for(&store, &req.id)?;
                 store.secret_set(emp_store::model::SecretSet {
                     id: existing,
@@ -348,7 +362,9 @@ pub async fn quotes_for(r: &Arc<MarketRouter>, keys: &[String]) -> Vec<Quote> {
         });
     }
     if !missing.is_empty() {
-        if let Ok(fetched) = tokio::time::timeout(FIRST_FETCH_DEADLINE, r.quotes(&missing, &HashMap::new())).await {
+        if let Ok(fetched) =
+            tokio::time::timeout(FIRST_FETCH_DEADLINE, r.quotes(&missing, &HashMap::new())).await
+        {
             let mut it = fetched.into_iter();
             for slot in &mut out {
                 if slot.is_none() {
@@ -438,7 +454,11 @@ pub async fn market_indicators(
         .bars(&key, BarInterval::Day, from, to, true, &BTreeMap::new())
         .await?;
     let closes: Vec<f64> = s.bars.iter().map(|b| b.close).collect();
-    let specs: Vec<_> = req.ind.iter().map(|i| (i.kind, i.period as usize)).collect();
+    let specs: Vec<_> = req
+        .ind
+        .iter()
+        .map(|i| (i.kind, i.period as usize))
+        .collect();
     Ok(emp_finance::portfolio::indicators::series(&closes, &specs))
 }
 
@@ -486,7 +506,10 @@ pub fn evaluate_alerts(lists: &[Watchlist], quotes: &[Quote]) -> Vec<MarketAlert
                 let checks: [(&'static str, bool); 3] = [
                     ("above", s.alert_above.is_some_and(|a| q.price >= a)),
                     ("below", s.alert_below.is_some_and(|b| q.price <= b)),
-                    ("pct", s.alert_pct.is_some_and(|p| q.change_pct.abs() >= p.abs())),
+                    (
+                        "pct",
+                        s.alert_pct.is_some_and(|p| q.change_pct.abs() >= p.abs()),
+                    ),
                 ];
                 for (kind, hit) in checks {
                     let k = (q.symbol.clone(), kind);
@@ -521,11 +544,16 @@ pub async fn market_subscribe(webview: Webview, req: SubscribeReq) -> ApiResult<
         let mut subs = SUBS.lock();
         subs.retain(|_, h| !h.inner().is_finished());
         if subs.len() >= MAX_SUBSCRIPTIONS {
-            return Err(ApiError::new(ErrorCode::RateLimited, "Too many live quote subscriptions"));
+            return Err(ApiError::new(
+                ErrorCode::RateLimited,
+                "Too many live quote subscriptions",
+            ));
         }
     }
     let sub_id = emp_store::model::ids::new_id();
-    let channel = req.on_quote.channel_on::<tauri::Wry, Vec<Quote>>(webview.clone());
+    let channel = req
+        .on_quote
+        .channel_on::<tauri::Wry, Vec<Quote>>(webview.clone());
     let handle_app = app.clone();
     let handle = tauri::async_runtime::spawn(async move {
         loop {
@@ -636,7 +664,10 @@ pub async fn watchlist_save(app: AppHandle, req: WatchlistSaveReq) -> ApiResult<
     let mut symbols = Vec::with_capacity(req.symbols.len());
     for s in req.symbols {
         let key = symbol_key("symbols.key", &s.key)?;
-        for x in [s.alert_above, s.alert_below, s.alert_pct].into_iter().flatten() {
+        for x in [s.alert_above, s.alert_below, s.alert_pct]
+            .into_iter()
+            .flatten()
+        {
             validate::finite("symbols.alert", x)?;
         }
         if !symbols.iter().any(|w: &WatchSymbol| w.key == key) {
@@ -650,8 +681,16 @@ pub async fn watchlist_save(app: AppHandle, req: WatchlistSaveReq) -> ApiResult<
         let delete = req.name.trim().is_empty() && symbols.is_empty();
         lists.retain(|w| w.id != id || !delete);
         if !delete {
-            let name = if req.name.trim().is_empty() { "Watchlist".to_owned() } else { req.name };
-            let w = Watchlist { id: id.clone(), name, symbols };
+            let name = if req.name.trim().is_empty() {
+                "Watchlist".to_owned()
+            } else {
+                req.name
+            };
+            let w = Watchlist {
+                id: id.clone(),
+                name,
+                symbols,
+            };
             match lists.iter_mut().find(|w| w.id == id) {
                 Some(existing) => *existing = w,
                 None => {
@@ -692,7 +731,11 @@ pub async fn fx_rates(app: AppHandle, req: FxReq) -> ApiResult<FxRates> {
         .map(|s| currency("symbols", s))
         .collect::<ApiResult<_>>()?;
     validate::list_len("symbols", symbols.len(), 200)?;
-    let date: Option<NaiveDate> = req.date.as_deref().map(|d| validate::ymd("date", d)).transpose()?;
+    let date: Option<NaiveDate> = req
+        .date
+        .as_deref()
+        .map(|d| validate::ymd("date", d))
+        .transpose()?;
     let r = blocking(move || router(&app.state::<AppState>())).await?;
     let rates = r.fx(&base, &symbols, date).await?;
     FX_SNAPSHOT.record(&rates);
@@ -701,10 +744,13 @@ pub async fn fx_rates(app: AppHandle, req: FxReq) -> ApiResult<FxRates> {
 
 // ───────────────────────────────────────────────────────────────────────────── formula host
 
+/// `(from, to, date)` of a cached FX rate (`None` = latest).
+type FxKey = (String, String, Option<String>);
+
 /// Latest FX rates seen by the app, for the formula host.
 #[derive(Default)]
 pub struct FxSnapshot {
-    rates: Mutex<HashMap<(String, String, Option<String>), f64>>,
+    rates: Mutex<HashMap<FxKey, f64>>,
 }
 
 impl FxSnapshot {
@@ -716,7 +762,10 @@ impl FxSnapshot {
         }
         for (to, r) in &rates.rates {
             m.insert((rates.base.clone(), to.clone(), None), *r);
-            m.insert((rates.base.clone(), to.clone(), Some(rates.date.clone())), *r);
+            m.insert(
+                (rates.base.clone(), to.clone(), Some(rates.date.clone())),
+                *r,
+            );
         }
     }
 
@@ -726,9 +775,11 @@ impl FxSnapshot {
         }
         let m = self.rates.lock();
         let key = |a: &str, b: &str| (a.to_owned(), b.to_owned(), date.map(str::to_owned));
-        m.get(&key(from, to))
-            .copied()
-            .or_else(|| m.get(&key(to, from)).filter(|r| **r != 0.0).map(|r| 1.0 / r))
+        m.get(&key(from, to)).copied().or_else(|| {
+            m.get(&key(to, from))
+                .filter(|r| **r != 0.0)
+                .map(|r| 1.0 / r)
+        })
     }
 }
 
@@ -738,8 +789,14 @@ static FX_SNAPSHOT: LazyLock<FxSnapshot> = LazyLock::new(FxSnapshot::default);
 #[must_use]
 pub fn stock_key(symbol: &str) -> Option<String> {
     let s = symbol.trim().to_ascii_uppercase();
-    let candidate = if s.contains(':') { s } else { format!("{s}:XNAS") };
-    emp_integrations::market::symbols::Symbol::parse(&candidate).ok().map(|x| x.key())
+    let candidate = if s.contains(':') {
+        s
+    } else {
+        format!("{s}:XNAS")
+    };
+    emp_integrations::market::symbols::Symbol::parse(&candidate)
+        .ok()
+        .map(|x| x.key())
 }
 
 /// The value of `field` of a quote.
@@ -809,7 +866,9 @@ impl MarketHost {
         tauri::async_runtime::spawn(async move {
             let app2 = app.clone();
             if let Ok(r) = blocking(move || router(&app2.state::<AppState>())).await {
-                let d = date.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+                let d = date
+                    .as_deref()
+                    .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
                 if let Ok(rates) = r.fx(&base, &[], d).await {
                     FX_SNAPSHOT.record(&rates);
                 }
@@ -928,8 +987,14 @@ mod tests {
     #[test]
     fn quote_fields_map_to_values() {
         let q = quote("AAPL:XNAS", 190.5, 2.0);
-        assert_eq!(quote_field(&q, "price"), Some(emp_sheets::Value::Number(190.5)));
-        assert_eq!(quote_field(&q, "changepct"), Some(emp_sheets::Value::Number(0.02)));
+        assert_eq!(
+            quote_field(&q, "price"),
+            Some(emp_sheets::Value::Number(190.5))
+        );
+        assert_eq!(
+            quote_field(&q, "changepct"),
+            Some(emp_sheets::Value::Number(0.02))
+        );
         assert_eq!(quote_field(&q, "open"), None);
         assert!(quote_field(&q, "nonsense").is_none());
     }
@@ -976,9 +1041,11 @@ mod tests {
 
     #[test]
     fn watchlist_entries_reject_unknown_fields() {
-        let ok: Result<WatchSymbol, _> = serde_json::from_value(json!({ "key": "AAPL:XNAS", "alertAbove": 200 }));
+        let ok: Result<WatchSymbol, _> =
+            serde_json::from_value(json!({ "key": "AAPL:XNAS", "alertAbove": 200 }));
         assert!(ok.is_ok());
-        let bad: Result<WatchSymbol, _> = serde_json::from_value(json!({ "key": "AAPL:XNAS", "x": 1 }));
+        let bad: Result<WatchSymbol, _> =
+            serde_json::from_value(json!({ "key": "AAPL:XNAS", "x": 1 }));
         assert!(bad.is_err());
     }
 }

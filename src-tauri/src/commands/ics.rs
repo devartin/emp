@@ -86,7 +86,11 @@ impl StoredDt {
     pub fn to_ics(&self) -> Option<IcsDateTime> {
         Some(match self.k {
             'd' => IcsDateTime::Date(NaiveDate::parse_from_str(&self.v, "%Y-%m-%d").ok()?),
-            'u' => IcsDateTime::Utc(DateTime::parse_from_rfc3339(&self.v).ok()?.with_timezone(&Utc)),
+            'u' => IcsDateTime::Utc(
+                DateTime::parse_from_rfc3339(&self.v)
+                    .ok()?
+                    .with_timezone(&Utc),
+            ),
             'z' => {
                 let tzid = self.tz.clone()?;
                 IcsDateTime::Zoned {
@@ -261,7 +265,13 @@ pub fn store_local_calendar(store: &Store, file_name: &str, cal: &IcsCalendar) -
         .name
         .clone()
         .filter(|n| !n.trim().is_empty())
-        .unwrap_or_else(|| if stem.is_empty() { "Calendar".into() } else { stem.to_owned() });
+        .unwrap_or_else(|| {
+            if stem.is_empty() {
+                "Calendar".into()
+            } else {
+                stem.to_owned()
+            }
+        });
     index.push(LocalCalendar {
         id,
         name: name.chars().take(validate::MAX_TITLE).collect(),
@@ -419,9 +429,7 @@ fn text_prop(schema: &DbSchema, names: &[&str]) -> Option<String> {
     schema
         .properties
         .iter()
-        .find(|p| {
-            p.kind == PropType::Text && names.iter().any(|n| p.name.eq_ignore_ascii_case(n))
-        })
+        .find(|p| p.kind == PropType::Text && names.iter().any(|n| p.name.eq_ignore_ascii_case(n)))
         .map(|p| p.id.clone())
 }
 
@@ -432,9 +440,11 @@ pub fn date_value(start: &IcsDateTime, end: Option<&IcsDateTime>, cal: &IcsCalen
     if let IcsDateTime::Date(s) = start {
         // ICS all-day ends are exclusive; database date ranges are inclusive.
         let end = match end {
-            Some(IcsDateTime::Date(e)) if *e > *s + chrono::Duration::days(1) => {
-                Some((*e - chrono::Duration::days(1)).format("%Y-%m-%d").to_string())
-            }
+            Some(IcsDateTime::Date(e)) if *e > *s + chrono::Duration::days(1) => Some(
+                (*e - chrono::Duration::days(1))
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            ),
             _ => None,
         };
         return DateValue {
@@ -628,7 +638,11 @@ pub struct IcsExportDto {
 
 fn export_calendar(store: &Store, source: &IcsSource) -> ApiResult<ExportCalendar> {
     let vault = store.vault_id().to_string();
-    let vault: String = vault.chars().filter(char::is_ascii_alphanumeric).take(16).collect();
+    let vault: String = vault
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .take(16)
+        .collect();
     let mut cal = ExportCalendar {
         dtstamp: Utc::now(),
         ..ExportCalendar::default()
@@ -657,7 +671,10 @@ fn export_calendar(store: &Store, source: &IcsSource) -> ApiResult<ExportCalenda
             for id in page_ids {
                 let got = store.db_row_get(id)?;
                 if !schemas.contains_key(&got.database_id) {
-                    schemas.insert(got.database_id.clone(), store.db_get_schema(&got.database_id)?);
+                    schemas.insert(
+                        got.database_id.clone(),
+                        store.db_get_schema(&got.database_id)?,
+                    );
                 }
                 let Some(schema) = schemas.get(&got.database_id) else {
                     continue;
@@ -738,7 +755,15 @@ END:VCALENDAR\r\n";
             zone: resolve_tzid("Europe/Berlin"),
         };
         assert_eq!(StoredDt::from_ics(&d).to_ics(), Some(d));
-        assert!(StoredDt { k: 'x', v: String::new(), tz: None }.to_ics().is_none());
+        assert!(
+            StoredDt {
+                k: 'x',
+                v: String::new(),
+                tz: None
+            }
+            .to_ics()
+            .is_none()
+        );
     }
 
     #[test]
@@ -746,7 +771,11 @@ END:VCALENDAR\r\n";
         let e = StoredEvent {
             uid: "u".into(),
             title: Some("x".repeat(10_000)),
-            start: StoredDt { k: 'd', v: "2026-01-01".into(), tz: None },
+            start: StoredDt {
+                k: 'd',
+                v: "2026-01-01".into(),
+                tz: None,
+            },
             end: None,
             duration_secs: None,
             rrule: None,
@@ -810,7 +839,9 @@ END:VCALENDAR\r\n";
         assert_eq!(e.uid, "r1@v.emp");
         assert_eq!(
             e.end,
-            Some(IcsDateTime::Date(NaiveDate::from_ymd_opt(2026, 2, 4).unwrap()))
+            Some(IcsDateTime::Date(
+                NaiveDate::from_ymd_opt(2026, 2, 4).unwrap()
+            ))
         );
         let ics = generate_ics(&ExportCalendar {
             events: vec![e],
@@ -820,5 +851,46 @@ END:VCALENDAR\r\n";
         .unwrap();
         assert!(ics.contains("SUMMARY:Dentist"));
         assert!(row_event(&row, "t", "missing", "v").is_none());
+    }
+
+    #[test]
+    fn local_calendars_expand_and_database_imports_undo() {
+        let (_dir, store) = super::super::finance::test_support::temp_store();
+        let cal = parse_ics(SAMPLE.as_bytes(), &IcsLimits::default()).unwrap();
+        assert_eq!(store_local_calendar(&store, "team.ics", &cal).unwrap(), 2);
+        let from = DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let to = DateTime::parse_from_rfc3339("2026-01-31T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let ev = local_events(&store, from, to, 100).unwrap();
+        assert_eq!(ev.iter().filter(|e| e.title == "Standup").count(), 5);
+        assert_eq!(calendars(&store).unwrap()[0].name, "Team");
+
+        let ws = store.workspace_list().unwrap().remove(0).id;
+        let db = store
+            .db_create(
+                emp_store::dbmodel::DbCreate::new(&ws, None, "Events").with_properties(vec![
+                    emp_store::dbmodel::PropertySpec::new("When", PropType::Date),
+                ]),
+            )
+            .unwrap();
+        let (n, import_id) = import_into_database(&store, &db.page.id, &cal).unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(
+            super::super::db::all_rows(&store, &db.page.id, None)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(undo_rows(&store, &import_id).unwrap(), Some(2));
+        assert!(
+            super::super::db::all_rows(&store, &db.page.id, None)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(undo_rows(&store, "nope").unwrap(), None);
+        assert!(remove_local_calendar(&store, &calendars(&store).unwrap()[0].id).unwrap());
     }
 }

@@ -1,0 +1,64 @@
+/* Home (§6.4). Tokens only. */
+.hm-page { max-width: 1120px; margin: 0 auto; padding: 48px 40px 96px; }
+.hm-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.hm-grid { position: relative; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; align-items: stretch; border-radius: 16px; }
+.hm-grid.is-editing::before {
+  content: ""; position: absolute; inset: -10px; border-radius: 18px; pointer-events: none;
+  background-image: radial-gradient(circle, rgba(var(--text-rgb), 0.16) 1px, transparent 1.4px);
+  background-size: calc((100% - 20px + 16px) / 12) 24px; background-position: 10px 10px;
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+@media (max-width: 1000px) { .hm-grid > .hm-widget { grid-column: span 12 / span 12 !important; } }
+.hm-widget { position: relative; min-width: 0; display: flex; flex-direction: column; border-radius: 16px; background: var(--bg-surface-1); box-shadow: inset 0 0 0 1px var(--border-subtle), var(--elev-1); contain: layout style; }
+.hm-widget.is-bare { background: transparent; box-shadow: none; }
+.hm-widget.is-editing { box-shadow: inset 0 0 0 1px var(--border), var(--elev-2); }
+.hm-widget.is-dragging { z-index: 5; box-shadow: inset 0 0 0 1px var(--border), var(--elev-4); scale: 1.02; }
+.hm-widget-body { flex: 1; min-height: 0; padding: 16px 18px 18px; }
+.hm-widget.is-bare .hm-widget-body { padding: 0; }
+.hm-edit-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px 0 8px; }
+.hm-grip { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); cursor: grab; touch-action: none; }
+.hm-grip:hover { background: var(--state-hover); color: var(--text-primary); }
+.hm-grip:active { cursor: grabbing; }
+.hm-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -8px 0 18px; overflow: hidden; }
+.hm-title { display: flex; align-items: center; gap: 7px; font-size: calc(13.5rem / 14); font-weight: 650; color: var(--text-primary); }
+.hm-title svg { color: var(--text-tertiary); }
+.hm-label { font-size: calc(12rem / 14); font-weight: 500; color: var(--text-secondary); }
+.hm-big { font-size: calc(24rem / 14); font-weight: 640; letter-spacing: -0.02em; color: var(--text-primary); line-height: 1.15; }
+
+.hm-quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.hm-quick-btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 10px;
+  font-size: calc(13rem / 14); font-weight: 550; color: var(--text-primary);
+  background: var(--bg-surface-1); box-shadow: inset 0 0 0 1px var(--border-subtle), var(--elev-1);
+  transition: box-shadow var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.hm-quick-btn svg { color: var(--text-tertiary); }
+.hm-quick-btn:hover { box-shadow: inset 0 0 0 1px var(--border), var(--elev-2); }
+.hm-quick-btn .emp-kbd { margin-left: 2px; }
+
+.hm-event { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 8px; margin: 0 -8px; border-radius: 10px; text-align: left; transition: background-color var(--dur-fast) var(--ease-out); }
+.hm-event:hover { background: var(--state-hover); }
+.hm-event-time { width: 66px; flex: none; white-space: nowrap; font-size: calc(12rem / 14); color: var(--text-secondary); font-weight: 550; }
+.hm-event-bar { width: 3px; align-self: stretch; margin: 4px 0; border-radius: 3px; flex: none; }
+.hm-live { flex: none; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 650; display: inline-flex; align-items: center; color: var(--loss-text); background: var(--loss-soft); }
+.hm-task { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+.hm-habits { display: flex; align-items: center; gap: 12px; margin-top: auto; padding: 10px 12px; border-radius: 12px; background: var(--bg-surface-2); text-align: left; transition: background-color var(--dur-fast) var(--ease-out); }
+.hm-habits:hover { background: var(--bg-surface-3); }
+.hm-habit { width: 26px; height: 26px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; background: var(--bg-surface-1); box-shadow: inset 0 0 0 1.5px var(--border); filter: grayscale(0.6); opacity: 0.75; }
+.hm-habit.is-done { box-shadow: inset 0 0 0 2px var(--app); filter: none; opacity: 1; }
+
+.hm-money { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) { .hm-money { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hm-money-cell { display: flex; flex-direction: column; gap: 8px; min-height: 128px; padding: 14px; border-radius: 12px; background: var(--bg-surface-2); transition: background-color var(--dur-fast) var(--ease-out); }
+.hm-money-cell.is-link { cursor: pointer; }
+.hm-money-cell.is-link:hover { background: var(--bg-surface-3); }
+:root:is([data-theme="dark"], [data-theme="midnight"]) .hm-money-cell { background: rgba(var(--text-rgb), 0.04); }
+:root:is([data-theme="dark"], [data-theme="midnight"]) .hm-money-cell.is-link:hover { background: rgba(var(--text-rgb), 0.07); }
+
+.hm-wl-row { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; margin: 0 -8px; border-radius: 8px; text-align: left; transition: background-color var(--dur-fast) var(--ease-out); }
+.hm-wl-row:hover { background: var(--state-hover); }
+
+.hm-recent { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.hm-recent-card { display: flex; width: 100%; height: 100px; flex-direction: column; justify-content: space-between; padding: 12px; border-radius: 12px; text-align: left; background: var(--bg-surface-2); transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+.hm-recent-card:hover { background: var(--bg-surface-3); transform: translateY(-1px); }
+:root:is([data-theme="dark"], [data-theme="midnight"]) .hm-recent-card { background: rgba(var(--text-rgb), 0.04); }

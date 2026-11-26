@@ -366,7 +366,7 @@ const ACCOUNTS: AcctDef[] = [
   { key: 'checking', name: 'Everyday Checking', type: 'checking', institution: 'Northbank', opening: 3_850_00, onBudget: true, low: 500_00 },
   { key: 'savings', name: 'High-Yield Savings', type: 'savings', institution: 'Northbank', opening: 12_400_00, onBudget: true, low: 0 },
   { key: 'card', name: 'Sapphire Rewards Card', type: 'credit_card', institution: 'Meridian Card', opening: -1_184_32, apr: 22.99, min: 35_00, limit: 8_000_00, onBudget: true },
-  { key: 'student', name: 'Student Loan', type: 'student_loan', institution: 'Federal Direct', opening: -19_250_00, apr: 5.4, min: 210_00, onBudget: false },
+  { key: 'student', name: 'Student Loan', type: 'student_loan', institution: 'Federal Direct', opening: -9_850_00, apr: 5.4, min: 210_00, onBudget: false },
   { key: 'auto', name: 'Auto Loan', type: 'auto_loan', institution: 'Harbor Credit Union', opening: -12_600_00, apr: 6.9, min: 345_00, onBudget: false },
   { key: 'brokerage', name: 'Brokerage', type: 'investment', institution: 'Harbor Brokerage', opening: 0, onBudget: false },
 ];
@@ -590,6 +590,23 @@ function seedMoneySample(ctx: MockCtx, set: FinSet): void {
       ctx.db.table<RowRecord>('db_rows').update(row.id, (r) => void (r.values[T['txn.transfer']] = V.rel([twin.id])));
     }
   }
+
+  // One side of a transfer whose other side arrives with the next checking import (shows transfer detection).
+  const pending = addDays(today, -3);
+  createRow(ctx, set.dbs.txns, {
+    silent: true,
+    sample: true,
+    values: {
+      [txPrimary]: V.text('Everyday Checking'),
+      [T['txn.date']]: V.date(pending),
+      [T['txn.amount']]: V.money(250_00),
+      [T['txn.account']]: V.rel([acctIds.get('savings')!]),
+      [T['txn.raw']]: V.text('ONLINE TRANSFER FROM CHK XXXX0187'),
+      [T['txn.cleared']]: V.status('uncleared'),
+      [T['txn.source']]: V.sel('import'),
+      [T['txn.import_id']]: V.text(`sample:savings:${pending}:25000:1`),
+    },
+  });
 
   // Budget assignments: category targets each month; a few deliberate overspends come from the data itself.
   for (let m = monthStart(start); m <= today; m = monthStart(m, 1)) {

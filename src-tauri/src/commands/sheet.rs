@@ -7,17 +7,20 @@
 
 use emp_sheets::workbook::sheet::CondFormatRule;
 use emp_sheets::{
-    Axis, CellEdit, CellInfo, ClearWhat, CopyResult, FillMode, FunctionInfo, PasteMode, Rect, StylePatch,
+    Axis, CellEdit, CellInfo, ClearWhat, CopyResult, FillMode, FunctionInfo, PasteMode, Rect,
+    StylePatch,
 };
 use emp_store::Store;
 use emp_store::repo::sheets::{EditResult, RangeResult, SheetPatch, SortSpec, StyleResult};
-use emp_store::repo::workbooks::{EvalResult, FindHit, LintItem, SheetMeta, WorkbookCreated, WorkbookInfo};
+use emp_store::repo::workbooks::{
+    EvalResult, FindHit, LintItem, SheetMeta, WorkbookCreated, WorkbookInfo,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, State, Webview};
 
 use super::db::PageDto;
-use super::import::{caps, cancelled_or, take_file};
+use super::import::{cancelled_or, caps, take_file};
 use super::job_sink;
 use super::workspaces::IdReq;
 use crate::error::{ApiError, ApiResult};
@@ -85,9 +88,14 @@ fn span(axis: Axis, at: u32, count: u32) -> ApiResult<()> {
 
 fn color(field: &str, s: &str) -> ApiResult<()> {
     let ok = s.len() <= 32
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'#' | b'(' | b')' | b',' | b'.' | b' ' | b'%'));
-    if ok { Ok(()) } else { Err(ApiError::invalid(field, "invalid colour")) }
+        && s.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'#' | b'(' | b')' | b',' | b'.' | b' ' | b'%')
+        });
+    if ok {
+        Ok(())
+    } else {
+        Err(ApiError::invalid(field, "invalid colour"))
+    }
 }
 
 // ───────────────────────────────────────────────────────────────────────────── workbooks
@@ -105,7 +113,10 @@ pub struct WorkbookCreateReq {
 
 /// `sheet_workbook_create({ workspaceId, parentId, title, template? }) → { page, sheets }`.
 #[tauri::command]
-pub async fn sheet_workbook_create(app: AppHandle, req: WorkbookCreateReq) -> ApiResult<WorkbookCreated> {
+pub async fn sheet_workbook_create(
+    app: AppHandle,
+    req: WorkbookCreateReq,
+) -> ApiResult<WorkbookCreated> {
     validate::id("workspaceId", &req.workspace_id)?;
     validate::opt_id("parentId", req.parent_id.as_deref())?;
     validate::title("title", &req.title)?;
@@ -232,7 +243,9 @@ pub struct SetStyleReq {
 pub async fn sheet_set_style(app: AppHandle, req: SetStyleReq) -> ApiResult<StyleResult> {
     validate::id("sheetId", &req.sheet_id)?;
     rects("rects", &req.rects)?;
-    let size = serde_json::to_vec(&req.patch).map(|v| v.len()).unwrap_or(usize::MAX);
+    let size = serde_json::to_vec(&req.patch)
+        .map(|v| v.len())
+        .unwrap_or(usize::MAX);
     if size > 16 * 1024 {
         return Err(ApiError::invalid("patch", "style is too large"));
     }
@@ -458,21 +471,29 @@ fn decode_entities(s: &str) -> String {
 pub fn html_table_to_tsv(html: &str) -> Option<String> {
     let lower = html.to_ascii_lowercase();
     let start = lower.find("<table")?;
-    let end = lower[start..].find("</table>").map_or(lower.len(), |e| start + e);
+    let end = lower[start..]
+        .find("</table>")
+        .map_or(lower.len(), |e| start + e);
     let body = &html[start..end];
     let lbody = &lower[start..end];
     let mut rows = Vec::new();
     let mut pos = 0;
     while let Some(tr) = lbody[pos..].find("<tr") {
         let tr_start = pos + tr;
-        let tr_end = lbody[tr_start..].find("</tr>").map_or(lbody.len(), |e| tr_start + e);
+        let tr_end = lbody[tr_start..]
+            .find("</tr>")
+            .map_or(lbody.len(), |e| tr_start + e);
         let mut cells = Vec::new();
         let mut cpos = tr_start;
         loop {
-            let td = lbody[cpos..tr_end].find("<td").or_else(|| lbody[cpos..tr_end].find("<th"));
+            let td = lbody[cpos..tr_end]
+                .find("<td")
+                .or_else(|| lbody[cpos..tr_end].find("<th"));
             let Some(td) = td else { break };
             let open = cpos + td;
-            let Some(gt) = lbody[open..tr_end].find('>') else { break };
+            let Some(gt) = lbody[open..tr_end].find('>') else {
+                break;
+            };
             let content_start = open + gt + 1;
             let close = ["</td>", "</th>"]
                 .iter()
@@ -518,14 +539,23 @@ pub async fn sheet_paste(app: AppHandle, req: PasteReq) -> ApiResult<EditResult>
             return Err(ApiError::invalid(f, "clipboard content is too large"));
         }
     }
-    let tsv = req.tsv.or_else(|| req.html.as_deref().and_then(html_table_to_tsv));
+    let tsv = req
+        .tsv
+        .or_else(|| req.html.as_deref().and_then(html_table_to_tsv));
     if req.clip.is_none() && tsv.is_none() {
         return Err(ApiError::invalid("tsv", "nothing to paste"));
     }
     blocking(move || {
         let store = session(&app)?;
         guarded(|| {
-            store.sheet_paste(&req.sheet_id, (req.at.row, req.at.col), req.clip, tsv, req.mode, req.visible)
+            store.sheet_paste(
+                &req.sheet_id,
+                (req.at.row, req.at.col),
+                req.clip,
+                tsv,
+                req.mode,
+                req.visible,
+            )
         })
     })
     .await
@@ -603,7 +633,15 @@ pub async fn sheet_find(app: AppHandle, req: FindReq) -> ApiResult<Vec<FindHit>>
     validate::non_empty("query", &req.query, validate::MAX_QUERY)?;
     blocking(move || {
         let store = session(&app)?;
-        guarded(|| store.sheet_find(&req.workbook_id, &req.query, req.match_case, req.whole_cell, req.in_formulas))
+        guarded(|| {
+            store.sheet_find(
+                &req.workbook_id,
+                &req.query,
+                req.match_case,
+                req.whole_cell,
+                req.in_formulas,
+            )
+        })
     })
     .await
 }
@@ -628,7 +666,13 @@ pub async fn sheet_replace(app: AppHandle, req: ReplaceReq) -> ApiResult<Value> 
     blocking(move || {
         let store = session(&app)?;
         let count = guarded(|| {
-            store.sheet_replace(&req.workbook_id, &req.query, &req.replacement, req.match_case, req.whole_cell)
+            store.sheet_replace(
+                &req.workbook_id,
+                &req.query,
+                &req.replacement,
+                req.match_case,
+                req.whole_cell,
+            )
         })?;
         Ok(json!({ "count": count }))
     })
@@ -651,8 +695,13 @@ pub struct AddReq {
 /// Validates a sheet name (Excel rules: ≤ 31 characters, none of `[]:*?/\`).
 pub fn sheet_name(field: &str, s: &str) -> ApiResult<()> {
     validate::non_empty(field, s, 31)?;
-    if s.chars().any(|c| matches!(c, '[' | ']' | ':' | '*' | '?' | '/' | '\\') || c.is_control()) {
-        return Err(ApiError::invalid(field, "sheet names cannot contain [ ] : * ? / \\"));
+    if s.chars()
+        .any(|c| matches!(c, '[' | ']' | ':' | '*' | '?' | '/' | '\\') || c.is_control())
+    {
+        return Err(ApiError::invalid(
+            field,
+            "sheet names cannot contain [ ] : * ? / \\",
+        ));
     }
     Ok(())
 }
@@ -667,7 +716,13 @@ pub async fn sheet_add(app: AppHandle, req: AddReq) -> ApiResult<SheetMeta> {
     validate::opt_id("afterId", req.after_id.as_deref())?;
     blocking(move || {
         let store = session(&app)?;
-        guarded(|| store.sheet_add(&req.workbook_id, req.name.as_deref(), req.after_id.as_deref()))
+        guarded(|| {
+            store.sheet_add(
+                &req.workbook_id,
+                req.name.as_deref(),
+                req.after_id.as_deref(),
+            )
+        })
     })
     .await
 }
@@ -752,7 +807,10 @@ pub async fn sheet_named_range_set(app: AppHandle, req: NamedRangeReq) -> ApiRes
         .chars()
         .next()
         .is_some_and(|c| c.is_alphabetic() || c == '_' || c == '\\')
-        && req.name.chars().all(|c| c.is_alphanumeric() || matches!(c, '_' | '.' | '\\'));
+        && req
+            .name
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '.' | '\\'));
     if !ok {
         return Err(ApiError::invalid("name", "invalid name"));
     }
@@ -761,7 +819,9 @@ pub async fn sheet_named_range_set(app: AppHandle, req: NamedRangeReq) -> ApiRes
     }
     blocking(move || {
         let store = session(&app)?;
-        guarded(|| store.sheet_named_range_set(&req.workbook_id, &req.name, req.reference.as_deref()))
+        guarded(|| {
+            store.sheet_named_range_set(&req.workbook_id, &req.name, req.reference.as_deref())
+        })
     })
     .await
 }
@@ -786,7 +846,8 @@ pub async fn sheet_cond_format_set(app: AppHandle, req: CondFormatReq) -> ApiRes
         }
         if let Some(v) = &r.values {
             validate::list_len("rules.values", v.len(), 8)?;
-            v.iter().try_for_each(|x| validate::formula("rules.values", x))?;
+            v.iter()
+                .try_for_each(|x| validate::formula("rules.values", x))?;
         }
         if let Some(c) = &r.colors {
             validate::list_len("rules.colors", c.len(), 8)?;
@@ -888,7 +949,13 @@ pub async fn sheet_eval(app: AppHandle, req: EvalReq) -> ApiResult<EvalResult> {
     validate::formula("formula", &req.formula)?;
     blocking(move || {
         let store = session(&app)?;
-        guarded(|| store.sheet_eval(req.workbook_id.as_deref(), req.sheet_id.as_deref(), &req.formula))
+        guarded(|| {
+            store.sheet_eval(
+                req.workbook_id.as_deref(),
+                req.sheet_id.as_deref(),
+                &req.formula,
+            )
+        })
     })
     .await
 }
@@ -954,7 +1021,12 @@ pub async fn sheet_import_file(
         .jobs
         .spawn("sheet_import_file", true, store.now(), sink, move |ctx| {
             let state = app.state::<AppState>();
-            let f = take_file(&state, &req.grant_id, &[GrantPurpose::Import], caps::WORKBOOK)?;
+            let f = take_file(
+                &state,
+                &req.grant_id,
+                &[GrantPurpose::Import],
+                caps::WORKBOOK,
+            )?;
             let (page, warnings) = store
                 .sheet_import_file(
                     &f.name,
@@ -1012,7 +1084,8 @@ pub async fn sheet_export(
                 WorkbookFormat::Xlsx => "xlsx",
                 WorkbookFormat::Csv => "csv",
             };
-            let bytes = guarded(|| store.sheet_export(&req.workbook_id, format, req.sheet_id.as_deref()))?;
+            let bytes =
+                guarded(|| store.sheet_export(&req.workbook_id, format, req.sheet_id.as_deref()))?;
             ctx.check_cancelled()?;
             ctx.report(1, 2, Some("Writing"));
             super::import::write_atomic(&target, &bytes)?;
@@ -1042,7 +1115,10 @@ pub async fn sheet_to_database(app: AppHandle, req: ToDatabaseReq) -> ApiResult<
     let rows = u64::from(req.rect.r1 - req.rect.r0) + 1;
     let cols = u64::from(req.rect.c1 - req.rect.c0) + 1;
     if cols > 500 || rows * cols > 5_000_000 {
-        return Err(ApiError::invalid("rect", "the range is too large for a database"));
+        return Err(ApiError::invalid(
+            "rect",
+            "the range is too large for a database",
+        ));
     }
     blocking(move || {
         let store = session(&app)?;
@@ -1066,9 +1142,42 @@ mod tests {
 
     #[test]
     fn rectangles_are_bounded() {
-        assert!(rect("r", &Rect { r0: 0, c0: 0, r1: 10, c1: 3 }).is_ok());
-        assert!(rect("r", &Rect { r0: 5, c0: 0, r1: 4, c1: 3 }).is_err());
-        assert!(rect("r", &Rect { r0: 0, c0: 0, r1: MAX_ROWS, c1: 0 }).is_err());
+        assert!(
+            rect(
+                "r",
+                &Rect {
+                    r0: 0,
+                    c0: 0,
+                    r1: 10,
+                    c1: 3
+                }
+            )
+            .is_ok()
+        );
+        assert!(
+            rect(
+                "r",
+                &Rect {
+                    r0: 5,
+                    c0: 0,
+                    r1: 4,
+                    c1: 3
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            rect(
+                "r",
+                &Rect {
+                    r0: 0,
+                    c0: 0,
+                    r1: MAX_ROWS,
+                    c1: 0
+                }
+            )
+            .is_err()
+        );
         assert!(rects("r", &[]).is_err());
     }
 
@@ -1089,18 +1198,32 @@ mod tests {
 
     #[test]
     fn resize_accepts_numbers_and_auto() {
-        let a: ResizeReq = serde_json::from_value(json!({ "sheetId": "s", "axis": "cols", "indices": [1], "size": 80 })).unwrap();
+        let a: ResizeReq = serde_json::from_value(
+            json!({ "sheetId": "s", "axis": "cols", "indices": [1], "size": 80 }),
+        )
+        .unwrap();
         assert!(matches!(a.size, ResizeSize::Px(x) if (x - 80.0).abs() < f64::EPSILON));
-        let b: ResizeReq = serde_json::from_value(json!({ "sheetId": "s", "axis": "rows", "indices": [1], "size": "auto" })).unwrap();
+        let b: ResizeReq = serde_json::from_value(
+            json!({ "sheetId": "s", "axis": "rows", "indices": [1], "size": "auto" }),
+        )
+        .unwrap();
         assert!(matches!(b.size, ResizeSize::Auto(_)));
-        assert!(serde_json::from_value::<ResizeReq>(json!({ "sheetId": "s", "axis": "rows", "indices": [1], "size": "big" })).is_err());
+        assert!(
+            serde_json::from_value::<ResizeReq>(
+                json!({ "sheetId": "s", "axis": "rows", "indices": [1], "size": "big" })
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn html_tables_become_tsv() {
         let html = "<meta charset=utf-8><table><tr><th>Name</th><th>Qty</th></tr>\
                     <tr><td><b>Apples</b></td><td>3</td></tr><tr><td>A &amp; B</td><td>4</td></tr></table>";
-        assert_eq!(html_table_to_tsv(html).unwrap(), "Name\tQty\nApples\t3\nA & B\t4");
+        assert_eq!(
+            html_table_to_tsv(html).unwrap(),
+            "Name\tQty\nApples\t3\nA & B\t4"
+        );
         assert!(html_table_to_tsv("<p>no table</p>").is_none());
     }
 

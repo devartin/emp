@@ -9,8 +9,8 @@ use std::sync::LazyLock;
 
 use emp_store::lifeapps::recommend::Recommendation;
 use emp_store::{
-    GenerationPlan, Insight, InstallResult, LifeAppInstance, LifeAppManifest, LifeAppSummary, LifeappInstall,
-    LifeappPreview, MetricValue, PlanDiff, SampleResult, TuneupResult,
+    GenerationPlan, Insight, InstallResult, LifeAppInstance, LifeAppManifest, LifeAppSummary,
+    LifeappInstall, LifeappPreview, MetricValue, PlanDiff, SampleResult, TuneupResult,
 };
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -29,13 +29,40 @@ pub const MAX_ANSWERS_BYTES: usize = 256 * 1024;
 /// Insights remembered as already announced.
 pub const SEEN_INSIGHTS_MAX: usize = 10_000;
 
+static PACKS_REGISTERED: std::sync::Once = std::sync::Once::new();
+
+/// Registers the built-in `emp-finance` tax packs for `pack.*` (Tax Organizer), once per process.
+pub fn ensure_packs(store: &emp_store::Store) {
+    PACKS_REGISTERED.call_once(|| match emp_finance::tax::pack::builtin_packs() {
+        Ok(packs) => {
+            for p in packs {
+                if let Ok(v) = serde_json::to_value(&p) {
+                    store.lifeapps_register_pack(&p.id, v);
+                }
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "tax packs not registered"),
+    });
+}
+
+fn session(app: &AppHandle) -> ApiResult<emp_store::Store> {
+    let store = app.state::<AppState>().session()?;
+    ensure_packs(&store);
+    Ok(store)
+}
+
 /// Validates a life-app or step id (`[a-z0-9_.-]`, ≤ 64).
 pub fn app_id(field: &str, s: &str) -> ApiResult<()> {
     let ok = !s.is_empty()
         && s.len() <= 64
-        && s.bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_' | b'.'));
-    if ok { Ok(()) } else { Err(ApiError::invalid(field, "invalid id")) }
+        && s.bytes().all(|b| {
+            b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_' | b'.')
+        });
+    if ok {
+        Ok(())
+    } else {
+        Err(ApiError::invalid(field, "invalid id"))
+    }
 }
 
 /// Bounds wizard answers.
@@ -61,14 +88,15 @@ pub fn answers(field: &str, a: &Map<String, Value>) -> ApiResult<()> {
 
 fn keys(field: &str, v: &[String]) -> ApiResult<()> {
     validate::list_len(field, v.len(), 1_000)?;
-    v.iter().try_for_each(|k| validate::non_empty(field, k, 256))
+    v.iter()
+        .try_for_each(|k| validate::non_empty(field, k, 256))
 }
 
 /// `lifeapp_list({}) → LifeAppSummary[]`.
 #[tauri::command]
 pub async fn lifeapp_list(app: AppHandle, req: super::Empty) -> ApiResult<Vec<LifeAppSummary>> {
     let _ = req;
-    blocking(move || Ok(app.state::<AppState>().session()?.lifeapp_list(None)?)).await
+    blocking(move || Ok(session(&app)?.lifeapp_list(None)?)).await
 }
 
 /// A `{ id }` request with an app id.
@@ -82,7 +110,7 @@ pub struct AppIdReq {
 #[tauri::command]
 pub async fn lifeapp_manifest(app: AppHandle, req: AppIdReq) -> ApiResult<LifeAppManifest> {
     app_id("id", &req.id)?;
-    blocking(move || Ok(app.state::<AppState>().session()?.lifeapp_manifest(&req.id)?)).await
+    blocking(move || Ok(session(&app)?.lifeapp_manifest(&req.id)?)).await
 }
 
 /// `lifeapp_recommend` request.
@@ -102,10 +130,7 @@ pub async fn lifeapp_recommend(app: AppHandle, req: RecommendReq) -> ApiResult<R
     app_id("stepId", &req.step_id)?;
     answers("answers", &req.answers)?;
     blocking(move || {
-        Ok(app
-            .state::<AppState>()
-            .session()?
-            .lifeapp_recommend(&req.app_id, &req.step_id, &req.answers)?)
+        Ok(session(&app)?.lifeapp_recommend(&req.app_id, &req.step_id, &req.answers)?)
     })
     .await
 }
@@ -116,7 +141,7 @@ pub async fn lifeapp_preview(app: AppHandle, req: LifeappPreview) -> ApiResult<G
     app_id("appId", &req.app_id)?;
     answers("answers", &req.answers)?;
     keys("disabledKeys", &req.disabled_keys)?;
-    blocking(move || Ok(app.state::<AppState>().session()?.lifeapp_preview(&req)?)).await
+    blocking(move || Ok(session(&app)?.lifeapp_preview(&req)?)).await
 }
 
 /// `lifeapp_install` request.
@@ -148,6 +173,7 @@ pub async fn lifeapp_install(
     keys("disabledKeys", &req.disabled_keys)?;
     validate::id("workspaceId", &req.workspace_id)?;
     let store = state.session()?;
+    ensure_packs(&store);
     let sink = job_sink(&webview, &req.on_event);
     let install = LifeappInstall {
         app_id: req.app_id,
@@ -157,13 +183,17 @@ pub async fn lifeapp_install(
         workspace_id: req.workspace_id,
         sample_data: req.sample_data,
     };
-    Ok(state
-        .jobs
-        .spawn("lifeapp_install", true, store.now(), sink, move |ctx| -> ApiResult<InstallResult> {
+    Ok(state.jobs.spawn(
+        "lifeapp_install",
+        true,
+        store.now(),
+        sink,
+        move |ctx| -> ApiResult<InstallResult> {
             store
                 .lifeapp_install(&install, ctx)
                 .map_err(|e| cancelled_or(ctx, e.into()))
-        }))
+        },
+    ))
 }
 
 /// A `{ workspaceId }` request.
@@ -175,9 +205,12 @@ pub struct WorkspaceReq {
 
 /// `lifeapp_instances({ workspaceId }) → LifeAppInstance[]`.
 #[tauri::command]
-pub async fn lifeapp_instances(app: AppHandle, req: WorkspaceReq) -> ApiResult<Vec<LifeAppInstance>> {
+pub async fn lifeapp_instances(
+    app: AppHandle,
+    req: WorkspaceReq,
+) -> ApiResult<Vec<LifeAppInstance>> {
     validate::id("workspaceId", &req.workspace_id)?;
-    blocking(move || Ok(app.state::<AppState>().session()?.lifeapp_instances(&req.workspace_id)?)).await
+    blocking(move || Ok(session(&app)?.lifeapp_instances(&req.workspace_id)?)).await
 }
 
 /// `lifeapp_tuneup_preview` request.
@@ -194,13 +227,8 @@ pub struct TuneupPreviewReq {
 pub async fn lifeapp_tuneup_preview(app: AppHandle, req: TuneupPreviewReq) -> ApiResult<PlanDiff> {
     validate::id("instanceId", &req.instance_id)?;
     answers("answers", &req.answers)?;
-    blocking(move || {
-        Ok(app
-            .state::<AppState>()
-            .session()?
-            .lifeapp_tuneup_preview(&req.instance_id, &req.answers)?)
-    })
-    .await
+    blocking(move || Ok(session(&app)?.lifeapp_tuneup_preview(&req.instance_id, &req.answers)?))
+        .await
 }
 
 /// `lifeapp_tuneup_apply` request.
@@ -226,14 +254,19 @@ pub async fn lifeapp_tuneup_apply(
     answers("answers", &req.answers)?;
     keys("acceptConflicts", &req.accept_conflicts)?;
     let store = state.session()?;
+    ensure_packs(&store);
     let sink = job_sink(&webview, &req.on_event);
-    Ok(state
-        .jobs
-        .spawn("lifeapp_tuneup_apply", true, store.now(), sink, move |ctx| -> ApiResult<TuneupResult> {
+    Ok(state.jobs.spawn(
+        "lifeapp_tuneup_apply",
+        true,
+        store.now(),
+        sink,
+        move |ctx| -> ApiResult<TuneupResult> {
             store
                 .lifeapp_tuneup_apply(&req.instance_id, &req.answers, &req.accept_conflicts, ctx)
                 .map_err(|e| cancelled_or(ctx, e.into()))
-        }))
+        },
+    ))
 }
 
 /// An `{ instanceId }` request.
@@ -247,7 +280,7 @@ pub struct InstanceReq {
 #[tauri::command]
 pub async fn lifeapp_detach(app: AppHandle, req: InstanceReq) -> ApiResult<()> {
     validate::id("instanceId", &req.instance_id)?;
-    blocking(move || Ok(app.state::<AppState>().session()?.lifeapp_detach(&req.instance_id)?)).await
+    blocking(move || Ok(session(&app)?.lifeapp_detach(&req.instance_id)?)).await
 }
 
 /// `lifeapp_uninstall` request.
@@ -262,13 +295,8 @@ pub struct UninstallReq {
 #[tauri::command]
 pub async fn lifeapp_uninstall(app: AppHandle, req: UninstallReq) -> ApiResult<()> {
     validate::id("instanceId", &req.instance_id)?;
-    blocking(move || {
-        Ok(app
-            .state::<AppState>()
-            .session()?
-            .lifeapp_uninstall(&req.instance_id, req.keep_content)?)
-    })
-    .await
+    blocking(move || Ok(session(&app)?.lifeapp_uninstall(&req.instance_id, req.keep_content)?))
+        .await
 }
 
 /// `lifeapp_metrics` request.
@@ -283,14 +311,17 @@ pub struct MetricsReq {
 /// `lifeapp_metrics({ instanceId, names }) → Record<string, { value, display, math, asOf }>` (all when `names` is
 /// empty).
 #[tauri::command]
-pub async fn lifeapp_metrics(app: AppHandle, req: MetricsReq) -> ApiResult<BTreeMap<String, MetricValue>> {
+pub async fn lifeapp_metrics(
+    app: AppHandle,
+    req: MetricsReq,
+) -> ApiResult<BTreeMap<String, MetricValue>> {
     validate::id("instanceId", &req.instance_id)?;
     validate::list_len("names", req.names.len(), 200)?;
     for n in &req.names {
         app_id("names", n)?;
     }
     blocking(move || {
-        let store = app.state::<AppState>().session()?;
+        let store = session(&app)?;
         crate::jobs::catch_panics(|| store.lifeapp_metrics(&req.instance_id, &req.names))
             .map_err(|_| ApiError::internal("metrics panicked"))?
             .map_err(Into::into)
@@ -315,7 +346,9 @@ pub fn unseen(list: &[Insight]) -> Vec<Insight> {
         seen.clear();
     }
     list.iter()
-        .filter(|i| i.muted_until.is_none() && seen.insert(format!("{}|{}", i.app_instance_id, i.id)))
+        .filter(|i| {
+            i.muted_until.is_none() && seen.insert(format!("{}|{}", i.app_instance_id, i.id))
+        })
         .cloned()
         .collect()
 }
@@ -327,6 +360,7 @@ pub async fn lifeapp_insights(app: AppHandle, req: InsightsReq) -> ApiResult<Vec
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
+        ensure_packs(&store);
         let list = crate::jobs::catch_panics(|| store.lifeapp_insights(req.instance_id.as_deref()))
             .map_err(|_| ApiError::internal("advisor panicked"))??;
         for i in unseen(&list) {
@@ -355,10 +389,7 @@ pub async fn lifeapp_insight_mute(app: AppHandle, req: MuteReq) -> ApiResult<()>
         validate::ts("until", t)?;
     }
     blocking(move || {
-        Ok(app
-            .state::<AppState>()
-            .session()?
-            .lifeapp_insight_mute(&req.instance_id, &req.rule_id, req.until)?)
+        Ok(session(&app)?.lifeapp_insight_mute(&req.instance_id, &req.rule_id, req.until)?)
     })
     .await
 }
@@ -375,7 +406,7 @@ pub struct SampleReq {
 #[tauri::command]
 pub async fn lifeapp_sample_data(app: AppHandle, req: SampleReq) -> ApiResult<SampleResult> {
     validate::id("instanceId", &req.instance_id)?;
-    blocking(move || Ok(app.state::<AppState>().session()?.lifeapp_sample_data(&req.instance_id, req.on)?)).await
+    blocking(move || Ok(session(&app)?.lifeapp_sample_data(&req.instance_id, req.on)?)).await
 }
 
 /// `lifeapp_checklist_tick` request.
@@ -391,13 +422,8 @@ pub struct TickReq {
 pub async fn lifeapp_checklist_tick(app: AppHandle, req: TickReq) -> ApiResult<()> {
     validate::id("instanceId", &req.instance_id)?;
     app_id("itemId", &req.item_id)?;
-    blocking(move || {
-        Ok(app
-            .state::<AppState>()
-            .session()?
-            .lifeapp_checklist_tick(&req.instance_id, &req.item_id)?)
-    })
-    .await
+    blocking(move || Ok(session(&app)?.lifeapp_checklist_tick(&req.instance_id, &req.item_id)?))
+        .await
 }
 
 #[cfg(test)]

@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use tauri::{AppHandle, Manager, State, Webview};
 
-use super::import::{InputFile, caps, cancelled_or, import_cell, remember_job, stage, take_file};
+use super::import::{InputFile, cancelled_or, caps, import_cell, remember_job, stage, take_file};
 use super::job_sink;
 use super::workspaces::IdReq;
 use crate::error::{ApiError, ApiResult};
@@ -100,7 +100,12 @@ pub fn row_owner(store: &Store, row_id: &str) -> ApiResult<String> {
 }
 
 /// Emits `db:changed` for `database_id` with its current revisions (best effort).
-pub fn emit_db_changed(state: &AppState, store: &Store, database_id: &str, row_ids: Option<Vec<String>>) {
+pub fn emit_db_changed(
+    state: &AppState,
+    store: &Store,
+    database_id: &str,
+    row_ids: Option<Vec<String>>,
+) {
     match store.db_get_schema(database_id) {
         Ok(schema) => {
             note_schema(&schema);
@@ -175,9 +180,9 @@ fn check_values(field: &str, values: &BTreeMap<String, Option<CellValue>>) -> Ap
 /// Bounds a cell value at the IPC edge: finite numbers, decimal money, bounded text and lists.
 pub fn check_cell(field: &str, v: &CellValue) -> ApiResult<()> {
     match v {
-        CellValue::Number { v: Some(x) } | CellValue::Rating { v: Some(x) } | CellValue::Progress { v: Some(x) } => {
-            validate::finite(field, *x)
-        }
+        CellValue::Number { v: Some(x) }
+        | CellValue::Rating { v: Some(x) }
+        | CellValue::Progress { v: Some(x) } => validate::finite(field, *x),
         CellValue::Money { v: Some(m), cur } => {
             validate::money(field, m)?;
             if cur.len() > 8 {
@@ -198,9 +203,9 @@ pub fn check_cell(field: &str, v: &CellValue) -> ApiResult<()> {
             v.iter().try_for_each(|id| validate::bounded(field, id, 64))
         }
         CellValue::Url { v: Some(s) } => validate::bounded(field, s, validate::MAX_URL),
-        CellValue::Email { v: Some(s) } | CellValue::Phone { v: Some(s) } | CellValue::Ticker { v: Some(s) } => {
-            validate::bounded(field, s, validate::MAX_TITLE)
-        }
+        CellValue::Email { v: Some(s) }
+        | CellValue::Phone { v: Some(s) }
+        | CellValue::Ticker { v: Some(s) } => validate::bounded(field, s, validate::MAX_TITLE),
         CellValue::Files { v } => validate::list_len(field, v.len(), 1_000),
         _ => Ok(()),
     }
@@ -419,13 +424,17 @@ pub async fn db_property_convert(
     let store = state.session()?;
     let sink = job_sink(&webview, &req.on_event);
     let app = webview.app_handle().clone();
-    Ok(state
-        .jobs
-        .spawn("db_property_convert", false, store.now(), sink, move |ctx| {
+    Ok(state.jobs.spawn(
+        "db_property_convert",
+        false,
+        store.now(),
+        sink,
+        move |ctx| {
             let p = store.db_property_convert(&req.id, req.to, req.config, ctx)?;
             emit_for_owner(&app.state::<AppState>(), &store, &req.id);
             Ok(p)
-        }))
+        },
+    ))
 }
 
 /// `db_property_delete` request.
@@ -477,7 +486,11 @@ pub async fn db_property_reorder(app: AppHandle, req: ReorderReq) -> ApiResult<P
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
-        let p = store.db_property_reorder(&req.id, req.before_id.as_deref(), req.after_id.as_deref())?;
+        let p = store.db_property_reorder(
+            &req.id,
+            req.before_id.as_deref(),
+            req.after_id.as_deref(),
+        )?;
         emit_for_owner(&state, &store, &req.id);
         Ok(p)
     })
@@ -542,14 +555,18 @@ fn check_filter(field: &str, f: &Filter, depth: usize) -> ApiResult<()> {
     match f {
         Filter::And { and } => {
             validate::list_len(field, and.len(), 100)?;
-            and.iter().try_for_each(|x| check_filter(field, x, depth + 1))
+            and.iter()
+                .try_for_each(|x| check_filter(field, x, depth + 1))
         }
         Filter::Or { or } => {
             validate::list_len(field, or.len(), 100)?;
-            or.iter().try_for_each(|x| check_filter(field, x, depth + 1))
+            or.iter()
+                .try_for_each(|x| check_filter(field, x, depth + 1))
         }
         other => {
-            let size = serde_json::to_vec(other).map(|v| v.len()).unwrap_or(usize::MAX);
+            let size = serde_json::to_vec(other)
+                .map(|v| v.len())
+                .unwrap_or(usize::MAX);
             if size > 16 * 1024 {
                 return Err(ApiError::invalid(field, "filter value is too large"));
             }
@@ -847,7 +864,12 @@ pub async fn db_rows_duplicate(app: AppHandle, req: IdsReq) -> ApiResult<Vec<Row
         let rows = store.db_rows_duplicate(&ids)?;
         if let Some(db) = db {
             note_rows(&db, &rows);
-            emit_db_changed(&state, &store, &db, Some(rows.iter().map(|r| r.id.clone()).collect()));
+            emit_db_changed(
+                &state,
+                &store,
+                &db,
+                Some(rows.iter().map(|r| r.id.clone()).collect()),
+            );
         }
         Ok(rows)
     })
@@ -876,7 +898,12 @@ pub async fn db_view_create(app: AppHandle, req: ViewCreateReq) -> ApiResult<Vie
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
-        let v = store.db_view_create(&req.database_id, &req.name, req.layout, req.from_view_id.as_deref())?;
+        let v = store.db_view_create(
+            &req.database_id,
+            &req.name,
+            req.layout,
+            req.from_view_id.as_deref(),
+        )?;
         note_owner(&v.id, &req.database_id);
         emit_db_changed(&state, &store, &req.database_id, None);
         Ok(v)
@@ -949,7 +976,8 @@ pub async fn db_view_reorder(app: AppHandle, req: ReorderReq) -> ApiResult<View>
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
-        let v = store.db_view_reorder(&req.id, req.before_id.as_deref(), req.after_id.as_deref())?;
+        let v =
+            store.db_view_reorder(&req.id, req.before_id.as_deref(), req.after_id.as_deref())?;
         emit_for_owner(&state, &store, &req.id);
         Ok(v)
     })
@@ -969,15 +997,19 @@ pub struct RelationOptionsReq {
 
 /// `db_relation_options({ propertyId, search, limit }) → { id, title, icon? }[]`.
 #[tauri::command]
-pub async fn db_relation_options(app: AppHandle, req: RelationOptionsReq) -> ApiResult<Vec<RelationOption>> {
+pub async fn db_relation_options(
+    app: AppHandle,
+    req: RelationOptionsReq,
+) -> ApiResult<Vec<RelationOption>> {
     validate::id("propertyId", &req.property_id)?;
     validate::query("search", &req.search)?;
     let limit = validate::limit("limit", req.limit, validate::MAX_LIST)?;
     blocking(move || {
-        Ok(app
-            .state::<AppState>()
-            .session()?
-            .db_relation_options(&req.property_id, &req.search, limit)?)
+        Ok(app.state::<AppState>().session()?.db_relation_options(
+            &req.property_id,
+            &req.search,
+            limit,
+        )?)
     })
     .await
 }
@@ -1009,7 +1041,10 @@ pub async fn db_formula_check(app: AppHandle, req: FormulaCheckReq) -> ApiResult
 /// `db_import_preview({ grantId }) → { columns, rows, delimiter, encoding, sheets? }`. The file stays staged for the
 /// `db_import_csv` that follows.
 #[tauri::command]
-pub async fn db_import_preview(app: AppHandle, req: super::import::GrantReq) -> ApiResult<ImportPreview> {
+pub async fn db_import_preview(
+    app: AppHandle,
+    req: super::import::GrantReq,
+) -> ApiResult<ImportPreview> {
     validate::grant_id("grantId", &req.grant_id)?;
     blocking(move || {
         let state = app.state::<AppState>();
@@ -1193,7 +1228,10 @@ mod tests {
             row_ids: None,
         })
         .unwrap();
-        assert_eq!(v, json!({ "databaseId": "d", "dataRev": 3, "schemaRev": 2 }));
+        assert_eq!(
+            v,
+            json!({ "databaseId": "d", "dataRev": 3, "schemaRev": 2 })
+        );
     }
 
     #[test]
@@ -1207,17 +1245,45 @@ mod tests {
     fn cells_are_bounded() {
         assert!(check_cell("v", &CellValue::Number { v: Some(f64::NAN) }).is_err());
         assert!(check_cell("v", &CellValue::Number { v: Some(1.5) }).is_ok());
-        assert!(check_cell("v", &CellValue::Money { v: Some("1.123456789".into()), cur: "USD".into() }).is_err());
-        assert!(check_cell("v", &CellValue::Money { v: Some("-12.50".into()), cur: "USD".into() }).is_ok());
+        assert!(
+            check_cell(
+                "v",
+                &CellValue::Money {
+                    v: Some("1.123456789".into()),
+                    cur: "USD".into()
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            check_cell(
+                "v",
+                &CellValue::Money {
+                    v: Some("-12.50".into()),
+                    cur: "USD".into()
+                }
+            )
+            .is_ok()
+        );
         assert!(check_cell("v", &CellValue::Text { v: rich("hi") }).is_ok());
-        assert!(check_cell("v", &CellValue::Url { v: Some("x".repeat(5_000)) }).is_err());
+        assert!(
+            check_cell(
+                "v",
+                &CellValue::Url {
+                    v: Some("x".repeat(5_000))
+                }
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn requests_deny_unknown_fields() {
-        let ok: Result<RowsMoveReq, _> = serde_json::from_value(json!({ "ids": ["a"], "afterId": "b" }));
+        let ok: Result<RowsMoveReq, _> =
+            serde_json::from_value(json!({ "ids": ["a"], "afterId": "b" }));
         assert!(ok.is_ok());
-        let bad: Result<RowsMoveReq, _> = serde_json::from_value(json!({ "ids": ["a"], "path": "/etc" }));
+        let bad: Result<RowsMoveReq, _> =
+            serde_json::from_value(json!({ "ids": ["a"], "path": "/etc" }));
         assert!(bad.is_err());
         let q: QueryRequest = serde_json::from_value(json!({
             "databaseId": "d", "window": { "offset": 0, "limit": 50 }, "reqId": 7,

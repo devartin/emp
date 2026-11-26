@@ -1,1 +1,2523 @@
-//! filled by domain team
+//! Finance commands (SPEC §11.3 "Finance", §15, §16.2).
+//!
+//! `emp-finance` is pure; this module is the glue of §15: it loads the databases of a life-app instance from
+//! `emp-store` **by semantic role** (§15.0, falling back to the manifest's database titles and property names for
+//! databases without roles, e.g. *Budgets*), converts rows into finance inputs, runs the engines and writes results
+//! back as rows.
+//!
+//! App-side state that has no database of its own lives in the encrypted kv store:
+//! * `fin.rules` — categorisation rules per instance (the IPC `Rule` shape, richer than the *Rules* database);
+//! * `fin.profiles` — CSV import profiles by header fingerprint (§15.2);
+//! * `fin.budget` — the budget configuration per instance (method, month start day).
+//!
+//! Statement imports are staged in memory between `finance_import_start`, `_preview` and `_commit` (bounded, 30 min).
+
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::{Arc, LazyLock};
+use std::time::{Duration, Instant};
+
+use chrono::{Datelike, NaiveDate};
+use emp_finance::budget::{self, Assignment, BudgetConfig, BudgetInput, BudgetMethod, BudgetMonth};
+use emp_finance::calendar::HolidayCalendar;
+use emp_finance::import::{ImportFormat, ImportMapping, ImportOptions, StatementTxn};
+use emp_finance::ledger::{Account, AccountType, Category, Txn, balance_as_of};
+use emp_finance::money::Currency;
+use emp_finance::period::{YearMonth, budget_period};
+use emp_finance::rules::{CategoryLearner, Rule, RuleSet, RuleTxn};
+use emp_finance::{Decimal, FinanceError};
+use emp_store::Store;
+use emp_store::dbmodel::{
+    CellValue, DbSchema, Property, RecurrenceMode, RecurrenceValue, RowDto, RowUpdate, rich,
+    rich_plain,
+};
+use emp_store::model::{PageKind, PageMeta};
+use emp_store::query::config::HasConfig;
+use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use tauri::{AppHandle, Manager, State, Webview};
+
+use super::import::{caps, stage, take_file};
+use super::job_sink;
+use crate::error::{ApiError, ApiResult, ErrorCode};
+use crate::grants::GrantPurpose;
+use crate::jobs::JobRef;
+use crate::state::{AppState, blocking};
+use crate::validate;
+
+/// kv namespace of categorisation rules.
+pub const RULES_NS: &str = "fin.rules";
+/// kv namespace of CSV import profiles.
+pub const PROFILES_NS: &str = "fin.profiles";
+/// kv namespace of budget configuration.
+pub const BUDGET_NS: &str = "fin.budget";
+/// Staged statement imports.
+pub const MAX_IMPORTS: usize = 8;
+/// Lifetime of a staged statement import.
+pub const IMPORT_TTL: Duration = Duration::from_secs(30 * 60);
+/// Rules per instance.
+pub const MAX_RULES: usize = 500;
+
+// ───────────────────────────────────────────────────────────────────────────── shared helpers
+
+/// Maps an `emp-finance` error to the IPC error.
+#[must_use]
+pub fn fin_err(e: FinanceError) -> ApiError {
+    match e {
+        FinanceError::Invalid(m) => ApiError::new(ErrorCode::Invalid, m),
+        FinanceError::Parse { message, .. } => ApiError::new(ErrorCode::Invalid, message),
+        FinanceError::TooLarge(m) => ApiError::new(ErrorCode::TooLarge, m),
+        FinanceError::NeedsConfirmation(m) => ApiError::new(ErrorCode::TooLarge, m),
+        FinanceError::Cancelled => ApiError::new(ErrorCode::Cancelled, "Cancelled"),
+        FinanceError::Unsupported(m) => ApiError::unsupported(m),
+        e @ FinanceError::MissingRate { .. } => ApiError::new(ErrorCode::Invalid, e.to_string()),
+    }
+}
+
+/// Local "today" (the vault's clock, local time zone of the device).
+#[must_use]
+pub fn local_today(store: &Store) -> NaiveDate {
+    chrono::DateTime::from_timestamp_millis(store.now())
+        .map(|t| t.with_timezone(&chrono::Local).date_naive())
+        .unwrap_or_else(|| chrono::Local::now().date_naive())
+}
+
+/// A decimal / money string field.
+pub fn dec(field: &str, s: &str) -> ApiResult<Decimal> {
+    validate::money(field, s.trim())?;
+    s.trim()
+        .parse()
+        .map_err(|_| ApiError::invalid(field, "invalid amount"))
+}
+
+/// A `YYYY-MM` field.
+pub fn month(field: &str, s: &str) -> ApiResult<YearMonth> {
+    if s.len() != 7 {
+        return Err(ApiError::invalid(field, "must be a month (YYYY-MM)"));
+    }
+    s.parse()
+        .map_err(|_| ApiError::invalid(field, "must be a month (YYYY-MM)"))
+}
+
+/// IPC `Money`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct MoneyDto {
+    /// Decimal string.
+    pub amount: String,
+    /// Currency code.
+    pub currency: String,
+}
+
+impl MoneyDto {
+    /// From a decimal (rounded to cents for display stability).
+    #[must_use]
+    pub fn of(d: Decimal, currency: &str) -> Self {
+        Self {
+            amount: d.round_dp(2).normalize().to_string(),
+            currency: currency.to_owned(),
+        }
+    }
+}
+
+fn s(d: Decimal) -> String {
+    d.round_dp(2).normalize().to_string()
+}
+
+// ───────────────────────────────────────────────────────────────────────────── instance databases
+
+/// One database of an instance with its rows.
+#[derive(Clone, Debug)]
+pub struct InstanceDb {
+    /// Schema (properties, roles, views).
+    pub schema: DbSchema,
+    /// Live rows in manual order.
+    pub rows: Vec<RowDto>,
+}
+
+impl InstanceDb {
+    /// Database id.
+    #[must_use]
+    pub fn id(&self) -> &str {
+        &self.schema.database.id
+    }
+
+    /// The property for `role`, else the property named one of `names` (case-insensitive).
+    #[must_use]
+    pub fn col(&self, role: &str, names: &[&str]) -> Option<&Property> {
+        if let Some(id) = self.schema.database.roles.get(role) {
+            if let Some(p) = self.schema.property(id) {
+                return Some(p);
+            }
+        }
+        if let Some(p) = self
+            .schema
+            .properties
+            .iter()
+            .find(|p| p.role.as_deref() == Some(role))
+        {
+            return Some(p);
+        }
+        names.iter().find_map(|n| self.schema.property_named(n))
+    }
+
+    /// The id of [`InstanceDb::col`].
+    #[must_use]
+    pub fn col_id(&self, role: &str, names: &[&str]) -> Option<String> {
+        self.col(role, names).map(|p| p.id.clone())
+    }
+
+    /// The title property id.
+    #[must_use]
+    pub fn title_id(&self) -> &str {
+        &self.schema.database.primary_prop_id
+    }
+
+    /// Title of a row.
+    #[must_use]
+    pub fn title(&self, r: &RowDto) -> String {
+        text(r.values.get(self.title_id()))
+    }
+
+    /// The option name of a select / status cell.
+    #[must_use]
+    pub fn option_name(&self, r: &RowDto, p: Option<&Property>) -> Option<String> {
+        let p = p?;
+        let id = match r.values.get(&p.id)? {
+            CellValue::Select { v: Some(id) } | CellValue::Status { v: Some(id) } => id,
+            _ => return None,
+        };
+        p.select_options()
+            .into_iter()
+            .find(|o| &o.id == id)
+            .map(|o| o.name)
+    }
+
+    /// The colour of a select cell.
+    #[must_use]
+    pub fn option_color(&self, r: &RowDto, p: Option<&Property>) -> Option<String> {
+        let p = p?;
+        let id = match r.values.get(&p.id)? {
+            CellValue::Select { v: Some(id) } | CellValue::Status { v: Some(id) } => id,
+            _ => return None,
+        };
+        p.select_options()
+            .into_iter()
+            .find(|o| &o.id == id)
+            .and_then(|o| serde_json::to_value(o.color).ok())
+            .and_then(|v| v.as_str().map(str::to_owned))
+    }
+
+    /// The option id of `p` whose normalised name equals `name`.
+    #[must_use]
+    pub fn option_id(p: &Property, name: &str) -> Option<String> {
+        let want = norm(name);
+        p.select_options()
+            .into_iter()
+            .find(|o| norm(&o.name) == want)
+            .map(|o| o.id)
+    }
+}
+
+/// Normalises an option name (`Credit card` → `credit_card`).
+#[must_use]
+pub fn norm(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.trim().chars() {
+        if c.is_alphanumeric() {
+            out.extend(c.to_lowercase());
+        } else if !out.ends_with('_') && !out.is_empty() {
+            out.push('_');
+        }
+    }
+    out.trim_end_matches('_').to_owned()
+}
+
+/// Plain text of a cell.
+#[must_use]
+pub fn text(v: Option<&CellValue>) -> String {
+    match v {
+        Some(CellValue::Text { v }) => rich_plain(v),
+        Some(
+            CellValue::Url { v }
+            | CellValue::Email { v }
+            | CellValue::Phone { v }
+            | CellValue::Ticker { v },
+        ) => v.clone().unwrap_or_default(),
+        Some(CellValue::Computed { v }) => v.display.clone(),
+        _ => String::new(),
+    }
+}
+
+/// A decimal from a money / number / computed cell.
+#[must_use]
+pub fn amount(v: Option<&CellValue>) -> Option<Decimal> {
+    match v? {
+        CellValue::Money { v: Some(s), .. } => s.parse().ok(),
+        CellValue::Number { v: Some(x) }
+        | CellValue::Rating { v: Some(x) }
+        | CellValue::Progress { v: Some(x) } => {
+            x.is_finite().then(|| emp_finance::money::from_f64(*x))
+        }
+        CellValue::Computed { v } => v.value.as_str().and_then(|s| s.parse().ok()).or_else(|| {
+            v.value
+                .as_f64()
+                .filter(|x| x.is_finite())
+                .map(emp_finance::money::from_f64)
+        }),
+        CellValue::Text { v } => rich_plain(v).trim().parse().ok(),
+        _ => None,
+    }
+}
+
+/// The start date of a date cell.
+#[must_use]
+pub fn date(v: Option<&CellValue>) -> Option<NaiveDate> {
+    match v? {
+        CellValue::Date { v: Some(d) } => {
+            NaiveDate::parse_from_str(d.start.get(..10)?, "%Y-%m-%d").ok()
+        }
+        CellValue::Computed { v } => v
+            .value
+            .as_str()
+            .and_then(|s| NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok()),
+        _ => None,
+    }
+}
+
+/// The first related id.
+#[must_use]
+pub fn rel(v: Option<&CellValue>) -> Option<String> {
+    match v? {
+        CellValue::Relation { v } => v.first().cloned(),
+        _ => None,
+    }
+}
+
+/// A checkbox.
+#[must_use]
+pub fn check(v: Option<&CellValue>) -> bool {
+    matches!(v, Some(CellValue::Check { v: true }))
+}
+
+/// Finds the workspace and app id of an instance.
+pub fn find_instance(store: &Store, instance_id: &str) -> ApiResult<(String, String)> {
+    for ws in store.workspace_list()? {
+        if let Some(i) = store
+            .lifeapp_instances(&ws.id)?
+            .into_iter()
+            .find(|i| i.id == instance_id)
+        {
+            if i.detached {
+                return Err(ApiError::invalid("instanceId", "this app was detached"));
+            }
+            return Ok((ws.id, i.app_id));
+        }
+    }
+    Err(ApiError::not_found("life app instance"))
+}
+
+/// The live databases of an instance.
+pub fn instance_databases(
+    store: &Store,
+    workspace_id: &str,
+    instance_id: &str,
+) -> ApiResult<Vec<PageMeta>> {
+    Ok(store
+        .page_tree(workspace_id)?
+        .into_iter()
+        .filter(|m| {
+            m.kind == PageKind::Database
+                && m.deleted_at.is_none()
+                && m.app_instance_id.as_deref() == Some(instance_id)
+        })
+        .collect())
+}
+
+/// Classifies a database of a finance app by its roles, then by its title.
+#[must_use]
+pub fn classify(schema: &DbSchema, titles: &BTreeMap<String, String>) -> Option<String> {
+    let roles = &schema.database.roles;
+    let has = |r: &str| {
+        roles.contains_key(r)
+            || schema
+                .properties
+                .iter()
+                .any(|p| p.role.as_deref() == Some(r))
+    };
+    for (role, key) in [
+        ("txn.amount", "transactions"),
+        ("acct.type", "accounts"),
+        ("cat.group", "categories"),
+        ("rec.amount", "recurring"),
+        ("goal.target", "goals"),
+        ("inv.type", "investments"),
+        ("sec.ticker", "securities"),
+        ("alloc.target", "allocation"),
+    ] {
+        if has(role) {
+            return Some(key.to_owned());
+        }
+    }
+    let t = schema.database.title.trim().to_lowercase();
+    titles
+        .iter()
+        .find(|(_, title)| title.to_lowercase() == t)
+        .map(|(k, _)| k.clone())
+}
+
+/// Template key → title of the database templates of `app_id`'s manifest.
+pub fn manifest_titles(store: &Store, app_id: &str) -> BTreeMap<String, String> {
+    let Ok(m) = store.lifeapp_manifest(app_id) else {
+        return BTreeMap::new();
+    };
+    let Ok(v) = serde_json::to_value(&m) else {
+        return BTreeMap::new();
+    };
+    v.get("templates")
+        .and_then(Value::as_array)
+        .map(|ts| {
+            ts.iter()
+                .filter(|t| t.get("kind").and_then(Value::as_str) == Some("database"))
+                .filter_map(|t| {
+                    Some((
+                        t.get("key")?.as_str()?.to_owned(),
+                        t.pointer("/spec/title")?.as_str()?.to_owned(),
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Loads every database of an instance, keyed by template key.
+pub fn load_instance(
+    store: &Store,
+    instance_id: &str,
+) -> ApiResult<(String, BTreeMap<String, InstanceDb>)> {
+    let (ws, app_id) = find_instance(store, instance_id)?;
+    let titles = manifest_titles(store, &app_id);
+    let mut out = BTreeMap::new();
+    for meta in instance_databases(store, &ws, instance_id)? {
+        let schema = store.db_get_schema(&meta.id)?;
+        let Some(key) = classify(&schema, &titles) else {
+            continue;
+        };
+        if out.contains_key(&key) {
+            continue;
+        }
+        let rows = super::db::all_rows(store, &meta.id, None)?;
+        out.insert(key, InstanceDb { schema, rows });
+    }
+    Ok((ws, out))
+}
+
+// ───────────────────────────────────────────────────────────────────────────── ledger
+
+/// The finance data of a Money HQ instance as `emp-finance` inputs.
+#[derive(Clone, Debug, Default)]
+pub struct Ledger {
+    /// Base currency.
+    pub currency: String,
+    /// Accounts.
+    pub accounts: Vec<Account>,
+    /// Transactions.
+    pub txns: Vec<Txn>,
+    /// Categories.
+    pub categories: Vec<Category>,
+    /// Category colours.
+    pub colors: HashMap<String, String>,
+    /// Budget assignments.
+    pub assignments: Vec<Assignment>,
+    /// Payee names by row id.
+    pub payees: HashMap<String, String>,
+    /// The raw databases.
+    pub dbs: BTreeMap<String, InstanceDb>,
+}
+
+fn account_type(name: Option<&str>) -> AccountType {
+    serde_json::from_value(json!(norm(name.unwrap_or("checking"))))
+        .unwrap_or(AccountType::OtherAsset)
+}
+
+impl Ledger {
+    /// Loads the ledger of `instance_id`.
+    pub fn load(store: &Store, instance_id: &str) -> ApiResult<Self> {
+        let (_, dbs) = load_instance(store, instance_id)?;
+        let currency = store
+            .vault_settings()
+            .map(|v| v.base_currency)
+            .ok()
+            .filter(|c| Currency::new(c).is_ok())
+            .unwrap_or_else(|| "USD".into());
+        let mut l = Ledger {
+            currency: currency.clone(),
+            ..Ledger::default()
+        };
+        let base = Currency::new(&currency).map_err(fin_err)?;
+        fn get<'a>(r: &'a RowDto, c: &Option<String>) -> Option<&'a CellValue> {
+            c.as_ref().and_then(|c| r.values.get(c))
+        }
+        if let Some(d) = dbs.get("payees") {
+            for r in &d.rows {
+                l.payees.insert(r.id.clone(), d.title(r));
+            }
+        }
+        if let Some(d) = dbs.get("accounts") {
+            let ty = d.col("acct.type", &["Type"]);
+            let cur = d.col_id("acct.currency", &["Currency"]);
+            let opening = d.col_id("acct.opening", &["Opening balance"]);
+            let apr = d.col_id("acct.apr", &["APR"]);
+            let minp = d.col_id("acct.min_payment", &["Min payment"]);
+            let limit = d.col_id("acct.limit", &["Credit limit"]);
+            let onb = d.col_id("acct.on_budget", &["On budget"]);
+            let low = d.col_id("acct.low_threshold", &["Low-balance threshold"]);
+            let closed = d.col_id("", &["Closed"]);
+            for r in &d.rows {
+                let c = text(get(r, &cur));
+                l.accounts.push(Account {
+                    id: r.id.clone(),
+                    name: d.title(r),
+                    kind: account_type(d.option_name(r, ty).as_deref()),
+                    currency: Currency::new(c.trim()).unwrap_or_else(|_| base.clone()),
+                    opening_balance: amount(get(r, &opening)).unwrap_or_default(),
+                    opening_date: None,
+                    apr_pct: amount(get(r, &apr)),
+                    min_payment: amount(get(r, &minp)),
+                    credit_limit: amount(get(r, &limit)),
+                    on_budget: onb.as_ref().is_none_or(|_| check(get(r, &onb))),
+                    low_threshold: amount(get(r, &low)),
+                    closed: check(get(r, &closed)),
+                });
+            }
+        }
+        if let Some(d) = dbs.get("categories") {
+            let group = d.col("cat.group", &["Group"]);
+            let ess = d.col_id("cat.essential", &["Essential"]);
+            let roll = d.col_id("cat.rollover", &["Rollover"]);
+            let color = d.col("", &["Color"]);
+            for r in &d.rows {
+                let g = d.option_name(r, group).unwrap_or_default();
+                let gn = norm(&g);
+                if let Some(c) = d
+                    .option_color(r, color)
+                    .or_else(|| d.option_color(r, group))
+                {
+                    l.colors.insert(r.id.clone(), c);
+                }
+                l.categories.push(Category {
+                    id: r.id.clone(),
+                    name: d.title(r),
+                    is_income: gn.contains("income"),
+                    is_saving: gn.contains("saving"),
+                    group: g,
+                    essential: ess.as_ref().is_some_and(|c| check(r.values.get(c))),
+                    rollover: roll.as_ref().is_some_and(|c| check(r.values.get(c))),
+                    variable: true,
+                });
+            }
+        }
+        if let Some(d) = dbs.get("transactions") {
+            let c = |role: &str, n: &str| d.col_id(role, &[n]);
+            let (dt, am, acct, cat, payee, memo, tr, imp, sp) = (
+                c("txn.date", "Date"),
+                c("txn.amount", "Amount"),
+                c("txn.account", "Account"),
+                c("txn.category", "Category"),
+                c("txn.payee", "Payee"),
+                c("txn.memo", "Memo"),
+                c("txn.transfer", "Transfer"),
+                c("txn.import_id", "Import ID"),
+                c("txn.split_parent", "Split parent"),
+            );
+            let raw = d
+                .col_id("txn.raw", &[])
+                .unwrap_or_else(|| d.title_id().to_owned());
+            let mut parents = HashSet::new();
+            for r in &d.rows {
+                if let Some(p) = rel(get(r, &sp)) {
+                    parents.insert(p);
+                }
+            }
+            for r in &d.rows {
+                let (Some(date), Some(amount)) = (date(get(r, &dt)), amount(get(r, &am))) else {
+                    continue;
+                };
+                let raw_s = text(r.values.get(&raw));
+                let payee_s = rel(get(r, &payee))
+                    .and_then(|p| l.payees.get(&p).cloned())
+                    .unwrap_or_else(|| emp_finance::payee::normalize(&raw_s));
+                l.txns.push(Txn {
+                    id: r.id.clone(),
+                    account_id: rel(get(r, &acct)).unwrap_or_default(),
+                    date,
+                    amount,
+                    payee: payee_s,
+                    raw: raw_s,
+                    memo: text(get(r, &memo)),
+                    category_id: rel(get(r, &cat)),
+                    transfer_id: rel(get(r, &tr)),
+                    import_id: Some(text(get(r, &imp))).filter(|s| !s.is_empty()),
+                    split_parent: rel(get(r, &sp)),
+                    has_splits: parents.contains(&r.id),
+                });
+            }
+        }
+        if let Some(d) = dbs.get("budgets") {
+            let m = d.col_id("", &["Month"]);
+            let cat = d.col_id("", &["Category"]);
+            let asg = d.col_id("", &["Assigned"]);
+            for r in &d.rows {
+                let get = |c: &Option<String>| c.as_ref().and_then(|c| r.values.get(c));
+                let (Ok(month), Some(category_id)) =
+                    (text(get(&m)).trim().parse::<YearMonth>(), rel(get(&cat)))
+                else {
+                    continue;
+                };
+                l.assignments.push(Assignment {
+                    month,
+                    category_id,
+                    amount: amount(get(&asg)).unwrap_or_default(),
+                });
+            }
+        }
+        l.dbs = dbs;
+        Ok(l)
+    }
+
+    /// Current balance of an account (opening balance plus transactions up to `as_of`).
+    #[must_use]
+    pub fn balance(&self, a: &Account, as_of: NaiveDate) -> Decimal {
+        balance_as_of(a, &self.txns, as_of)
+    }
+
+    /// Net worth in the base currency (accounts in other currencies are skipped without rates).
+    #[must_use]
+    pub fn net_worth(&self, as_of: NaiveDate) -> Decimal {
+        self.accounts
+            .iter()
+            .filter(|a| !a.closed && a.currency.code() == self.currency)
+            .map(|a| self.balance(a, as_of))
+            .sum()
+    }
+
+    fn db(&self, key: &str) -> ApiResult<&InstanceDb> {
+        self.dbs.get(key).ok_or_else(|| {
+            ApiError::new(
+                ErrorCode::NotFound,
+                format!("This app has no {key} database"),
+            )
+        })
+    }
+}
+
+/// The stored budget configuration of an instance (default: zero-based, months start on the 1st).
+pub fn budget_config(store: &Store, instance_id: &str) -> BudgetConfig {
+    store
+        .kv_get_any(BUDGET_NS, instance_id)
+        .ok()
+        .flatten()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or(BudgetConfig {
+            method: BudgetMethod::ZeroBased,
+            month_start_day: 1,
+            income_buffer: false,
+            savings_target_pct: None,
+        })
+}
+
+fn budget_month(
+    store: &Store,
+    instance_id: &str,
+    l: &Ledger,
+    m: YearMonth,
+) -> ApiResult<BudgetMonth> {
+    let cfg = budget_config(store, instance_id);
+    let input = BudgetInput {
+        config: &cfg,
+        categories: &l.categories,
+        txns: &l.txns,
+        assignments: &l.assignments,
+    };
+    let first = l
+        .txns
+        .iter()
+        .map(|t| YearMonth::of(t.date))
+        .min()
+        .unwrap_or(m)
+        .min(m);
+    let from = if first.months_until(m) > 120 {
+        m.plus_months(-120)
+    } else {
+        first
+    };
+    budget::compute(&input, from, m)
+        .map_err(fin_err)?
+        .pop()
+        .ok_or_else(|| ApiError::internal("budget"))
+}
+
+// ───────────────────────────────────────────────────────────────────────────── overview and charts
+
+/// An `{ instanceId, month }` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MonthReq {
+    instance_id: String,
+    month: String,
+}
+
+/// One budget row of the overview.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverviewBudgetRow {
+    category_id: String,
+    name: String,
+    group: String,
+    color: String,
+    assigned: MoneyDto,
+    activity: MoneyDto,
+    available: MoneyDto,
+    pace: f64,
+}
+
+/// One upcoming bill.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpcomingRow {
+    row_id: String,
+    name: String,
+    due: String,
+    amount: MoneyDto,
+    autopay: bool,
+}
+
+/// `finance_overview` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Overview {
+    net_worth: MoneyDto,
+    net_worth_delta30d: MoneyDto,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to_be_assigned: Option<MoneyDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    left_to_spend: Option<MoneyDto>,
+    savings_rate3m: f64,
+    ef_months: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    debt_free_date: Option<String>,
+    budget: Vec<OverviewBudgetRow>,
+    upcoming: Vec<UpcomingRow>,
+    uncategorized: usize,
+    as_of: i64,
+}
+
+/// The next due date of a recurring row (its computed "Next date", else its schedule start).
+fn recurring_next(d: &InstanceDb, r: &RowDto) -> Option<NaiveDate> {
+    let next = d.col_id("", &["Next date"]);
+    if let Some(n) = date(next.as_ref().and_then(|c| r.values.get(c))) {
+        return Some(n);
+    }
+    let sched = d.col_id("rec.schedule", &["Schedule"])?;
+    match r.values.get(&sched)? {
+        CellValue::Recurrence { v: Some(rv) } => {
+            NaiveDate::parse_from_str(rv.dtstart.get(..10)?, "%Y-%m-%d").ok()
+        }
+        _ => None,
+    }
+}
+
+fn debt_free_date(l: &Ledger, today: NaiveDate) -> Option<String> {
+    let debts: Vec<_> = l
+        .accounts
+        .iter()
+        .filter(|a| a.kind.is_liability() && !a.closed)
+        .filter_map(|a| {
+            let owed = -l.balance(a, today);
+            (owed > Decimal::ZERO).then(|| emp_finance::debt::DebtInput {
+                name: a.id.clone(),
+                balance: owed.to_string(),
+                apr_pct: a.apr_pct.unwrap_or_default().to_string(),
+                min_payment: a
+                    .min_payment
+                    .unwrap_or_else(|| (owed / Decimal::from(50)).round_dp(2))
+                    .to_string(),
+            })
+        })
+        .collect();
+    if debts.is_empty() {
+        return None;
+    }
+    let req = emp_finance::debt::DebtPlanRequest {
+        debts,
+        strategy: emp_finance::debt::Strategy::Avalanche,
+        extra_monthly: "0".into(),
+        order: None,
+        start_month: YearMonth::of(today),
+    };
+    let plan = emp_finance::debt::plan(&req).ok()?;
+    plan.strategies.first()?.payoff_date.map(|m| m.to_string())
+}
+
+/// Computes `finance_overview`.
+pub fn overview(store: &Store, instance_id: &str, m: YearMonth) -> ApiResult<Overview> {
+    let l = Ledger::load(store, instance_id)?;
+    let today = local_today(store);
+    let cur = l.currency.clone();
+    let nw = l.net_worth(today);
+    let nw30 = l.net_worth(today - chrono::Duration::days(30));
+    let bm = budget_month(store, instance_id, &l, m)?;
+    let period = budget_period(m, budget_config(store, instance_id).month_start_day);
+    let pace = budget::pace(&period, today);
+    let names: HashMap<&str, &Category> = l.categories.iter().map(|c| (c.id.as_str(), c)).collect();
+    let budget_rows = bm
+        .categories
+        .iter()
+        .filter_map(|c| {
+            let cat = names.get(c.category_id.as_str())?;
+            (!cat.is_income).then(|| OverviewBudgetRow {
+                category_id: c.category_id.clone(),
+                name: cat.name.clone(),
+                group: cat.group.clone(),
+                color: l
+                    .colors
+                    .get(&c.category_id)
+                    .cloned()
+                    .unwrap_or_else(|| "gray".into()),
+                assigned: MoneyDto::of(c.assigned, &cur),
+                activity: MoneyDto::of(c.activity, &cur),
+                available: MoneyDto::of(c.available, &cur),
+                pace,
+            })
+        })
+        .collect();
+    let mut upcoming = Vec::new();
+    if let Some(d) = l.dbs.get("recurring") {
+        let am = d.col_id("rec.amount", &["Amount"]);
+        let ap = d.col_id("rec.autopay", &["Autopay"]);
+        for r in &d.rows {
+            let Some(due) = recurring_next(d, r) else {
+                continue;
+            };
+            if due < today || due > today + chrono::Duration::days(30) {
+                continue;
+            }
+            upcoming.push(UpcomingRow {
+                row_id: r.id.clone(),
+                name: d.title(r),
+                due: due.to_string(),
+                amount: MoneyDto::of(
+                    amount(am.as_ref().and_then(|c| r.values.get(c))).unwrap_or_default(),
+                    &cur,
+                ),
+                autopay: ap.as_ref().is_some_and(|c| check(r.values.get(c))),
+            });
+        }
+        upcoming.sort_by(|a, b| a.due.cmp(&b.due));
+    }
+    let ef_balance: Decimal = l
+        .accounts
+        .iter()
+        .filter(|a| a.kind == AccountType::Savings && !a.closed)
+        .map(|a| l.balance(a, today))
+        .sum();
+    let essential = emp_finance::metrics::essential_monthly_spend(&l.txns, &l.categories, today);
+    Ok(Overview {
+        net_worth: MoneyDto::of(nw, &cur),
+        net_worth_delta30d: MoneyDto::of(nw - nw30, &cur),
+        to_be_assigned: bm.to_be_assigned.map(|x| MoneyDto::of(x, &cur)),
+        left_to_spend: bm.left_to_spend.map(|x| MoneyDto::of(x, &cur)),
+        savings_rate3m: emp_finance::metrics::savings_rate_3m(&l.txns, &l.categories, today)
+            .unwrap_or(0.0),
+        ef_months: emp_finance::metrics::ef_months(ef_balance, essential).unwrap_or(0.0),
+        debt_free_date: debt_free_date(&l, today),
+        budget: budget_rows,
+        upcoming,
+        uncategorized: l
+            .txns
+            .iter()
+            .filter(|t| t.category_id.is_none() && !t.is_transfer() && t.counts())
+            .count(),
+        as_of: store.now(),
+    })
+}
+
+/// `finance_overview({ instanceId, month }) → { netWorth, netWorthDelta30d, toBeAssigned?, leftToSpend?, savingsRate3m,
+/// efMonths, debtFreeDate?, budget, upcoming, uncategorized, asOf }`.
+#[tauri::command]
+pub async fn finance_overview(app: AppHandle, req: MonthReq) -> ApiResult<Overview> {
+    validate::id("instanceId", &req.instance_id)?;
+    let m = month("month", &req.month)?;
+    blocking(move || overview(&app.state::<AppState>().session()?, &req.instance_id, m)).await
+}
+
+/// `finance_networth_series` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SeriesReq {
+    instance_id: String,
+    range: String,
+}
+
+/// `finance_networth_series({ instanceId, range: '6m'|'1y'|'3y'|'5y'|'all' }) → { t, assets, liabilities, net,
+/// currency }`: stored monthly snapshots, back-filled from transactions where missing.
+#[tauri::command]
+pub async fn finance_networth_series(
+    app: AppHandle,
+    req: SeriesReq,
+) -> ApiResult<emp_finance::networth::NetWorthSeries> {
+    validate::id("instanceId", &req.instance_id)?;
+    let months: Option<i32> = match req.range.as_str() {
+        "6m" => Some(6),
+        "1y" => Some(12),
+        "3y" => Some(36),
+        "5y" => Some(60),
+        "all" => None,
+        _ => return Err(ApiError::invalid("range", "must be 6m, 1y, 3y, 5y or all")),
+    };
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        let today = local_today(&store);
+        let base = Currency::new(&l.currency).map_err(fin_err)?;
+        let to = YearMonth::of(today);
+        let earliest = l
+            .txns
+            .iter()
+            .map(|t| YearMonth::of(t.date))
+            .min()
+            .unwrap_or(to);
+        let from = match months {
+            Some(n) => to.plus_months(-(n - 1)),
+            None => earliest,
+        };
+        let mut snaps: BTreeMap<YearMonth, emp_finance::networth::Snapshot> = BTreeMap::new();
+        for s in emp_finance::networth::backfill_from_transactions(
+            &l.accounts,
+            &l.txns,
+            from.max(earliest).min(to),
+            to,
+            today,
+            &base,
+            &emp_finance::fx::FxRates::new(),
+        ) {
+            snaps.insert(s.month, s);
+        }
+        if let Some(d) = l.dbs.get("networth") {
+            let a = d.col_id("", &["Assets"]);
+            let li = d.col_id("", &["Liabilities"]);
+            for r in &d.rows {
+                let Ok(m) = d.title(r).trim().parse::<YearMonth>() else {
+                    continue;
+                };
+                if m < from || m > to {
+                    continue;
+                }
+                let assets = amount(a.as_ref().and_then(|c| r.values.get(c))).unwrap_or_default();
+                let liabilities = amount(li.as_ref().and_then(|c| r.values.get(c)))
+                    .unwrap_or_default()
+                    .abs();
+                snaps.insert(
+                    m,
+                    emp_finance::networth::Snapshot {
+                        month: m,
+                        as_of: m.last_day(),
+                        assets,
+                        liabilities,
+                        net_worth: assets - liabilities,
+                        currency: base.clone(),
+                        missing_rates: Vec::new(),
+                        source: "snapshot".into(),
+                    },
+                );
+            }
+        }
+        let list: Vec<_> = snaps.into_values().collect();
+        Ok(emp_finance::networth::series(&list, &base))
+    })
+    .await
+}
+
+/// `finance_spending_breakdown` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BreakdownReq {
+    instance_id: String,
+    from: String,
+    to: String,
+    by: emp_finance::metrics::BreakdownBy,
+}
+
+/// One breakdown row.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BreakdownDto {
+    key: String,
+    label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
+    amount: String,
+    pct: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    delta_pct: Option<f64>,
+}
+
+/// `finance_spending_breakdown({ instanceId, from, to, by }) → { key, label, color?, amount, pct, deltaPct? }[]`.
+#[tauri::command]
+pub async fn finance_spending_breakdown(
+    app: AppHandle,
+    req: BreakdownReq,
+) -> ApiResult<Vec<BreakdownDto>> {
+    validate::id("instanceId", &req.instance_id)?;
+    let from = validate::ymd("from", &req.from)?;
+    let to = validate::ymd("to", &req.to)?;
+    if to < from || (to - from).num_days() > 3_700 {
+        return Err(ApiError::invalid("to", "invalid date range"));
+    }
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        let accounts: HashMap<&str, &str> = l
+            .accounts
+            .iter()
+            .map(|a| (a.id.as_str(), a.name.as_str()))
+            .collect();
+        Ok(
+            emp_finance::metrics::spending_breakdown(&l.txns, &l.categories, req.by, from, to)
+                .into_iter()
+                .map(|r| BreakdownDto {
+                    color: l.colors.get(&r.key).cloned(),
+                    label: match req.by {
+                        emp_finance::metrics::BreakdownBy::Account => accounts
+                            .get(r.key.as_str())
+                            .map_or(r.label.clone(), |n| (*n).to_owned()),
+                        _ => r.label,
+                    },
+                    key: r.key,
+                    amount: s(r.amount),
+                    pct: r.pct,
+                    delta_pct: r.delta_pct,
+                })
+                .collect(),
+        )
+    })
+    .await
+}
+
+/// `finance_cashflow_sankey({ instanceId, month }) → { nodes, links }` (income → groups → categories).
+#[tauri::command]
+pub async fn finance_cashflow_sankey(
+    app: AppHandle,
+    req: MonthReq,
+) -> ApiResult<emp_finance::metrics::Sankey> {
+    validate::id("instanceId", &req.instance_id)?;
+    let m = month("month", &req.month)?;
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        let p = budget_period(m, budget_config(&store, &req.instance_id).month_start_day);
+        Ok(emp_finance::metrics::cashflow_sankey(
+            &l.txns,
+            &l.categories,
+            p.start,
+            p.end,
+        ))
+    })
+    .await
+}
+
+// ───────────────────────────────────────────────────────────────────────────── budget
+
+/// One `finance_budget_month` category.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetCategoryDto {
+    category_id: String,
+    assigned: String,
+    activity: String,
+    available: String,
+    rollover: String,
+}
+
+/// `finance_budget_month` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetMonthDto {
+    categories: Vec<BudgetCategoryDto>,
+    to_be_assigned: String,
+    currency: String,
+}
+
+fn budget_dto(bm: &BudgetMonth, currency: &str) -> BudgetMonthDto {
+    BudgetMonthDto {
+        categories: bm
+            .categories
+            .iter()
+            .map(|c| BudgetCategoryDto {
+                category_id: c.category_id.clone(),
+                assigned: s(c.assigned),
+                activity: s(c.activity),
+                available: s(c.available),
+                rollover: s(c.rollover),
+            })
+            .collect(),
+        to_be_assigned: s(bm.to_be_assigned.unwrap_or_default()),
+        currency: currency.to_owned(),
+    }
+}
+
+/// `finance_budget_month({ instanceId, month }) → { categories, toBeAssigned, currency }`.
+#[tauri::command]
+pub async fn finance_budget_month(app: AppHandle, req: MonthReq) -> ApiResult<BudgetMonthDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    let m = month("month", &req.month)?;
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        Ok(budget_dto(
+            &budget_month(&store, &req.instance_id, &l, m)?,
+            &l.currency,
+        ))
+    })
+    .await
+}
+
+/// `finance_budget_assign` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssignReq {
+    instance_id: String,
+    month: String,
+    category_id: String,
+    amount: String,
+}
+
+/// `finance_budget_assign` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssignDto {
+    available: String,
+    to_be_assigned: String,
+}
+
+/// `finance_budget_assign({ instanceId, month, categoryId, amount }) → { available, toBeAssigned }`: writes the
+/// assignment row of the *Budgets* database (creating it when missing).
+#[tauri::command]
+pub async fn finance_budget_assign(app: AppHandle, req: AssignReq) -> ApiResult<AssignDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::id("categoryId", &req.category_id)?;
+    let m = month("month", &req.month)?;
+    let value = dec("amount", &req.amount)?;
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        if !l.categories.iter().any(|c| c.id == req.category_id) {
+            return Err(ApiError::not_found("category"));
+        }
+        let d = l.db("budgets")?;
+        let (Some(mcol), Some(ccol), Some(acol)) = (
+            d.col_id("", &["Month"]),
+            d.col_id("", &["Category"]),
+            d.col_id("", &["Assigned"]),
+        ) else {
+            return Err(ApiError::invalid(
+                "instanceId",
+                "the Budgets database is missing columns",
+            ));
+        };
+        let money = CellValue::Money {
+            v: Some(value.normalize().to_string()),
+            cur: l.currency.clone(),
+        };
+        let existing = d.rows.iter().find(|r| {
+            text(r.values.get(&mcol)).trim() == m.to_string()
+                && rel(r.values.get(&ccol)).as_deref() == Some(&req.category_id)
+        });
+        match existing {
+            Some(r) => {
+                store.db_rows_update(vec![RowUpdate::one(&r.id, &acol, Some(money))])?;
+            }
+            None => {
+                let name = l
+                    .categories
+                    .iter()
+                    .find(|c| c.id == req.category_id)
+                    .map_or_else(String::new, |c| c.name.clone());
+                let mut values = BTreeMap::new();
+                values.insert(
+                    d.title_id().to_owned(),
+                    CellValue::text(&format!("{name} · {m}")),
+                );
+                values.insert(mcol.clone(), CellValue::text(&m.to_string()));
+                values.insert(
+                    ccol.clone(),
+                    CellValue::Relation {
+                        v: vec![req.category_id.clone()],
+                    },
+                );
+                values.insert(acol.clone(), money);
+                store.db_rows_insert_bulk(d.id(), vec![values], None)?;
+            }
+        }
+        super::db::emit_db_changed(&state, &store, d.id(), None);
+        let l = Ledger::load(&store, &req.instance_id)?;
+        let bm = budget_month(&store, &req.instance_id, &l, m)?;
+        Ok(AssignDto {
+            available: s(bm
+                .category(&req.category_id)
+                .map(|c| c.available)
+                .unwrap_or_default()),
+            to_be_assigned: s(bm.to_be_assigned.unwrap_or_default()),
+        })
+    })
+    .await
+}
+
+// ───────────────────────────────────────────────────────────────────────────── statement import
+
+struct StagedImport {
+    instance_id: String,
+    name: String,
+    bytes: Arc<Vec<u8>>,
+    format: ImportFormat,
+    fingerprint: Option<String>,
+    expires: Instant,
+}
+
+static IMPORTS: LazyLock<Mutex<HashMap<String, StagedImport>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// A staged import: instance, file name, bytes, format and CSV header fingerprint.
+type Staged = (String, String, Arc<Vec<u8>>, ImportFormat, Option<String>);
+
+fn staged_import(id: &str) -> ApiResult<Staged> {
+    let now = Instant::now();
+    let mut m = IMPORTS.lock();
+    m.retain(|_, s| s.expires > now);
+    let s = m.get(id).ok_or_else(|| {
+        ApiError::invalid("importId", "this import expired; choose the file again")
+    })?;
+    Ok((
+        s.instance_id.clone(),
+        s.name.clone(),
+        Arc::clone(&s.bytes),
+        s.format,
+        s.fingerprint.clone(),
+    ))
+}
+
+/// A saved CSV import profile.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportProfile {
+    /// Id.
+    pub id: String,
+    /// Name.
+    pub name: String,
+    /// Mapping.
+    pub mapping: ImportMapping,
+}
+
+/// `finance_import_start` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportStartReq {
+    instance_id: String,
+    grant_id: String,
+}
+
+/// `finance_import_start` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportStartDto {
+    import_id: String,
+    format: ImportFormat,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    columns: Option<Vec<String>>,
+    sample: Vec<Vec<String>>,
+    mapping_guess: ImportMapping,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    profile_match: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_guess: Option<String>,
+    row_count: usize,
+    encoding: String,
+    warnings: Vec<String>,
+}
+
+/// `finance_import_start({ instanceId, grantId }) → { importId, format, columns?, sample, mappingGuess, profileMatch?,
+/// accountGuess?, rowCount, encoding }` (CSV, OFX, QFX, QIF; saved CSV profiles apply automatically).
+#[tauri::command]
+pub async fn finance_import_start(
+    app: AppHandle,
+    req: ImportStartReq,
+) -> ApiResult<ImportStartDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::grant_id("grantId", &req.grant_id)?;
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        let file = take_file(
+            &state,
+            &req.grant_id,
+            &[GrantPurpose::Import],
+            caps::STATEMENT,
+        )?;
+        let opts = ImportOptions {
+            confirmed_large: true,
+            ..ImportOptions::default()
+        };
+        let st = crate::jobs::catch_panics(|| {
+            emp_finance::import::start(&file.bytes, Some(&file.name), &opts)
+        })
+        .map_err(|_| ApiError::invalid("grantId", "This statement could not be read"))?
+        .map_err(fin_err)?;
+        let mut mapping = st.mapping_guess.clone();
+        let mut profile_match = None;
+        if let Some(fp) = &st.header_fingerprint {
+            if let Some(p) = store
+                .kv_get_any(PROFILES_NS, fp)?
+                .and_then(|v| serde_json::from_value::<ImportProfile>(v).ok())
+            {
+                mapping = p.mapping.clone();
+                profile_match = Some(json!({ "id": p.id, "name": p.name }));
+            }
+        }
+        let last4 = st
+            .account
+            .as_ref()
+            .and_then(emp_finance::import::StatementAccount::last4);
+        let open: Vec<&Account> = l.accounts.iter().filter(|a| !a.closed).collect();
+        let account_guess = last4
+            .and_then(|l4| {
+                open.iter()
+                    .find(|a| a.name.contains(&l4))
+                    .map(|a| a.id.clone())
+            })
+            .or_else(|| (open.len() == 1).then(|| open[0].id.clone()));
+        let import_id = emp_store::model::ids::new_id();
+        {
+            let now = Instant::now();
+            let mut m = IMPORTS.lock();
+            m.retain(|_, s| s.expires > now);
+            while m.len() >= MAX_IMPORTS {
+                let Some(k) = m
+                    .iter()
+                    .min_by_key(|(_, s)| s.expires)
+                    .map(|(k, _)| k.clone())
+                else {
+                    break;
+                };
+                m.remove(&k);
+            }
+            m.insert(
+                import_id.clone(),
+                StagedImport {
+                    instance_id: req.instance_id.clone(),
+                    name: file.name.clone(),
+                    bytes: Arc::clone(&file.bytes),
+                    format: st.format,
+                    fingerprint: st.header_fingerprint.clone(),
+                    expires: now + IMPORT_TTL,
+                },
+            );
+        }
+        // The same grant may be used by a generic importer afterwards (e.g. "import as a table instead").
+        stage(&req.grant_id, &file);
+        Ok(ImportStartDto {
+            import_id,
+            format: st.format,
+            columns: st.columns,
+            sample: st.sample,
+            mapping_guess: mapping,
+            profile_match,
+            account_guess,
+            row_count: st.row_count,
+            encoding: st.encoding,
+            warnings: st.warnings,
+        })
+    })
+    .await
+}
+
+/// One preview row (IPC shape).
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewRowDto {
+    idx: usize,
+    date: String,
+    payee: String,
+    raw_payee: String,
+    amount: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    category_id: Option<String>,
+    confidence: emp_finance::import::preview::Confidence,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rule_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duplicate_of: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    possible_duplicate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transfer_pair: Option<String>,
+    #[serde(skip)]
+    import_key: String,
+    #[serde(skip)]
+    memo: String,
+}
+
+/// `finance_import_preview` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewDto {
+    rows: Vec<PreviewRowDto>,
+    new_count: usize,
+    duplicates: usize,
+    categorized: usize,
+}
+
+fn rules_of(store: &Store, instance_id: &str) -> ApiResult<Vec<Rule>> {
+    Ok(store
+        .kv_get_any(RULES_NS, instance_id)?
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default())
+}
+
+fn aliases_of(l: &Ledger) -> emp_finance::payee::PayeeAliases {
+    let mut a = emp_finance::payee::PayeeAliases::new();
+    if let Some(d) = l.dbs.get("payees") {
+        let al = d.col_id("", &["Aliases"]);
+        let dc = d.col_id("", &["Default category"]);
+        for r in &d.rows {
+            let p = emp_finance::payee::PayeeRef {
+                payee_id: r.id.clone(),
+                name: d.title(r),
+                default_category_id: rel(dc.as_ref().and_then(|c| r.values.get(c))),
+            };
+            a.insert(&p.name, p.clone());
+            for alias in text(al.as_ref().and_then(|c| r.values.get(c))).split([',', ';', '\n']) {
+                let alias = alias.trim();
+                if !alias.is_empty() {
+                    a.insert(alias, p.clone());
+                }
+            }
+        }
+    }
+    a
+}
+
+fn run_preview(
+    store: &Store,
+    import_id: &str,
+    mapping: &ImportMapping,
+    account_id: &str,
+) -> ApiResult<(String, PreviewDto, Ledger, Option<String>)> {
+    let (instance_id, name, bytes, format, fingerprint) = staged_import(import_id)?;
+    let l = Ledger::load(store, &instance_id)?;
+    if !l.accounts.iter().any(|a| a.id == account_id) {
+        return Err(ApiError::invalid("accountId", "unknown account"));
+    }
+    let opts = ImportOptions {
+        confirmed_large: true,
+        ..ImportOptions::default()
+    };
+    let parsed = crate::jobs::catch_panics(|| {
+        emp_finance::import::parse(&bytes, Some(&name), Some(mapping), &opts)
+    })
+    .map_err(|_| ApiError::invalid("mapping", "This statement could not be read"))?
+    .map_err(fin_err)?;
+    let rows: Vec<StatementTxn> = parsed.transactions().cloned().collect();
+    let existing: Vec<emp_finance::dedupe::Existing> = l
+        .txns
+        .iter()
+        .filter(|t| t.account_id == account_id)
+        .map(|t| emp_finance::dedupe::Existing {
+            id: t.id.clone(),
+            import_id: t.import_id.clone(),
+            date: t.date,
+            amount: t.amount,
+            payee: t.payee.clone(),
+        })
+        .collect();
+    let others: Vec<emp_finance::transfers::TransferCandidate> = l
+        .txns
+        .iter()
+        .filter(|t| t.account_id != account_id)
+        .map(|t| emp_finance::transfers::TransferCandidate {
+            id: t.id.clone(),
+            account_id: t.account_id.clone(),
+            date: t.date,
+            amount: t.amount,
+            linked: t.transfer_id.is_some(),
+        })
+        .collect();
+    let owned: HashSet<String> = l.accounts.iter().map(|a| a.id.clone()).collect();
+    let rules = RuleSet::compile(&rules_of(store, &instance_id)?).map_err(fin_err)?;
+    let mut learner = CategoryLearner::new();
+    for t in &l.txns {
+        if let Some(c) = &t.category_id {
+            learner.observe(&t.payee, c);
+        }
+    }
+    let aliases = aliases_of(&l);
+    let cx = emp_finance::import::preview::PreviewContext {
+        account_id,
+        format,
+        existing: &existing,
+        aliases: &aliases,
+        rules: &rules,
+        learner: &learner,
+        other_accounts: &others,
+        owned_accounts: &owned,
+    };
+    let p = emp_finance::import::preview::preview(&rows, &cx);
+    let memos: HashMap<usize, String> = rows
+        .iter()
+        .map(|r| (r.idx, r.memo.clone().unwrap_or_default()))
+        .collect();
+    let dto = PreviewDto {
+        rows: p
+            .rows
+            .into_iter()
+            .map(|r| PreviewRowDto {
+                memo: memos.get(&r.idx).cloned().unwrap_or_default(),
+                idx: r.idx,
+                date: r.date.to_string(),
+                payee: r.payee,
+                raw_payee: r.raw_payee,
+                amount: r.amount.normalize().to_string(),
+                category_id: r.category_id,
+                confidence: r.confidence,
+                rule_id: r.rule_id,
+                duplicate_of: r.duplicate_of,
+                possible_duplicate: r.possible_duplicate,
+                transfer_pair: r.transfer_pair,
+                import_key: r.import_id,
+            })
+            .collect(),
+        new_count: p.new_count,
+        duplicates: p.duplicates,
+        categorized: p.categorized,
+    };
+    Ok((instance_id, dto, l, fingerprint))
+}
+
+/// `finance_import_preview` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportPreviewReq {
+    import_id: String,
+    mapping: ImportMapping,
+    account_id: String,
+}
+
+fn check_mapping(m: &ImportMapping) -> ApiResult<()> {
+    for c in [
+        m.date, m.amount, m.debit, m.credit, m.payee, m.memo, m.balance,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if c >= 512 {
+            return Err(ApiError::invalid("mapping", "column out of range"));
+        }
+    }
+    Ok(())
+}
+
+/// `finance_import_preview({ importId, mapping, accountId }) → { rows, newCount, duplicates, categorized }` (dedupe,
+/// transfer pairing, rules and learned categories; nothing is written).
+#[tauri::command]
+pub async fn finance_import_preview(
+    app: AppHandle,
+    req: ImportPreviewReq,
+) -> ApiResult<PreviewDto> {
+    validate::id("importId", &req.import_id)?;
+    validate::id("accountId", &req.account_id)?;
+    check_mapping(&req.mapping)?;
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        Ok(run_preview(&store, &req.import_id, &req.mapping, &req.account_id)?.1)
+    })
+    .await
+}
+
+/// A per-row override.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RowOverride {
+    #[serde(default)]
+    category_id: Option<String>,
+    #[serde(default)]
+    payee: Option<String>,
+}
+
+/// `finance_import_commit` request.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportCommitReq {
+    import_id: String,
+    mapping: ImportMapping,
+    account_id: String,
+    #[serde(default)]
+    skip: Vec<usize>,
+    #[serde(default)]
+    overrides: BTreeMap<String, RowOverride>,
+    #[serde(default)]
+    save_profile_as: Option<String>,
+    on_event: tauri::ipc::JavaScriptChannelId,
+}
+
+/// `finance_import_commit({ importId, mapping, accountId, skip, overrides, saveProfileAs?, onEvent })` (job)
+/// ⇒ `{ inserted, skipped, transfersLinked, importId }`. Exact duplicates are always skipped.
+#[tauri::command]
+pub async fn finance_import_commit(
+    webview: Webview,
+    state: State<'_, AppState>,
+    req: ImportCommitReq,
+) -> ApiResult<JobRef> {
+    validate::id("importId", &req.import_id)?;
+    validate::id("accountId", &req.account_id)?;
+    check_mapping(&req.mapping)?;
+    validate::list_len("skip", req.skip.len(), 5_000_000)?;
+    validate::list_len("overrides", req.overrides.len(), 100_000)?;
+    let mut overrides: HashMap<usize, RowOverride> = HashMap::new();
+    for (k, v) in req.overrides {
+        let idx: usize = k
+            .parse()
+            .map_err(|_| ApiError::invalid("overrides", "keys are row indexes"))?;
+        validate::opt_id("overrides.categoryId", v.category_id.as_deref())?;
+        if let Some(p) = &v.payee {
+            validate::title("overrides.payee", p)?;
+        }
+        overrides.insert(idx, v);
+    }
+    if let Some(n) = &req.save_profile_as {
+        validate::non_empty("saveProfileAs", n, 128)?;
+    }
+    let store = state.session()?;
+    let sink = job_sink(&webview, &req.on_event);
+    let app = webview.app_handle().clone();
+    let cell = super::import::import_cell();
+    let out = Arc::clone(&cell);
+    let job = state.jobs.spawn("finance_import_commit", true, store.now(), sink, move |ctx| {
+        let state = app.state::<AppState>();
+        ctx.report(0, 3, Some("Checking"));
+        let (_, preview, l, fingerprint) = run_preview(&store, &req.import_id, &req.mapping, &req.account_id)?;
+        ctx.check_cancelled()?;
+        let d = l.db("transactions")?;
+        let c = |role: &str, n: &str| d.col_id(role, &[n]);
+        let (dt, am, acct, cat, memo, imp, tr) = (
+            c("txn.date", "Date"),
+            c("txn.amount", "Amount"),
+            c("txn.account", "Account"),
+            c("txn.category", "Category"),
+            c("txn.memo", "Memo"),
+            c("txn.import_id", "Import ID"),
+            c("txn.transfer", "Transfer"),
+        );
+        let raw = d.col_id("txn.raw", &[]).unwrap_or_else(|| d.title_id().to_owned());
+        let cur = l
+            .accounts
+            .iter()
+            .find(|a| a.id == req.account_id)
+            .map_or_else(|| l.currency.clone(), |a| a.currency.code().to_owned());
+        let skip: HashSet<usize> = req.skip.into_iter().collect();
+        let mut rows = Vec::new();
+        let mut pairs = Vec::new();
+        let mut skipped = 0usize;
+        for r in &preview.rows {
+            if skip.contains(&r.idx) || r.duplicate_of.is_some() {
+                skipped += 1;
+                continue;
+            }
+            let o = overrides.get(&r.idx);
+            let mut v = BTreeMap::new();
+            let title = o.and_then(|o| o.payee.clone()).unwrap_or_else(|| r.raw_payee.clone());
+            v.insert(raw.clone(), CellValue::text(&title));
+            if let Some(p) = &dt {
+                v.insert(
+                    p.clone(),
+                    CellValue::Date {
+                        v: Some(emp_store::dbmodel::DateValue { start: r.date.clone(), end: None, time: false, tz: None }),
+                    },
+                );
+            }
+            if let Some(p) = &am {
+                v.insert(p.clone(), CellValue::Money { v: Some(r.amount.clone()), cur: cur.clone() });
+            }
+            if let Some(p) = &acct {
+                v.insert(p.clone(), CellValue::Relation { v: vec![req.account_id.clone()] });
+            }
+            let category = o.and_then(|o| o.category_id.clone()).or_else(|| r.category_id.clone());
+            if let (Some(p), Some(cid)) = (&cat, category) {
+                v.insert(p.clone(), CellValue::Relation { v: vec![cid] });
+            }
+            if let (Some(p), false) = (&memo, r.memo.is_empty()) {
+                v.insert(p.clone(), CellValue::text(&r.memo));
+            }
+            if let Some(p) = &imp {
+                v.insert(p.clone(), CellValue::text(&r.import_key));
+            }
+            pairs.push(r.transfer_pair.clone());
+            rows.push(v);
+        }
+        ctx.report(1, 3, Some("Saving"));
+        let mut ids = Vec::new();
+        for chunk in rows.chunks(1_000) {
+            ctx.check_cancelled()?;
+            ids.extend(store.db_rows_insert_bulk(d.id(), chunk.to_vec(), None)?);
+        }
+        ctx.report(2, 3, Some("Linking transfers"));
+        let mut linked = 0usize;
+        if let Some(tp) = &tr {
+            let mut updates = Vec::new();
+            for (id, pair) in ids.iter().zip(&pairs) {
+                if let Some(other) = pair {
+                    updates.push(RowUpdate::one(id, tp, Some(CellValue::Relation { v: vec![other.clone()] })));
+                    updates.push(RowUpdate::one(other, tp, Some(CellValue::Relation { v: vec![id.clone()] })));
+                    linked += 1;
+                }
+            }
+            for chunk in updates.chunks(1_000) {
+                store.db_rows_update(chunk.to_vec())?;
+            }
+        }
+        if let (Some(name), Some(fp)) = (&req.save_profile_as, &fingerprint) {
+            let profile = ImportProfile {
+                id: emp_store::model::ids::new_id(),
+                name: name.trim().to_owned(),
+                mapping: req.mapping.clone(),
+            };
+            store.kv_set_any(PROFILES_NS, fp, json!(profile), None)?;
+        }
+        let import_id = emp_store::model::ids::new_id();
+        super::ics::save_row_undo(&store, &import_id, &ids)?;
+        *out.lock() = Some(import_id.clone());
+        super::db::emit_db_changed(&state, &store, d.id(), None);
+        ctx.report(3, 3, Some("Done"));
+        Ok(json!({ "inserted": ids.len(), "skipped": skipped, "transfersLinked": linked, "importId": import_id }))
+    });
+    super::import::remember_job(&job, cell);
+    Ok(job)
+}
+
+// ───────────────────────────────────────────────────────────────────────────── rules
+
+/// An `{ instanceId }` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InstanceReq {
+    instance_id: String,
+}
+
+/// `finance_rules_list({ instanceId }) → Rule[]` (priority order).
+#[tauri::command]
+pub async fn finance_rules_list(app: AppHandle, req: InstanceReq) -> ApiResult<Vec<Rule>> {
+    validate::id("instanceId", &req.instance_id)?;
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let mut rules = rules_of(&store, &req.instance_id)?;
+        rules.sort_by_key(|r| r.priority);
+        Ok(rules)
+    })
+    .await
+}
+
+/// A rule as sent by `finance_rule_upsert` (`id` optional, no `timesApplied`).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuleInput {
+    #[serde(default)]
+    id: Option<String>,
+    name: String,
+    priority: i64,
+    when: emp_finance::rules::When,
+    then: emp_finance::rules::Then,
+    #[serde(rename = "continue")]
+    continue_: bool,
+}
+
+/// `finance_rule_upsert` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuleUpsertReq {
+    instance_id: String,
+    rule: RuleInput,
+}
+
+/// `finance_rule_upsert({ instanceId, rule }) → Rule` (regexes are size-limited; invalid rules are rejected).
+#[tauri::command]
+pub async fn finance_rule_upsert(app: AppHandle, req: RuleUpsertReq) -> ApiResult<Rule> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::opt_id("rule.id", req.rule.id.as_deref())?;
+    validate::title("rule.name", &req.rule.name)?;
+    validate::list_len("rule.when.all", req.rule.when.all.len(), 32)?;
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let mut rules = rules_of(&store, &req.instance_id)?;
+        let id = req
+            .rule
+            .id
+            .clone()
+            .unwrap_or_else(emp_store::model::ids::new_id);
+        let times = rules
+            .iter()
+            .find(|r| r.id == id)
+            .map_or(0, |r| r.times_applied);
+        let rule = Rule {
+            id: id.clone(),
+            name: req.rule.name,
+            priority: req.rule.priority,
+            when: req.rule.when,
+            then: req.rule.then,
+            continue_: req.rule.continue_,
+            times_applied: times,
+        };
+        emp_finance::rules::validate_rule(&rule).map_err(fin_err)?;
+        match rules.iter_mut().find(|r| r.id == id) {
+            Some(r) => *r = rule.clone(),
+            None => {
+                if rules.len() >= MAX_RULES {
+                    return Err(ApiError::invalid("rule", "too many rules"));
+                }
+                rules.push(rule.clone());
+            }
+        }
+        store.kv_set_any(RULES_NS, &req.instance_id, json!(rules), None)?;
+        Ok(rule)
+    })
+    .await
+}
+
+/// `finance_rule_delete` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuleDeleteReq {
+    instance_id: String,
+    id: String,
+}
+
+/// `finance_rule_delete({ instanceId, id }) → void`.
+#[tauri::command]
+pub async fn finance_rule_delete(app: AppHandle, req: RuleDeleteReq) -> ApiResult<()> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::id("id", &req.id)?;
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let mut rules = rules_of(&store, &req.instance_id)?;
+        let n = rules.len();
+        rules.retain(|r| r.id != req.id);
+        if rules.len() == n {
+            return Err(ApiError::not_found("rule"));
+        }
+        store.kv_set_any(RULES_NS, &req.instance_id, json!(rules), None)?;
+        Ok(())
+    })
+    .await
+}
+
+/// `finance_rules_apply` request.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RulesApplyReq {
+    instance_id: String,
+    scope: RulesScope,
+    dry_run: bool,
+    on_event: tauri::ipc::JavaScriptChannelId,
+}
+
+/// Which transactions `finance_rules_apply` touches.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RulesScope {
+    /// Only uncategorised transactions.
+    Uncategorized,
+    /// Every transaction.
+    All,
+}
+
+/// `finance_rules_apply({ instanceId, scope, dryRun, onEvent })` (job) ⇒ `{ changed, sample }`.
+#[tauri::command]
+pub async fn finance_rules_apply(
+    webview: Webview,
+    state: State<'_, AppState>,
+    req: RulesApplyReq,
+) -> ApiResult<JobRef> {
+    validate::id("instanceId", &req.instance_id)?;
+    let store = state.session()?;
+    let sink = job_sink(&webview, &req.on_event);
+    let app = webview.app_handle().clone();
+    Ok(state
+        .jobs
+        .spawn("finance_rules_apply", true, store.now(), sink, move |ctx| {
+            let state = app.state::<AppState>();
+            let l = Ledger::load(&store, &req.instance_id)?;
+            let mut rules = rules_of(&store, &req.instance_id)?;
+            let set = RuleSet::compile(&rules).map_err(fin_err)?;
+            let d = l.db("transactions")?;
+            let cat = d.col_id("txn.category", &["Category"]).ok_or_else(|| {
+                ApiError::invalid("instanceId", "transactions have no category column")
+            })?;
+            let names: HashMap<&str, &str> = l
+                .categories
+                .iter()
+                .map(|c| (c.id.as_str(), c.name.as_str()))
+                .collect();
+            let mut updates = Vec::new();
+            let mut sample = Vec::new();
+            let mut applied: HashMap<String, u64> = HashMap::new();
+            let total = l.txns.len() as u64;
+            for (i, t) in l.txns.iter().enumerate() {
+                if i % 500 == 0 {
+                    ctx.check_cancelled()?;
+                    ctx.report(i as u64, total, Some("Matching"));
+                }
+                if t.is_transfer()
+                    || (req.scope == RulesScope::Uncategorized && t.category_id.is_some())
+                {
+                    continue;
+                }
+                let o = set.apply(&RuleTxn {
+                    payee: &t.payee,
+                    raw: &t.raw,
+                    memo: &t.memo,
+                    amount: t.amount,
+                    account_id: &t.account_id,
+                    date: t.date,
+                });
+                let Some(to) = o.category_id.clone() else {
+                    continue;
+                };
+                if t.category_id.as_deref() == Some(to.as_str()) {
+                    continue;
+                }
+                for r in &o.matched {
+                    *applied.entry(r.clone()).or_default() += 1;
+                }
+                if sample.len() < 20 {
+                    sample.push(json!({
+                        "rowId": t.id,
+                        "from": t.category_id.as_deref().and_then(|c| names.get(c)).copied(),
+                        "to": names.get(to.as_str()).copied().unwrap_or(to.as_str()),
+                    }));
+                }
+                updates.push(RowUpdate::one(
+                    &t.id,
+                    &cat,
+                    Some(CellValue::Relation { v: vec![to] }),
+                ));
+            }
+            let changed = updates.len();
+            if !req.dry_run && changed > 0 {
+                for chunk in updates.chunks(1_000) {
+                    ctx.check_cancelled()?;
+                    store.db_rows_update(chunk.to_vec())?;
+                }
+                for r in &mut rules {
+                    r.times_applied += applied.get(&r.id).copied().unwrap_or(0);
+                }
+                store.kv_set_any(RULES_NS, &req.instance_id, json!(rules), None)?;
+                super::db::emit_db_changed(&state, &store, d.id(), None);
+            }
+            ctx.report(total, total, Some("Done"));
+            Ok(json!({ "changed": changed, "sample": sample }))
+        }))
+}
+
+// ───────────────────────────────────────────────────────────────────────────── recurring
+
+/// One detected recurring series (IPC shape).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecurringDto {
+    payee: String,
+    cadence: emp_finance::recurring::Cadence,
+    amount: MoneyDto,
+    next_due: String,
+    confidence: f64,
+    row_ids: Vec<String>,
+    kind: emp_finance::recurring::RecurringKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    price_change: Option<Value>,
+}
+
+/// `finance_recurring_detect({ instanceId }) → { payee, cadence, amount, nextDue, confidence, rowIds, priceChange? }[]`
+/// (series already in *Recurring* are omitted).
+#[tauri::command]
+pub async fn finance_recurring_detect(
+    app: AppHandle,
+    req: InstanceReq,
+) -> ApiResult<Vec<RecurringDto>> {
+    validate::id("instanceId", &req.instance_id)?;
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        let today = local_today(&store);
+        let known: HashSet<String> = l
+            .dbs
+            .get("recurring")
+            .map(|d| {
+                d.rows
+                    .iter()
+                    .map(|r| emp_finance::payee::payee_key(&d.title(r)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let txns: Vec<emp_finance::recurring::RecurringTxn> = l
+            .txns
+            .iter()
+            .filter(|t| !t.is_transfer() && t.counts())
+            .map(|t| emp_finance::recurring::RecurringTxn {
+                id: t.id.clone(),
+                date: t.date,
+                amount: t.amount,
+                payee: if t.payee.is_empty() {
+                    t.raw.clone()
+                } else {
+                    t.payee.clone()
+                },
+            })
+            .collect();
+        let cal = HolidayCalendar::us_federal(today.year() - 1..=today.year() + 1);
+        Ok(emp_finance::recurring::detect(&txns, &cal, Some(today))
+            .into_iter()
+            .filter(|c| !known.contains(&emp_finance::payee::payee_key(&c.payee)))
+            .map(|c| RecurringDto {
+                amount: MoneyDto::of(c.amount, &l.currency),
+                next_due: c.next_due.to_string(),
+                confidence: c.confidence,
+                cadence: c.cadence,
+                kind: c.kind,
+                price_change: c
+                    .price_change
+                    .map(|p| json!({ "from": s(p.from), "to": s(p.to) })),
+                payee: c.payee,
+                row_ids: c.row_ids,
+            })
+            .collect())
+    })
+    .await
+}
+
+/// One accepted recurring item.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AcceptItem {
+    payee: String,
+    cadence: String,
+    amount: AcceptMoney,
+    next_due: String,
+    kind: String,
+}
+
+/// IPC `Money` on input.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AcceptMoney {
+    amount: String,
+    currency: String,
+}
+
+/// `finance_recurring_accept` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AcceptReq {
+    instance_id: String,
+    items: Vec<AcceptItem>,
+}
+
+/// The RRULE of a cadence.
+pub fn cadence_rrule(cadence: &str) -> ApiResult<&'static str> {
+    Ok(match cadence {
+        "weekly" => "FREQ=WEEKLY",
+        "biweekly" => "FREQ=WEEKLY;INTERVAL=2",
+        "monthly" => "FREQ=MONTHLY",
+        "quarterly" => "FREQ=MONTHLY;INTERVAL=3",
+        "yearly" => "FREQ=YEARLY",
+        _ => return Err(ApiError::invalid("items.cadence", "unknown cadence")),
+    })
+}
+
+/// `finance_recurring_accept({ instanceId, items }) → { created }`: one *Recurring* row per item.
+#[tauri::command]
+pub async fn finance_recurring_accept(app: AppHandle, req: AcceptReq) -> ApiResult<Value> {
+    validate::id("instanceId", &req.instance_id)?;
+    if req.items.is_empty() {
+        return Err(ApiError::invalid("items", "must not be empty"));
+    }
+    validate::list_len("items", req.items.len(), 500)?;
+    for i in &req.items {
+        validate::title("items.payee", &i.payee)?;
+        cadence_rrule(&i.cadence)?;
+        dec("items.amount.amount", &i.amount.amount)?;
+        Currency::new(&i.amount.currency)
+            .map_err(|_| ApiError::invalid("items.amount.currency", "invalid currency"))?;
+        validate::ymd("items.nextDue", &i.next_due)?;
+        if !matches!(i.kind.as_str(), "bill" | "subscription" | "income") {
+            return Err(ApiError::invalid(
+                "items.kind",
+                "must be bill, subscription or income",
+            ));
+        }
+    }
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        let d = l.db("recurring")?;
+        let am = d.col_id("rec.amount", &["Amount"]);
+        let sc = d.col_id("rec.schedule", &["Schedule"]);
+        let kind = d.col("rec.kind", &["Kind"]).cloned();
+        let mut rows = Vec::new();
+        for i in &req.items {
+            let mut v = BTreeMap::new();
+            v.insert(
+                d.title_id().to_owned(),
+                CellValue::Text {
+                    v: rich(i.payee.trim()),
+                },
+            );
+            if let Some(p) = &am {
+                v.insert(
+                    p.clone(),
+                    CellValue::Money {
+                        v: Some(i.amount.amount.clone()),
+                        cur: i.amount.currency.clone(),
+                    },
+                );
+            }
+            if let Some(p) = &sc {
+                v.insert(
+                    p.clone(),
+                    CellValue::Recurrence {
+                        v: Some(RecurrenceValue {
+                            rrule: cadence_rrule(&i.cadence)?.to_owned(),
+                            dtstart: i.next_due.clone(),
+                            tz: None,
+                            mode: RecurrenceMode::Schedule,
+                        }),
+                    },
+                );
+            }
+            if let Some(p) = &kind {
+                if let Some(opt) = InstanceDb::option_id(p, &i.kind) {
+                    v.insert(p.id.clone(), CellValue::Select { v: Some(opt) });
+                }
+            }
+            rows.push(v);
+        }
+        let created = store.db_rows_insert_bulk(d.id(), rows, None)?;
+        super::db::emit_db_changed(&state, &store, d.id(), None);
+        Ok(json!({ "created": created }))
+    })
+    .await
+}
+
+// ───────────────────────────────────────────────────────────────────────────── planning (pure)
+
+/// `finance_debt_plan({ debts, strategy, extraMonthly, order?, startMonth }) → { strategies, schedule }`.
+#[tauri::command]
+pub async fn finance_debt_plan(
+    app: AppHandle,
+    req: emp_finance::debt::DebtPlanRequest,
+) -> ApiResult<emp_finance::debt::DebtPlanResponse> {
+    if req.debts.is_empty() {
+        return Err(ApiError::invalid("debts", "must not be empty"));
+    }
+    validate::list_len("debts", req.debts.len(), 100)?;
+    for d in &req.debts {
+        validate::title("debts.name", &d.name)?;
+        dec("debts.balance", &d.balance)?;
+        dec("debts.aprPct", &d.apr_pct)?;
+        dec("debts.minPayment", &d.min_payment)?;
+    }
+    dec("extraMonthly", &req.extra_monthly)?;
+    blocking(move || {
+        app.state::<AppState>().session()?;
+        emp_finance::debt::plan(&req).map_err(fin_err)
+    })
+    .await
+}
+
+/// `finance_amortization({ principal, annualRatePct, termMonths, extraMonthly?, startDate }) → { payment,
+/// totalInterest, payoffDate, rows }`.
+#[tauri::command]
+pub async fn finance_amortization(
+    app: AppHandle,
+    req: emp_finance::amortize::AmortizationRequest,
+) -> ApiResult<emp_finance::amortize::Amortization> {
+    dec("principal", &req.principal)?;
+    dec("annualRatePct", &req.annual_rate_pct)?;
+    if req.term_months == 0 || req.term_months > 1_200 {
+        return Err(ApiError::invalid("termMonths", "must be 1–1200"));
+    }
+    if let Some(x) = &req.extra_monthly {
+        dec("extraMonthly", x)?;
+    }
+    validate::ymd("startDate", &req.start_date)?;
+    blocking(move || {
+        app.state::<AppState>().session()?;
+        emp_finance::amortize::schedule(&req).map_err(fin_err)
+    })
+    .await
+}
+
+/// `finance_goal_plan({ target, by, current, annualYieldPct }) → { monthlyRequired, onTrack }`.
+#[tauri::command]
+pub async fn finance_goal_plan(
+    app: AppHandle,
+    req: emp_finance::goals::GoalPlanRequest,
+) -> ApiResult<emp_finance::goals::GoalPlan> {
+    dec("target", &req.target)?;
+    dec("current", &req.current)?;
+    dec("annualYieldPct", &req.annual_yield_pct)?;
+    validate::ymd("by", &req.by)?;
+    if let Some(c) = &req.monthly_contribution {
+        dec("monthlyContribution", c)?;
+    }
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        emp_finance::goals::plan(&req, local_today(&store)).map_err(fin_err)
+    })
+    .await
+}
+
+// ───────────────────────────────────────────────────────────────────────────── forecast
+
+/// Converts a recurrence value to a forecast schedule (FREQ / INTERVAL / UNTIL of the RRULE).
+#[must_use]
+pub fn schedule_of(rv: &RecurrenceValue) -> Option<emp_finance::forecast::Schedule> {
+    use emp_finance::forecast::{Frequency, Schedule};
+    let anchor = NaiveDate::parse_from_str(rv.dtstart.get(..10)?, "%Y-%m-%d").ok()?;
+    let rule = rv.rrule.trim().trim_start_matches("RRULE:");
+    let mut freq = None;
+    let mut interval = 1u32;
+    let mut until = None;
+    for part in rule.split(';') {
+        let (k, v) = part.split_once('=')?;
+        match k.trim().to_ascii_uppercase().as_str() {
+            "FREQ" => {
+                freq = Some(match v.trim().to_ascii_uppercase().as_str() {
+                    "DAILY" => Frequency::Daily,
+                    "WEEKLY" => Frequency::Weekly,
+                    "MONTHLY" => Frequency::Monthly,
+                    "YEARLY" => Frequency::Yearly,
+                    _ => return None,
+                });
+            }
+            "INTERVAL" => {
+                interval = v
+                    .trim()
+                    .parse()
+                    .ok()
+                    .filter(|n: &u32| (1..=1000).contains(n))?
+            }
+            "UNTIL" => until = NaiveDate::parse_from_str(v.get(..8)?, "%Y%m%d").ok(),
+            _ => {}
+        }
+    }
+    Some(Schedule::Every {
+        freq: freq?,
+        interval,
+        anchor,
+        until,
+    })
+}
+
+/// `finance_forecast` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ForecastReq {
+    instance_id: String,
+    horizon_days: u32,
+    band: bool,
+}
+
+/// `finance_forecast` result.
+#[derive(Debug, Serialize)]
+pub struct ForecastDto {
+    t: Vec<String>,
+    balance: Vec<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    p10: Option<Vec<f64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    p90: Option<Vec<f64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    threshold: Option<f64>,
+    breaches: Vec<Value>,
+}
+
+/// `finance_forecast({ instanceId, horizonDays, band }) → { t, balance, p10?, p90?, threshold?, breaches }` (on-budget
+/// cash accounts; recurring items expanded; discretionary spend bootstrapped for the band).
+#[tauri::command]
+pub async fn finance_forecast(app: AppHandle, req: ForecastReq) -> ApiResult<ForecastDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    if req.horizon_days == 0 || req.horizon_days > emp_finance::forecast::MAX_HORIZON_DAYS {
+        return Err(ApiError::invalid("horizonDays", "must be 1–730"));
+    }
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        let today = local_today(&store);
+        let cash: Vec<&Account> = l
+            .accounts
+            .iter()
+            .filter(|a| a.kind.is_liquid() && a.on_budget && !a.closed && a.currency.code() == l.currency)
+            .collect();
+        let accounts: Vec<emp_finance::forecast::ForecastAccount> = cash
+            .iter()
+            .map(|a| emp_finance::forecast::ForecastAccount {
+                id: a.id.clone(),
+                balance: l.balance(a, today),
+                low_threshold: a.low_threshold,
+            })
+            .collect();
+        let spending = cash.iter().find(|a| a.kind == AccountType::Checking).or(cash.first()).map(|a| a.id.clone());
+        let mut recurring = Vec::new();
+        if let Some(d) = l.dbs.get("recurring") {
+            let am = d.col_id("rec.amount", &["Amount"]);
+            let sc = d.col_id("rec.schedule", &["Schedule"]);
+            let ac = d.col_id("rec.account", &["Account"]);
+            let kind = d.col("rec.kind", &["Kind"]);
+            for r in &d.rows {
+                let Some(CellValue::Recurrence { v: Some(rv) }) = sc.as_ref().and_then(|c| r.values.get(c)) else {
+                    continue;
+                };
+                let (Some(schedule), Some(mut amt)) = (schedule_of(rv), amount(am.as_ref().and_then(|c| r.values.get(c))))
+                else {
+                    continue;
+                };
+                let income = d.option_name(r, kind).is_some_and(|k| norm(&k) == "income");
+                if !income && amt > Decimal::ZERO {
+                    amt = -amt;
+                }
+                let account_id = rel(ac.as_ref().and_then(|c| r.values.get(c)))
+                    .or_else(|| spending.clone())
+                    .unwrap_or_default();
+                recurring.push(emp_finance::forecast::RecurringItem { name: d.title(r), amount: amt, account_id, schedule });
+            }
+        }
+        let seed = {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            store.vault_id().to_string().hash(&mut h);
+            YearMonth::of(today).to_string().hash(&mut h);
+            h.finish()
+        };
+        let ids = HashSet::new();
+        let fc = emp_finance::forecast::cashflow(&emp_finance::forecast::ForecastInput {
+            today,
+            horizon_days: req.horizon_days,
+            accounts: &accounts,
+            spending_account: spending.as_deref(),
+            recurring: &recurring,
+            history: &l.txns,
+            categories: &l.categories,
+            recurring_txn_ids: &ids,
+            band: req.band,
+            seed,
+            simulations: emp_finance::forecast::DEFAULT_SIMULATIONS,
+        })
+        .map_err(fin_err)?;
+        Ok(ForecastDto {
+            t: fc.t.iter().map(ToString::to_string).collect(),
+            balance: fc.balance,
+            p10: fc.p10,
+            p90: fc.p90,
+            threshold: fc.threshold,
+            breaches: fc
+                .breaches
+                .into_iter()
+                .map(|b| {
+                    json!({ "date": b.date.to_string(), "accountId": b.account_id, "amount": s(b.amount),
+                            "topOutflows": b.top_outflows })
+                })
+                .collect(),
+        })
+    })
+    .await
+}
+
+/// Test helpers shared by the domain command modules.
+#[cfg(test)]
+pub(crate) mod test_support {
+    /// An unencrypted temporary vault with one workspace.
+    pub(crate) fn temp_store() -> (tempfile::TempDir, emp_store::Store) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut opts = emp_store::StoreOptions::new(dir.path().join("device.key"));
+        opts.background_indexing = false;
+        let created = emp_store::Store::create(
+            dir.path(),
+            emp_store::CreateOptions {
+                password: None,
+                kdf: emp_crypto::KdfParams::INSECURE_TEST,
+                auto_lock: emp_store::model::AutoLock::default(),
+                workspace_name: Some("Test".into()),
+            },
+            opts,
+        )
+        .unwrap();
+        (dir, created.store)
+    }
+
+    /// Installs `app_id` with sample data; returns (workspace id, instance id).
+    pub(crate) fn install(store: &emp_store::Store, app_id: &str) -> (String, String) {
+        let ws = store.workspace_list().unwrap().remove(0).id;
+        let req: emp_store::LifeappInstall = serde_json::from_value(serde_json::json!({
+            "appId": app_id, "answers": {}, "mode": "quick", "disabledKeys": [], "workspaceId": ws, "sampleData": true
+        }))
+        .unwrap();
+        let r = store.lifeapp_install(&req, &emp_store::NoProgress).unwrap();
+        (ws, r.instance_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn option_names_normalise() {
+        assert_eq!(norm("Credit card"), "credit_card");
+        assert_eq!(norm("Savings & Debt"), "savings_debt");
+        assert_eq!(account_type(Some("Credit card")), AccountType::CreditCard);
+        assert_eq!(account_type(Some("Mystery")), AccountType::OtherAsset);
+        assert_eq!(account_type(None), AccountType::Checking);
+    }
+
+    #[test]
+    fn months_and_amounts_validate() {
+        assert_eq!(month("m", "2026-11").unwrap().to_string(), "2026-11");
+        assert!(month("m", "2026-13").is_err());
+        assert!(month("m", "2026-1").is_err());
+        assert_eq!(
+            dec("a", "12.50").unwrap(),
+            "12.50".parse::<Decimal>().unwrap()
+        );
+        assert!(dec("a", "1e5").is_err());
+    }
+
+    #[test]
+    fn money_dto_rounds_to_cents() {
+        let m = MoneyDto::of("12.345".parse().unwrap(), "USD");
+        assert_eq!(m.amount, "12.34");
+        assert_eq!(MoneyDto::of(Decimal::from(5), "EUR").amount, "5");
+    }
+
+    #[test]
+    fn rrules_become_schedules() {
+        let rv = RecurrenceValue {
+            rrule: "RRULE:FREQ=MONTHLY;INTERVAL=3;UNTIL=20271231".into(),
+            dtstart: "2026-01-15".into(),
+            tz: None,
+            mode: RecurrenceMode::Schedule,
+        };
+        match schedule_of(&rv).unwrap() {
+            emp_finance::forecast::Schedule::Every {
+                interval, until, ..
+            } => {
+                assert_eq!(interval, 3);
+                assert_eq!(until, NaiveDate::from_ymd_opt(2027, 12, 31));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        let bad = RecurrenceValue {
+            rrule: "FREQ=HOURLY".into(),
+            ..rv
+        };
+        assert!(schedule_of(&bad).is_none());
+        assert_eq!(cadence_rrule("biweekly").unwrap(), "FREQ=WEEKLY;INTERVAL=2");
+        assert!(cadence_rrule("daily").is_err());
+    }
+
+    #[test]
+    fn finance_errors_map_to_codes() {
+        assert_eq!(fin_err(FinanceError::invalid("x")).code, ErrorCode::Invalid);
+        assert_eq!(fin_err(FinanceError::Cancelled).code, ErrorCode::Cancelled);
+        assert_eq!(
+            fin_err(FinanceError::TooLarge("x".into())).code,
+            ErrorCode::TooLarge
+        );
+    }
+
+    #[test]
+    fn cells_are_read_by_kind() {
+        assert_eq!(
+            amount(Some(&CellValue::Money {
+                v: Some("-4.20".into()),
+                cur: "USD".into()
+            })),
+            Some("-4.20".parse().unwrap())
+        );
+        assert_eq!(amount(Some(&CellValue::Number { v: Some(f64::NAN) })), None);
+        assert_eq!(
+            rel(Some(&CellValue::Relation {
+                v: vec!["a".into(), "b".into()]
+            }))
+            .as_deref(),
+            Some("a")
+        );
+        assert!(check(Some(&CellValue::Check { v: true })));
+        assert_eq!(
+            date(Some(&CellValue::Date {
+                v: Some(emp_store::dbmodel::DateValue {
+                    start: "2026-03-04T10:00:00Z".into(),
+                    end: None,
+                    time: true,
+                    tz: None
+                })
+            })),
+            NaiveDate::from_ymd_opt(2026, 3, 4)
+        );
+    }
+
+    #[test]
+    fn pure_planners_run() {
+        let req: emp_finance::debt::DebtPlanRequest = serde_json::from_value(json!({
+            "debts": [{ "name": "Card", "balance": "2000", "aprPct": "24", "minPayment": "60" }],
+            "strategy": "avalanche", "extraMonthly": "100", "startMonth": "2026-11"
+        }))
+        .unwrap();
+        let p = emp_finance::debt::plan(&req).unwrap();
+        assert!(!p.strategies.is_empty());
+        let a: emp_finance::amortize::AmortizationRequest = serde_json::from_value(json!({
+            "principal": "10000", "annualRatePct": "6", "termMonths": 12, "startDate": "2026-01-01"
+        }))
+        .unwrap();
+        assert_eq!(emp_finance::amortize::schedule(&a).unwrap().rows.len(), 12);
+    }
+
+    #[test]
+    fn loads_a_money_hq_ledger_and_computes_the_overview() {
+        let (_dir, store) = test_support::temp_store();
+        let (_, inst) = test_support::install(&store, "money-hq");
+        let l = Ledger::load(&store, &inst).unwrap();
+        assert!(!l.accounts.is_empty(), "accounts");
+        assert!(!l.categories.is_empty(), "categories");
+        assert!(!l.txns.is_empty(), "transactions");
+        assert!(l.dbs.contains_key("budgets"));
+        let today = local_today(&store);
+        let o = overview(&store, &inst, YearMonth::of(today)).unwrap();
+        let v = serde_json::to_value(&o).unwrap();
+        assert!(v["netWorth"]["amount"].is_string());
+        assert!(v["budget"].is_array());
+        let bm = budget_month(&store, &inst, &l, YearMonth::of(today)).unwrap();
+        assert!(!bm.categories.is_empty());
+        let sankey = emp_finance::metrics::cashflow_sankey(
+            &l.txns,
+            &l.categories,
+            today - chrono::Duration::days(90),
+            today,
+        );
+        assert!(!sankey.nodes.is_empty());
+    }
+
+    #[test]
+    fn unknown_instances_are_not_found() {
+        let (_dir, store) = test_support::temp_store();
+        let e = Ledger::load(&store, "00000000-0000-0000-0000-000000000000").unwrap_err();
+        assert_eq!(e.code, ErrorCode::NotFound);
+    }
+}

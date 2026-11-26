@@ -9,6 +9,7 @@ import { Donut } from "@/charts/Donut";
 import { LineChart } from "@/charts/Line";
 import { Sankey } from "@/charts/Sankey";
 import { useChartTheme, seriesColor } from "@/charts/theme";
+import type { SankeyData } from "@/backend/types";
 import { Amount } from "@/ui/Amount";
 import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
@@ -18,7 +19,7 @@ import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { addMonths, dayLabel, fmtMoney, fmtPct, monthLabel, num, relDays, toMoney, todayIso } from "../shared/format";
+import { addMonths, assignColors, dayLabel, fmtMoney, fmtPct, monthLabel, num, relDays, toMoney, todayIso } from "../shared/format";
 import { useAsync, useDbChanged } from "../shared/hooks";
 import { InsightCard, Quiet, Section } from "../shared/ui";
 import { localInsights } from "./insights";
@@ -264,16 +265,42 @@ function Envelopes() {
 function SpendingDonut() {
   const { instanceId, month } = useMoney();
   const l = useLedgerCtx();
+  const t = useChartTheme();
   const from = `${month}-01`;
   const last = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
   const to = `${month}-${String(last).padStart(2, "0")}`;
   const s = useAsync(() => api.finance.spendingBreakdown({ instanceId, from, to, by: "category" }), [instanceId, month]);
   useDbChanged([l.schemas.txns?.database.id], s.reload, 400);
-  const total = (s.data ?? []).reduce((a, x) => a + num(x.amount), 0);
-  const prev = (s.data ?? []).reduce((a, x) => a + (x.deltaPct !== undefined ? num(x.amount) / (1 + x.deltaPct) : num(x.amount)), 0);
+  const rows = s.data ?? [];
+  const total = rows.reduce((a, x) => a + num(x.amount), 0);
+  const prev = rows.reduce((a, x) => a + (x.deltaPct !== undefined ? num(x.amount) / (1 + x.deltaPct) : num(x.amount)), 0);
+  const slices = useMemo(() => {
+    const sorted = rows.map((x) => ({ id: x.key, label: x.label, value: num(x.amount) })).sort((a, b) => b.value - a.value);
+    const top = sorted.slice(0, 6);
+    const rest = sorted.slice(6).reduce((a, x) => a + x.value, 0);
+    const colors = assignColors(top.map((x) => x.id));
+    const out = top.map((x) => ({ ...x, color: x.id === "uncategorized" ? t.other : seriesColor(t, colors.get(x.id) ?? 0) }));
+    if (rest > 0) out.push({ id: "__other", label: "Everything else", value: rest, color: t.other });
+    return out;
+  }, [rows, t]);
   return (
-    <Section title="Spending by category" subtitle={s.data ? <>{monthLabel(month)} · {prev > 0 ? <DeltaPill value={(total - prev) / prev} invert plain label="vs last month" /> : null}</> : null}>
-      <Donut data={(s.data ?? []).map((x) => ({ id: x.key, label: x.label, value: num(x.amount) }))} size={164} loading={s.loading && !s.data} summaryLabel="Spending by category" centerLabel="Spent" />
+    <Section title="Spending by category" subtitle={s.data ? <span className="inline-flex items-center gap-2">{monthLabel(month)}{prev > 0 ? <DeltaPill value={(total - prev) / prev} invert plain label="vs last month" /> : null}</span> : null}>
+      <div className="flex items-center gap-5">
+        <div className="flex-none" style={{ width: 150 }}>
+          <Donut data={slices} size={150} legend={false} loading={s.loading && !s.data} summaryLabel="Spending by category" centerLabel="Spent" />
+        </div>
+        <ul className="m-0 p-0 list-none flex-1 min-w-0 flex flex-col gap-0.5">
+          {slices.map((x) => (
+            <li key={x.id} className="flex items-center gap-2 h-7 text-body-sm min-w-0">
+              <span className="w-2 h-2 rounded-[2px] flex-none" style={{ background: x.color }} />
+              <span className="truncate flex-1 text-secondary">{x.label}</span>
+              <span className="tabular text-primary font-medium" data-sensitive="">
+                {fmtMoney(x.value, "USD", { noCents: true })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </Section>
   );
 }
@@ -287,16 +314,17 @@ function CashFlow() {
   const [month, setMonth] = useState(() => addMonths(todayIso().slice(0, 7), -1));
   const s = useAsync(() => api.finance.cashflowSankey({ instanceId, month }), [instanceId, month]);
   useDbChanged([l.schemas.txns?.database.id], s.reload, 400);
+  const data = useMemo(() => (s.data ? simplifySankey(s.data) : undefined), [s.data]);
   const nodes = useMemo(() => {
-    if (!s.data) return [];
+    if (!data) return [];
     const groupColor = new Map<string, string>();
     let gi = 0;
     const incomeNames = new Set<number>();
-    for (const lk of s.data.links) if (s.data.nodes[lk.target]?.name === "Income") incomeNames.add(lk.source);
-    const hub = s.data.nodes.findIndex((n) => n.name === "Income");
+    for (const lk of data.links) if (data.nodes[lk.target]?.name === "Income") incomeNames.add(lk.source);
+    const hub = data.nodes.findIndex((n) => n.name === "Income");
     const parentOf = new Map<number, number>();
-    for (const lk of s.data.links) parentOf.set(lk.target, lk.source);
-    return s.data.nodes.map((n, i) => {
+    for (const lk of data.links) parentOf.set(lk.target, lk.source);
+    return data.nodes.map((n, i) => {
       if (i === hub || incomeNames.has(i)) return { name: n.name, color: t.gain };
       if (n.name === "Saved & paid down") return { name: n.name, color: t.accent };
       const parent = parentOf.get(i);
@@ -305,11 +333,11 @@ function CashFlow() {
         groupColor.set(n.name, c);
         return { name: n.name, color: c };
       }
-      const pn = parent !== undefined ? s.data!.nodes[parent]?.name : undefined;
+      const pn = parent !== undefined ? data.nodes[parent]?.name : undefined;
       if (pn === "Saved & paid down") return { name: n.name, color: t.accent };
       return { name: n.name, color: (pn && groupColor.get(pn)) || t.textTertiary };
     });
-  }, [s.data, t]);
+  }, [data, t]);
   const income = s.data ? s.data.links.filter((lk) => s.data!.nodes[lk.target]?.name === "Income").reduce((a, lk) => a + lk.value, 0) : 0;
   const saved = s.data ? s.data.links.filter((lk) => s.data!.nodes[lk.target]?.name === "Saved & paid down").reduce((a, lk) => a + lk.value, 0) : 0;
   return (
@@ -337,9 +365,51 @@ function CashFlow() {
         />
       }
     >
-      <Sankey nodes={nodes} links={s.data?.links ?? []} height={300} loading={s.loading && !s.data} summaryLabel={`Cash flow, ${monthLabel(month)}`} />
+      <Sankey nodes={nodes} links={data?.links ?? []} height={400} loading={s.loading && !s.data} summaryLabel={`Cash flow, ${monthLabel(month)}`} />
     </Section>
   );
+}
+
+/** Fold tiny flows so every label has room: small income sources merge, each group keeps its top 3 categories. */
+function simplifySankey(d: SankeyData): SankeyData {
+  const name = (i: number) => d.nodes[i]?.name ?? "";
+  const hub = d.nodes.findIndex((n) => n.name === "Income");
+  const income = d.links.filter((l) => l.target === hub).reduce((a, l) => a + l.value, 0) || 1;
+  const nodes: SankeyData["nodes"] = [];
+  const links: SankeyData["links"] = [];
+  const idx = new Map<string, number>();
+  const node = (n: string) => {
+    if (!idx.has(n)) {
+      idx.set(n, nodes.length);
+      nodes.push({ name: n });
+    }
+    return idx.get(n)!;
+  };
+  const add = (a: string, b: string, v: number) => {
+    const s = node(a);
+    const t = node(b);
+    const ex = links.find((l) => l.source === s && l.target === t);
+    if (ex) ex.value += v;
+    else links.push({ source: s, target: t, value: v });
+  };
+  const sources = d.links.filter((l) => l.target === hub).sort((a, b) => b.value - a.value);
+  const big = sources.filter((l, i) => i === 0 || l.value / income >= 0.06);
+  const smallSum = sources.filter((l) => !big.includes(l)).reduce((a, l) => a + l.value, 0);
+  big.forEach((l, i) => {
+    const merge = smallSum > 0 && big.length > 1 && i === big.length - 1;
+    add(merge ? `${name(l.source)} & other` : name(l.source), "Income", l.value + (merge ? smallSum : 0));
+  });
+  if (smallSum > 0 && big.length === 1) add("Other income", "Income", smallSum);
+  for (const g of d.links.filter((l) => l.source === hub)) {
+    const gName = name(g.target);
+    add("Income", gName, g.value);
+    const kids = d.links.filter((l) => l.source === g.target).sort((a, b) => b.value - a.value);
+    const keep = gName === "Saved & paid down" ? kids : kids.filter((k, i) => i < 3 && k.value / income >= 0.025);
+    const rest = kids.filter((k) => !keep.includes(k)).reduce((a, k) => a + k.value, 0);
+    for (const k of keep) add(gName, name(k.target), k.value);
+    if (rest > 0) add(gName, gName === "Fun" ? "Other fun" : `Other ${gName.toLowerCase()}`, rest);
+  }
+  return { nodes, links: links.filter((l) => l.value > 0) };
 }
 
 // ───────────────────────────────────────────────────────────────────────────── recent + upcoming

@@ -215,7 +215,10 @@ pub fn cancelled_or(ctx: &JobCtx, e: ApiError) -> ApiError {
 
 // ───────────────────────────────────────────────────────────────────────────── undo bookkeeping
 
-static JOB_IMPORTS: LazyLock<Mutex<HashMap<String, Arc<Mutex<Option<String>>>>>> =
+/// A cell an import job fills with its import id.
+pub type ImportCell = Arc<Mutex<Option<String>>>;
+
+static JOB_IMPORTS: LazyLock<Mutex<HashMap<String, ImportCell>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 /// Remembered job → import mappings.
 const MAX_JOB_IMPORTS: usize = 256;
@@ -418,7 +421,10 @@ fn markdown_files(state: &AppState, grant_id: &str) -> ApiResult<Vec<ImportFile>
         let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
         total += len;
         if total > caps::MARKDOWN_FOLDER {
-            return Err(ApiError::new(ErrorCode::TooLarge, "This folder is too large"));
+            return Err(ApiError::new(
+                ErrorCode::TooLarge,
+                "This folder is too large",
+            ));
         }
         // Attachments of a Markdown folder are capped like single files; bigger files are skipped by the importer.
         if len > caps::MARKDOWN_FILE * 4 {
@@ -570,7 +576,10 @@ pub async fn import_ics(
             ctx.report(0, 2, Some("Reading"));
             let f = take_file(&state, &req.grant_id, &[GrantPurpose::Import], caps::ICS)?;
             let cal = crate::jobs::catch_panics(|| {
-                emp_integrations::ics::parse_ics(&f.bytes, &emp_integrations::ics::IcsLimits::default())
+                emp_integrations::ics::parse_ics(
+                    &f.bytes,
+                    &emp_integrations::ics::IcsLimits::default(),
+                )
             })
             .map_err(|_| ApiError::invalid("grantId", "This calendar file could not be read"))??;
             ctx.check_cancelled()?;

@@ -97,8 +97,11 @@ export const multi = (names: string[]): SelRef | null => (names.length ? { [SEL]
 export const lucide = (v: string): Icon => ({ t: 'lucide', v });
 export const emoji = (v: string): Icon => ({ t: 'emoji', v });
 
-/** 'YYYY-MM-DD' for a ms timestamp (UTC calendar day). */
-export const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+/** 'YYYY-MM-DD' for a ms timestamp (local calendar day, like `ctx.clock.today()`). */
+export const isoDay = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 export const DAY = 86_400_000;
 
 /** Deterministic PRNG for sample data. */

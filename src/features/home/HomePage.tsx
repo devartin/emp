@@ -1,17 +1,63 @@
 /**
- * Placeholder Home (owned by the home feature, §6.4): greeting, date and recent pages, so the shell has a real
- * landing screen until the full widget dashboard replaces this file.
+ * Home (§6.4): greeting + date, then a customisable 12-column widget grid — Today (events, tasks due, habit strip),
+ * Money snapshot, Watchlist, Recent pages, Suggestions and Quick actions. "Customize home" reveals the dotted grid,
+ * drag handles (dnd-kit, `spring.layout`), width presets and hide/show; the layout persists in kv `ui.home.layout`.
  */
-import { FileText } from "lucide-react";
-import { m } from "motion/react";
-import { useShallow } from "zustand/react/shallow";
-import { navigate } from "@/app/router";
-import { formatDate, formatRelative } from "@/lib/dates";
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Check, Eye, EyeOff, GripVertical, LayoutGrid, RotateCcw } from "lucide-react";
+import { AnimatePresence, m } from "motion/react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { api } from "@/backend";
+import { cn } from "@/lib/cn";
 import { useSettings } from "@/stores/settings";
-import { useTree } from "@/stores/tree";
-import { useWorkspace } from "@/stores/workspace";
-import { PageIcon } from "@/features/shell/PageIcon";
-import { staggerItem, staggerList } from "@/ui/motion/presets";
+import { Button } from "@/ui/Button";
+import { IconButton } from "@/ui/IconButton";
+import { Segmented } from "@/ui/Segmented";
+import { spring } from "@/ui/motion/tokens";
+import { useStableNow } from "@/features/lifeapps/data";
+import { WizardSheet } from "@/features/lifeapps/WizardSheet";
+import { MoneyWidget } from "./widgets/Money";
+import { QuickActionsWidget } from "./widgets/QuickActions";
+import { RecentWidget } from "./widgets/Recent";
+import { SuggestionsWidget } from "./widgets/Suggestions";
+import { TodayWidget } from "./widgets/Today";
+import { WatchlistWidget } from "./widgets/Watchlist";
+import "@/features/lifeapps/lifeapps.css";
+import "./home.css";
+
+type Span = 4 | 5 | 6 | 7 | 8 | 12;
+interface Slot {
+  id: string;
+  span: Span;
+  hidden?: boolean;
+}
+
+const WIDGETS: Record<string, { title: string; C: ComponentType; bare?: boolean }> = {
+  quick: { title: "Quick actions", C: QuickActionsWidget, bare: true },
+  today: { title: "Today", C: TodayWidget },
+  suggestions: { title: "Suggestions", C: SuggestionsWidget },
+  money: { title: "Money", C: MoneyWidget },
+  watchlist: { title: "Watchlist", C: WatchlistWidget },
+  recent: { title: "Recent pages", C: RecentWidget },
+};
+
+const DEFAULT: Slot[] = [
+  { id: "quick", span: 12 },
+  { id: "today", span: 7 },
+  { id: "suggestions", span: 5 },
+  { id: "money", span: 12 },
+  { id: "recent", span: 7 },
+  { id: "watchlist", span: 5 },
+];
+
+const SIZES: { value: string; label: string }[] = [
+  { value: "4", label: "S" },
+  { value: "6", label: "M" },
+  { value: "8", label: "L" },
+  { value: "12", label: "Full" },
+];
 
 function greeting(h: number) {
   if (h < 5) return "Good evening";
@@ -20,43 +66,129 @@ function greeting(h: number) {
   return "Good evening";
 }
 
+function sanitize(v: unknown): Slot[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: Slot[] = [];
+  for (const x of v) {
+    if (!x || typeof x !== "object") continue;
+    const s = x as Partial<Slot>;
+    if (typeof s.id !== "string" || !WIDGETS[s.id] || out.some((o) => o.id === s.id)) continue;
+    const span = [4, 5, 6, 7, 8, 12].includes(Number(s.span)) ? (Number(s.span) as Span) : 6;
+    out.push({ id: s.id, span, hidden: !!s.hidden });
+  }
+  for (const d of DEFAULT) if (!out.some((o) => o.id === d.id)) out.push(d);
+  return out;
+}
+
+function Widget({ slot, editing, onSpan, onHide, index }: { slot: Slot; editing: boolean; onSpan: (s: Span) => void; onHide: () => void; index: number }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: slot.id, disabled: !editing });
+  const def = WIDGETS[slot.id];
+  const C = def.C;
+  return (
+    <m.section
+      ref={setNodeRef}
+      layout="position"
+      transition={spring.layout}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0, transition: { ...spring.gentle, delay: index * 0.05 } }}
+      className={cn("hm-widget", def.bare && !editing && "is-bare", editing && "is-editing", isDragging && "is-dragging")}
+      style={{ gridColumn: `span ${slot.span} / span ${slot.span}`, transform: CSS.Translate.toString(transform), transition }}
+      aria-label={def.title}
+    >
+      {editing ? (
+        <div className="hm-edit-bar">
+          <button type="button" className="hm-grip" {...attributes} {...listeners} aria-label={`Move ${def.title}`}>
+            <GripVertical size={14} aria-hidden />
+          </button>
+          <span className="flex-1 truncate text-caption font-semibold text-secondary">{def.title}</span>
+          <Segmented size="sm" value={String([4, 6, 8, 12].includes(slot.span) ? slot.span : slot.span < 6 ? 4 : 8)} onValueChange={(v) => onSpan(Number(v) as Span)} options={SIZES} aria-label="Width" />
+          <IconButton size="xs" icon={EyeOff} label={`Hide ${def.title}`} onClick={onHide} />
+        </div>
+      ) : null}
+      <div className={cn("hm-widget-body", editing && "pointer-events-none select-none")}>
+        <C />
+      </div>
+    </m.section>
+  );
+}
+
 export default function HomePage() {
   const name = useSettings((s) => s.vault?.profileName?.trim());
-  const recents = useWorkspace((s) => s.recents);
-  const pages = useTree(useShallow((s) => recents.map((id) => s.byId.get(id)).filter((p) => !!p && !p.flags.template).slice(0, 8)));
-  const now = new Date();
+  const now = useStableNow(60_000);
+  const [layout, setLayout] = useState<Slot[]>(DEFAULT);
+  const [editing, setEditing] = useState(false);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+
+  useEffect(() => {
+    api.kv
+      .get({ ns: "ui.home", key: "layout" })
+      .then((v) => {
+        const s = sanitize(v);
+        if (s) setLayout(s);
+      })
+      .catch(() => undefined);
+  }, []);
+  const save = (next: Slot[]) => {
+    setLayout(next);
+    void api.kv.set({ ns: "ui.home", key: "layout", value: next }).catch(() => undefined);
+  };
+  const visible = useMemo(() => layout.filter((s) => !s.hidden), [layout]);
+  const hidden = layout.filter((s) => s.hidden);
+
+  const onDragEnd = (e: DragEndEvent) => {
+    if (!e.over || e.active.id === e.over.id) return;
+    const from = layout.findIndex((s) => s.id === e.active.id);
+    const to = layout.findIndex((s) => s.id === e.over!.id);
+    save(arrayMove(layout, from, to));
+  };
+
   return (
-    <div className="mx-auto w-full max-w-[880px] px-12 pb-24 pt-16">
-      <h1 className="text-h1 text-primary">{greeting(now.getHours())}{name ? `, ${name}` : ""}</h1>
-      <p className="mt-1 text-body text-secondary">{formatDate(now, "full")}</p>
-      <section className="mt-12" aria-labelledby="home-recent">
-        <h2 id="home-recent" className="text-micro uppercase text-tertiary">Recent pages</h2>
-        {pages.length ? (
-          <m.ul className="mt-3 grid grid-cols-4 gap-3" variants={staggerList(0.03)} initial="hidden" animate="show">
-            {pages.map((p) =>
-              p ? (
-                <m.li key={p.id} variants={staggerItem}>
-                  <button
-                    type="button"
-                    onClick={() => navigate({ t: "page", id: p.id })}
-                    className="group flex h-[100px] w-full flex-col justify-between rounded-xl border border-subtle bg-surface-1 p-3 text-left shadow-elev-1 transition-[translate,box-shadow] duration-160 ease-out hover:-translate-y-px hover:shadow-elev-2"
-                  >
-                    <PageIcon icon={p.icon} kind={p.kind} size={20} />
-                    <span className="flex flex-col gap-0.5">
-                      <span className="truncate text-body-sm font-medium text-primary">{p.title || "Untitled"}</span>
-                      <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>{formatRelative(p.updatedAt)}</span>
-                    </span>
-                  </button>
-                </m.li>
-              ) : null,
-            )}
-          </m.ul>
-        ) : (
-          <p className="mt-3 flex items-center gap-2 text-body-sm text-tertiary">
-            <FileText size={14} aria-hidden /> Pages you open will show up here.
-          </p>
-        )}
-      </section>
+    <div className="hm-page">
+      <header className="hm-head">
+        <div>
+          <h1 className="text-h1 text-primary">
+            {greeting(now.getHours())}
+            {name ? `, ${name}` : ""}
+          </h1>
+          <p className="mt-1 text-body text-secondary">{now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <AnimatePresence>
+            {editing ? (
+              <m.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} transition={spring.ui}>
+                <Button size="sm" variant="ghost" icon={RotateCcw} onClick={() => save(DEFAULT)}>
+                  Reset
+                </Button>
+              </m.div>
+            ) : null}
+          </AnimatePresence>
+          <Button size="sm" variant={editing ? "primary" : "ghost"} icon={editing ? Check : LayoutGrid} onClick={() => setEditing((e) => !e)}>
+            {editing ? "Done" : "Customize home"}
+          </Button>
+        </div>
+      </header>
+      <AnimatePresence>
+        {editing && hidden.length ? (
+          <m.div className="hm-tray" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}>
+            <span className="text-caption text-tertiary">Hidden:</span>
+            {hidden.map((s) => (
+              <Button key={s.id} size="xs" variant="soft" icon={Eye} onClick={() => save(layout.map((x) => (x.id === s.id ? { ...x, hidden: false } : x)))}>
+                {WIDGETS[s.id].title}
+              </Button>
+            ))}
+          </m.div>
+        ) : null}
+      </AnimatePresence>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={visible.map((s) => s.id)} strategy={rectSortingStrategy}>
+          <div className={cn("hm-grid", editing && "is-editing")}>
+            {visible.map((s, i) => (
+              <Widget key={s.id} slot={s} index={i} editing={editing} onSpan={(span) => save(layout.map((x) => (x.id === s.id ? { ...x, span } : x)))} onHide={() => save(layout.map((x) => (x.id === s.id ? { ...x, hidden: true } : x)))} />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+      <WizardSheet />
     </div>
   );
 }

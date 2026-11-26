@@ -512,7 +512,8 @@ export function search(q: string, limit: number): MarketSearchResult[] {
     const ticker = i.ticker.toLowerCase();
     const name = i.name.toLowerCase();
     let score = 0;
-    if (ticker === s) score = 100;
+    const key = i.key.toLowerCase();
+    if (ticker === s || key === s || key.split(':')[0] === s) score = 100;
     else if (ticker.startsWith(s)) score = 80 - ticker.length;
     else if (name.startsWith(s)) score = 60;
     else if (name.split(/\s+/).some((w) => w.startsWith(s))) score = 45;

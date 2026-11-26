@@ -137,8 +137,12 @@ export function TxnLine({ t, category, accountName, onClick }: { t: Txn; categor
         <span className="fh-glyph" style={{ width: 30, height: 30, borderRadius: 9, background: "var(--bg-surface-2)", color: "var(--text-secondary)" }}>
           <Split size={15} />
         </span>
+      ) : category ? (
+        <Glyph name={category.icon} color={category.color} size={30} />
       ) : (
-        <Glyph name={category?.icon} color={category?.color ?? "gray"} size={30} />
+        <span className="fh-glyph fh-glyph-unknown" style={{ width: 30, height: 30, borderRadius: 9 }} aria-hidden>
+          ?
+        </span>
       )}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-body-sm font-medium text-primary">{t.payee || "Unknown payee"}</span>

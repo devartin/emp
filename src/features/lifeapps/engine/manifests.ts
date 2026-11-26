@@ -70,8 +70,8 @@ const moneyHq: LifeAppManifest = {
     'debt_free_date', 'upcoming_bills_7d', 'uncategorized_count', 'utilization_max', 'forecast_min_balance_30d',
   ].map((name) => ({ name, kind: 'rust' as const, fn: `money.${name}`, deps: ['transactions.txn.amount'] })),
   advisor: [
-    { id: 'cat-over', when: 'metrics.cat_over_count > 0', severity: 'warn', title: '{{metrics.cat_over_count}} categories are overspent', body: 'Consider moving money from a category with room so the month still balances.', mathMetrics: ['cat_over_count'], actions: [{ label: 'Open budget', route: 'tab:budget' }] },
-    { id: 'cat-90pct', when: 'metrics.cat_90pct_count > 0', severity: 'tip', title: '{{metrics.cat_90pct_count}} categories are almost spent', body: 'These categories have used 90% or more of their budget with at least 10 days left.', mathMetrics: ['cat_90pct_count'], actions: [{ label: 'Open budget', route: 'tab:budget' }] },
+    { id: 'cat-over', when: 'metrics.cat_over_count > 0', severity: 'warn', title: '{{metrics.cat_over_count}} {{if(metrics.cat_over_count == 1, "category is", "categories are")}} overspent', body: 'Consider moving money from a category with room so the month still balances.', mathMetrics: ['cat_over_count'], actions: [{ label: 'Open budget', route: 'tab:budget' }] },
+    { id: 'cat-90pct', when: 'metrics.cat_90pct_count > 0', severity: 'tip', title: '{{metrics.cat_90pct_count}} {{if(metrics.cat_90pct_count == 1, "category is", "categories are")}} almost spent', body: 'These categories have used 90% or more of their budget with at least 10 days left.', mathMetrics: ['cat_90pct_count'], actions: [{ label: 'Open budget', route: 'tab:budget' }] },
     { id: 'uncategorized', when: 'metrics.uncategorized_count >= 10', severity: 'info', title: '{{metrics.uncategorized_count}} transactions need a category', body: 'Categorising keeps budgets and reports accurate.', mathMetrics: ['uncategorized_count'], actions: [{ label: 'Review transactions', route: 'tab:transactions' }] },
     { id: 'ef-below-target', when: 'metrics.ef_months < answers.emergency_months', severity: 'tip', title: 'Your emergency fund covers {{fmt_months(metrics.ef_months)}}', body: 'Common guideline: 3–6 months of essential expenses. A small automatic transfer each payday adds up.', mathMetrics: ['ef_months', 'essential_monthly_spend'], actions: [{ label: 'Open goals', route: 'tab:goals' }] },
     { id: 'util-30', when: 'metrics.utilization_max > 0.3', severity: 'tip', title: 'Card utilization is {{fmt_pct(metrics.utilization_max)}}', body: 'Keeping utilization under 30% is a common guideline for credit health.', mathMetrics: ['utilization_max'], actions: [{ label: 'Open accounts', route: 'tab:accounts' }] },
@@ -443,7 +443,7 @@ const lifeOs: LifeAppManifest = {
     tpl('today', 'dashboard', 'Today', { icon: 'lucide:sun', note: 'Agenda, Top 3, due and overdue' }),
     tpl('tasks', 'database', 'Tasks', { icon: '✅', note: 'Inbox, Today, Upcoming, Board, Someday, Waiting, Completed' }),
     tpl('projects', 'database', 'Projects', { icon: '🎯' }),
-    tpl('areas_db', 'database', 'Areas', { icon: '🧭', count: 'answers.areas_count' }),
+    tpl('areas_db', 'database', 'Areas', { icon: '🧭' }),
     tpl('resources', 'database', 'Resources', { icon: '📚', when: 'answers.style == "para" or answers.style == "mix"' }),
     tpl('daily', 'database', 'Daily notes', { icon: '📓' }),
     tpl('eisenhower', 'view', 'Eisenhower board', { when: 'answers.priority == "eisenhower"' }),
@@ -464,7 +464,7 @@ const lifeOs: LifeAppManifest = {
     { id: 'overdue-5', when: 'metrics.overdue_count > 5', severity: 'warn', title: '{{metrics.overdue_count}} tasks are overdue', body: 'Consider rescheduling, delegating or dropping a few — a shorter list you trust beats a long one you avoid.', mathMetrics: ['overdue_count'], actions: [{ label: 'Review overdue', route: 'tab:tasks' }] },
     { id: 'overbooked', when: 'metrics.today_scheduled_min > metrics.working_min', severity: 'warn', title: 'Today is overbooked', body: 'You have scheduled {{metrics.today_scheduled_min}} minutes of tasks into {{metrics.working_min}} working minutes.', mathMetrics: ['today_scheduled_min', 'working_min'], actions: [{ label: 'Open Today', route: 'tab:today' }] },
     { id: 'inbox-20', when: 'metrics.inbox_count > 20', severity: 'tip', title: 'Your inbox has {{metrics.inbox_count}} items', body: 'A quick pass to sort each one into Next, Someday or Done keeps the list trustworthy.', mathMetrics: ['inbox_count'], actions: [{ label: 'Process inbox', route: 'tab:tasks' }] },
-    { id: 'project-no-next', when: 'metrics.projects_without_next > 0', severity: 'tip', title: '{{metrics.projects_without_next}} projects have no next action', body: 'Projects move when the next physical step is written down.', mathMetrics: ['projects_without_next'], actions: [{ label: 'Open projects', route: 'tab:projects' }] },
+    { id: 'project-no-next', when: 'metrics.projects_without_next > 0', severity: 'tip', title: '{{metrics.projects_without_next}} {{if(metrics.projects_without_next == 1, "project has", "projects have")}} no next action', body: 'Projects move when the next physical step is written down.', mathMetrics: ['projects_without_next'], actions: [{ label: 'Open projects', route: 'tab:projects' }] },
     { id: 'review-missed', when: 'metrics.days_since_review > 8', severity: 'tip', title: 'Weekly review is due', body: 'It has been {{metrics.days_since_review}} days since your last review.', mathMetrics: ['last_review_date'], actions: [{ label: 'Start review', route: 'page:weekly' }] },
   ],
   checklist: [
@@ -531,7 +531,7 @@ const habits: LifeAppManifest = {
   ],
   templates: [
     tpl('dash', 'dashboard', 'Habits', { icon: 'lucide:heart-pulse', note: 'Heatmaps, streaks, weekly score' }),
-    tpl('habits_db', 'database', 'Habits', { icon: '🌱', count: 'answers.pick_count' }),
+    tpl('habits_db', 'database', 'Habits', { icon: '🌱' }),
     tpl('log', 'database', 'Habit log', { icon: '🗒️' }),
     tpl('weekly', 'page', 'Weekly habit review', { icon: '🪞', when: 'answers.review' }),
     tpl('habit_rem', 'reminder', 'Habit reminders', { optional: true, count: 'answers.pick_count' }),

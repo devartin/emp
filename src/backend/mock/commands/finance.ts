@@ -630,10 +630,13 @@ function simulate(debts: DebtIn[], strategy: string, extra: number, startMonth: 
     for (const d of debts) {
       const b = bal.get(d.name) ?? 0;
       if (b <= 0) continue;
-      const p = Math.min(b, d.min);
+      // Lenders never accept less than the month's interest plus 1% of the balance (typical card minimum).
+      const floor = Math.round((b * (d.apr / 100)) / 12 + b * 0.01);
+      const p = Math.min(b, Math.max(d.min, Math.min(floor, b)));
       bal.set(d.name, b - p);
       payments[d.name] = p;
       if (p < d.min && !minimumsOnly) pool += d.min - p;
+      if (p > d.min && !minimumsOnly) pool -= p - d.min;
     }
     if (!minimumsOnly) {
       for (const n of order) {
@@ -887,7 +890,8 @@ const PAYEE_RX = [
   /[X*]{4,}\d{4}/gi,
   /#\d{3,}/g,
   /\s+\d{2}\/\d{2}(\/\d{2,4})?/g,
-  /\s+[A-Z][A-Z .'-]+\s+[A-Z]{2}$/,
+  // City + state: one city word (the spec's greedy form also ate merchant words, e.g. "GREENLEAF MARKET OAKLAND CA").
+  /\s+[A-Z][A-Z.'-]+\s+[A-Z]{2}$/,
 ];
 
 export function normalizePayee(raw: string): string {
@@ -1067,6 +1071,8 @@ function matchCondition(c: RuleCondition, ctx: { payee: string; raw: string; mem
 }
 
 function rulesOf(ctx: MockCtx, setId: Id): Rule[] {
+  const set = finSets(ctx).get(setId);
+  if (set) ensureDefaultRules(ctx, set);
   return rulesTable(ctx)
     .filter((r) => r.setId === setId)
     .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name))
@@ -1652,7 +1658,12 @@ function previewRows(ctx: MockCtx, l: Ledger, s: ImportSession, mapping: ImportM
   let duplicates = 0;
   let categorized = 0;
   const usedPairs = new Set<Id>();
+  // Payee alias table (§15.2): a raw description seen before maps to the payee name and category used then.
+  const alias = new Map<string, { payee: string; categoryId: Id | null }>();
+  for (const t of l.txns) if (t.raw && !t.transferId) alias.set(normalizePayee(t.raw).toLowerCase(), { payee: t.payee, categoryId: t.categoryId ?? alias.get(normalizePayee(t.raw).toLowerCase())?.categoryId ?? null });
   for (const r of rows) {
+    const known = alias.get(r.payee.toLowerCase());
+    if (known) r.payee = known.payee;
     if (!r.date || r.amount === null) continue;
     const k = `${r.date}|${r.amount}|${r.payee.toLowerCase()}`;
     const n = (occ.get(k) ?? 0) + 1;
@@ -1675,9 +1686,10 @@ function previewRows(ctx: MockCtx, l: Ledger, s: ImportSession, mapping: ImportM
     const { rule, then } = applyRules(rules, { payee: r.payee, raw: r.rawPayee, memo: r.memo, amount: r.amount, accountId, accountName: acct.name, date: r.date });
     let categoryId = then.categoryId;
     let confidence: 'rule' | 'learned' | 'none' = rule && categoryId ? 'rule' : 'none';
-    const payee = then.renamePayee ?? r.payee;
+    const twinAcct = transferPair ? l.acctById.get(l.txnById.get(transferPair)?.accountId ?? '') : undefined;
+    const payee = then.renamePayee ?? (twinAcct ? twinAcct.name : r.payee);
     if (!categoryId && !transferPair) {
-      categoryId = learnedCategory(l, payee);
+      categoryId = learnedCategory(l, payee) ?? alias.get(r.payee.toLowerCase())?.categoryId ?? undefined;
       if (categoryId) confidence = 'learned';
     }
     if (duplicateOf) duplicates++;
