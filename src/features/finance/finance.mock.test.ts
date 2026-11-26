@@ -27,7 +27,7 @@ describe('finance mock backend (demo seed)', () => {
     expect(Number(res.toBeAssigned)).toBeCloseTo(before - 25, 2);
 
     const nw = await api.finance.networthSeries({ instanceId: inst, range: '1y' });
-    expect(nw.t.length).toBeGreaterThan(40);
+    expect(nw.t.length).toBe(12); // one point per month, like Rust `networth_series`
     nw.net.forEach((v, i) => expect(v).toBeCloseTo(nw.assets[i] - nw.liabilities[i], 1));
 
     const sk = await api.finance.cashflowSankey({ instanceId: inst, month: '2026-10' });

@@ -137,6 +137,11 @@ function optionName(ctx: MockCtx, propId: Id | undefined, optId: string | null):
   return opts.find((o) => o.id === optId)?.name ?? optId;
 }
 
+/** A liability's opening balance is the amount owed, either sign: counted as `−|opening|` (Rust `opening_as_counted`). */
+export function openingAsCounted(type: string, opening: number): number {
+  return DEBT_TYPES.has(type) ? -Math.abs(opening) : opening;
+}
+
 export function readLedger(ctx: MockCtx, set: FinSet): Ledger {
   let m = ledgerCache.get(ctx.db);
   if (!m) ledgerCache.set(ctx.db, (m = new Map()));
@@ -160,7 +165,8 @@ export function readLedger(ctx: MockCtx, set: FinSet): Ledger {
     type: selOf(r.values[ra['acct.type']]) ?? 'other_asset',
     institution: text(r.values[findProp(ctx, A.id, 'Institution')]),
     currency: text(r.values[ra['acct.currency']]) || set.baseCurrency,
-    opening: moneyOf(r.values[ra['acct.opening']]) ?? 0,
+    // Card and loan openings are amounts owed, whichever sign they were entered with (Rust `opening_as_counted`).
+    opening: openingAsCounted(selOf(r.values[ra['acct.type']]) ?? 'other_asset', moneyOf(r.values[ra['acct.opening']]) ?? 0),
     apr: numOf(r.values[ra['acct.apr']]),
     minPayment: moneyOf(r.values[ra['acct.min_payment']]) ?? 0,
     limit: moneyOf(r.values[ra['acct.limit']]),

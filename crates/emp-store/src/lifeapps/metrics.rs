@@ -578,8 +578,15 @@ fn accounts(d: &MetricData) -> Vec<Acct> {
         .map(|r| {
             let kind = a.opt(r, "acct.type");
             let computed = a.num(r, "balance");
+            // Card and loan openings are amounts owed, either sign (`emp_finance::ledger::opening_as_counted`).
+            let opening = a.num(r, "acct.opening").unwrap_or(0.0);
+            let opening = if is_debt(&kind) {
+                -opening.abs()
+            } else {
+                opening
+            };
             let balance = computed.unwrap_or_else(|| {
-                a.num(r, "acct.opening").unwrap_or(0.0)
+                opening
                     + txns
                         .iter()
                         .filter(|t| t.2.contains(&r.id))

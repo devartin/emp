@@ -178,6 +178,20 @@ pub struct Category {
     pub is_saving: bool,
 }
 
+/// The opening balance as the ledger counts it. A card or loan's opening balance is the amount owed, entered
+/// either way round — the setup wizard and sample data store it as a positive "what you owe", hand-built ledgers
+/// often as a negative balance — and either way it is a debt: `−|opening|`, because debts carry negative balances
+/// (§15.5; card purchases are negative amounts that deepen it). Other accounts keep their sign. The browser mock's
+/// `readLedger` and the frontend ledger apply the same rule.
+#[must_use]
+pub fn opening_as_counted(kind: AccountType, opening: Decimal) -> Decimal {
+    if kind.is_liability() {
+        -opening.abs()
+    } else {
+        opening
+    }
+}
+
 /// Balance of `account` as of `date` (inclusive): opening balance plus every counted transaction
 /// on or after the opening date.
 pub fn balance_as_of(account: &Account, txns: &[Txn], date: NaiveDate) -> Decimal {
@@ -193,6 +207,25 @@ pub fn balance_as_of(account: &Account, txns: &[Txn], date: NaiveDate) -> Decima
 mod tests {
     use super::*;
     use crate::testutil::txn;
+
+    #[test]
+    fn liability_openings_are_amounts_owed_either_sign() {
+        use rust_decimal::Decimal;
+        let d = |s: &str| s.parse::<Decimal>().unwrap();
+        assert_eq!(
+            opening_as_counted(AccountType::CreditCard, d("1800")),
+            d("-1800")
+        );
+        assert_eq!(
+            opening_as_counted(AccountType::StudentLoan, d("-950")),
+            d("-950")
+        );
+        assert_eq!(
+            opening_as_counted(AccountType::Checking, d("-50")),
+            d("-50")
+        );
+        assert_eq!(opening_as_counted(AccountType::Savings, d("400")), d("400"));
+    }
 
     #[test]
     fn balance() {

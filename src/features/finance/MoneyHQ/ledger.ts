@@ -125,7 +125,8 @@ function parseAll(schemas: Partial<Record<DbKey, DbSchema>>, rows: Partial<Recor
     name: cell.text(r.values[A!.database.primaryPropId]) || "Untitled account",
     type: cell.sel(r.values[roleOf(A, "acct.type")!]) ?? "other_asset",
     institution: inst ? cell.text(r.values[inst]) : "",
-    opening: num(cell.money(r.values[roleOf(A, "acct.opening")!])),
+    // Card and loan openings are amounts owed, whichever sign they were entered with (Rust `opening_as_counted`).
+    opening: openingAsCounted(cell.sel(r.values[roleOf(A, "acct.type")!]) ?? "other_asset", num(cell.money(r.values[roleOf(A, "acct.opening")!]))),
     apr: cell.num(r.values[roleOf(A, "acct.apr")!]),
     minPayment: num(cell.money(r.values[roleOf(A, "acct.min_payment")!])),
     limit: cell.money(r.values[roleOf(A, "acct.limit")!]) !== null ? num(cell.money(r.values[roleOf(A, "acct.limit")!])) : null,
@@ -350,6 +351,11 @@ export function useLedgerCtx(): Ledger {
 }
 
 export const DEBT_TYPES = new Set(["credit_card", "student_loan", "auto_loan", "mortgage", "personal_loan", "other_liability"]);
+
+/** A liability's opening balance is the amount owed, either sign: counted as `−|opening|` (Rust `opening_as_counted`). */
+export function openingAsCounted(type: string, opening: number): number {
+  return DEBT_TYPES.has(type) ? -Math.abs(opening) : opening;
+}
 /** The debts the planner works on (Rust `ledger_debts`, the mock's `debtsOf` — the debts behind
  * `FinanceOverview.debtFreeDate`): open loan/card accounts carrying a balance owed, at their minimum payment or
  * `max($25, 2%)` without one. */

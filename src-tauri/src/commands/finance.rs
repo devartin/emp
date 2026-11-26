@@ -28,13 +28,13 @@ use emp_finance::money::Currency;
 use emp_finance::period::{YearMonth, budget_period};
 use emp_finance::rules::{CategoryLearner, Rule, RuleSet, RuleTxn};
 use emp_finance::{Decimal, FinanceError};
-use emp_store::{MetricValue, Store};
 use emp_store::dbmodel::{
     CellValue, DbSchema, Property, RecurrenceMode, RecurrenceValue, RowDto, RowUpdate, rich,
     rich_plain,
 };
 use emp_store::model::{PageKind, PageMeta};
 use emp_store::query::config::HasConfig;
+use emp_store::{MetricValue, Store};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -561,12 +561,17 @@ impl Ledger {
             let closed = d.keyed_id("closed", &["Closed"]);
             for r in &d.rows {
                 let c = text(get(r, &cur));
+                let kind = account_type(d.option_name(r, ty).as_deref());
                 l.accounts.push(Account {
                     id: r.id.clone(),
                     name: d.title(r),
-                    kind: account_type(d.option_name(r, ty).as_deref()),
+                    kind,
                     currency: Currency::new(c.trim()).unwrap_or_else(|_| base.clone()),
-                    opening_balance: amount(get(r, &opening)).unwrap_or_default(),
+                    // Card and loan openings are amounts owed, whichever sign they were entered with.
+                    opening_balance: emp_finance::ledger::opening_as_counted(
+                        kind,
+                        amount(get(r, &opening)).unwrap_or_default(),
+                    ),
                     opening_date: None,
                     apr_pct: amount(get(r, &apr)),
                     min_payment: amount(get(r, &minp)),
@@ -1526,7 +1531,10 @@ impl emp_store::MetricProvider for FinanceMetrics {
         match result {
             Ok(v) => v,
             Err(e) => {
-                tracing::info!(code = e.code.as_str(), "finance metrics fell back to built-ins");
+                tracing::info!(
+                    code = e.code.as_str(),
+                    "finance metrics fell back to built-ins"
+                );
                 BTreeMap::new()
             }
         }
@@ -3473,7 +3481,11 @@ mod tests {
         let (marks, need) = portfolio_marks_cached(&store, None, &money, today, None)
             .unwrap()
             .expect("portfolio");
-        assert_eq!(need, MarksRefresh::default(), "no router: nothing to refetch");
+        assert_eq!(
+            need,
+            MarksRefresh::default(),
+            "no router: nothing to refetch"
+        );
         let with = check(Some(&marks));
         let inv = money_of(&with["investments"]);
         assert_eq!(inv, marks.value_at(today));
@@ -3536,9 +3548,9 @@ mod tests {
             ("left_to_spend", "leftToSpend"),
         ] {
             match o.get(field) {
-                Some(v) => assert!(
-                    (num(metric) - emp_finance::money::to_f64(money_of(v))).abs() < 0.005
-                ),
+                Some(v) => {
+                    assert!((num(metric) - emp_finance::money::to_f64(money_of(v))).abs() < 0.005)
+                }
                 None => assert!(val(metric).is_null(), "{metric}: no figure, no fallback"),
             }
         }
@@ -3563,10 +3575,11 @@ mod tests {
         let debts = ledger_debts(&l, today);
         let o = serde_json::to_value(overview(&store, &money, YearMonth::of(today), None).unwrap())
             .unwrap();
-        if debts.is_empty() {
-            assert!(o.get("debtFreeDate").is_none());
-            return;
-        }
+        // The sample's card and loan are entered as amounts owed (positive openings): they are debts, and
+        // liabilities in net worth — never assets.
+        assert_eq!(debts.len(), 2, "card and student loan");
+        let owed: Decimal = debts.iter().map(|d| d.balance).sum();
+        assert!(money_of(&o["liabilities"]) >= owed);
         // The Debt tab's planner, same debts, minimums only, starting next month.
         let req = emp_finance::debt::DebtPlanRequest {
             debts: debts
