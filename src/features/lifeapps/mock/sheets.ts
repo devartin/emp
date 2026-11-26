@@ -4,17 +4,17 @@ import type { MockCtx } from '@/backend/mock/ctx';
 import { createWorkbook } from '@/backend/mock/commands/sheet';
 import { SHEET_TITLES } from '../engine/plan';
 import { md } from './content';
-import { emoji, isoDay, type Env, type InstanceRecord } from './env';
+import { isoDay, lucide, type Env, type InstanceRecord } from './env';
 import { buildForIntent } from './workbooks';
 
-const ICONS: Record<string, string> = { loan: '🏦', budget: '🧾', decision: '⚖️', project_budget: '🔨', timesheet: '⏱️', inventory: '📦', split: '🧮', savings: '🌱', blank: '📊' };
+const ICONS: Record<string, string> = { loan: 'landmark', budget: 'receipt', decision: 'scale', project_budget: 'hammer', timesheet: 'timer', inventory: 'package', split: 'calculator', savings: 'sprout', blank: 'chart-column' };
 
 export function addWorkbook(ctx: MockCtx, inst: InstanceRecord, intent: string, structure: string[]): Id {
   const res = createWorkbook(ctx, {
     workspaceId: inst.workspaceId,
     parentId: inst.rootPageId,
     title: SHEET_TITLES[intent] ?? 'Workbook',
-    icon: emoji(ICONS[intent] ?? '📊'),
+    icon: lucide(ICONS[intent] ?? 'chart-column'),
     silent: ctx.seeding,
     build: (b) => buildForIntent(b, intent, { structure, today: isoDay(ctx.clock.now()) }),
   });
@@ -34,7 +34,7 @@ export async function installSheets(env: Env): Promise<void> {
     await env.step('Writing the build guide');
     env.page('guide', {
       title: 'How these workbooks are built',
-      icon: emoji('📐'),
+      icon: lucide('ruler'),
       blocks: md(`Every Spreadsheet Studio workbook follows the same conventions, so anyone can audit it.
 - **Inputs** are tinted with your accent colour. Change these; leave formulas alone.
 - **Outputs** are bold.

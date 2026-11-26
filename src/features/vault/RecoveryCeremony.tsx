@@ -155,7 +155,7 @@ export function RecoveryCeremony({ words, onDone, allowSkip = true, footerStart,
             exit={{ opacity: 0, transition: { duration: 0.1 } }}
           >
             <EyeOff size={16} className="flex-none text-tertiary" aria-hidden />
-            <span className="flex-1 text-body-sm text-secondary">Key hidden — confirm it from the copy you saved.</span>
+            <span className="flex-1 text-body-sm text-secondary">Key hidden. Confirm it from the copy you saved.</span>
             <Button size="xs" variant="ghost" onClick={() => setReveal(true)}>
               Show again
             </Button>

@@ -29,11 +29,11 @@ const RECOMMENDERS: Record<string, (a: Record<string, unknown>) => Recommendatio
     const accounts = list(a.accounts);
     const highApr = accounts.some((x) => ['credit_card', 'personal_loan'].includes(String(x.type)) && Number(x.apr ?? 0) >= 0.1 && Number(x.balance ?? 0) > 0);
     if (stability === 'irregular' || stability === 'variable')
-      return { value: 'zero_based', why: 'Your income varies, so giving each dollar a job as it arrives (with a small income buffer) keeps the month steady.', source: 'Common guideline for irregular income' };
+      return { value: 'zero_based', why: 'Your income varies, so each dollar is assigned as it arrives, with a small buffer.', source: 'Irregular income' };
     if (highApr)
-      return { value: 'zero_based', why: 'You carry high-interest debt. Assigning every dollar makes room for extra payments.', source: 'Common guideline: pay down debt above ~10% APR first' };
-    if (a.simple === true) return { value: 'fifty_thirty_twenty', why: 'You asked for something simple: three buckets, no line items.', source: 'Common guideline' };
-    return { value: 'fifty_thirty_twenty', why: 'Stable income and no high-interest debt — three buckets are easy to keep up with.', source: 'Common guideline: 50% needs, 30% wants, 20% savings' };
+      return { value: 'zero_based', why: 'You carry high-interest debt. Assigning every dollar makes room for extra payments.', source: 'Debt above about 10% APR' };
+    if (a.simple === true) return { value: 'fifty_thirty_twenty', why: 'You asked for something simple: three buckets, no line items.', source: 'Your answer' };
+    return { value: 'fifty_thirty_twenty', why: 'Stable income and no high-interest debt: three buckets are easy to keep up with.', source: '50% needs, 30% wants, 20% savings' };
   },
   recommend_debt_strategy() {
     return { value: { strategy: 'avalanche' }, why: 'Paying the highest APR first minimises total interest.', source: 'Debt avalanche (mathematically optimal)' };
@@ -44,9 +44,9 @@ const RECOMMENDERS: Record<string, (a: Record<string, unknown>) => Recommendatio
     const stability = String(income.stability ?? 'stable');
     const dependents = Number(household.dependents ?? 0);
     const dual = String(household.mode ?? 'single').startsWith('partner');
-    if (stability !== 'stable') return { value: { months: 9 }, why: 'Irregular or self-employed income needs a deeper cushion.', source: 'Common guideline: 9–12 months of essential expenses' };
-    if (dual && dependents === 0) return { value: { months: 3 }, why: 'Two stable incomes and no dependents: a shorter cushion is usually enough.', source: 'Common guideline: 3–6 months of essential expenses' };
-    return { value: { months: 6 }, why: 'One income or dependents relying on you: six months gives more room.', source: 'Common guideline: 3–6 months of essential expenses' };
+    if (stability !== 'stable') return { value: { months: 9 }, why: 'Irregular or self-employed income needs a deeper cushion.', source: '9–12 months of essential expenses' };
+    if (dual && dependents === 0) return { value: { months: 3 }, why: 'Two stable incomes and no dependents: a shorter cushion is usually enough.', source: '3–6 months of essential expenses' };
+    return { value: { months: 6 }, why: 'One income or dependents relying on you: six months gives more room.', source: '3–6 months of essential expenses' };
   },
   recommend_allocation(a) {
     const risk = isObj(a.risk) ? a.risk : {};
@@ -144,7 +144,7 @@ export function templateTitle(m: LifeAppManifest, t: Template, answers: Record<s
   if (m.id === 'spreadsheet-studio' && t.key === 'workbook') return SHEET_TITLES[String(answers.intent ?? 'blank')] ?? 'Workbook';
   if (m.id === 'tax-organizer' && t.key === 'hub') {
     const j = isObj(answers.jurisdiction) ? answers.jurisdiction : {};
-    return `Tax Year ${Number(j.year ?? (today ? Number(today.slice(0, 4)) : 2026))}`;
+    return `Tax year ${Number(j.year ?? (today ? Number(today.slice(0, 4)) : 2026))}`;
   }
   return spec.title ?? t.key;
 }

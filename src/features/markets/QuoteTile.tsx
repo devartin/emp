@@ -24,7 +24,6 @@ export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: Symb
       data-raise={selected ? undefined : ""}
       data-latched={selected ? "" : undefined}
       data-light=""
-      data-tilt={selected ? undefined : "3"}
       aria-pressed={onClick ? !!selected : undefined}
       onClick={onClick}
     >

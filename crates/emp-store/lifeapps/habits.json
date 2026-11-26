@@ -197,7 +197,7 @@
         "blocks": [
           {
             "t": "callout",
-            "icon": "🌱",
+            "icon": "lucide:sprout",
             "color": "green",
             "md": "I'm becoming someone who {{if(answers.identity == \"\", \"shows up a little every day\", answers.identity)}}."
           },
@@ -231,7 +231,7 @@
       "optional": false,
       "spec": {
         "title": "How habits stick",
-        "icon": "🧩",
+        "icon": "lucide:puzzle",
         "blocks": [
           {
             "t": "md",
@@ -246,7 +246,7 @@
       "optional": false,
       "spec": {
         "title": "Weekly habit review",
-        "icon": "🪞",
+        "icon": "lucide:scan-face",
         "template": true,
         "blocks": [
           {
@@ -278,7 +278,7 @@
       "optional": false,
       "spec": {
         "title": "Habits",
-        "icon": "🌱",
+        "icon": "lucide:sprout",
         "properties": [
           {
             "key": "name",
@@ -468,7 +468,7 @@
       "optional": false,
       "spec": {
         "title": "Habit log",
-        "icon": "🗓️",
+        "icon": "lucide:calendar",
         "properties": [
           {
             "key": "name",

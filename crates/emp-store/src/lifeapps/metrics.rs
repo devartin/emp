@@ -1869,14 +1869,15 @@ fn tax_fn(id: &str, d: &MetricData) -> Option<Out> {
                 .rows
                 .iter()
                 .map(|r| {
-                    ded.num(r, "amount").unwrap_or(0.0) * ded.num(r, "pct").unwrap_or(100.0) / 100.0
+                    // `pct` is a fraction (1 = 100%), as in the mock's Deductions database.
+                    ded.num(r, "amount").unwrap_or(0.0) * ded.num(r, "pct").unwrap_or(1.0)
                 })
                 .sum();
             num_out(
                 total,
                 money(total, cur),
                 vec![line(
-                    "Σ amount × deductible %",
+                    "Σ amount × deductible share",
                     money(total, cur),
                     Some("Deductions & credits"),
                 )],

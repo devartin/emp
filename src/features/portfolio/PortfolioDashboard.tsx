@@ -5,7 +5,6 @@
  * `tab = "holding:<SYMBOL>"` opens a holding page.
  */
 import { CandlestickChart, ChevronRight, RefreshCw } from "lucide-react";
-import { m } from "motion/react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { Id, Insight, PerfRange, PortfolioSummary } from "@/backend/types";
@@ -19,7 +18,6 @@ import { Amount } from "@/ui/Amount";
 import { Button } from "@/ui/Button";
 import { DeltaPill, GainLoss } from "@/ui/DeltaPill";
 import { EdgeLight } from "@/ui/motion/EdgeLight";
-import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Segmented } from "@/ui/Segmented";
@@ -27,6 +25,8 @@ import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import type { TabItem } from "@/ui/Tabs";
 import { DivergingBars } from "../finance/shared/charts";
+import { Figure } from "../finance/shared/Figure";
+import { figureLabel, periodReturn, portfolioParts, rangeYears } from "../finance/shared/definitions";
 import { assignColors, fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney, fmtWhole } from "../finance/shared/format";
 import { useAsync, useScrubIdx, useScrubStore, type ScrubStore } from "../finance/shared/hooks";
 import { Disclaimer, HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
@@ -121,32 +121,47 @@ export default function PortfolioDashboard({ instanceId, tab }: PortfolioDashboa
 // ───────────────────────────────────────────────────────────────────────────── overview
 
 function Overview({ instanceId, summary: s, go }: { instanceId: Id; summary?: PortfolioSummary; go: (t: PTab) => void }) {
+  // `pf.mwr.ytd` is the YTD range's money-weighted figure (annualised XIRR from portfolio_performance, the same on both
+  // backends) turned into this year's own return — so it equals the hero legend's YTD figure by construction.
+  const ytd = useAsync(() => api.portfolio.performance({ instanceId, range: "ytd" }), [instanceId]);
+  const ytdMwr = ytd.data?.xirr !== undefined ? periodReturn(ytd.data.xirr, rangeYears(ytd.data.t)) : null;
+  const parts = s ? portfolioParts(s) : null;
   return (
-    <m.div className="fh-grid" variants={staggerList(0.04)} initial="hidden" animate="show">
-      <m.div variants={staggerItem} className="fh-span-8">
+    <div className="fh-grid">
+      <div className="fh-span-8">
         <ValueHero instanceId={instanceId} summary={s} />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-4 flex flex-col gap-3">
-        <Kpi label="Unrealised gain" value={s ? <GainLoss value={num(s.unrealized.amount)}><span data-sensitive=""><RollingNumber value={num(s.unrealized.amount)} format={(n) => fmtWhole(Math.round(n), { signed: true })} countUpKey="pf:unrealised" sensitive /></span></GainLoss> : null} sub={s ? `${fmtPct(s.unrealizedPct, 1, true)} on cost` : ""} />
-        <Kpi label="Money-weighted return" value={s ? <span>{s.xirrAll !== undefined ? fmtPct(s.xirrAll, 1, true) : "—"}<span className="text-tertiary text-body-sm font-medium"> /yr</span></span> : null} sub={s?.xirrYtd !== undefined ? `${fmtPct(s.xirrYtd, 1, true)} year to date (XIRR)` : ""} />
-        <Kpi label="Dividends" value={s ? <span data-sensitive=""><RollingNumber value={num(s.divTtm.amount)} format={(n) => fmtWhole(Math.round(n))} countUpKey="pf:div" sensitive /></span> : null} sub={s ? <>last 12 months · <Sensitive>{fmtWhole(s.divFwd12m.amount, { currency: s.divFwd12m.currency })}</Sensitive> expected next 12</> : ""} onClick={() => go("dividends")} />
+      </div>
+      <div className="fh-span-4 flex flex-col gap-3">
+        <Kpi
+          label="Unrealised gain"
+          value={s ? <GainLoss value={num(s.unrealized.amount)}><Figure id="pf.unrealised" inputs={[{ label: "Holdings value", value: fmtWhole(parts?.holdings ?? 0, { currency: s.totalValue.currency }) }, { label: "Cost basis", value: fmtWhole(parts?.cost ?? 0, { currency: s.totalValue.currency }) }, { label: "Gain on cost", value: fmtPct(s.unrealizedPct, 1, true), sensitive: false }]}><Sensitive>{fmtWhole(s.unrealized.amount, { signed: true, currency: s.unrealized.currency })}</Sensitive></Figure></GainLoss> : null}
+          sub={s ? `${fmtPct(s.unrealizedPct, 1, true)} on cost` : ""}
+        />
+        {/* Three returns, three names (definitions.ts): since first buy (annualised), this year (not annualised), and
+            the chart range's money-weighted figure in the hero legend. */}
+        <Kpi
+          label={figureLabel("pf.mwr.all")}
+          value={s ? s.xirrAll !== undefined ? <Figure id="pf.mwr.all">{fmtPct(s.xirrAll, 1, true)}<span className="text-tertiary text-body-sm font-medium"> a year</span></Figure> : "—" : null}
+          sub={ytdMwr ? <>This year <Figure id="pf.mwr.ytd">{fmtPct(ytdMwr.value, 1, true)}</Figure></> : ""}
+        />
+        <Kpi label="Dividends" value={s ? <span data-sensitive=""><RollingNumber value={num(s.divTtm.amount)} format={(n) => fmtWhole(Math.round(n))} sensitive countUp={false} /></span> : null} sub={s ? <>last 12 months · <Sensitive>{fmtWhole(s.divFwd12m.amount, { currency: s.divFwd12m.currency })}</Sensitive> expected next 12</> : ""} onClick={() => go("dividends")} />
         <Kpi label="Fees" value={s ? <Sensitive>{fmtWhole(s.feesPerYear.amount, { currency: s.feesPerYear.currency })}</Sensitive> : null} sub={s ? `a year · ${fmtPct(num(s.feesPerYear.amount) / Math.max(1, num(s.totalValue.amount)), 2)} of the portfolio` : ""} />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-7">
+      </div>
+      <div className="fh-span-7">
         <Allocation summary={s} onRebalance={() => go("rebalance")} />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-5">
+      </div>
+      <div className="fh-span-5">
         <Section title="Today's heat map" subtitle="Tile size is value · colour is today's move">
           <Treemap data={(s?.holdings ?? []).map((h) => ({ id: h.symbol, label: ticker(h.symbol), value: num(h.value.amount), change: h.dayPct ?? 0, sub: h.dayPct !== undefined ? `${h.dayPct >= 0 ? "+" : "−"}${Math.abs(h.dayPct * 100).toFixed(2)}%` : undefined }))} colorBy="change" changeScale={0.03} height={268} loading={!s} summaryLabel="Holdings by value, coloured by today's change" />
         </Section>
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-12">
+      </div>
+      <div className="fh-span-12">
         <TopHoldings instanceId={instanceId} summary={s} />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-12">
+      </div>
+      <div className="fh-span-12">
         <PfInsights instanceId={instanceId} summary={s} />
-      </m.div>
-    </m.div>
+      </div>
+    </div>
   );
 }
 
@@ -211,9 +226,21 @@ function ValueHero({ instanceId, summary: s }: { instanceId: Id; summary?: Portf
         />
       </div>
       <div className="fh-groove -mx-5 mt-1" />
-      <HeroLegend scrub={scrub} data={data} summary={s} xirr={perf.data?.xirr} />
+      <HeroLegend scrub={scrub} data={data} summary={s} xirr={perf.data?.xirr} years={rangeYears(perf.data?.t)} rangeLabel={RANGES.find((r) => r.value === range)?.label ?? range} />
     </section>
   );
+}
+
+/** The popover inputs for `pf.value`: holdings at market value, uninvested cash when there is any, and the count. */
+function valueInputs(s: PortfolioSummary) {
+  const p = portfolioParts(s);
+  const cur = s.totalValue.currency;
+  return [
+    { label: "Holdings at market value", value: fmtWhole(p.holdings, { currency: cur }) },
+    ...(p.cash !== 0 ? [{ label: "Uninvested cash", value: fmtWhole(p.cash, { currency: cur }) }] : []),
+    { label: "Holdings", value: String(s.holdings.length), sensitive: false },
+    { label: "As of", value: new Date(s.asOf).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }), sensitive: false },
+  ];
 }
 
 function HeroReadout({ scrub, data, summary: s, xf }: { scrub: ScrubStore; data: HeroPoint[]; summary?: PortfolioSummary; xf: (v: unknown) => string }) {
@@ -226,9 +253,17 @@ function HeroReadout({ scrub, data, summary: s, xf }: { scrub: ScrubStore; data:
   return (
     <div>
       <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
-        Total value
+        {figureLabel("pf.value")}
       </div>
-      <div className="mt-1 h-[48px] flex items-center">{value !== null ? <HeroMoney value={value} cents={false} countUpKey="pf:value" scrubbing={idx !== null} /> : <Skeleton width={220} height={38} />}</div>
+      <div className="mt-1 h-[48px] flex items-center">
+        {value !== null ? (
+          <Figure id="pf.value" block inputs={s ? valueInputs(s) : undefined}>
+            <HeroMoney value={value} cents={false} currency={s?.totalValue.currency} scrubbing={idx !== null} />
+          </Figure>
+        ) : (
+          <Skeleton width={220} height={38} />
+        )}
+      </div>
       <div className="flex items-center gap-2 h-6 mt-1">
         {cur && first ? (
           <>
@@ -255,20 +290,29 @@ function HeroReadout({ scrub, data, summary: s, xf }: { scrub: ScrubStore; data:
   );
 }
 
-function HeroLegend({ scrub, data, summary: s, xirr }: { scrub: ScrubStore; data: HeroPoint[]; summary?: PortfolioSummary; xirr?: number }) {
+function HeroLegend({ scrub, data, summary: s, xirr, years, rangeLabel }: { scrub: ScrubStore; data: HeroPoint[]; summary?: PortfolioSummary; xirr?: number; years: number; rangeLabel: string }) {
+  const mwr = xirr !== undefined ? periodReturn(xirr, years) : null;
   const idx = useScrubIdx(scrub);
   const cur = idx !== null ? data[idx] : null;
   return (
     <div className="flex items-center gap-5 pt-2.5 text-caption" style={{ fontWeight: 400 }}>
       <span className="inline-flex items-center gap-1.5 text-tertiary">
         <i className="fh-key" style={{ background: "var(--chart-line)" }} />
-        Value <b className="text-primary tabular font-medium ml-1"><Sensitive>{cur ? fmtWhole(cur.value) : s ? fmtWhole(num(s.totalValue.amount)) : "—"}</Sensitive></b>
+        {figureLabel("pf.value")} <b className="text-primary tabular font-medium ml-1"><Sensitive>{cur ? fmtWhole(cur.value) : s ? fmtWhole(num(s.totalValue.amount)) : "—"}</Sensitive></b>
       </span>
       <span className="inline-flex items-center gap-1.5 text-tertiary">
         <i className="fh-key" style={{ background: "var(--text-tertiary)" }} />
         Contributed <b className="text-primary tabular font-medium ml-1"><Sensitive>{cur ? fmtWhole(cur.contributions) : data.length ? fmtWhole(data[data.length - 1].contributions) : "—"}</Sensitive></b>
       </span>
-      {xirr !== undefined ? <span className="ml-auto text-tertiary">XIRR this period {fmtPct(xirr, 1, true)}/yr</span> : null}
+      {mwr ? (
+        <span className="ml-auto text-tertiary">
+          {figureLabel("pf.mwr.range", rangeLabel)}{" "}
+          <Figure id="pf.mwr.range" range={rangeLabel}>
+            <b className="text-primary tabular font-medium">{fmtPct(mwr.value, 1, true)}</b>
+          </Figure>
+          {mwr.annualised ? " a year" : ""}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -423,18 +467,18 @@ function PfInsights({ instanceId, summary: s }: { instanceId: Id; summary?: Port
     const tab = (t: string) => ({ t: "app" as const, instanceId, tab: t });
     const total = num(s.totalValue.amount);
     for (const a of s.allocation.filter((x) => x.status === "outside_band").slice(0, 2)) {
-      out.push({ id: `drift:${a.assetClass}`, appInstanceId: instanceId, ruleId: "drift-band", severity: "warn", title: `${a.assetClass} is ${fmtPp(a.drift)} from target`, body: `Now ${a.current.toFixed(1)}% against a ${a.target}% target. New contributions can close most of the gap without selling.`, math: [{ label: "Current", value: `${a.current.toFixed(1)}%` }, { label: "Target", value: `${a.target}%` }, { label: "Band", value: "±5 pp or 25% of target" }], actions: [{ label: "Plan a rebalance", route: tab("rebalance") }] });
+      out.push({ id: `drift:${a.assetClass}`, appInstanceId: instanceId, ruleId: "drift-band", severity: "warn", title: `${a.assetClass} is ${fmtPp(a.drift)} from target`, body: `Now ${a.current.toFixed(1)}% against a ${a.target}% target.`, math: [{ label: "Current", value: `${a.current.toFixed(1)}%` }, { label: "Target", value: `${a.target}%` }, { label: "Band", value: "±5 pp or 25% of target" }], actions: [{ label: "Plan a rebalance", route: tab("rebalance") }] });
     }
     for (const h of s.holdings.filter((x) => x.weight > 0.1 && !/ETF|Fund/i.test(x.name)).slice(0, 1)) {
-      out.push({ id: `conc:${h.symbol}`, appInstanceId: instanceId, ruleId: "concentration-10", severity: "tip", title: `${ticker(h.symbol)} is ${(h.weight * 100).toFixed(0)}% of the portfolio`, body: "A single company above 10% adds risk that diversification usually removes. Consider whether that's intentional.", math: [{ label: "Value", value: fmtWhole(h.value.amount, { currency: h.value.currency }) }, { label: "Share", value: fmtPct(h.weight, 1) }], actions: [{ label: "Open holding", route: tab(`holding:${h.symbol}`) }] });
+      out.push({ id: `conc:${h.symbol}`, appInstanceId: instanceId, ruleId: "concentration-10", severity: "tip", title: `${ticker(h.symbol)} is ${(h.weight * 100).toFixed(0)}% of the portfolio`, body: "One holding above 10% of the portfolio.", math: [{ label: "Value", value: fmtWhole(h.value.amount, { currency: h.value.currency }) }, { label: "Share", value: fmtPct(h.weight, 1) }], actions: [{ label: "Open holding", route: tab(`holding:${h.symbol}`) }] });
     }
-    out.push({ id: "ips", appInstanceId: instanceId, ruleId: "ips-review", severity: "tip", title: "Write down your investment policy", body: "An IPS records your targets and the rules you follow when markets fall — so decisions in a downturn are already made.", actions: [{ label: "Open IPS", route: tab("ips") }] });
-    if (total > 0 && s.allocation.find((a) => a.assetClass === "Cash" && a.current > 5)) out.push({ id: "cash", appInstanceId: instanceId, ruleId: "cash-drag", severity: "info", title: "Cash is above 5%", body: "Uninvested cash earns less over time. Consider putting it to work toward your targets.", actions: [{ label: "Plan a rebalance", route: tab("rebalance") }] });
+    out.push({ id: "ips", appInstanceId: instanceId, ruleId: "ips-review", severity: "tip", title: "Write down your investment policy", body: "Targets and rebalancing rules, written down.", actions: [{ label: "Open IPS", route: tab("ips") }] });
+    if (total > 0 && s.allocation.find((a) => a.assetClass === "Cash" && a.current > 5)) out.push({ id: "cash", appInstanceId: instanceId, ruleId: "cash-drag", severity: "info", title: "Cash is above 5%", body: "Cash above 5% of the portfolio.", actions: [{ label: "Plan a rebalance", route: tab("rebalance") }] });
     return out;
   }, [remote.data, s, instanceId]);
   if (!s) return null;
   return (
-    <Section title="Insights" subtitle="Common guidelines applied to your portfolio — education, not advice.">
+    <Section title="Insights">
       {list.length ? (
         <div className="fh-insights">
           {list.slice(0, 6).map((i) => (
@@ -442,7 +486,7 @@ function PfInsights({ instanceId, summary: s }: { instanceId: Id; summary?: Port
           ))}
         </div>
       ) : (
-        <Quiet title="All clear" body="Allocation is within bands and nothing else needs attention." />
+        <Quiet title="Nothing to flag" body="Every asset class is within its band." />
       )}
     </Section>
   );

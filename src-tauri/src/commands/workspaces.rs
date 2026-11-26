@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn icons_are_bounded() {
         let ok: Icon =
-            serde_json::from_value(serde_json::json!({ "t": "emoji", "v": "📒" })).unwrap();
+            serde_json::from_value(serde_json::json!({ "t": "emoji", "v": "\u{1F4D2}" })).unwrap();
         assert!(check_icon("icon", &ok).is_ok());
         let long: Icon =
             serde_json::from_value(serde_json::json!({ "t": "lucide", "v": "x".repeat(100) }))

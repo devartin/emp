@@ -16,7 +16,7 @@ import { parseDate } from "chrono-node";
 import { Command } from "cmdk";
 import {
   ArrowRight, Calculator, CalendarDays, Check, ChevronLeft, CornerDownLeft, Database, FilePlus, FileSearch, Hash, Keyboard,
-  LineChart, Search, Sparkles, TextSearch,
+  LineChart, Plus, Search, Settings, TextSearch,
 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -40,22 +40,19 @@ import { useTree } from "@/stores/tree";
 import { useUi, type PaletteMode } from "@/stores/ui";
 import { useVault } from "@/stores/vault";
 import { useWorkspace } from "@/stores/workspace";
-import { DeltaPill } from "@/ui/DeltaPill";
 import { Kbd } from "@/ui/Kbd";
-import { GlideHighlight } from "@/ui/GlideHighlight";
 import { Spinner } from "@/ui/Spinner";
-import { RollingNumber } from "@/ui/motion/RollingNumber";
-import { duration, ease, spring } from "@/ui/motion/tokens";
+import { duration, ease } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { calc, calcSync, type CalcResult } from "./calc";
 import { fuzzy, fuzzyAny } from "./fuzzy";
 import { commandIcon } from "./icons";
-import { captureAccount, describeCapture, loadMoneyTarget, parseCapture, type MoneyTarget } from "./capture";
+import type { MoneyTarget } from "./capture";
 import { takeHeldKeys } from "./keyBuffer";
 import { NESTED, type NestedPage, type NestedId } from "./nested";
 import { takePaletteOrigin } from "./origin";
-import { placesFor } from "./places";
-import { runCapture } from "./runCapture";
+import type { Place } from "./places";
+import { useExtras } from "./useExtras";
 import "./palette.css";
 
 // ───────────────────────────────────────────────────────────────────────────── model
@@ -97,7 +94,7 @@ const SCOPE_LABEL: Record<Scope, string> = {
 };
 
 const PLACEHOLDER: Record<Scope, string> = {
-  all: "Search pages or type > for commands…",
+  all: "Search, or add with t, n or −12.50…",
   pages: "Find a page…",
   commands: "Run a command…",
   tags: "Find a database or row…",
@@ -159,9 +156,9 @@ function Highlight({ text, ranges }: { text: string; ranges?: [number, number][]
   return <>{out}</>;
 }
 
-function IconTile({ children, tone }: { children: ReactNode; tone?: string }) {
+function IconTile({ children }: { children: ReactNode }) {
   return (
-    <span className="cmdk-icon" style={tone ? { background: tone, color: "#fff", borderColor: "transparent" } : undefined} aria-hidden>
+    <span className="cmdk-icon" aria-hidden>
       {children}
     </span>
   );
@@ -269,8 +266,6 @@ function scatteredHit(r: { match: number; ranges: [number, number][] }, title: s
   const i = r.ranges[0][0];
   return i > 0 && !/[\s\-_/.,:;()[\]→>·—–]/.test(title[i - 1]) && !(title[i - 1] === title[i - 1].toLowerCase() && title[i] !== title[i].toLowerCase());
 }
-
-const NO_ITEMS: Item[] = [];
 
 // ───────────────────────────────────────────────────────────────────────────── component
 
@@ -390,8 +385,6 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<(() => void) | null>(null);
-  const reduced = useReducedMotionPref();
-  const entering = false;
 
   // Re-sync when the store asks for another mode while open (⌘P while ⌘K is open).
   useEffect(() => {
@@ -422,6 +415,27 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
   const frequency = useSearch((s) => s.frequency);
   const encrypted = useVault((s) => !!s.status?.encrypted);
   const route = useRoute();
+
+  // Capture (t / n / −12.50 …) and places load as their own chunk when the palette opens (useExtras.ts).
+  const extras = useExtras();
+  const capture = useMemo(() => (extras && !nested && scope === "all" ? extras.parseCapture(q) : null), [extras, q, nested, scope]);
+  const hasLifeOs = lifeapps.some((a) => a.appId === "life-os" && !a.detached);
+  const hasMoney = lifeapps.some((a) => a.appId === "money-hq" && !a.detached);
+  const [moneyTarget, setMoneyTarget] = useState<MoneyTarget | null>(null);
+  const [account, setAccount] = useState<{ id: Id; name: string } | null>(null);
+  const wantsMoney = capture?.kind === "money";
+  useEffect(() => {
+    if (!wantsMoney || moneyTarget || !hasMoney || !extras) return;
+    let live = true;
+    void extras.loadMoneyTarget().then(async (t) => {
+      if (!live || !t) return;
+      setMoneyTarget(t);
+      setAccount(await extras.captureAccount(t));
+    });
+    return () => {
+      live = false;
+    };
+  }, [wantsMoney, moneyTarget, hasMoney, extras]);
 
   const wantContent = !nested && (scope === "all" || scope === "pages" || scope === "tags") && q.trim().length > 0;
   const content = useContentHits(q, wantContent, scope === "tags" ? ["database", "row"] : undefined);
@@ -624,8 +638,8 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
               group: "Life apps",
               title: root?.title || idn.name,
               icon: (
-                <IconTile tone={idn.color}>
-                  <Icon size={14} strokeWidth={2} />
+                <IconTile>
+                  <Icon size={16} strokeWidth={1.75} />
                 </IconTile>
               ),
               route: r,
@@ -634,8 +648,62 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
           }
           break;
         }
+        // A capture prefix puts its row first; a page whose title starts the same way ("Task list") is the next row,
+        // one ↓ away (Flow r2 §2.7: prefix grammar, capture row first, the page second).
+        let captureRow: Item | null = null;
+        if (capture && extras) {
+          const d = extras.describeCapture(capture, { lifeOs: hasLifeOs, money: hasMoney, account: account?.name });
+          const failed = capture.kind === "error";
+          captureRow = {
+            id: "capture:row",
+            group: "Add",
+            title: d.title,
+            subtitle: d.meta.join(" · ") || (failed ? (capture.target === "money" ? "Type an amount, then who it was paid to" : undefined) : undefined),
+            icon: (
+              <IconTile>
+                <Plus size={16} strokeWidth={1.75} />
+              </IconTile>
+            ),
+            hint: failed ? undefined : capture.kind === "money" && moneyTarget && moneyTarget.accounts.length > 1 ? "Tab: account" : "Add",
+            stay: failed && !(capture.target === "money" && hasMoney),
+            run: () => {
+              if (capture.kind !== "error") return finish(() => void extras.runCapture(capture, account?.id));
+              // A money line that can't be read opens Money HQ's transactions, where the full form lives.
+              const money = lifeapps.find((a) => a.appId === "money-hq" && !a.detached);
+              if (capture.target === "money" && money) finish(() => navigate({ t: "app", instanceId: money.id, tab: "transactions" }));
+            },
+          };
+        }
+        const lower = query.toLowerCase();
+        if (captureRow) out.push(captureRow);
         // Groups are ordered by their best match so an exact command or setting beats a weak content hit.
         const groupsOut: { score: number; items: Item[] }[] = [];
+        const places = (extras?.placesFor(lifeapps, (inst) => byId.get(inst.rootPageId)?.title) ?? [])
+          .map((pl) => ({ pl, r: fuzzyAny(query, pl.title, pl.keywords) ?? fuzzyAny(query, `${pl.app} ${pl.title}`) }))
+          .filter((x): x is { pl: Place; r: NonNullable<typeof x.r> } => !!x.r && x.r.match > 0.4 && !scatteredHit(x.r, x.pl.title))
+          .sort((a, b) => b.r.match - a.r.match)
+          .slice(0, 5);
+        groupsOut.push({
+          // An exact place name ("Estimator", "Accounts") goes to the hub tab ahead of a page with the same title.
+          score: (places[0]?.r.match ?? 0) >= 0.95 ? 1.7 : (places[0]?.r.match ?? 0) * 1.06,
+          items: places.map(({ pl, r }) => {
+            const Icon = identity(pl.appId).icon;
+            return {
+              id: `place:${pl.id}`,
+              group: "Places",
+              title: pl.title,
+              ranges: r.ranges,
+              subtitle: pl.app,
+              icon: (
+                <IconTile>
+                  <Icon size={16} strokeWidth={1.75} />
+                </IconTile>
+              ),
+              route: pl.route,
+              run: ({ peek }: { peek: boolean }) => openRoute(pl.route, peek),
+            } satisfies Item;
+          }),
+        });
         const pages = fuzzyPages(7);
         const shown = new Set(pages.map((x) => x.p.id));
         groupsOut.push({ score: (pages[0]?.s ?? 0) * 1.02, items: pages.map(({ p, ranges }) => pageItem(p, "Pages", { ranges })) });
@@ -655,7 +723,11 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
             cmdTop = Math.max(cmdTop, r.match);
           }
         }
-        groupsOut.push({ score: cmdTop * 0.95, items: cmdItems });
+        // A verb whose title starts with what was typed ("check in" → Check in habits) beats a place that only
+        // partly matches, and even an exactly named place (1.7).
+        const words = (t: string) => t.toLowerCase().replace(/[-‐]/g, " ");
+        const verbFirst = lower.length >= 3 && cmdMatches.some(({ c }) => words(c.title).startsWith(words(lower)));
+        groupsOut.push({ score: verbFirst ? 1.72 : cmdTop * 0.95, items: cmdItems });
         const settings = [
           ...SECTIONS.map((s) => ({ key: s.id, title: s.title, path: "Settings", kw: s.keywords, icon: s.icon, section: s.id as string })),
           ...SETTING_ENTRIES.map((e) => ({ key: e.id, title: e.title, path: `Settings / ${SECTIONS.find((s) => s.id === e.section)?.title ?? ""}`, kw: e.keywords ?? [], icon: SECTIONS.find((s) => s.id === e.section)?.icon, section: `${e.section}:${e.id}` })),
@@ -667,7 +739,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
         groupsOut.push({
           score: (settings[0]?.r?.match ?? 0) * 0.9,
           items: settings.map(({ s, r }) => {
-            const Icon = s.icon ?? Sparkles;
+            const Icon = s.icon ?? Settings;
             const rt: AppRoute = { t: "settings", section: s.section };
             return {
               id: `set:${s.key}`,
@@ -847,7 +919,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
                 <span className="cmdk-price tabular" data-sensitive="">
                   {row.quote ? formatCurrency(row.quote.price, row.quote.currency) : "—"}
                 </span>
-                {row.quote ? <DeltaPill value={row.quote.changePct} digits={2} /> : null}
+                {row.quote ? <span className={cn("cmdk-delta tabular", row.quote.changePct < 0 ? "text-loss-text" : "text-gain-text")}>{`${row.quote.changePct < 0 ? "−" : "+"}${Math.abs(row.quote.changePct * 100).toFixed(2)}%`}</span> : null}
               </span>
             ),
             run: ({ peek }) => openRoute(r, peek),
@@ -910,7 +982,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
     return out;
     // `now` is captured per render on purpose; ranking only needs minute precision.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, effectiveScope, nested, byId, recents, favorites, frequency, commands, lifeapps, content.hits, quotes, calcState.result, encrypted, route, pageItem, commandItem, nestedEntry, openRoute, finish]);
+  }, [q, effectiveScope, nested, byId, recents, favorites, frequency, commands, lifeapps, content.hits, quotes, calcState.result, encrypted, route, pageItem, commandItem, nestedEntry, openRoute, finish, capture, hasLifeOs, hasMoney, account, moneyTarget, extras]);
 
   // A new query (or scope / nested level) always selects the first result, so ↵ runs the best match. Otherwise
   // (async content hits arriving, live updates) keep the current selection while it is still listed.
@@ -997,7 +1069,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
   const chip = nested ? nested.title : SCOPE_LABEL[effectiveScope];
   let rowIndex = 0;
   const loading = (wantContent && content.loading) || (scope === "quote" && !!q.trim() && quotes === null) || (scope === "calc" && calcState.pending);
-  const enterLabel = effectiveScope === "calc" ? "Copy" : nested ? "Apply" : selected?.stay ? "Open" : selected?.route ? "Open" : "Run";
+  const enterLabel = effectiveScope === "calc" ? "Copy" : nested ? "Apply" : selected?.id === "capture:row" ? "Add" : selected?.stay ? "Open" : selected?.route ? "Open" : "Run";
 
   return (
     <Command
@@ -1012,6 +1084,13 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
       }}
       onKeyDown={(e) => {
         if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End" || e.key === "PageDown" || e.key === "PageUp" || (e.ctrlKey && (e.key === "j" || e.key === "k" || e.key === "n" || e.key === "p"))) picked.current = true;
+        if (e.key === "Tab" && !e.shiftKey && capture?.kind === "money" && moneyTarget && moneyTarget.accounts.length > 1) {
+          e.preventDefault();
+          e.stopPropagation();
+          const i = moneyTarget.accounts.findIndex((a) => a.id === account?.id);
+          setAccount(moneyTarget.accounts[(i + 1) % moneyTarget.accounts.length]);
+          return;
+        }
         if (e.key === "Enter" && e.shiftKey && selected?.route) {
           e.preventDefault();
           void selected.run({ peek: true });
@@ -1031,19 +1110,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
         ) : (
           <Search size={20} className="cmdk-search-icon" aria-hidden />
         )}
-        <AnimatePresence initial={false}>
-          {chip ? (
-            <m.span
-              key={chip}
-              className="cmdk-chip"
-              initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.9, x: -4 }}
-              animate={{ opacity: 1, scale: 1, x: 0, transition: spring.snappy }}
-              exit={{ opacity: 0, transition: { duration: 0.08 } }}
-            >
-              {chip}
-            </m.span>
-          ) : null}
-        </AnimatePresence>
+        {chip ? <span className="cmdk-chip">{chip}</span> : null}
         <Command.Input
           ref={inputRef}
           value={input}
@@ -1056,8 +1123,7 @@ function Palette({ initialScope, initialQuery, onClose, escRef }: { initialScope
         {loading ? <Spinner size={14} className="cmdk-spinner" label="Searching" /> : null}
         {!content.ready && wantContent ? <span className="cmdk-indexing">Indexing…</span> : null}
       </div>
-      <Command.List ref={listRef} className="cmdk-list" data-entering={entering ? "" : undefined}>
-        <GlideHighlight selector='.cmdk-item[data-selected="true"]' tone="slab" />
+      <Command.List ref={listRef} className="cmdk-list">
         {!items.length && !loading && !listPending ? <EmptyResults scope={effectiveScope} query={q} /> : null}
         {groups.map((g) => (
           <Command.Group key={g.name} heading={g.name}>
@@ -1181,5 +1247,5 @@ function CalcValue({ display }: { display: string }) {
   if (!Number.isFinite(value)) return <span className="cmdk-calc-value tabular">{display}</span>;
   const format = (n: number) =>
     `${n < 0 ? "−" : ""}${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: frac, maximumFractionDigits: frac, useGrouping: grouped })}${rest}`;
-  return <RollingNumber className="cmdk-calc-value tabular" value={value} format={format} aria-label={display} />;
+  return <span className="cmdk-calc-value tabular">{format(value)}</span>;
 }

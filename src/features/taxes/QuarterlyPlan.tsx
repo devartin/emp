@@ -21,10 +21,11 @@ import { Skeleton } from "@/ui/Skeleton";
 import { daysBetween, dayLabel, num, todayIso, fmtWhole } from "../finance/shared/format";
 import { useAsync } from "../finance/shared/hooks";
 import { Section } from "../finance/shared/ui";
-import { useTax } from "./data";
+import { dueAtFilingText, useTax } from "./data";
+import { noPaymentNeeded, safeHarbourKnown } from "../finance/shared/definitions";
 
 const METHODS = [
-  { value: "safe_harbor", label: "Safe harbor", help: "Pay 100% of last year's tax (110% above $150k AGI) — no underpayment penalty even if this year is higher." },
+  { value: "safe_harbor", label: "Safe harbor", help: "Pay 100% of last year's tax (110% above $150k AGI). No underpayment penalty even if this year is higher." },
   { value: "current_90", label: "90% of this year", help: "Pay 90% of this year's estimated tax. Lower if income fell, but relies on the estimate." },
   { value: "even_split", label: "Even split", help: "Spread the estimated balance due evenly over the remaining periods." },
 ] as const;
@@ -62,6 +63,10 @@ export default function QuarterlyPlan() {
   if (!p) return <Skeleton height={360} radius={14} />;
   const method = METHODS.find((x) => x.value === p.method) ?? METHODS[0];
   const next = plan.data?.due.find((d) => d.status !== "paid" && d.date >= todayIso());
+  // A $0 suggestion is "no penalty expected" only when the method's inputs are known (a default "0" for last year's
+  // tax is not), and even then it is not "nothing owed": say what is still due at filing (definitions.ts noPaymentNeeded).
+  const dueAtFiling = dueAtFilingText(tx.estimate, tx.year, (v) => fmtWhole(v), (d) => dayLabel(d));
+  const noPayment = noPaymentNeeded(dueAtFiling?.amount ?? 0, dueAtFiling?.text ?? "", safeHarbourKnown(p));
   return (
     <div className="flex flex-col gap-4">
       <Section title="How to size payments" subtitle={method.help} actions={<Segmented size="sm" value={p.method} onValueChange={(v) => tx.setProfile({ method: v })} options={METHODS.map(({ value, label }) => ({ value, label }))} aria-label="Method" />}>
@@ -72,8 +77,9 @@ export default function QuarterlyPlan() {
             <span className="text-caption text-secondary" style={{ fontWeight: 500 }}>Next payment</span>
             {next ? (
               <>
-                <span className="tabular" style={{ fontSize: 22, fontWeight: 640 }}>{num(next.suggested) === 0 ? <span className="text-gain-text">Covered</span> : <Sensitive>{fmtWhole(next.suggested)}</Sensitive>}</span>
+                <span className="tabular" style={{ fontSize: 22, fontWeight: 640 }}>{num(next.suggested) === 0 ? <span>{noPayment.needsInput ? noPayment.short : "No payment needed"}</span> : <Sensitive>{fmtWhole(next.suggested)}</Sensitive>}</span>
                 <span className="text-caption text-tertiary">{next.period} · due {dayLabel(next.date, true)} · in {daysBetween(todayIso(), next.date)} days</span>
+                {num(next.suggested) === 0 && dueAtFiling ? <span className="text-caption text-secondary tabular"><Sensitive>{noPayment.label}</Sensitive></span> : null}
               </>
             ) : (
               <span className="text-body-sm text-tertiary">Nothing left this year</span>
@@ -90,7 +96,7 @@ export default function QuarterlyPlan() {
               const paidRow = tx.payments.find((x) => x.period === d.period);
               const isPaid = d.status === "paid";
               return (
-                <m.div key={d.period} className={cn("tx-q", isPaid && "is-paid")} data-status={d.status} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, type: "spring", stiffness: 260, damping: 30 }}>
+                <div key={d.period} className={cn("tx-q", isPaid && "is-paid")} data-status={d.status}>
                   <div className="tx-q-dot">{isPaid ? <PaidMark fresh={freshKeep.has(d.period) || fresh.has(d.period)} /> : d.status === "late" ? "!" : i + 1}</div>
                   <div className="text-body font-semibold">{d.period}</div>
                   <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>Due {dayLabel(d.date, true)}</div>
@@ -105,7 +111,7 @@ export default function QuarterlyPlan() {
                     ) : d.status === "due_soon" ? (
                       <Badge tone="warning" icon={Clock}>Due soon</Badge>
                     ) : num(d.suggested) === 0 ? (
-                      <Badge tone="gain">Covered — nothing more needed</Badge>
+                      <Badge tone={noPayment.needsInput ? "warning" : "neutral"}>{noPayment.needsInput ? noPayment.short : noPayment.label}</Badge>
                     ) : (
                       <Badge tone="neutral">Suggested</Badge>
                     )}
@@ -115,7 +121,7 @@ export default function QuarterlyPlan() {
                       Record payment
                     </Button>
                   ) : null}
-                </m.div>
+                </div>
               );
             })}
           </div>
@@ -123,7 +129,7 @@ export default function QuarterlyPlan() {
       </Section>
       <div className="fh-alert" data-tone="info">
         <Info size={16} />
-        <span className="text-body-sm">Pay through IRS Direct Pay or EFTPS. Ultra Note never makes payments — record them here so the plan and reminders stay accurate.</span>
+        <span className="text-body-sm">Pay through IRS Direct Pay or EFTPS. Ultra Note never makes payments. Record them here to keep the plan and reminders accurate.</span>
       </div>
       {recording ? <RecordDialog period={recording.period} suggested={recording.suggested} onClose={() => setRecording(null)} /> : null}
     </div>

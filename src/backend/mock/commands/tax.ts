@@ -10,9 +10,11 @@
  * Definitions shared with Rust:
  *   - `effectiveRate` = total tax ÷ AGI (N-MO3 `tax.effective`; IRS SOI "average tax rate" uses AGI:
  *     https://www.irs.gov/statistics/soi-tax-stats-individual-income-tax-rates-and-tax-shares).
- *   - `deduction`: with itemisable entries, the larger of the itemised total after floors and caps
- *     (`itemizedWouldBe`) and the standard deduction plus the 2026 non-itemiser charitable deduction
- *     ($1,000 / $2,000 MFJ, cash; IRS Pub 505 (2026) What's New, https://www.irs.gov/publications/p505).
+ *   - `deduction`: `{ itemized, mode }` — `auto` (default) takes the larger of the itemised total after floors and
+ *     caps (`itemizedWouldBe`) and the standard deduction plus the 2026 non-itemiser charitable deduction
+ *     ($1,000 / $2,000 MFJ, cash; IRS Pub 505 (2026) What's New, https://www.irs.gov/publications/p505);
+ *     `standard` takes the latter; `itemized` itemises even when smaller (IRC §63(e)). Bare `'standard'` /
+ *     `'auto'` carry no entries, so neither the cash-gift deduction nor `itemizedWouldBe` applies.
  *   - Itemised charitable gifts count only above 0.5% of AGI from 2026 (same source).
  */
 import type { TaxEstimate, TaxInput, TaxPackInfo } from '../../types';
@@ -213,13 +215,16 @@ function compute(p: PackJson, input: TaxInput, scale: number): Core {
   // 2. AGI.
   const agi = rd(gross - adjustments - seDeductible);
 
-  // 3. Deduction: the larger of itemised (after floors/caps) and standard + the non-itemiser charitable deduction.
+  // 3. Deduction (`mode`, default auto): auto = the larger of itemised (after floors/caps) and standard + the
+  // non-itemiser charitable deduction; standard = the latter; itemized = itemise regardless (IRC §63(e) election).
   const standard = rd(get(p.standardDeduction, status) + get(p.additionalStdDeduction65OrBlind, status) * (input.age65OrBlind ?? 0));
-  const entries = typeof input.deductions === 'object' && input.deductions ? input.deductions.itemized : [];
-  const itemizedWouldBe = entries.length ? rd(itemizedAmount(p, entries, agi, status)) : undefined;
+  const obj = typeof input.deductions === 'object' && input.deductions ? input.deductions : undefined;
+  const entries = obj?.itemized ?? [];
+  const choice = obj ? (obj.mode ?? 'auto') : 'standard';
+  const itemizedWouldBe = entries.length || choice === 'itemized' ? rd(itemizedAmount(p, entries, agi, status)) : undefined;
   const nc = p.nonItemizerCharity;
   const charityNi = nc ? rd(Math.min(entries.filter((e) => nc.kinds.includes(e.kind)).reduce((s, e) => s + Math.max(0, n(e.amount)), 0), get(nc.cap, status))) : 0;
-  const useItemized = itemizedWouldBe !== undefined && itemizedWouldBe > standard + charityNi;
+  const useItemized = itemizedWouldBe !== undefined && (choice === 'itemized' || (choice === 'auto' && itemizedWouldBe > standard + charityNi));
   const deductionAmount = useItemized ? itemizedWouldBe! : standard + charityNi;
   const deduction: TaxEstimate['deduction'] = {
     kind: useItemized ? 'itemized' : 'standard',

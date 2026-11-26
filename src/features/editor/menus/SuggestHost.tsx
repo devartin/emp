@@ -1,8 +1,7 @@
-/** Renders the active suggestion menu (slash, mention, page link, emoji) for one editor. */
+/** Renders the active suggestion menu (slash, mention, page link) for one editor. The app offers no emoji inserter. */
 import type { Editor } from '@tiptap/core';
 import { useSyncExternalStore } from 'react';
 import { getSuggest, subscribeSuggest } from '../extensions/suggest';
-import { EmojiMenu } from './EmojiMenu';
 import { MentionMenu } from './MentionMenu';
 import { SlashMenu } from './SlashMenu';
 
@@ -16,6 +15,5 @@ export function SuggestHost({ editor }: { editor: Editor }) {
   const key = `${state.kind}:${state.from}`;
   if (state.kind === 'slash') return <SlashMenu key={key} editor={editor} state={state} />;
   if (state.kind === 'mention' || state.kind === 'pagelink') return <MentionMenu key={key} editor={editor} state={state} />;
-  if (state.kind === 'emoji') return <EmojiMenu key={key} editor={editor} state={state} />;
   return null;
 }

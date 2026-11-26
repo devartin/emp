@@ -68,11 +68,11 @@
 .emp-tb-fmt { min-width: 92px; justify-content: space-between; }
 .emp-tb-fmt-label { min-width: 56px; text-align: left; font-variant-numeric: tabular-nums; }
 .emp-fmt-sample { color: var(--text-tertiary); font-variant-numeric: tabular-nums; font-size: 12px; }
-.emp-menu-item.is-current .emp-menu-label { color: var(--accent-text); font-weight: 550; }
+.emp-menu-item.is-current .emp-menu-label { color: var(--accent-text); font-weight: 500; }
 .emp-fmt-custom { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px; }
 .emp-fmt-custom-input {
   flex: 1; min-width: 0; height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border);
-  background: var(--bg-surface-1); color: var(--text-primary); font: 450 12.5px/1 var(--font-mono-code); outline: none;
+  background: var(--bg-surface-1); color: var(--text-primary); font: 500 12.5px/1 var(--font-mono-code); outline: none;
 }
 .emp-fmt-custom-input:focus { border-color: var(--accent-solid); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-solid) 22%, transparent); }
 .emp-swatch-pop { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -101,7 +101,7 @@
 .emp-namebox-input:focus { background: var(--bg-surface-1); box-shadow: inset 0 0 0 2px var(--accent-solid); }
 .emp-namebox-menu { position: absolute; right: 4px; top: 7px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; color: var(--text-tertiary); }
 .emp-namebox-menu:hover { background: var(--state-hover); color: var(--text-primary); }
-.emp-namebox-ref { font: 450 11.5px/1 var(--font-mono-code); color: var(--text-tertiary); }
+.emp-namebox-ref { font: 500 11.5px/1 var(--font-mono-code); color: var(--text-tertiary); }
 .emp-fbar-actions { display: flex; align-items: center; gap: 1px; padding: 0 4px 0 6px; flex: none; color: var(--text-tertiary); }
 .emp-fbar-actions::after { content: ''; width: 1px; height: 16px; margin-left: 4px; background: var(--border-subtle); }
 .emp-fbar-input-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
@@ -115,14 +115,14 @@
 .emp-formula-bar[data-editing] .emp-fbar-input-wrap { box-shadow: inset 0 -2px 0 var(--accent-solid); }
 
 /* Formula token colours (refs match their grid highlight) */
-.tok-fn { color: var(--accent-text); font-weight: 550; }
+.tok-fn { color: var(--accent-text); font-weight: 500; }
 .tok-num { color: color-mix(in oklab, var(--cat-2) 80%, var(--text-primary)); }
 .tok-str { color: color-mix(in oklab, var(--cat-7) 75%, var(--text-primary)); }
 .tok-bool { color: color-mix(in oklab, var(--cat-6) 80%, var(--text-primary)); }
 .tok-err { color: var(--loss-text); }
 .tok-name { color: color-mix(in oklab, var(--cat-3) 80%, var(--text-primary)); font-weight: 500; }
 .tok-op { color: var(--text-secondary); }
-.tok-ref { font-weight: 550; }
+.tok-ref { font-weight: 500; }
 .tok-ref[data-ref="1"] { color: var(--cat-1); } .tok-ref[data-ref="2"] { color: var(--cat-2); }
 .tok-ref[data-ref="3"] { color: var(--cat-3); } .tok-ref[data-ref="4"] { color: var(--cat-4); }
 .tok-ref[data-ref="5"] { color: var(--cat-5); } .tok-ref[data-ref="6"] { color: var(--cat-6); }
@@ -176,8 +176,8 @@
 .emp-fa-item svg { color: var(--text-tertiary); flex: none; }
 .emp-fa-item.is-active { background: var(--state-selected); color: var(--text-primary); }
 .emp-fa-item.is-active svg { color: var(--accent-text); }
-.emp-fa-name { font: 450 12.5px/1 var(--font-mono-code); letter-spacing: 0; }
-.emp-fa-name b { color: var(--text-primary); font-weight: 650; }
+.emp-fa-name { font: 500 12.5px/1 var(--font-mono-code); letter-spacing: 0; }
+.emp-fa-name b { color: var(--text-primary); font-weight: 600; }
 .emp-fa-meta { margin-left: auto; font-size: 11px; color: var(--text-tertiary); }
 .emp-fa-detail { border-top: 1px solid var(--border-subtle); }
 .emp-fa-detail .emp-fh { width: auto; box-shadow: none; border-radius: 0; background: transparent; }
@@ -185,17 +185,17 @@
 .emp-fa-foot kbd { font: 500 10.5px/1 var(--font-ui); padding: 2px 4px; border-radius: 4px; background: var(--bg-surface-2); box-shadow: inset 0 -1px 0 var(--border); color: var(--text-secondary); }
 .emp-fh { padding: 10px 12px; }
 .emp-fh-head { display: flex; align-items: baseline; gap: 8px; }
-.emp-fh-sig { font: 450 12.5px/18px var(--font-mono-code); color: var(--text-secondary); letter-spacing: 0; }
-.emp-fh-name { color: var(--accent-text); font-weight: 650; }
+.emp-fh-sig { font: 500 12.5px/18px var(--font-mono-code); color: var(--text-secondary); letter-spacing: 0; }
+.emp-fh-name { color: var(--accent-text); font-weight: 600; }
 .emp-fh-punct { color: var(--text-tertiary); }
 .emp-fh-arg { transition: color var(--dur-fast) var(--ease-out); }
-.emp-fh-arg.is-active { color: var(--text-primary); font-weight: 650; text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--accent-solid) 55%, transparent); text-underline-offset: 3px; text-decoration-thickness: 2px; }
+.emp-fh-arg.is-active { color: var(--text-primary); font-weight: 600; text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--accent-solid) 55%, transparent); text-underline-offset: 3px; text-decoration-thickness: 2px; }
 .emp-fh-cat { margin-left: auto; font: 600 10.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); white-space: nowrap; }
 .emp-fh-desc { margin: 6px 0 0; font: 400 12.5px/18px var(--font-ui); color: var(--text-secondary); }
 .emp-fh-argline { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; font: 500 12px/16px var(--font-ui); }
 .emp-fh-argname { font-family: var(--font-mono-code); color: var(--text-primary); }
 .emp-fh-opt { padding: 1px 6px; border-radius: 9999px; background: var(--bg-surface-2); color: var(--text-tertiary); font-size: 10.5px; }
-.emp-fh-example { display: block; margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--bg-surface-2); font: 450 12px/16px var(--font-mono-code); color: var(--text-primary); white-space: pre-wrap; }
+.emp-fh-example { display: block; margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--bg-surface-2); font: 500 12px/16px var(--font-mono-code); color: var(--text-primary); white-space: pre-wrap; }
 
 /* Find */
 .emp-sheet-find {
@@ -290,7 +290,7 @@
 .emp-cf-values > * { flex: 1; }
 .emp-cf-looks { display: flex; gap: 6px; }
 .emp-cf-look {
-  flex: 1; height: 28px; border-radius: 6px; font: 650 12px/1 var(--font-ui); background: var(--bg-surface-2); color: var(--text-primary);
+  flex: 1; height: 28px; border-radius: 6px; font: 600 12px/1 var(--font-ui); background: var(--bg-surface-2); color: var(--text-primary);
   box-shadow: inset 0 0 0 1px var(--border-subtle); transition: box-shadow var(--dur-fast) var(--ease-out);
 }
 .emp-cf-look.is-active { box-shadow: 0 0 0 2px var(--bg-overlay), 0 0 0 3.5px var(--accent-solid); }

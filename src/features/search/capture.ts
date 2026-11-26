@@ -1,11 +1,12 @@
 /**
- * Capture grammar (PROGRAMME-v3 K4 "⌘K hub", Flow r2 §2.7). Prefix-only: plain text is never parsed, so a page titled
- * "Task list" can't be mistaken for a capture.
+ * Capture grammar (PROGRAMME-v3 K4 "⌘K hub", Flow r2 §2.7). Prefix-only: plain text without a prefix is never parsed.
+ * A prefix can still begin a page title ("Task list", "note to self"); as Flow r2 §2.7 specifies, ⌘K then shows the
+ * capture row first and the page second, so the page is one ↓ away and typing without the prefix finds it directly.
  *
  *   t …  / task …        a task (parseNatural: dates, !high/med/low, #tag)  → Life OS Inbox, else a to-do in today's note
  *   n …  / note …        a paragraph appended to today's note
  *   −12.50 coffee        an expense (+250 refund is income); optional trailing date word and #category → Money HQ
- *   spent 12.50 coffee   the same expense, written as a verb
+ *   spent 12.50 coffee   the same expense, written as a verb (only with a number after "spent")
  *
  * `parseCapture` is pure (table-driven tests in capture.test.ts); `commitCapture` writes through existing commands.
  */
@@ -27,7 +28,7 @@ export type Capture =
 const TASK = /^(?:t|task)\s+(.*)$/is;
 const NOTE = /^(?:n|note)\s+(.*)$/is;
 const MONEY = /^([−‒–+-])\s*(.*)$/s;
-const SPENT = /^spent\s+(.*)$/is;
+const SPENT = /^spent\s+(\d[\d.,]*(?:\s.*)?)$/is;
 
 function localNoon(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12);
@@ -36,6 +37,7 @@ function localNoon(d: Date): Date {
 /** Splits "12.50 coffee yesterday #dining" into an amount, a payee, a date word and a category. */
 function parseMoneyRest(sign: 1 | -1, rest: string, ref: Date): Capture {
   const text = rest.trim();
+  if (!text) return { kind: "error", target: "money", message: "Type an amount, then who it was paid to", text };
   const m = /^([\d.,]+)(?:\s+(.*))?$/s.exec(text);
   const amount = m ? parseMoneyInput(m[1]) : null;
   if (!m || amount === null || Number(amount) === 0) return { kind: "error", target: "money", message: "Couldn’t read an amount", text };

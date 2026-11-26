@@ -304,7 +304,7 @@ pub static SPECS: &[FnSpec] = &[
         unicode,
         "UNICODE(text)",
         "Code point of the first character.",
-        "=UNICODE(\"☃\")"
+        "=UNICODE(\"A\")"
     ),
     fspec!(
         "T",

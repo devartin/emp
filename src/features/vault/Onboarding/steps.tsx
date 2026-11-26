@@ -1,46 +1,36 @@
 /**
- * Onboarding steps (§6.2). Each step renders its own heading (focused on entry) and footer. Copy follows SPEC
- * §6.2/§9.22 verbatim where SPEC gives it.
+ * First-run steps (PROGRAMME-v3 K4). Each step renders its own heading (focused on entry) and footer. Plain copy:
+ * what the step does, no coaching.
  */
 import {
   ArrowLeft,
   Check,
   CircleHelp,
-  Cloud,
   Download,
+  FilePlus,
   Info,
-  LineChart,
+  Landmark,
   Lock,
   LockOpen,
   RefreshCw,
-  ShieldCheck,
-  Sparkles,
   Wand2,
 } from "lucide-react";
 import { AnimatePresence, m, useIsPresent } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, errorMessage } from "@/backend";
 import type { PasswordStrength } from "@/backend/types";
-import type { AccentName } from "@/lib/bootPrefs";
-import { useSettings } from "@/stores/settings";
-import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
 import { ChoiceCard } from "@/ui/ChoiceCard";
-import { AccentPicker } from "@/ui/ColorPicker";
 import { Input } from "@/ui/Input";
 import { Kbd } from "@/ui/Kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
 import { Segmented } from "@/ui/Segmented";
 import { Spinner } from "@/ui/Spinner";
-import { Switch } from "@/ui/Switch";
-import { Magnetic } from "@/ui/motion/primitives";
-import { switchThemeWithReveal } from "@/ui/motion/themeTransition";
-import { ease, spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
-import { AppMark, Wordmark } from "../AppMark";
+import { AppMark } from "../AppMark";
 import { PasswordField, passwordAcceptable } from "../PasswordField";
 import { RecoveryCeremony } from "../RecoveryCeremony";
-import { appsFor, HELP_OPTIONS, type AutoLockChoice, type Draft } from "./model";
+import { appsFor, TRACK_OPTIONS, type AutoLockChoice, type Draft, type StartWith } from "./model";
 
 export interface StepProps {
   draft: Draft;
@@ -91,166 +81,50 @@ export function Footer({ back, children, hint = true }: { back: (() => void) | n
   );
 }
 
-// ───────────────────────────────────────────────────────────────────────────── 0 · launch
-
-export function LaunchStep({ onDone }: { onDone: () => void }) {
-  const reduced = useReducedMotionPref();
-  useEffect(() => {
-    const t = window.setTimeout(onDone, reduced ? 500 : 1200);
-    return () => window.clearTimeout(t);
-  }, [onDone, reduced]);
-  return (
-    <div className="flex flex-col items-center gap-5 py-6" aria-label="Ultra Note">
-      <AppMark size={112} stage="drop" />
-      <Wordmark className="text-[34px] leading-none" delay={0.5} />
-    </div>
-  );
-}
-
 // ───────────────────────────────────────────────────────────────────────────── 1 · welcome
 
-export function WelcomeStep({ next, update }: StepProps) {
-  return (
-    <div className="flex flex-col items-center text-center">
-      <AppMark size={88} stage="rest" className="emp-onb-hero-mark" />
-      <div className="mt-7">
-        <StepHeading title="Welcome to Ultra Note" sub="Your notes, money, plans and life admin, in one private place on your device." center />
-      </div>
-      <div className="mt-8 flex w-full max-w-[320px] flex-col gap-2">
-        <Button variant="primary" size="xl" block onClick={next} kbd="enter">
-          Get started
-        </Button>
-        <Button
-          variant="ghost"
-          size="md"
-          block
-          icon={Download}
-          onClick={() => {
-            update({ importAfter: true });
-            next();
-          }}
-        >
-          Import from Notion, Markdown or CSV
-        </Button>
-      </div>
-      <p className="mt-8 flex items-center gap-1.5 text-caption text-tertiary" style={{ fontWeight: 400 }}>
-        <ShieldCheck size={14} aria-hidden />
-        Everything stays on this device unless you connect a service.
-      </p>
-    </div>
-  );
-}
+const STARTS: { value: StartWith; title: string; description: string; icon: typeof Download }[] = [
+  { value: "fresh", title: "Start fresh", description: "An empty workspace with the apps you pick next.", icon: FilePlus },
+  { value: "pages", title: "Bring in Notion, Markdown or Obsidian", description: "Pages and simple databases. Relations and formulas may not survive.", icon: Download },
+  { value: "money", title: "Bring in money", description: "A bank file (OFX, QFX or CSV) goes into Money HQ.", icon: Landmark },
+];
 
-// ───────────────────────────────────────────────────────────────────────────── 2 · make it yours
-
-type ThemeChoice = "light" | "dark" | "system";
-
-export function PersonalizeStep({ draft, update, next, back }: StepProps) {
-  const device = useSettings((s) => s.device);
-  const setDevice = useSettings((s) => s.setDevice);
-  const theme: ThemeChoice = device?.theme === "light" || device?.theme === "dark" ? device.theme : device?.theme === "midnight" ? "dark" : "system";
-
-  const pickTheme = (t: ThemeChoice, el: HTMLElement | null) => {
-    if (t === theme) return;
-    switchThemeWithReveal(() => void setDevice({ theme: t }), el);
-  };
-
+export function WelcomeStep({ draft, update, next }: StepProps) {
   return (
     <div>
-      <StepHeading title="Make it yours" sub="You can change any of this later in Settings → Appearance." />
+      <div className="flex items-center gap-4">
+        <AppMark size={48} stage="rest" />
+        <StepHeading title="Welcome to Ultra Note" sub="Notes, tasks and money, on this device." />
+      </div>
       <div className="mt-6">
         <Input
-          label="What should we call you?"
-          placeholder="Your first name"
+          label="Your name"
+          helper="Optional. Shown on the lock screen."
+          placeholder="First name"
           value={draft.name}
           maxLength={60}
           autoComplete="given-name"
           onChange={(e) => update({ name: e.currentTarget.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              next();
+            }
+          }}
           size="lg"
+          autoFocus
         />
       </div>
-      <div className="mt-6">
-        <span className="emp-label">Theme</span>
-        <div className="mt-1.5 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Theme">
-          {(["light", "dark", "system"] as const).map((t) => (
-            <ThemeCard key={t} t={t} selected={theme === t} onSelect={(el) => pickTheme(t, el)} />
-          ))}
-        </div>
+      <div className="mt-5 flex flex-col gap-2" role="radiogroup" aria-label="How do you want to start?">
+        {STARTS.map((o) => (
+          <ChoiceCard key={o.value} className="emp-onb-start" selected={draft.start === o.value} onSelect={() => update({ start: o.value })} icon={o.icon} title={o.title} description={o.description} />
+        ))}
       </div>
-      <div className="mt-6 flex flex-wrap items-end gap-x-8 gap-y-5">
-        <div>
-          <span className="emp-label">Accent</span>
-          <div className="mt-2">
-            <AccentPicker value={(device?.accent ?? "graphite") as AccentName} onChange={(accent) => void setDevice({ accent })} />
-          </div>
-        </div>
-      </div>
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <div>
-          <span className="emp-label">Density</span>
-          <Segmented
-            className="mt-1.5"
-            block
-            aria-label="Density"
-            value={device?.density ?? "comfortable"}
-            onValueChange={(density) => void setDevice({ density })}
-            options={[
-              { value: "comfortable", label: "Comfortable" },
-              { value: "compact", label: "Compact" },
-            ]}
-          />
-        </div>
-        <div>
-          <span className="emp-label">Text size</span>
-          <Segmented
-            className="mt-1.5"
-            block
-            aria-label="Text size"
-            value={device?.textSize ?? "m"}
-            onValueChange={(textSize) => void setDevice({ textSize })}
-            options={[
-              { value: "s", label: "S", "aria-label": "Small" },
-              { value: "m", label: "M", "aria-label": "Default" },
-              { value: "l", label: "L", "aria-label": "Large" },
-            ]}
-          />
-        </div>
-      </div>
-      <Footer back={back}>
+      <Footer back={null}>
         <Button variant="primary" size="lg" onClick={next}>
           Continue
         </Button>
       </Footer>
-    </div>
-  );
-}
-
-function ThemeCard({ t, selected, onSelect }: { t: ThemeChoice; selected: boolean; onSelect: (el: HTMLElement | null) => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  return (
-    <div ref={ref}>
-      <ChoiceCard
-        className="emp-theme-card"
-        selected={selected}
-        onSelect={() => onSelect(ref.current)}
-        title={t === "light" ? "Light" : t === "dark" ? "Dark" : "System"}
-        preview={
-          <span className="emp-theme-preview" data-t={t} aria-hidden>
-            <span className="side">
-              <i style={{ width: "80%" }} />
-              <i style={{ width: "60%" }} />
-              <i className="a" style={{ width: "70%" }} />
-              <i style={{ width: "50%" }} />
-            </span>
-            <span className="main">
-              <i style={{ width: "55%", height: 6 }} />
-              <i style={{ width: "90%" }} />
-              <i style={{ width: "75%" }} />
-              <i style={{ width: "82%" }} />
-            </span>
-          </span>
-        }
-      />
     </div>
   );
 }
@@ -288,8 +162,8 @@ export function ProtectStep({ draft, update, next, back, creating }: StepProps &
         >
           <Info size={15} className="mt-0.5 flex-none text-tertiary" aria-hidden />
           {draft.encrypt
-            ? "Your password never leaves this device, and we can't reset it. Your recovery key is the only other way in, so keep it safe."
-            : "Your workspace lives on your computer. Ultra Note has no servers and no accounts, and we never receive your data."}
+            ? "Your password never leaves this device and can't be reset. Your recovery key is the only other way in."
+            : "Your workspace lives on this computer. Ultra Note has no servers and no accounts, and your data is never sent anywhere."}
         </m.p>
       </AnimatePresence>
       <Footer back={back}>
@@ -337,7 +211,7 @@ export function PasswordStep({
 
   return (
     <div>
-      <StepHeading title="Create a password" sub="You'll use it to unlock Ultra Note. Use at least 10 characters — a few random words work well." />
+      <StepHeading title="Create a password" sub="You'll use it to unlock Ultra Note. Use at least 10 characters; a few random words work well." />
       <div className="mt-6 flex flex-col gap-4">
         <PasswordField
           label="Password"
@@ -492,115 +366,45 @@ export function RecoveryStep({ draft, update, next }: StepProps) {
   );
 }
 
-// ───────────────────────────────────────────────────────────────────────────── 4 · what should EMP help with?
+// ───────────────────────────────────────────────────────────────────────────── 2 · what do you want to track?
 
-export function HelpStep({ draft, update, next, back }: StepProps) {
-  const reduced = useReducedMotionPref();
+export function TrackStep({ draft, update, next, back }: StepProps) {
   const picks = new Set(draft.picks);
-  const apps = appsFor(draft.picks).length;
   const toggle = (id: string) => {
     const nextPicks = new Set(picks);
     if (nextPicks.has(id)) nextPicks.delete(id);
     else nextPicks.add(id);
-    update({ picks: HELP_OPTIONS.filter((o) => nextPicks.has(o.id)).map((o) => o.id) });
+    update({ picks: TRACK_OPTIONS.filter((o) => nextPicks.has(o.appId)).map((o) => o.appId) });
   };
+  const n = appsFor(draft).length;
   return (
     <div>
-      <StepHeading title="What should Ultra Note help with?" sub="Pick as many as you like. We'll set up a starting point for each." />
-      <div className="emp-onb-choice-grid mt-6" role="group" aria-label="Areas">
-        {HELP_OPTIONS.map((o) => {
-          const on = picks.has(o.id);
+      <StepHeading title="What do you want to track?" sub="Each pick is built as a life app with its own pages and databases. You can add or remove apps later." />
+      <div className="emp-onb-choice-grid mt-6" role="group" aria-label="Life apps">
+        {TRACK_OPTIONS.map((o) => {
+          const on = picks.has(o.appId);
           const Icon = o.icon;
           return (
-            <m.button
-              key={o.id}
-              type="button"
-              role="checkbox"
-              aria-checked={on}
-              className="emp-onb-chip"
-              onClick={() => toggle(o.id)}
-              whileTap={reduced ? undefined : { scale: 0.985 }}
-              transition={spring.snappy}
-            >
+            <button key={o.appId} type="button" role="checkbox" aria-checked={on} className="emp-onb-chip" onClick={() => toggle(o.appId)}>
               <span className="tile">
                 <Icon aria-hidden />
               </span>
               <span className="flex min-w-0 flex-col">
-                <span className="text-body-sm font-medium leading-[18px]">{o.label}</span>
-                {o.starter ? (
-                  <span className="text-[11px] leading-[14px] text-tertiary">More coming</span>
-                ) : null}
+                <span className="text-body-sm font-medium">{o.label}</span>
+                <span className="text-caption text-tertiary">{o.detail}</span>
               </span>
-              <AnimatePresence>
-                {on ? (
-                  <m.span
-                    key="c"
-                    className="ml-auto flex h-4 w-4 flex-none items-center justify-center rounded-full bg-accent text-accent-contrast"
-                    initial={reduced ? { opacity: 0 } : { scale: 0 }}
-                    animate={reduced ? { opacity: 1 } : { scale: 1, transition: spring.bouncy }}
-                    exit={{ opacity: 0, scale: reduced ? 1 : 0.5, transition: { duration: 0.1 } }}
-                  >
-                    <Check size={10} strokeWidth={3} aria-hidden />
-                  </m.span>
-                ) : null}
-              </AnimatePresence>
-            </m.button>
+              {on ? (
+                <span className="ml-auto flex h-4 w-4 flex-none items-center justify-center rounded-full bg-accent text-accent-contrast">
+                  <Check size={10} strokeWidth={3} aria-hidden />
+                </span>
+              ) : null}
+            </button>
           );
         })}
       </div>
       <p className="mt-4 text-body-sm text-secondary" aria-live="polite">
-        <span className="tabular font-semibold text-primary">{apps}</span> {apps === 1 ? "app" : "apps"} selected
-        {draft.picks.some((p) => HELP_OPTIONS.find((o) => o.id === p)?.starter) ? <span className="text-tertiary"> · plus starter pages</span> : null}
+        {n ? `${n} ${n === 1 ? "app" : "apps"} to build` : "No apps. You'll start with a blank workspace."}
       </p>
-      <Footer back={back}>
-        <Button variant="primary" size="lg" onClick={next}>
-          Continue
-        </Button>
-      </Footer>
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────── 6 · connections and updates
-
-export function ConnectionsStep({ draft, update, next, back }: StepProps) {
-  return (
-    <div>
-      <StepHeading title="Connections and updates" sub="Nothing connects to the internet unless you turn on an integration. You can see every request Ultra Note makes in Security Center." />
-      <div className="mt-5">
-        <div className="emp-onb-row">
-          <span className="ico">
-            <Cloud size={18} aria-hidden />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-body font-medium text-primary">Google Calendar and Drive</p>
-            <p className="text-body-sm text-tertiary">Connect from Settings → Integrations whenever you're ready. Ultra Note talks to Google directly from this device.</p>
-          </div>
-          <Badge tone="outline">Later</Badge>
-        </div>
-        <div className="emp-onb-row">
-          <span className="ico">
-            <LineChart size={18} aria-hidden />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-2 text-body font-medium text-primary">
-              Market data <Badge tone="neutral">Delayed data</Badge>
-            </p>
-            <p className="text-body-sm text-tertiary">Free quotes with no key, delayed by about 15 minutes. Add your own provider keys later; they're always stored encrypted.</p>
-          </div>
-          <Switch checked={draft.delayedMarketData} onCheckedChange={(v) => update({ delayedMarketData: v })} aria-label="Use free delayed market data" />
-        </div>
-        <div className="emp-onb-row">
-          <span className="ico">
-            <RefreshCw size={18} aria-hidden />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-body font-medium text-primary">Check for updates automatically</p>
-            <p className="text-body-sm text-tertiary">Contacts github.com once a day. Nothing else is sent.</p>
-          </div>
-          <Switch checked={draft.updates} onCheckedChange={(v) => update({ updates: v })} aria-label="Check for updates automatically" />
-        </div>
-      </div>
       <Footer back={back}>
         <Button variant="primary" size="lg" onClick={next}>
           Continue
@@ -615,19 +419,27 @@ export function ConnectionsStep({ draft, update, next, back }: StepProps) {
 export interface BuildTask {
   id: string;
   label: string;
-  run: () => Promise<void>;
+  /** Reports 0..1 when the work knows its own progress (a life-app build). */
+  run: (progress: (p: number) => void) => Promise<void>;
 }
 
 type RowState = "pending" | "running" | "done" | "error";
 
+/**
+ * The build (one of the three signature moments, PROGRAMME-v3 K3): each row is real work and its length is the work.
+ * When everything is done the app opens on Home by itself; an error stops here with Retry.
+ */
 export function BuildingStep({ tasks, onOpen, opening }: { tasks: BuildTask[]; onOpen: () => void; opening: boolean }) {
   const reduced = useReducedMotionPref();
   const [states, setStates] = useState<RowState[]>(() => tasks.map(() => "pending"));
+  const [progress, setProgress] = useState<number[]>(() => tasks.map(() => 0));
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const done = states.every((s) => s === "done");
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
+  const openRef = useRef(onOpen);
+  openRef.current = onOpen;
 
   useEffect(() => {
     let live = true;
@@ -635,53 +447,48 @@ export function BuildingStep({ tasks, onOpen, opening }: { tasks: BuildTask[]; o
       const list = tasksRef.current;
       for (let i = 0; i < list.length; i++) {
         if (!live) return;
-        setStates((cur) => (cur[i] === "done" ? cur : cur.map((s, k) => (k === i ? "running" : s))));
-        const started = performance.now();
+        let skip = false;
+        setStates((cur) => {
+          skip = cur[i] === "done";
+          return skip ? cur : cur.map((s, k) => (k === i ? "running" : s));
+        });
+        if (skip) continue;
         try {
-          await list[i].run();
+          await list[i].run((p) => live && setProgress((cur) => cur.map((x, k) => (k === i ? Math.max(x, Math.min(1, p)) : x))));
         } catch (e) {
           if (!live) return;
           setError(errorMessage(e) || "Something went wrong");
           setStates((cur) => cur.map((s, k) => (k === i ? "error" : s)));
           return;
         }
-        // §6.2: at least 180ms per row so each check is visible; never longer than the real work + 2s overall.
-        const left = 180 - (performance.now() - started);
-        if (left > 0) await new Promise((r) => setTimeout(r, left));
         if (!live) return;
         setStates((cur) => cur.map((s, k) => (k === i ? "done" : s)));
       }
+      // Everything is built: open on Home (a short beat so the last check is seen).
+      if (live) window.setTimeout(() => live && openRef.current(), reduced ? 0 : 400);
     })();
     return () => {
       live = false;
     };
-  }, [attempt]);
+  }, [attempt, reduced]);
 
   return (
     <div>
-      <StepHeading title={done ? "Your workspace is ready" : "Building your workspace"} sub={done ? "Everything is set up on this device." : "This only takes a moment."} />
-      <m.ul className="mt-6 flex flex-col" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.18 } } }}>
+      <StepHeading title={done ? "Ready" : "Building your workspace"} sub={done ? "Opening your workspace." : "Each app gets its own pages and databases."} />
+      <ul className="mt-6 flex flex-col">
         {tasks.map((t, i) => (
-          <m.li
-            key={t.id}
-            className="emp-build-row"
-            data-state={states[i] === "done" ? "done" : states[i] === "pending" ? "pending" : undefined}
-            variants={{ hidden: { opacity: 0, y: reduced ? 0 : 6 }, show: { opacity: 1, y: 0, transition: spring.gentle } }}
-          >
+          <li key={t.id} className="emp-build-row" data-state={states[i] === "done" ? "done" : states[i] === "pending" ? "pending" : undefined}>
             <span className="emp-build-dot" aria-hidden>
               {states[i] === "running" ? <Spinner size={16} /> : null}
-              {states[i] === "done" ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <m.path d="M5 12.5l4.5 4.5L19 7.5" initial={{ pathLength: reduced ? 1 : 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.28, ease: ease.out }} />
-                </svg>
-              ) : null}
-              {states[i] === "error" ? <Info size={14} style={{ color: "var(--loss-text)" }} /> : null}
+              {states[i] === "done" ? <Check size={12} strokeWidth={3} /> : null}
+              {states[i] === "error" ? <Info size={14} className="text-loss-text" /> : null}
             </span>
             <span className="flex-1">{t.label}</span>
+            {states[i] === "running" && progress[i] > 0 ? <span className="text-caption tabular text-tertiary">{Math.round(progress[i] * 100)}%</span> : null}
             <span className="sr-only">{states[i]}</span>
-          </m.li>
+          </li>
         ))}
-      </m.ul>
+      </ul>
       {error ? (
         <div className="mt-3 flex items-center gap-3">
           <p className="emp-helper flex-1" data-invalid="" role="alert">
@@ -700,20 +507,14 @@ export function BuildingStep({ tasks, onOpen, opening }: { tasks: BuildTask[]; o
           </Button>
         </div>
       ) : null}
-      <div className="emp-onb-foot">
-        <span className="flex-1" />
-        <AnimatePresence>
-          {done ? (
-            <m.div key="open" initial={{ opacity: 0, y: reduced ? 0 : 6, scale: reduced ? 1 : 0.96 }} animate={{ opacity: 1, y: 0, scale: 1, transition: spring.settle }}>
-              <Magnetic strength={3}>
-                <Button variant="primary" size="xl" icon={Sparkles} iconMotion="sparkle" onClick={onOpen} loading={opening} kbd="enter" autoFocus>
-                  Open Ultra Note
-                </Button>
-              </Magnetic>
-            </m.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
+      {done ? (
+        <div className="emp-onb-foot">
+          <span className="flex-1" />
+          <Button variant="primary" size="lg" onClick={onOpen} loading={opening} kbd="enter" autoFocus>
+            Open
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

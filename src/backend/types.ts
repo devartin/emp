@@ -1105,7 +1105,13 @@ export interface FinanceImportPreviewRow {
  * file order). QIF carries no balance, so it is absent there, as it is when the file has none.
  */
 export interface FinanceImportStatement {
-  /** Decimal string in the account's currency, e.g. "10900.99" (same format as row amounts). */
+  /**
+   * Decimal string in the account's currency, e.g. "10900.99" (same format as row amounts), in the **ledger's sign**:
+   * an asset's balance is positive, a liability owed is negative (a card owing $80 → "-80.00"), so it compares
+   * directly with the account's cleared balance. CSV: the balance column follows the mapping's `invert` like the
+   * amounts; it is the closing row of the latest date whatever the file's order. OFX: `LEDGERBAL` as sent (OFX signs
+   * amounts from the account holder's side, so an owed card balance is negative).
+   */
   balance: string;
   /** YYYY-MM-DD the balance is as of (OFX `DTASOF`, else the latest row date). */
   asOf?: string;
@@ -1300,7 +1306,14 @@ export interface TaxInput {
   age65OrBlind?: number;
   incomes: { kind: TaxIncomeKind; amount: string; source?: string }[];
   adjustments: { kind: 'ira' | 'hsa' | 'student_loan_interest' | 'se_health' | 'other'; amount: string }[];
-  deductions: 'standard' | 'auto' | { itemized: { kind: string; amount: string }[] };
+  /**
+   * Bare `'standard'` / `'auto'` carry no entries (no non-itemiser charitable deduction, no `itemizedWouldBe`).
+   * `{ itemized, mode? }` (`mode` additive, PROGRAMME-v3 K5): the entries are itemisable candidates (`kind` =
+   * `charity` | `medical` | `salt` | `mortgage` | …, see `TAX_DEDUCTION_CATEGORIES`); `mode` `auto` (default) takes
+   * the larger of itemised and standard + the non-itemiser charitable deduction, `standard` the latter, `itemized`
+   * itemises even when smaller (IRC §63(e)). Every mode reports `standardWouldBe` and `itemizedWouldBe`.
+   */
+  deductions: 'standard' | 'auto' | { itemized: { kind: string; amount: string }[]; mode?: 'auto' | 'standard' | 'itemized' };
   credits: { id: string; amount?: string }[];
   withheld: string;
   estimatedPaid: string;

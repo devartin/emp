@@ -60,7 +60,7 @@ const NAMES: Record<string, string> = {
   "spreadsheet-studio": "Spreadsheet Studio",
 };
 
-/** Places for the installed apps (`titleOf` gives an instance's own name, e.g. "Tax Year 2026"). */
+/** Places for the installed apps (`titleOf` gives an instance's own name, e.g. "Tax year 2026"). */
 export function placesFor(apps: readonly LifeAppInstance[], titleOf: (inst: LifeAppInstance) => string | undefined): Place[] {
   const out: Place[] = [];
   for (const inst of apps) {

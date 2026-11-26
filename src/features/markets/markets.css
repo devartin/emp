@@ -70,7 +70,5 @@
 
 .mk-range-rail { position: absolute; inset: 0; width: 100%; pointer-events: none; }
 .mk-range-rail i { left: 0; }
-.mk-detail { animation: mk-detail-in 320ms var(--ease-out) both; }
-@keyframes mk-detail-in { from { opacity: 0; transform: translateY(6px); } }
 :root[data-motion="reduced"] .mk-detail { animation: fh-fade 140ms linear both; }
 .mk-indices { padding-bottom: 2px; }

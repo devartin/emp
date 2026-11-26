@@ -10,8 +10,9 @@ import type { CalendarEvent, FinanceOverview, Id, PageMeta, TipTapDoc, TipTapNod
 import { useTree } from "@/stores/tree";
 import { useWorkspace } from "@/stores/workspace";
 import { localDay } from "@/features/lifeapps/cells";
-import { useAppDatabases, useMetrics } from "@/features/lifeapps/data";
-import { spendingBudget } from "@/features/finance/shared/figures";
+import { useAppDatabases } from "@/features/lifeapps/data";
+import { dueOn, useHabitData } from "@/features/lifeapps/habitData";
+import { isIncomeGroup, isSavingGroup, spendingBudget } from "@/features/finance/shared/figures";
 
 export function useAppInstance(appId: string) {
   return useWorkspace((s) => s.lifeapps.find((i) => i.appId === appId && !i.detached));
@@ -159,15 +160,24 @@ export function useNoteTodos(note: PageMeta | null) {
 
 // ───────────────────────────────────────────────────────────────────────────── habits
 
-/** "3 of 6 done" for today, from the Habits app's own metrics. `undefined` without Habits, `null` while loading. */
-export function useHabitsToday(): { instanceId: Id; done: number; total: number } | null | undefined {
+/**
+ * "2 of 4 done" for today: habits due today (by schedule) and how many are checked in, counted from the Habits
+ * databases exactly as the Habits hub counts them. `undefined` without Habits or with nothing due, `null` while loading.
+ */
+export function useHabitsToday(today: string): { instanceId: Id; done: number; total: number } | null | undefined {
   const habits = useAppInstance("habits");
-  const { metrics } = useMetrics(habits?.id, ["today_done_pct", "active_count"]);
-  if (!habits) return undefined;
-  if (!metrics) return null;
-  const total = Number(metrics.active_count?.value ?? 0);
-  const pct = Number(metrics.today_done_pct?.value ?? 0);
-  return { instanceId: habits.id, done: Math.round(pct * total), total };
+  const { byRole, dbs } = useAppDatabases(habits?.id);
+  const habitsDb = byRole("habit.name");
+  const logDb = byRole("log.date");
+  const { habits: list, entries, loading } = useHabitData(habitsDb, logDb);
+  return useMemo(() => {
+    if (!habits) return undefined;
+    if (!dbs) return null;
+    if (!habitsDb || !logDb) return undefined;
+    if (loading) return null;
+    const { due, done } = dueOn(list, entries, today);
+    return due.length ? { instanceId: habits.id, done, total: due.length } : undefined;
+  }, [habits, dbs, habitsDb, logDb, loading, list, entries, today]);
 }
 
 // ───────────────────────────────────────────────────────────────────────────── money
@@ -233,14 +243,15 @@ export function useMoneyGlance(today: string): MoneyGlance | null | undefined {
   return useMemo(() => {
     if (!money) return undefined;
     if (overview === undefined || (txns && !extra)) return null;
-    if (!overview) return null;
+    // The overview couldn't load: the section is left out rather than shown wrong.
+    if (!overview) return undefined;
     const currency = overview.netWorth.currency;
     const { assigned, spent } = spendingBudget(overview.budget);
     const left = assigned > 0 ? assigned - spent : null;
     const month = new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { month: "long" });
     let alert: MoneyGlance["alert"] = null;
     const over = overview.budget
-      .filter((b) => !/income|saving/i.test(b.group) && Number(b.available.amount) < 0)
+      .filter((b) => !isIncomeGroup(b.group) && !isSavingGroup(b.group) && Number(b.available.amount) < 0)
       .sort((a, b) => Number(a.available.amount) - Number(b.available.amount))[0];
     if (over) alert = { text: `${over.name}`, amount: -Number(over.available.amount), tab: "budget" };
     else {

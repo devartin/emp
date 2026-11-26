@@ -235,9 +235,7 @@ function Checklist({ inst }: { inst: LifeAppInstance }) {
   return (
     <section aria-label={`${id.name} guide`}>
       <div className="mb-2 flex items-center gap-2">
-        <span className="emp-app-tile" style={{ background: id.color, width: 22, height: 22, borderRadius: 6 }}>
-          <Icon aria-hidden strokeWidth={2.25} />
-        </span>
+        <Icon size={16} strokeWidth={1.75} className="flex-none text-secondary" aria-hidden />
         <span className="flex-1 text-body-sm font-semibold text-primary">{id.name}</span>
         <span className="text-caption text-tertiary tabular">
           {done}/{inst.checklist.length}

@@ -2802,6 +2802,27 @@ interface ImportMapping { date?:number; amount?:number; debit?:number; credit?:n
 finance_import_preview({ importId:Id; mapping:ImportMapping; accountId:Id }) → { rows:{ idx:number; date:string; payee:string; rawPayee:string; amount:string;
   categoryId?:Id; confidence:'rule'|'learned'|'none'; ruleId?:Id; duplicateOf?:Id; possibleDuplicate?:Id; transferPair?:Id }[]; newCount:number; duplicates:number; categorized:number }
 finance_import_commit({ importId:Id; mapping:ImportMapping; accountId:Id; skip:number[]; overrides:Record<number,{ categoryId?:Id; payee?:string }>; saveProfileAs?:string; onEvent }) (job) ⇒ { inserted:number; skipped:number; transfersLinked:number }
+```
+
+> **Note (PROGRAMME-v3 K5, 2026-11-26; additive).** `finance_import_preview` also returns
+> `statement?:{ balance:string; asOf?:string; currency?:string; source:'ofx'|'csv' }`, the closing balance the file itself
+> reports: OFX/QFX `<LEDGERBAL>` (`DTASOF`, `CURDEF`) of the section whose account number's last four digits appear in
+> the account name, else of the only section with one; CSV: the mapped balance column on the latest-dated row (the last
+> such row in file order on ties); QIF: absent. `balance` has two decimals. `finance_import_commit` writes on every
+> inserted row `txn.cleared` (OFX/QFX rows are bank-posted, so `cleared`; QIF follows its `C` field: `*`/`c`/`X`/`R` →
+> `cleared`, else `uncleared`; CSV → `uncleared`), `txn.source = import` and `txn.reviewed = false`. Rust: `PreviewDto.
+> statement` (`StatementDto`) in `src-tauri/src/commands/finance.rs`; TS: `FinanceImportStatement` in `src/backend/types.ts`.
+>
+> *Amended 2026-11-26 (review fixes; supersedes the CSV rule above).* `statement.balance` is in the **ledger's sign**
+> (an asset positive, a liability owed negative, so it compares directly with the account's cleared balance): the CSV
+> balance column follows the mapping's `invert` like the amounts, and OFX `LEDGERBAL` is taken as sent (OFX signs from
+> the account holder's side, so an owed card balance is negative). CSV closing row: the only row of the latest date;
+> else the same-day row whose balance no other same-day row continues from (`balance(r) + amount(s) = balance(s)`),
+> when exactly one qualifies; else the file's direction (majority of neighbouring date steps) decides: the first
+> same-day row of a newest-first file, the last of an oldest-first one. Rust `emp_finance::import::csv_closing`; mock
+> `csvClosing` in `src/backend/mock/commands/finance.ts`.
+
+```ts
 finance_rules_list({ instanceId:Id }) → Rule[]
 interface Rule { id:Id; name:string; priority:number; when:{ all:{ field:'payee'|'raw'|'memo'|'amount'|'abs_amount'|'account'|'day_of_month'; op:'contains'|'equals'|'starts_with'|'regex'|'lt'|'gt'|'between'|'in'; value:unknown }[] };
   then:{ categoryId?:Id; renamePayee?:string; tags?:string[]; markTransfer?:boolean; split?:{ categoryId:Id; pct?:number; amount?:string }[] }; continue:boolean; timesApplied:number }
@@ -3309,6 +3330,9 @@ A role maps a well-known concept to a property. Roles are stored in `DatabasePay
 | `txn.cleared` | Cleared status |
 | `txn.transfer` | Transfer link |
 | `txn.import_id` | Import identifier, used for dedupe |
+| `txn.source` | Where the row came from (manual, import, rule) — role added 2026-11-26 (PROGRAMME-v3 K5) |
+| `txn.reviewed` | Checkbox: the row has been looked at in the review lane; imports write `false` — added 2026-11-26 (PROGRAMME-v3 K5) |
+| `taxdoc.*`, `taxded.*`, `taxpay.*` | Tax Organizer Documents / Deductions / Estimated payments columns (`taxdoc.name\|issuer\|for\|expected\|status\|summary\|notes`, `taxded.desc\|date\|category\|amount\|pct\|receipt\|payee\|year`, `taxpay.period\|due\|amount\|date\|method`), which the Tax hub reads — added to the 1.0.0 manifest 2026-11-26 (the browser mock already used them). `taxded.category` options (key = mock option id, name): `charity` Charitable gifts, `medical` Medical & dental, `salt` State & local taxes, `mortgage` Mortgage interest, `home_office`, `business`, `education`, `childcare`, `hsa` HSA contribution, `ira` Traditional IRA contribution, `other`; the first four are the engine's itemised kinds (`TAX_DEDUCTION_CATEGORIES` in `src/backend/taxDeductions.ts`; desktop option ids are generated, so map by name). `taxded.pct` is a fraction (1 = 100%, number format percent) on both backends |
 | `txn.split_parent` | Parent row of a split |
 | `acct.type` | Account type |
 | `acct.currency` | Account currency |
@@ -3447,6 +3471,7 @@ A role maps a well-known concept to a property. Roles are stored in `DatabasePay
   - Assets are positive balances. Liabilities are debt account balances.
 - **Metrics.**
   - `savings_rate = (income − spending) / income` over the trailing 3 months, excluding transfers and investment contributions, which count as saving.
+  - *Note (N-MO3, 2026-11-26).* One definition of spending, shared by Rust `emp_finance::metrics` (`income_spending`, `spending_breakdown`, `cashflow_sankey`) and the mock (`flows`, `finance_spending_breakdown`, `finance_cashflow_sankey`), pinned by the parity fixture: transfers never count; income = net flows in income categories; flows in saving categories (group name contains "saving", e.g. Savings & Debt) are saving, never spending, and never appear in the spending breakdown; spending = net outflow in every other known category (a refund nets only inside its own category) plus the outflows without a category; inflows without a category are neither income nor spending until they are categorised.
   - `essential_monthly_spend` is the trailing-90-day median of the monthly sum over categories marked `essential`.
   - `ef_months = ef_balance / essential_monthly_spend`.
   - `utilization = card balance / limit`.
@@ -3516,6 +3541,28 @@ A role maps a well-known concept to a property. Roles are stored in `DatabasePay
 7. Rounding follows the pack.
 
 When inputs are incomplete (some questions answered "not sure"), `range` is computed from ±10% income sensitivity and the UI shows "≈".
+
+> **Note (PROGRAMME-v3 K5 / N-MO3 / N-MO5, 2026-11-26).** Definitions shared by the desktop engine
+> (`crates/emp-finance/src/tax/engine.rs`) and the browser mock (`src/backend/mock/commands/tax.ts`, which now runs the
+> same pack files), pinned by the parity fixture `crates/emp-finance/tests/fixtures/parity/fixture.json`:
+> - `effectiveRate` = total tax ÷ AGI (0 when AGI ≤ 0). The IRS SOI "average tax rate" uses AGI as the denominator
+>   (https://www.irs.gov/statistics/soi-tax-stats-individual-income-tax-rates-and-tax-shares).
+> - `TaxEstimate.deduction` gains `itemizedWouldBe?:string` (additive): the itemised total after the pack's floors and
+>   caps, present whenever `deductions` carries itemisable entries, whichever deduction wins.
+> - With `{ itemized:[…] }` the engine uses the larger of `itemizedWouldBe` and the standard deduction plus the
+>   non-itemiser charitable deduction (step 3 for every mode that carries entries; `standard` and bare `auto` carry
+>   none). When the standard deduction wins, `deduction.amount` includes that charitable deduction and
+>   `standardWouldBe` stays the plain standard deduction.
+> - Pack `us-federal-2026` v1.1.0: `nonItemizerCharity` ($1,000; $2,000 MFJ; `charity` entries, treated as cash) and an
+>   `itemizedRules` charity floor of 0.5% of AGI (IRS Pub 505 (2026) "What's New", https://www.irs.gov/publications/p505;
+>   https://www.irs.gov/newsroom/irs-reminder-permanent-charitable-contribution-deduction-begins-for-returns-filed-next-year-for-taxpayers-who-do-not-itemize).
+>   A Roth IRA contribution is not a deduction (https://www.irs.gov/retirement-plans/roth-iras).
+> - *Amended 2026-11-26 (additive):* `deductions` may be `{ itemized:[…]; mode?:'auto'|'standard'|'itemized' }`.
+>   `auto` (default) is the rule above; `standard` takes the standard deduction plus the non-itemiser charitable
+>   deduction (computed from the entries, which still report `itemizedWouldBe`); `itemized` itemises even when the total
+>   is smaller (the election of IRC §63(e), https://www.law.cornell.edu/uscode/text/26/63) and still reports
+>   `standardWouldBe`. Bare `'standard'` / `'auto'` carry no entries, so no charitable deduction applies: a client
+>   that knows the entries sends the object form with `mode`.
 
 **Quarterly payments.**
 - *Safe harbor:* `max(0, priorYearPct × priorTax)`, or `highIncomePct` when prior AGI is above the threshold, minus expected withholding, divided by the remaining periods.
@@ -3672,7 +3719,7 @@ interface Template { key:string; kind:'page'|'database'|'view'|'dashboard'|'work
   - "Monthly review" and "Weekly check-in" recurring page templates.
 - **Databases**
   - **Accounts**: Name, Type, Institution, Currency, Balance (computed), Cleared balance (computed), On budget, APR, Min payment, Credit limit, Utilization (formula), Last reconciled, Low-balance threshold, Closed, Last 4 (secret).
-  - **Transactions**: Date, Payee (relation), Raw description, Memo, Amount (money, signed), Account (relation), Category (relation), Split parent (self-relation), Cleared (status: uncleared, cleared, reconciled), Transfer (self-relation), Import ID (hidden), Tags, Receipt (files), Source (select: manual, import, rule).
+  - **Transactions**: Date, Payee (relation), Raw description, Memo, Amount (money, signed), Account (relation), Category (relation), Split parent (self-relation), Cleared (status: uncleared, cleared, reconciled), Transfer (self-relation), Import ID (hidden), Tags, Receipt (files), Source (select: manual, import, rule). *(2026-11-26: plus Reviewed (checkbox, role `txn.reviewed`); Source carries role `txn.source`. Both ship in the 1.0.0 manifest, since life-app migrations can only add templates.)*
   - **Categories**: Name, Group (50/30/20 → Needs/Wants/Savings & Debt; other methods → default groups Bills, Everyday, Savings & Debt, Fun, Income), Essential, Rollover, Icon, Color, Target type, Target.
   - **Budgets** (Month × Category): Month, Category, Assigned, Activity (computed), Available (computed), Status (formula).
   - **Recurring**: Name, Amount, Schedule (recurrence), Next date (computed), Account, Category, Autopay, Reminder days, Kind, Variable.

@@ -22,8 +22,9 @@ export interface RollingNumberProps {
   /** Scrub mode (chart crosshair): the text is rewritten in place, never rolled. */
   scrubbing?: boolean;
   /**
-   * When to roll a change: "edit" (default) rolls only when the change follows the user's own input within 1.5s
-   * (a typed amount, a ticked box), "always" rolls every change, "never" never rolls.
+   * When to roll a change: "edit" (default) rolls only when the owning component called markUserEdit() just before
+   * the change (a typed amount, a ticked box) — never on its own; "always" rolls every change (only from an explicit
+   * edit handler); "never" never rolls.
    */
   roll?: "edit" | "always" | "never";
   className?: string;
@@ -41,26 +42,25 @@ export interface RollingNumberProps {
 
 const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 const LINE = 1.2; // em per glyph
-/** Continuity class C2 (register.ts): 240ms, ease-out, no overshoot, no stagger. */
-const ROLL_MS = 240;
-const USER_WINDOW_MS = 1500;
+/** Continuity class C2 (register.ts numberRoll): 200ms, ease-out, no overshoot, no stagger. */
+const ROLL_MS = 200;
+/** How long a markUserEdit() stays armed: long enough for the edit's own commit / recompute to land. */
+const EDIT_WINDOW_MS = 1200;
 
-/** When the user last pressed a key, pointer or changed a field (one passive module-level listener). */
-let lastUserInput = Number.NEGATIVE_INFINITY;
-let listening = false;
-function listen() {
-  if (listening || typeof window === "undefined") return;
-  listening = true;
-  const mark = () => {
-    lastUserInput = performance.now();
-  };
-  for (const t of ["pointerup", "keydown", "input", "change"]) window.addEventListener(t, mark, { capture: true, passive: true });
-}
-/** Tell the roll that the next value change is the user's own (for edits that arrive outside a DOM event). */
+/**
+ * When the owning component last declared a user edit. Rolling is strictly opt-in: there is no global input listener,
+ * so navigation clicks, tab / range / month switches and data refreshes never roll — only a value change that follows
+ * an explicit markUserEdit() (or roll="always").
+ */
+let armedAt = Number.NEGATIVE_INFINITY;
+/**
+ * Call right before committing a value the user typed or set (an amount field's blur / Enter, a ticked box that moves
+ * a total). Number changes in the next 1.2s roll; everything else is rewritten in place.
+ */
 export function markUserEdit(): void {
-  lastUserInput = typeof performance === "undefined" ? 0 : performance.now();
+  armedAt = typeof performance === "undefined" ? 0 : performance.now();
 }
-const userCaused = () => typeof performance !== "undefined" && performance.now() - lastUserInput < USER_WINDOW_MS;
+const editArmed = () => typeof performance !== "undefined" && performance.now() - armedAt < EDIT_WINDOW_MS;
 
 function Column({ from, to, dir }: { from: number; to: number; dir: number }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -108,8 +108,8 @@ function Overlay({ from, to, dir }: { from: string; to: string; dir: number }) {
 /**
  * RollingNumber v3 (docs/DESIGN.md §7, motion register C2). The DOM, the copied text and the accessibility text all
  * hold the final value from the first frame: the visible value is a plain text node. A roll happens only when the
- * change follows the user's own edit (or `roll="always"`): an aria-hidden, `user-select: none` overlay rolls the
- * changed digits for 240ms while the real text underneath is transparent. Arrival, data refreshes, scrubbing,
+ * change follows an explicit markUserEdit() from the edit handler (or `roll="always"`): an aria-hidden, `user-select: none` overlay rolls the
+ * changed digits for 200ms while the real text underneath is transparent. Arrival, data refreshes, scrubbing,
  * Hide numbers and reduced motion never roll.
  */
 export function RollingNumber({ value, format = defaultFormat, scrubbing, roll = "edit", className, sensitive, display, announce, countUp: _cu, from: _f, countUpKey: _k, countUpDuration: _d, ...rest }: RollingNumberProps) {
@@ -124,16 +124,12 @@ export function RollingNumber({ value, format = defaultFormat, scrubbing, roll =
   const prev = useRef({ text, value });
   const changed = useRef(false);
 
-  useEffect(() => {
-    if (roll === "edit") listen();
-  }, [roll]);
-
   useLayoutEffect(() => {
     const was = prev.current;
     prev.current = { text, value };
     if (was.text === text) return;
     changed.current = true;
-    const wants = roll === "always" || (roll === "edit" && userCaused());
+    const wants = roll === "always" || (roll === "edit" && editArmed());
     if (!wants || scrubbing || masked || isReducedMotion()) {
       setAnim(null);
       return;

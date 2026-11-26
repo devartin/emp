@@ -1,10 +1,10 @@
 /**
- * Onboarding (§6.2): full-window aurora behind a centred glass panel (560 wide, radius 20, 92% overlay + blur 24,
- * elev-3, padding 40). A stepper sits on top; steps slide x ±24 (160ms out / 240ms in) while the panel height follows
- * on `spring.gentle`. Enter continues, ⌘[ goes back, Esc does nothing; focus moves to each step's heading.
+ * First run (PROGRAMME-v3 K4, Flow r2 §2.6): a centred panel with three screens, five with encryption, then the
+ * build. Enter continues, ⌘[ goes back, Esc does nothing; focus moves to each step's heading.
  *
- * Flow: launch → welcome → make it yours → protect → (create password → recovery key) → what should EMP help with?
- *       → connections and updates → building your workspace → into the app (hands off to the life-app gallery).
+ *   welcome (name, how you start) → what do you want to track → protect → (password → recovery key)
+ *   → building: the picked life apps are installed for real with their defaults (quick mode, no personal data)
+ *   → Home. Starting with pages or a bank file opens the import dialog over Home.
  */
 import { AnimatePresence, m, useIsPresent } from "motion/react";
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
@@ -15,29 +15,18 @@ import { isMac } from "@/lib/platform";
 import { useSettings } from "@/stores/settings";
 import { useUi } from "@/stores/ui";
 import { useVault } from "@/stores/vault";
-import { ease, spring } from "@/ui/motion/tokens";
+import { useWorkspace } from "@/stores/workspace";
+import { openFinanceImport } from "@/features/finance/ImportWizard/request";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import "../vault.css";
-import { appsFor, autoLockFor, HELP_OPTIONS, INITIAL_DRAFT, stepsFor, type Draft, type StepId } from "./model";
-import {
-  BuildingStep,
-  ConnectionsStep,
-  HelpStep,
-  LaunchStep,
-  PasswordStep,
-  PersonalizeStep,
-  ProtectStep,
-  RecoveryStep,
-  WelcomeStep,
-  type BuildTask,
-} from "./steps";
+import { appsFor, autoLockFor, INITIAL_DRAFT, stepsFor, TRACK_OPTIONS, type Draft, type StepId } from "./model";
+import { BuildingStep, PasswordStep, ProtectStep, RecoveryStep, TrackStep, WelcomeStep, type BuildTask } from "./steps";
 
 const MIN_SECURE_MS = 600;
 
 export default function Onboarding() {
   const reduced = useReducedMotionPref();
-  const [step, setStep] = useState<StepId>("launch");
-  const [dir, setDir] = useState<1 | -1>(1);
+  const [step, setStep] = useState<StepId>("welcome");
   const [draft, setDraft] = useState<Draft>(INITIAL_DRAFT);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -52,17 +41,14 @@ export default function Onboarding() {
     void preloadShell();
   }, []);
 
-  const go = useCallback((to: StepId, d: 1 | -1) => {
-    setDir(d);
-    setStep(to);
-  }, []);
+  const go = useCallback((to: StepId) => setStep(to), []);
 
-  /** The earliest step the user can go back to: nothing before vault creation once it exists. */
-  const floor = draft.vaultCreated ? steps.indexOf(draft.encrypt ? "recovery" : "help") : 0;
-  const back = index > floor && index > 0 && step !== "building" ? () => go(steps[index - 1], -1) : null;
+  /** Nothing before vault creation can be revisited once the vault exists. */
+  const floor = draft.vaultCreated ? steps.indexOf(draft.encrypt ? "recovery" : "building") : 0;
+  const back = index > floor && index > 0 && step !== "building" ? () => go(steps[index - 1]) : null;
   const forward = useCallback(() => {
     const i = steps.indexOf(step);
-    if (i >= 0 && i < steps.length - 1) go(steps[i + 1], 1);
+    if (i >= 0 && i < steps.length - 1) go(steps[i + 1]);
   }, [go, step, steps]);
 
   // ── vault creation (protect → plain, or password → encrypted)
@@ -78,7 +64,6 @@ export default function Onboarding() {
         if (password && wait > 0) await new Promise((r) => setTimeout(r, wait));
         useVault.getState().setStatus(res.status);
         update({ vaultCreated: true, recoveryWords: res.recoveryWords ?? null, password: "", confirm: "" });
-        // Vault settings exist now; load them so the name and preferences can be saved.
         void useSettings.getState().load().catch(() => undefined);
         return true;
       } catch (e) {
@@ -93,59 +78,59 @@ export default function Onboarding() {
 
   const onProtectContinue = async () => {
     if (draft.encrypt) return forward();
-    if (await createVault(undefined)) go("help", 1);
+    if (await createVault(undefined)) go("building");
   };
   const onPasswordContinue = async () => {
-    if (await createVault(draft.password)) go("recovery", 1);
+    if (await createVault(draft.password)) go("recovery");
   };
 
-  // ── building tasks reflect the real work
+  // ── the build: real work, one row per piece
   const buildTasks = useMemo<BuildTask[]>(() => {
-    const apps = appsFor(draft.picks);
-    const starters = HELP_OPTIONS.filter((o) => o.starter && draft.picks.includes(o.id));
+    const apps = appsFor(draft);
     const list: BuildTask[] = [
-      {
-        id: "prefs",
-        label: draft.name.trim() ? `Saving your preferences, ${draft.name.trim()}` : "Saving your preferences",
-        run: async () => {
-          await useSettings.getState().load();
-          const s = useSettings.getState();
-          if (s.vault) await s.setVault({ profileName: draft.name.trim() });
-          await s.setDevice({ updates: draft.updates ? "check" : "off" });
-          await api.kv.set({ ns: "ui.onboarding", key: "connections", value: { delayedMarketData: draft.delayedMarketData } });
-        },
-      },
       {
         id: "workspace",
         label: draft.encrypt ? "Opening your encrypted workspace" : "Opening your workspace",
         run: async () => {
-          const list = await api.workspace.list();
-          if (!list.length) throw new Error("No workspace was created");
+          await useSettings.getState().load();
+          const s = useSettings.getState();
+          if (s.vault && draft.name.trim()) await s.setVault({ profileName: draft.name.trim() });
+          const ws = await api.workspace.list();
+          if (!ws.length) throw new Error("No workspace was created");
         },
       },
     ];
-    if (starters.length) {
+    for (const appId of apps) {
+      const opt = TRACK_OPTIONS.find((o) => o.appId === appId);
+      const name = opt?.detail ?? appId;
       list.push({
-        id: "starters",
-        label: `Creating ${starters.length} starter ${starters.length === 1 ? "page" : "pages"}`,
-        run: async () => {
+        id: `app:${appId}`,
+        label: `Building ${name}`,
+        run: async (progress) => {
           const [ws] = await api.workspace.list();
-          if (!ws) return;
-          const done = ((await api.kv.get({ ns: "ui.onboarding", key: "startersCreated" })) as string[] | null) ?? [];
-          for (const o of starters) {
-            if (!o.starter || done.includes(o.id)) continue;
-            await api.page.create({ workspaceId: ws.id, parentId: null, kind: "doc", title: o.starter.title, icon: { t: "emoji", v: o.starter.emoji } });
-            done.push(o.id);
-            await api.kv.set({ ns: "ui.onboarding", key: "startersCreated", value: done });
-          }
+          if (!ws) throw new Error("No workspace was created");
+          const built = ((await api.kv.get({ ns: "ui.onboarding", key: "built" })) as string[] | null) ?? [];
+          if (built.includes(appId)) return;
+          const job = await api.lifeapp.install({
+            appId,
+            answers: {},
+            mode: "quick",
+            disabledKeys: [],
+            workspaceId: ws.id,
+            sampleData: false,
+            onEvent: (e: { kind: string; done?: number; total?: number }) => {
+              if (e.kind === "progress" && e.total) progress((e.done ?? 0) / e.total);
+            },
+          });
+          await job.result;
+          await api.kv.set({ ns: "ui.onboarding", key: "built", value: [...built, appId] });
         },
       });
     }
     list.push({
-      id: "apps",
-      label: apps.length ? `Lining up ${apps.length} life ${apps.length === 1 ? "app" : "apps"} to set up` : "Preparing Getting started",
+      id: "finish",
+      label: "Finishing up",
       run: async () => {
-        await api.kv.set({ ns: "ui.onboarding", key: "starterApps", value: apps });
         await api.kv.set({ ns: "ui.onboarding", key: "completedAt", value: Date.now() });
         await preloadShell();
       },
@@ -158,10 +143,19 @@ export default function Onboarding() {
   const open = async () => {
     if (opening) return;
     setOpening(true);
-    const apps = appsFor(draft.picks);
     try {
-      await enterShell({ route: apps.length ? { t: "lifeapps" } : { t: "home" } });
-      if (draft.importAfter) window.setTimeout(() => useUi.getState().setImportOpen(true), 520);
+      await enterShell({ route: { t: "home" } });
+      // "Bring in money" goes straight to Money HQ's statement import (Money HQ is built when that start is picked);
+      // "Bring in pages" opens the page import dialog.
+      if (draft.start === "money")
+        window.setTimeout(() => {
+          void useWorkspace
+            .getState()
+            .refreshLifeapps()
+            .catch(() => undefined)
+            .then(() => openFinanceImport());
+        }, 120);
+      else if (draft.start === "pages") window.setTimeout(() => useUi.getState().setImportOpen(true), 120);
     } catch (e) {
       setOpening(false);
       setCreateError(errorMessage(e));
@@ -182,16 +176,14 @@ export default function Onboarding() {
     }
     if (e.key !== "Enter" || e.defaultPrevented || e.nativeEvent.isComposing) return;
     const t = e.target as HTMLElement;
-    if (t.tagName === "BUTTON" || t.tagName === "TEXTAREA" || t.getAttribute("role") === "checkbox" || t.getAttribute("role") === "radio") return;
-    if (t.tagName === "INPUT" && step !== "personalize") return; // field-level Enter handlers decide
+    if (t.tagName === "BUTTON" || t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.getAttribute("role") === "checkbox" || t.getAttribute("role") === "radio") return;
     e.preventDefault();
-    if (step === "welcome" || step === "personalize" || step === "help" || step === "connections") forward();
+    if (step === "welcome" || step === "track") forward();
     else if (step === "protect") void onProtectContinue();
-    else if (step === "building" && buildTasks.length) void open();
   };
 
   const props = { draft, update, next: forward, back };
-  const wide = step === "recovery" || step === "help";
+  const wide = step === "recovery" || step === "track";
   const progress = index < 0 ? 0 : index;
 
   return (
@@ -199,75 +191,44 @@ export default function Onboarding() {
       className="emp-stage emp-vault-stage"
       onScroll={(e) => e.currentTarget.scrollLeft && (e.currentTarget.scrollLeft = 0)}
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1, transition: { duration: 0.32 } }}
-      exit={{ opacity: 0, transition: { duration: 0.48, ease: ease.out } }}
+      animate={{ opacity: 1, transition: { duration: reduced ? 0 : 0.16 } }}
+      exit={{ opacity: 0, transition: { duration: reduced ? 0 : 0.16 } }}
       onKeyDown={onKeyDown}
     >
-      <span className="emp-stage-light" aria-hidden />
       <div className="emp-stage-drag drag-region" data-tauri-drag-region />
       <WindowControls className="absolute right-0 top-0" />
-      <m.div
+      <div
         className="emp-vault-card emp-onb-panel"
         data-wide={wide ? "" : undefined}
+        data-inert={isPresent ? undefined : ""}
         role="dialog"
         aria-modal="true"
         aria-label="Set up Ultra Note"
-        initial={{ opacity: 0, scale: reduced ? 1 : 0.97, y: reduced ? 0 : 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0, transition: { ...spring.settle, opacity: { duration: 0.4, ease: ease.out } } }}
-        exit={{ opacity: 0, scale: reduced ? 1 : 1.04, transition: { duration: 0.48, ease: ease.out } }}
-        // Step changes resize the card with a layout (transform) animation on spring.gentle — never a height
-        // animation. Children carry layout="position" so they are counter-scaled instead of distorting.
-        layout={reduced ? false : true}
-        transition={{ layout: spring.gentle }}
-        style={{ pointerEvents: isPresent ? undefined : "none", borderRadius: 22 }}
       >
-        <AnimatePresence initial={false}>
-          {step !== "launch" ? (
-            <m.div key="stepper" layout={reduced ? false : "position"} transition={{ layout: spring.gentle }} className="emp-onb-stepper" aria-hidden initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: 0.24, delay: 0.1 } }}>
-              {steps.map((s, i) => (
-                <span key={s}>
-                  <m.i initial={false} animate={{ scaleX: i <= progress ? 1 : 0 }} transition={reduced ? { duration: 0 } : { ...spring.glide, delay: i === progress ? 0.08 : 0 }} style={{ originX: dir > 0 ? 0 : 1 }} />
-                </span>
-              ))}
-            </m.div>
-          ) : null}
-        </AnimatePresence>
+        <div className="emp-onb-stepper" aria-hidden>
+          {steps.map((s, i) => (
+            <span key={s} data-on={i <= progress ? "" : undefined} />
+          ))}
+        </div>
         <span className="sr-only" aria-live="polite">
           {index >= 0 ? `Step ${index + 1} of ${steps.length}` : ""}
         </span>
-        <m.div layout={reduced ? false : "position"} transition={{ layout: spring.gentle }}>
-          <AnimatePresence mode="wait" initial={false} custom={dir}>
-            <m.div
-              key={step}
-              custom={dir}
-              variants={{
-                enter: (d: number) => ({ opacity: 0, x: reduced ? 0 : 28 * d, filter: reduced ? "none" : "blur(3px)" }),
-                center: { opacity: 1, x: 0, filter: "blur(0px)", transition: reduced ? { duration: 0.14 } : { ...spring.settle, opacity: { duration: 0.24, ease: ease.out }, filter: { duration: 0.24, ease: ease.out } } },
-                exit: (d: number) => ({ opacity: 0, x: reduced ? 0 : -20 * d, filter: reduced ? "none" : "blur(2px)", transition: { duration: 0.14, ease: ease.in } }),
-              }}
-              initial="enter"
-              animate="center"
-              exit="exit"
-            >
-              {step === "launch" ? <LaunchStep onDone={() => go("welcome", 1)} /> : null}
-              {step === "welcome" ? <WelcomeStep {...props} /> : null}
-              {step === "personalize" ? <PersonalizeStep {...props} /> : null}
-              {step === "protect" ? <ProtectStep {...props} next={() => void onProtectContinue()} creating={creating && !draft.encrypt} /> : null}
-              {step === "password" ? <PasswordStep {...props} onCreate={() => void onPasswordContinue()} creating={creating} error={createError} /> : null}
-              {step === "recovery" ? <RecoveryStep {...props} /> : null}
-              {step === "help" ? <HelpStep {...props} /> : null}
-              {step === "connections" ? <ConnectionsStep {...props} next={() => go("building", 1)} /> : null}
-              {step === "building" ? <BuildingStep tasks={buildTasks} onOpen={() => void open()} opening={opening} /> : null}
-            </m.div>
-          </AnimatePresence>
-        </m.div>
-        {createError && step === "protect" ? (
+        <AnimatePresence mode="wait" initial={false}>
+          <m.div key={step} initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: reduced ? 0 : 0.12 } }} exit={{ opacity: 0, transition: { duration: reduced ? 0 : 0.08 } }}>
+            {step === "welcome" ? <WelcomeStep {...props} /> : null}
+            {step === "track" ? <TrackStep {...props} /> : null}
+            {step === "protect" ? <ProtectStep {...props} next={() => void onProtectContinue()} creating={creating && !draft.encrypt} /> : null}
+            {step === "password" ? <PasswordStep {...props} onCreate={() => void onPasswordContinue()} creating={creating} error={createError} /> : null}
+            {step === "recovery" ? <RecoveryStep {...props} next={() => go("building")} /> : null}
+            {step === "building" ? <BuildingStep tasks={buildTasks} onOpen={() => void open()} opening={opening} /> : null}
+          </m.div>
+        </AnimatePresence>
+        {createError && (step === "protect" || step === "building") ? (
           <p className="emp-helper mt-3" data-invalid="" role="alert">
             <span>{createError}</span>
           </p>
         ) : null}
-      </m.div>
+      </div>
     </m.div>
   );
 }
-

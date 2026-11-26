@@ -34,8 +34,8 @@ export interface MenuContentProps {
 }
 
 /**
- * Panel (docs/DESIGN.md §6.1): glass-1 (opaque inside dialogs), radius 10, 220–320 wide; scales from its trigger on
- * the `glide` spring; rows stagger 16ms on first open; one highlight plate glides between items.
+ * Panel (docs/DESIGN.md §5.5): opaque paper, E2 shadow, radius 10, 220–320 wide, 28px rows. Mouse-opened menus grow
+ * from their trigger (.97 → 1, 120ms); keyboard-opened menus appear at once. One highlight plate under the active row.
  */
 export function MenuContent({ children, align = "start", side = "bottom", sideOffset = 6, width, className, noReturnFocus }: MenuContentProps) {
   const inOverlay = useInOverlay();

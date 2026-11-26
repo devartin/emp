@@ -35,7 +35,7 @@ function captionFor(reason: string | null, idleMinutes: number | null): string {
     case "session_max":
       return "Locked at the end of the session limit";
     case "panic":
-      return "Locked for your safety";
+      return "Locked";
     default:
       return idle ? `Locked automatically after ${idle}` : "Your workspace is encrypted";
   }
@@ -178,7 +178,6 @@ export default function LockScreen() {
                   </m.span>
                 </div>
                 <m.h1 id="lock-title" className="emp-lock-title" variants={rise(reduced)}>
-                  {identity.emoji ? <span className="mr-1.5" aria-hidden>{identity.emoji}</span> : null}
                   {name}
                 </m.h1>
                 <m.p className="mt-1 text-body-sm text-tertiary" variants={rise(reduced)}>

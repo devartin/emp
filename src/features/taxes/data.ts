@@ -295,3 +295,14 @@ export function useTax(): TaxData {
 export const STATUS_LABEL: Record<string, string> = { single: "Single", mfj: "Married filing jointly", mfs: "Married filing separately", hoh: "Head of household", qss: "Qualifying surviving spouse" };
 export const DOC_FLOW = ["expected", "received", "reviewed", "sent"];
 export const DOC_LABEL: Record<string, string> = { expected: "Expected", received: "Received", reviewed: "Reviewed", sent: "Sent to preparer", na: "N/A" };
+
+/**
+ * `tax.due` as a short fact for the quarterly views: "$1,224 due Apr 15" when the estimate leaves a balance due at
+ * filing, else null. Used with `noPaymentNeeded` (definitions.ts) so a quarter with no payment never reads "Covered" while money
+ * is still owed.
+ */
+export function dueAtFilingText(estimate: { balance: string } | undefined, year: number, fmt: (v: number) => string, day: (d: string) => string): { amount: number; text: string } | null {
+  const bal = estimate ? Number(estimate.balance) || 0 : 0;
+  if (bal <= 0.5) return null;
+  return { amount: bal, text: `${fmt(bal)} due ${day(`${year + 1}-04-15`)}` };
+}

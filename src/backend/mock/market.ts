@@ -90,6 +90,10 @@ interface Series {
   l: number[];
   c: number[];
   v: number[];
+  /** Unscaled, unrounded path (open, high, low, close per bar), kept so extensions continue the exact same walk. */
+  raw: { o: number; h: number; l: number; c: number }[];
+  /** Factor that puts the REF_DAY close at `Instrument.start` (fixed when the series is first built). */
+  scale: number;
 }
 
 const seriesCache = new Map<SymbolKey, Series>();
@@ -103,28 +107,34 @@ function round(n: number, i: Instrument): number {
 /** `Instrument.start` is the close on this day; the GBM path is generated from ANCHOR and rescaled to it. */
 const REF_DAY = Date.UTC(2026, 5, 1);
 
-/** Generate (and extend) the daily series up to and including `untilDay` (UTC midnight). */
+/**
+ * Generate (and extend) the daily series up to and including `untilDay` (UTC midnight).
+ *
+ * Deterministic regardless of call order (PROGRAMME-v3 K5 "data truth"): bar `n`'s random draws come from a
+ * generator seeded by `(symbol, n)` alone, the walk continues from the unrounded previous close, and the scale is
+ * fixed by the REF_DAY close, which the first build always reaches. So opening Portfolio first or Home first gives
+ * the same prices to the cent.
+ */
 function series(i: Instrument, untilDay: number): Series {
   let s = seriesCache.get(i.key);
   const fresh = !s;
   if (!s) {
-    s = { t: [], o: [], h: [], l: [], c: [], v: [] };
+    s = { t: [], o: [], h: [], l: [], c: [], v: [], raw: [], scale: 1 };
     seriesCache.set(i.key, s);
   }
   const lastT = s.t.length ? s.t[s.t.length - 1] : ANCHOR - DAY;
   const until = fresh ? Math.max(untilDay, REF_DAY) : untilDay;
   if (lastT >= until) return s;
-  // Re-derive the rng state deterministically from the number of generated bars.
-  const rng = createRng(hashString(`${i.key}:${s.t.length}`));
   const dt = 1 / 252;
   const drift = (i.mu - (i.sigma * i.sigma) / 2) * dt;
   const vol = i.sigma * Math.sqrt(dt);
-  let prev = s.c.length ? s.c[s.c.length - 1] : 1;
+  let prev = s.raw.length ? s.raw[s.raw.length - 1].c : 1;
   const phase = hashString(i.key) % 7;
-  const raw: Series = { t: [], o: [], h: [], l: [], c: [], v: [] };
+  const first = s.t.length;
   for (let day = lastT + DAY; day <= until; day += DAY) {
     if (!tradesEveryDay(i) && isWeekend(day)) continue;
-    const n = s.t.length + raw.t.length;
+    const n = s.t.length;
+    const rng = createRng(hashString(`${i.key}:bar:${n}`));
     // A gentle regime cycle keeps charts from looking like pure noise.
     const cycle = Math.sin(n / 70 + phase) * 0.0006 * (i.sigma / 0.25);
     const ret = drift + cycle + vol * rng.normal();
@@ -135,29 +145,30 @@ function series(i: Instrument, untilDay: number): Series {
     const low = Math.min(open, close) * (1 - span * rng.next());
     const baseVol = i.type === 'crypto' ? 28_000 : i.type === 'index' || i.type === 'fx' ? 0 : i.type === 'etf' ? 4_200_000 : 2_600_000 * (60 / Math.max(10, i.start));
     const volume = baseVol ? Math.round(baseVol * Math.exp(0.35 * rng.normal()) * (1 + Math.abs(ret) * 25)) : 0;
-    raw.t.push(day);
-    raw.o.push(open);
-    raw.h.push(high);
-    raw.l.push(low);
-    raw.c.push(close);
-    raw.v.push(volume);
+    s.t.push(day);
+    s.raw.push({ o: open, h: high, l: low, c: close });
+    s.v.push(volume);
     prev = close;
   }
-  let scale = 1;
   if (fresh) {
-    let k = raw.t.length - 1;
-    while (k > 0 && raw.t[k] > REF_DAY) k--;
-    scale = raw.c[k] > 0 ? i.start / raw.c[k] : 1;
+    let k = s.t.length - 1;
+    while (k > 0 && s.t[k] > REF_DAY) k--;
+    s.scale = s.raw[k] && s.raw[k].c > 0 ? i.start / s.raw[k].c : 1;
   }
-  for (let k = 0; k < raw.t.length; k++) {
-    s.t.push(raw.t[k]);
-    s.o.push(round(raw.o[k] * scale, i));
-    s.h.push(round(raw.h[k] * scale, i));
-    s.l.push(round(raw.l[k] * scale, i));
-    s.c.push(fresh ? round(raw.c[k] * scale, i) : round(raw.c[k], i));
-    s.v.push(raw.v[k]);
+  for (let k = first; k < s.t.length; k++) {
+    const r = s.raw[k];
+    s.o.push(round(r.o * s.scale, i));
+    s.h.push(round(r.h * s.scale, i));
+    s.l.push(round(r.l * s.scale, i));
+    s.c.push(round(r.c * s.scale, i));
   }
   return s;
+}
+
+/** Test hook: forget generated series (to prove that call order doesn't change prices). */
+export function resetMarketCache(): void {
+  seriesCache.clear();
+  live.clear();
 }
 
 const utcDay = (ts: number) => Math.floor(ts / DAY) * DAY;

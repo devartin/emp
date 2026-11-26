@@ -1,6 +1,5 @@
 import type { HTMLAttributes, KeyboardEvent, ReactNode, Ref } from "react";
 import { cn } from "@/lib/cn";
-import { EdgeLight } from "./motion/EdgeLight";
 
 export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title?: ReactNode;
@@ -9,24 +8,30 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "title">
   actions?: ReactNode;
   icon?: ReactNode;
   pad?: "none" | "md" | "lg";
+  /** A quiet hairline frame (radius 10, no shadow). Use for the one container level a view may have. */
+  framed?: boolean;
+  /** @deprecated alias of `framed`. */
   flat?: boolean;
-  /** Interactive plate: lifts 2px with a pre-baked raise shadow on hover, presses to .99 (CSS, §4.5). */
+  /** Clickable: an instant ink wash on hover (no lift). */
   interactive?: boolean;
-  /** Pointer-tracked edge light (hero cards, widgets, KPI tiles — never rows). */
+  /** @deprecated edge light is retired; ignored. */
   light?: boolean;
-  /** Broad specular wash under the pointer (hero cards and KPI only). Implies `light`. */
+  /** @deprecated specular is retired; ignored. */
   specular?: boolean;
-  /** Pointer tilt, at most 3° (KPI tiles, gallery tiles, choice cards). */
+  /** @deprecated tilt is retired; ignored. */
   tilt?: boolean;
   ref?: Ref<HTMLDivElement>;
 }
 
 /**
- * Card — a machined panel (docs/DESIGN.md §4.5, §6.3): top-lit gradient, inner highlight, rim, grain and a soft
- * contact shadow. Radius 14, padding 16 (compact 12, large 20), header 15/22 600.
+ * Card — ruled, not boxed (docs/DESIGN.md §5.6, N-CR5). By default a section with no frame and no shadow: a 14/600
+ * head over a hairline, then content. `framed` gives it a quiet hairline frame (radius 10). A card inside a card or a
+ * panel loses its frame automatically, so a view never nests containers.
  */
-export function Card({ title, subtitle, actions, icon, pad = "md", flat, interactive, light, specular, tilt, className, children, onClick, onKeyDown, ref, ...rest }: CardProps) {
-  const lit = light || specular;
+export function Card({ title, subtitle, actions, icon, pad = "md", framed, flat, interactive, light: _l, specular: _s, tilt: _t, className, children, onClick, onKeyDown, ref, ...rest }: CardProps) {
+  void _l;
+  void _s;
+  void _t;
   const header =
     title || actions ? (
       <div className="emp-card-header">
@@ -46,12 +51,8 @@ export function Card({ title, subtitle, actions, icon, pad = "md", flat, interac
       tabIndex={clickable ? 0 : undefined}
       className={cn("emp-card panel", className)}
       data-pad={pad === "md" ? undefined : pad}
-      data-flat={flat ? "" : undefined}
+      data-framed={framed || flat ? "" : undefined}
       data-interactive={interactive ? "" : undefined}
-      data-raise={interactive ? "" : undefined}
-      data-light={lit ? "" : undefined}
-      data-specular={specular ? "" : undefined}
-      data-tilt={tilt && interactive ? "3" : undefined}
       onClick={onClick}
       onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
         if (clickable && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
@@ -62,7 +63,6 @@ export function Card({ title, subtitle, actions, icon, pad = "md", flat, interac
       }}
       {...rest}
     >
-      {lit ? <EdgeLight specular={specular} /> : null}
       {header}
       {children}
     </div>

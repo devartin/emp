@@ -34,7 +34,7 @@ export const handlers: MockHandlers = {
     await ctx.sleep(500, ctx.signal);
     ctx.progress(2, 3, 'Converting headings, lists and tables');
     await ctx.sleep(300, ctx.signal);
-    const page = ctx.pages.create({ workspaceId: req.workspaceId, parentId: req.parentId, kind: 'doc', title: 'Q1 planning notes', icon: { t: 'emoji', v: '📄' }, doc: makeDoc(md(SAMPLE).slice(1)) });
+    const page = ctx.pages.create({ workspaceId: req.workspaceId, parentId: req.parentId, kind: 'doc', title: 'Q1 planning notes', icon: { t: 'lucide', v: 'file-text' }, doc: makeDoc(md(SAMPLE).slice(1)) });
     ctx.progress(3, 3, 'Done');
     return { page: ctx.pages.meta(page.id), warnings: ['2 comments were not imported (comments aren’t part of the page)', 'Suggested edits were dropped — accept them in Google Docs first to keep them'] };
   },

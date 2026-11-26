@@ -290,6 +290,9 @@ fn parse(html: &str) -> Node {
     stack.pop().unwrap_or(Node::Text(String::new()))
 }
 
+/// Placeholder for an inline image inside a text run (dropped again by `lift_images`; never stored).
+const IMAGE_MARKER: &str = "\u{FFFC}";
+
 /// Conversion result.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HtmlResult {
@@ -297,6 +300,9 @@ pub struct HtmlResult {
     pub doc: TipTapDoc,
     /// `h1.page-title`.
     pub title: Option<String>,
+    /// The page icon (`.page-header-icon`), mapped from Notion's emoji to a Lucide icon; `None` when absent or
+    /// unmapped.
+    pub icon: Option<crate::model::Icon>,
     /// Rows of `table.properties` (`name → value text`).
     pub properties: Vec<(String, String)>,
     /// Unresolved links.
@@ -403,7 +409,7 @@ impl Conv<'_> {
                                 // Inline images become their own block later; keep a marker text.
                                 out.push(
                                     TipTapNode::new("emoji")
-                                        .with_attr("native", json!("🖼"))
+                                        .with_attr("native", json!(IMAGE_MARKER))
                                         .with_attr("shortcode", json!(a)),
                                 );
                             }
@@ -780,11 +786,13 @@ impl Conv<'_> {
     }
 
     fn callout(&mut self, n: &Node, depth: usize) -> Result<Vec<TipTapNode>> {
+        // Notion's callout emoji maps to its Lucide icon; unmapped or absent → `lightbulb`, so a generated callout
+        // always carries a Lucide icon (as in the mock's importer and `lifeapps/content.rs`).
         let icon = n
             .find(&|x| x.has_class("icon"))
             .map(|x| x.text().trim().to_owned())
-            .filter(|t| !t.is_empty())
-            .unwrap_or_else(|| "💡".into());
+            .and_then(|t| crate::icons::callout_attr_for_emoji(&t))
+            .unwrap_or_else(|| crate::icons::lucide_attr(crate::icons::CALLOUT_FALLBACK));
         let body = Node::El {
             name: "div".into(),
             attrs: Vec::new(),
@@ -798,13 +806,10 @@ impl Conv<'_> {
         let kids = self.blocks_of(&body, depth)?;
         let (first, rest) = split_first_paragraph(kids);
         let color = color_attr(n).map_or_else(|| "gray".to_owned(), |c| c.1);
-        Ok(vec![container(
-            TipTapNode::new("callout")
-                .with_attr("icon", json!(icon))
-                .with_attr("color", json!(color))
-                .with_content(first),
-            Some(rest),
-        )?])
+        let node = TipTapNode::new("callout")
+            .with_attr("color", json!(color))
+            .with_attr("icon", icon);
+        Ok(vec![container(node.with_content(first), Some(rest))?])
     }
 }
 
@@ -826,7 +831,7 @@ fn trim_inline(v: &mut Vec<TipTapNode>) {
 /// Inline image markers are dropped from text (images are converted as blocks where they stand alone).
 fn lift_images(v: Vec<TipTapNode>) -> Vec<TipTapNode> {
     v.into_iter()
-        .filter(|n| !(n.kind == "emoji" && n.attr_str("native") == Some("🖼")))
+        .filter(|n| !(n.kind == "emoji" && n.attr_str("native") == Some(IMAGE_MARKER)))
         .collect()
 }
 
@@ -911,9 +916,19 @@ pub fn convert(html: &str, r: &mut dyn Resolve) -> Result<HtmlResult> {
         TipTapDoc::from_blocks(blocks)
     };
     normalize(&mut doc)?;
+    let icon = root
+        .find(&|n| n.has_class("page-header-icon"))
+        .and_then(|h| h.find(&|x| x.has_class("icon")).or(Some(h)))
+        .map(|x| x.text().trim().to_owned())
+        .and_then(|t| crate::icons::lucide_for_emoji(&t))
+        .map(|name| crate::model::Icon::Lucide {
+            v: name.to_owned(),
+            color: None,
+        });
     Ok(HtmlResult {
         doc,
         title,
+        icon,
         properties,
         unresolved: c.unresolved,
         unsupported: c.unsupported,
@@ -938,10 +953,10 @@ mod tests {
     #[test]
     fn notion_page() {
         let html = r#"<!DOCTYPE html><html><head><title>T</title><style>p{}</style><script>alert(1)</script></head><body>
-<article class="page sans"><header><h1 class="page-title">My Page</h1><table class="properties"><tbody><tr><th>Status</th><td>Done</td></tr></tbody></table></header>
+<article class="page sans"><header><div class="page-header-icon undefined"><span class="icon">&#x1F680;</span></div><h1 class="page-title">My Page</h1><table class="properties"><tbody><tr><th>Status</th><td>Done</td></tr></tbody></table></header>
 <div class="page-body"><p class="block-color-red">Hello <strong>bold</strong> &amp; <a href="https://x.io">link</a> <a href="javascript:x()">bad</a></p>
 <details><summary>Toggle</summary><p>inside</p></details>
-<figure class="block-color-gray_background callout"><div><span class="icon">💡</span></div><div><p>Tip text</p></div></figure>
+<figure class="block-color-gray_background callout"><div><span class="icon">&#x1F4A1;</span></div><div><p>Tip text</p></div></figure>
 <aside>Aside text</aside>
 <ul class="to-do-list"><li><div class="checkbox checkbox-on"></div><span class="to-do-children-checked">Done</span></li></ul>
 <ol><li>one</li><li>two<ul><li>nested</li></ul></li></ol>
@@ -985,6 +1000,34 @@ mod tests {
         assert!(json.contains("\"checked\":true"));
         assert!(json.contains("Hello "));
         assert!(json.contains(" & "));
+        // No emoji survive into generated structure: Notion's callout and page emoji map to Lucide icons.
+        let callout = &r.doc.blocks()[2].children()[0];
+        assert_eq!(
+            callout.attrs.as_ref().and_then(|a| a.get("icon")),
+            Some(&serde_json::json!({"t": "lucide", "v": "lightbulb"}))
+        );
+        assert_eq!(
+            r.icon,
+            Some(crate::model::Icon::Lucide {
+                v: "rocket".into(),
+                color: None
+            })
+        );
+    }
+
+    #[test]
+    fn callouts_without_a_mapped_icon_get_lightbulb() {
+        for html in [
+            r#"<figure class="callout"><div>No icon here</div></figure>"#,
+            r#"<figure class="callout"><div class="icon">&#x1FAE0;</div><div>Unmapped</div></figure>"#,
+        ] {
+            let r = convert(html, &mut NoResolve).unwrap();
+            let json = serde_json::to_value(&r.doc).unwrap().to_string();
+            assert!(
+                json.contains(r#""icon":{"t":"lucide","v":"lightbulb"}"#),
+                "{json}"
+            );
+        }
     }
 
     #[test]

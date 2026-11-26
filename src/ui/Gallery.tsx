@@ -1,7 +1,7 @@
 /* Dev-only component showcase: every primitive in every state, all themes/accents, all chart types. */
 import {
   Archive, ArrowRight, Bell, Calendar as CalendarIcon, Copy, Download, FileText, Inbox, LayoutGrid, List, Lock, MoreHorizontal, Pencil, Plus, Search,
-  Settings, Share2, Sparkles, Star, Table2, Trash2, Wallet,
+  Check, House, Lightbulb, ListChecks, Settings, Share2, Star, Table2, Trash2, Wallet,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { applyBootPrefs, getBootPrefs, type AccentName, type ThemePref } from "@/lib/bootPrefs";
@@ -22,10 +22,11 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { DatePicker } from "./DatePicker";
 import { DeltaPill, GainLoss } from "./DeltaPill";
 import { Dialog } from "./Dialog";
-import { EmojiPicker } from "./EmojiPicker";
+import { IconPicker } from "./IconPicker";
+import { Glyph } from "./icons/Icon";
 import { EmptyState } from "./EmptyState";
 import { FileDropZone } from "./FileDropZone";
-import { KeycapExtras, MaterialsSection, MotionLab, StateMatrix } from "./GalleryV2";
+import { IconsSection, KeycapExtras, MaterialsSection, MoneySection, MotionLab, StateMatrix, TypeSection } from "./GalleryV2";
 import { IconButton } from "./IconButton";
 import { Input } from "./Input";
 import { Kbd } from "./Kbd";
@@ -50,6 +51,7 @@ import { Segmented } from "./Segmented";
 import { Select } from "./Select";
 import { Sheet } from "./Sheet";
 import { Skeleton, SkeletonSwap, SkeletonText } from "./Skeleton";
+import { Text } from "./Text";
 import { Slider } from "./Slider";
 import { Spinner } from "./Spinner";
 import { StrengthMeter } from "./StrengthMeter";
@@ -64,8 +66,11 @@ const ChartGallery = lazy(() => import("@/charts/ChartGallery"));
 
 const SECTIONS = [
   ["foundations", "Foundations"],
-  ["materials", "Materials"],
-  ["buttons", "Buttons"],
+  ["materials", "Paper, ink and keys"],
+  ["type", "Type"],
+  ["money", "Money"],
+  ["icons", "Icons"],
+  ["buttons", "Keys"],
   ["inputs", "Inputs"],
   ["selection", "Selection"],
   ["controls", "Toggles & sliders"],
@@ -75,7 +80,7 @@ const SECTIONS = [
   ["data", "Cards & KPIs"],
   ["status", "Progress & status"],
   ["misc", "Tags, avatars, misc"],
-  ["motion", "Motion lab"],
+  ["motion", "Motion register"],
   ["charts", "Charts"],
 ] as const;
 
@@ -100,11 +105,11 @@ export function Gallery() {
   }, [density, motion, privacy, numbers, effects, contrast]);
 
   return (
-    <div className="min-h-screen canvas-halo text-primary">
-      <header className="glass-1 sticky top-0 z-30 flex items-center gap-3 px-6 h-14" style={{ boxShadow: "inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark)" }}>
-        <img src="/emp.svg" width={24} height={24} alt="" style={{ borderRadius: 6, boxShadow: "0 3px 8px -3px rgba(0,0,0,.5)" }} />
+    <div className="min-h-screen bg-canvas text-primary">
+      <header className="sticky top-0 z-30 flex items-center gap-3 px-6 h-14 bg-canvas border-b border-default">
+        <img src="/emp.svg" width={24} height={24} alt="" className="rounded-sm" />
         <span className="text-title">Ultra Note UI</span>
-        <Badge tone="solid">v2 · Slab</Badge>
+        <Badge tone="solid">v3 Paper, ink and keys</Badge>
         <div className="ml-auto flex items-center gap-2">
           <Segmented
             size="sm"
@@ -149,7 +154,7 @@ export function Gallery() {
               <MenuSeparator />
               <MenuLabel>Effects</MenuLabel>
               <MenuRadioGroup value={effects} onValueChange={setEffects}>
-                <MenuRadioItem value="full">Full (glass, light, grain)</MenuRadioItem>
+                <MenuRadioItem value="full">Full</MenuRadioItem>
                 <MenuRadioItem value="reduced">Reduced</MenuRadioItem>
               </MenuRadioGroup>
               <MenuSeparator />
@@ -182,6 +187,9 @@ export function Gallery() {
         <main className="flex-1 min-w-0 px-8 py-8 flex flex-col gap-14 max-w-[1120px]">
           <Foundations />
           <MaterialsSection />
+          <TypeSection />
+          <MoneySection />
+          <IconsSection />
           <Buttons />
           <Inputs />
           <SelectionSection />
@@ -193,7 +201,7 @@ export function Gallery() {
           <Status />
           <Misc />
           <MotionLab />
-          <Section id="charts" title="Charts" lead="Single-series trends are ink; colour means something. Hero lines are drawn by a pen, bars grow on settle, tooltips are faux glass with a glowing scrub dot. Entry runs once when 30% visible.">
+          <Section id="charts" title="Charts" lead="One ink line on nothing: no gridlines, no gradient fill, a dotted reference line, a quiet axis on the right. Colour only for multi-series. Lines draw in once, on the first data load, in 250ms.">
             <Suspense fallback={<Skeleton height={320} radius={14} />}>
               <ChartGallery />
             </Suspense>
@@ -219,7 +227,7 @@ function Section({ id, title, lead, children }: { id: string; title: string; lea
 function Row({ label, children, className }: { label?: string; children: ReactNode; className?: string }) {
   return (
     <div className="flex flex-col gap-2">
-      {label ? <span className="text-micro text-tertiary uppercase">{label}</span> : null}
+      {label ? <span className="text-caption text-tertiary">{label}</span> : null}
       <div className={cn("flex flex-wrap items-center gap-3", className)}>{children}</div>
     </div>
   );
@@ -232,7 +240,7 @@ function Foundations() {
   const semantic = ["--accent-solid", "--accent-soft", "--gain", "--loss", "--warning", "--info"];
   const blocks = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"];
   return (
-    <Section id="foundations" title="Foundations" lead="Premium monochrome — graphite by default, matching the icon — with real depth. Colour is reserved for meaning: gain/loss, destructive, warning, tags and data.">
+    <Section id="foundations" title="Foundations" lead="Warm paper and graphite ink. Colour is reserved for meaning: gain and loss on deltas, destructive, warning, tags and multi-series data.">
       <div className="grid grid-cols-2 gap-4">
         <Card title="Surfaces">
           <div className="grid grid-cols-7 gap-2">
@@ -274,22 +282,22 @@ function Foundations() {
         </Card>
         <Card title="Type scale">
           <div className="flex flex-col gap-2">
-            <span className="text-display">Display 40</span>
-            <span className="text-h1">Heading one 30</span>
-            <span className="text-h2">Heading two 24</span>
-            <span className="text-h3">Heading three 20</span>
-            <span className="text-title">Title 17</span>
-            <span className="text-body">Body 14 — the quick brown fox jumps over the lazy dog.</span>
-            <span className="text-body-sm text-secondary">Body small 13 — secondary</span>
-            <span className="text-caption text-tertiary">Caption 12 — tertiary</span>
-            <span className="text-micro text-tertiary uppercase">Micro 11 uppercase</span>
-            <span className="text-mono font-mono">mono 13 · 0x1F4A9 · €1,204.50</span>
+            <Text v="title" as="span">Title 30 / 600</Text>
+            <Text v="h1" as="span">Heading 1 24 / 600</Text>
+            <Text v="h2" as="span">Heading 2 20 / 600</Text>
+            <Text v="h3" as="span">Heading 3 16 / 600</Text>
+            <Text v="doc" as="span">Document 16 / 400. The quick brown fox jumps over the lazy dog.</Text>
+            <Text v="body" as="span">Body 14 / 400. The quick brown fox jumps over the lazy dog.</Text>
+            <Text v="ui" as="span" tone="secondary">UI 13, secondary</Text>
+            <Text v="small" as="span" tone="tertiary">Small 12, tertiary</Text>
+            <Text v="micro" as="span" tone="tertiary">Micro 11, sentence case</Text>
+            <Text v="mono">mono 13 · 0x1F4A9 · €1,204.50</Text>
           </div>
         </Card>
         <Card title="Elevation & radii">
           <div className="grid grid-cols-4 gap-4 p-2">
             {[1, 2, 3, 4].map((e) => (
-              <div key={e} className="h-20 rounded-xl flex items-end p-2 text-caption text-tertiary" style={{ boxShadow: `var(--elev-${e})`, background: "linear-gradient(180deg, var(--panel-top), var(--panel-bot))" }}>
+              <div key={e} className="h-20 rounded-xl flex items-end p-2 text-caption text-tertiary" style={{ boxShadow: `var(--elev-${e})`, background: "var(--bg-overlay)" }}>
                 elev-{e}
               </div>
             ))}
@@ -304,14 +312,6 @@ function Foundations() {
           </div>
         </Card>
       </div>
-      <div className="panel rounded-2xl h-40 flex items-center justify-center overflow-hidden canvas-halo" data-light="" data-specular="">
-        <span className="emp-specular" aria-hidden />
-        <span className="emp-edge" aria-hidden />
-        <div className="flex flex-col items-center gap-3">
-          <img src="/emp.svg" width={56} height={56} alt="" style={{ borderRadius: 14, boxShadow: "0 12px 28px -10px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06)" }} />
-          <span className="text-title">Canvas halo · one key light</span>
-        </div>
-      </div>
     </Section>
   );
 }
@@ -321,7 +321,7 @@ function Buttons() {
   const variants = ["primary", "secondary", "ghost", "soft", "destructive", "destructive-ghost", "link"] as const;
   const [ok, setOk] = useState(false);
   return (
-    <Section id="buttons" title="Buttons" lead="Tactile keycaps. Hover lifts the face 1px while the side stays put; press seats the face onto its side in 70ms (pure CSS, one frame) and releases on a spring with 11% overshoot. Focus rings land from 7px out.">
+    <Section id="buttons" title="Buttons" lead="Keys answer your hands. The ink key is the one primary action in a view; secondary actions are paper keys; ghosts are an ink wash. Press travels 0.5px in 60ms, release is 100ms with no overshoot. Focus is a 2px ink ring, 1px out.">
       <StateMatrix />
       <Card>
         <div className="flex flex-col gap-5">
@@ -346,7 +346,7 @@ function Buttons() {
           ))}
           <Row label="Sizes">
             {(["xs", "sm", "md", "lg", "xl"] as const).map((s) => (
-              <Button key={s} size={s} variant="primary" icon={Sparkles}>
+              <Button key={s} size={s} variant="primary" icon={Plus}>
                 Size {s}
               </Button>
             ))}
@@ -365,8 +365,8 @@ function Buttons() {
             <Button variant="secondary" success={ok} onClick={() => setOk((v) => !v)} icon={Copy}>
               Copy link
             </Button>
-            <Button variant="soft" icon={Sparkles} iconRight={ArrowRight}>
-              Set it up for me
+            <Button variant="soft" iconRight={ArrowRight}>
+              Set up with a guide
             </Button>
           </Row>
         </div>
@@ -382,7 +382,7 @@ function Inputs() {
   const [amt, setAmt] = useState<string | null>("2450.00");
   const [text, setText] = useState("Quarterly review");
   return (
-    <Section id="inputs" title="Inputs" lead="Recessed wells. Focus swaps the inner rim for the ring with a 4px halo; invalid helpers rise in. Number fields carry mini keycap steppers that auto-repeat on hold and evaluate =expressions on blur.">
+    <Section id="inputs" title="Inputs" lead="Flat 1px fields. Hover darkens the hairline; focus draws a 2px ink ring. Number fields carry small steppers that repeat on hold and evaluate =expressions on blur.">
       <Card>
         <div className="grid grid-cols-3 gap-x-6 gap-y-5">
           <Input label="Page title" value={text} onChange={(e) => setText(e.currentTarget.value)} clearable helper="Shown in the sidebar and breadcrumbs" />
@@ -420,10 +420,11 @@ function SelectionSection() {
   ]);
   const [date, setDate] = useState<string | null>("2026-11-26");
   const [color, setColor] = useState<BlockColorValue>("blue");
+  const [pickedIcon, setPickedIcon] = useState("book-open");
   const [bg, setBg] = useState<BlockColorValue>("yellow");
   const currencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "SEK", "NOK", "SGD", "BTC"].map((c) => ({ value: c, label: c, description: formatCurrency(1234.5, c === "BTC" ? "USD" : c) }));
   return (
-    <Section id="selection" title="Select, combobox, date" lead="Triggers are full-width secondary slabs that latch while open. Lists are glass with an origin-aware open and a highlight plate that glides between rows.">
+    <Section id="selection" title="Select, combobox, date" lead="Triggers are fields. Lists are opaque paper with a warm ring; the highlight follows the pointer and the arrow keys instantly.">
       <Card>
         <div className="grid grid-cols-3 gap-x-6 gap-y-5">
           <Select label="Base currency" value={cur} onValueChange={setCur} options={currencies} />
@@ -456,11 +457,11 @@ function SelectionSection() {
           <ColorPicker label="Text colour" value={color} onChange={setColor} mode="text" />
           <ColorPicker label="Background" value={bg} onChange={setBg} mode="background" />
           <div className="flex items-end">
-            <EmojiPicker onSelect={(e) => toast.success(`Picked ${e}`)}>
-              <Button variant="secondary" icon={<span style={{ fontSize: 15 }}>😀</span>}>
-                Emoji picker
+            <IconPicker value={pickedIcon} onSelect={(n) => setPickedIcon(n)}>
+              <Button variant="secondary" icon={<Glyph name={pickedIcon} context="row" />}>
+                Icon picker
               </Button>
-            </EmojiPicker>
+            </IconPicker>
           </div>
         </div>
       </Card>
@@ -479,7 +480,7 @@ function Controls() {
   const [vol, setVol] = useState([62]);
   const [range, setRange] = useState([20, 75]);
   return (
-    <Section id="controls" title="Checkbox, radio, switch, slider" lead="Wells that light up: checks pop into a lit mini-slab and draw their tick; switch thumbs are domes that travel on the thumb spring and stretch while held; sliders have engraved ticks.">
+    <Section id="controls" title="Checkbox, radio, switch, slider" lead="A checked box fills with ink and draws its tick in 120ms; a switch thumb is a paper key that travels in 140ms; slider fills are ink.">
       <Card>
         <div className="grid grid-cols-4 gap-6">
           <div className="flex flex-col gap-3">
@@ -521,7 +522,7 @@ function Navigation() {
   const [view, setView] = useState("table");
   const [tab, setTab] = useState("overview");
   return (
-    <Section id="navigation" title="Tabs & segmented" lead="The segmented slab glides by layout projection and squashes with travel; the tab bar is an extruded ink bar whose leading edge arrives first.">
+    <Section id="navigation" title="Tabs & segmented" lead="Selection is instant. Tabs are a hairline with a 2px ink underline; the segmented thumb is a paper key on a flat bed.">
       <Card>
         <div className="flex flex-col gap-6">
           <div className="flex flex-wrap items-center gap-4">
@@ -557,7 +558,7 @@ function Navigation() {
               { value: "overview", label: "Overview" },
               { value: "transactions", label: "Transactions", count: 248 },
               { value: "budgets", label: "Budgets" },
-              { value: "insights", label: "Insights", icon: Sparkles },
+              { value: "insights", label: "Insights", icon: Lightbulb },
               { value: "archived", label: "Archived", disabled: true },
             ]}
             trailing={<IconButton size="sm" icon={Plus} label="Add view" />}
@@ -577,7 +578,7 @@ function Overlays() {
   const [showHidden, setShowHidden] = useState(true);
   const [sort, setSort] = useState("updated");
   return (
-    <Section id="overlays" title="Menus, popovers, dialogs, sheets" lead="Glass. Menus scale from their trigger on the glide spring, rows stagger 16ms; dialogs grow out of the button that opened them and close back into it; sheets drag to dismiss.">
+    <Section id="overlays" title="Menus, popovers, dialogs, sheets" lead="Things you summon float: opaque paper, a 1px warm ring and a soft layer. Mouse-opened menus grow from their trigger in 120ms; keyboard-opened ones appear at once. Dialogs settle in 160ms.">
       <Card>
         <div className="flex flex-wrap gap-3">
           <Menu>
@@ -755,7 +756,7 @@ function Overlays() {
 function Feedback() {
   const [loading, setLoading] = useState(false);
   return (
-    <Section id="feedback" title="Toasts, banners, empty states, skeletons" lead="Toasts rise from the dock on the thumb spring and drain a groove; banners are recessed bands; empty states settle the icon's slabs into a well.">
+    <Section id="feedback" title="Toasts, banners, empty states, skeletons" lead="Toasts are opaque paper, in 150ms and out 100ms. Banners are flat tinted bands. Empty states are a line glyph, a sentence and at most one key.">
       <Card>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => toast.success("Imported 248 transactions", { description: "6 duplicates skipped · 12 rules applied" })}>
@@ -778,7 +779,7 @@ function Feedback() {
           </Button>
           <Button
             variant="soft"
-            icon={Sparkles}
+            icon={Check}
             onClick={(e) => {
               celebrate(e.currentTarget);
             }}
@@ -845,7 +846,7 @@ function DataSection() {
     return () => window.clearInterval(iv);
   }, []);
   return (
-    <Section id="data" title="Cards, KPI tiles, money" lead="Machined plates. Clickable tiles lift, catch the pointer light and tilt up to 3°. Only changed digits roll, right to left; Hide numbers swaps to a recessed mask.">
+    <Section id="data" title="Cards, KPI tiles, money" lead="Ruled, not boxed: a card is a section with a 14/600 head over a hairline, framed only when it is the one container in view. KPI figures are labelled numbers, final from the first frame.">
       <div className="grid grid-cols-4 gap-4">
         <KpiTile label="Net worth" value={{ amount: nw.toFixed(2), currency: "USD" }} delta={{ value: 0.042 }} spark={spark} info="Assets minus liabilities, in USD" onClick={() => toast("Net worth")} />
         <KpiTile label="Spent this month" value={{ amount: "3412.18", currency: "USD" }} noCents delta={{ value: 0.083, invert: true }} spark={spark.map((v, i) => v + Math.sin(i) * 3)} sparkColor="accent" />
@@ -910,7 +911,7 @@ function DataSection() {
 function Status() {
   const [p, setP] = useState(0.42);
   return (
-    <Section id="status" title="Progress, rings, budgets, spinners" lead="Grooves with lit fills (scaleX on glide). Rings sweep in on settle and glow once at 100%. Budget bars turn warning at 75% and loss past 100%.">
+    <Section id="status" title="Progress, rings, budgets, spinners" lead="Flat 4px tracks with ink fills. Rings are for small progress only; Money, Portfolio and Tax use 4px bars. Budget bars turn loss past 100%.">
       <Card>
         <div className="grid gap-8" style={{ gridTemplateColumns: "1fr 1.2fr 1.3fr" }}>
           <div className="flex flex-col gap-4">
@@ -1000,7 +1001,7 @@ function Misc() {
             {([16, 20, 24, 32, 40, 64] as const).map((s) => (
               <Avatar key={s} name="Devin Artin" size={s} />
             ))}
-            <Avatar name="Workspace" glyph="🏠" shape="square" size={32} />
+            <Avatar name="Workspace" glyph={<House size={16} strokeWidth={1.25} absoluteStrokeWidth aria-hidden />} shape="square" size={32} />
             <AvatarStack size={24}>
               <Avatar name="Ana Lima" />
               <Avatar name="Kenji Mori" />
@@ -1030,7 +1031,7 @@ function ChoiceCardDemo() {
   const [v, setV] = useState("guided");
   return (
     <>
-      <ChoiceCard selected={v === "guided"} onSelect={() => setV("guided")} icon={Sparkles} title="Guided" description="Answer 6 questions; we set it up." recommended />
+      <ChoiceCard selected={v === "guided"} onSelect={() => setV("guided")} icon={ListChecks} title="Guided" description="Six questions, then the pages are set up for you." recommended />
       <ChoiceCard selected={v === "blank"} onSelect={() => setV("blank")} icon={FileText} title="Start blank" description="An empty workspace you shape yourself." />
     </>
   );

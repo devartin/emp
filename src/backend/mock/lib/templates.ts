@@ -12,18 +12,18 @@ export interface BuiltinTemplate {
   doc(): TipTapDoc;
 }
 
-const emoji = (v: string): Icon => ({ t: 'emoji', v });
+const lucide = (v: string): Icon => ({ t: 'lucide', v });
 
 export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
   {
     id: 'builtin:meeting-notes',
     title: 'Meeting notes',
-    icon: emoji('📝'),
+    icon: lucide('notebook-pen'),
     category: 'Work',
     kind: 'doc',
     doc: () =>
       makeDoc([
-        b.callout(['Date, attendees and the one question this meeting must answer.'], { icon: emoji('🎯'), tone: 'blue' }),
+        b.callout(['Date, attendees and the one question this meeting must answer.'], { icon: lucide('target'), tone: 'blue' }),
         b.h2('Agenda'),
         b.numbered(''),
         b.h2('Notes'),
@@ -37,7 +37,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
   {
     id: 'builtin:weekly-review',
     title: 'Weekly review',
-    icon: emoji('🔁'),
+    icon: lucide('repeat'),
     category: 'Personal',
     kind: 'doc',
     doc: () =>
@@ -59,12 +59,12 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
   {
     id: 'builtin:project-brief',
     title: 'Project brief',
-    icon: emoji('🎯'),
+    icon: lucide('target'),
     category: 'Work',
     kind: 'doc',
     doc: () =>
       makeDoc([
-        b.callout([t.bold('One sentence: '), 'what are we doing, for whom, and why now?'], { icon: emoji('💡'), tone: 'yellow' }),
+        b.callout([t.bold('One sentence: '), 'what are we doing, for whom, and why now?'], { icon: lucide('lightbulb'), tone: 'yellow' }),
         b.h2('Problem'),
         b.p(''),
         b.h2('Goals'),
@@ -84,7 +84,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
   {
     id: 'builtin:daily-journal',
     title: 'Daily journal',
-    icon: emoji('☀️'),
+    icon: lucide('sun'),
     category: 'Journal',
     kind: 'doc',
     doc: () => dailyNoteDoc(),
@@ -92,7 +92,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
   {
     id: 'builtin:reading-notes',
     title: 'Reading notes',
-    icon: emoji('📚'),
+    icon: lucide('library'),
     category: 'Learning',
     kind: 'doc',
     doc: () =>
@@ -116,7 +116,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
   {
     id: 'builtin:trip-planner',
     title: 'Trip planner',
-    icon: emoji('✈️'),
+    icon: lucide('plane'),
     category: 'Personal',
     kind: 'doc',
     doc: () =>
@@ -139,13 +139,13 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
   {
     id: 'builtin:decision-log',
     title: 'Decision log',
-    icon: emoji('⚖️'),
+    icon: lucide('scale'),
     category: 'Work',
     kind: 'doc',
     doc: () =>
       makeDoc([
         b.callout('Write the decision down before you make it. Future you will want the context.', {
-          icon: emoji('🧭'),
+          icon: lucide('compass'),
           tone: 'gray',
         }),
         b.h2('Context'),
@@ -162,7 +162,7 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
   {
     id: 'builtin:one-on-one',
     title: '1:1 notes',
-    icon: emoji('🤝'),
+    icon: lucide('handshake'),
     category: 'Work',
     kind: 'doc',
     doc: () =>

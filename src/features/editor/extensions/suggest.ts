@@ -121,13 +121,8 @@ export const Suggest = Extension.create({
               kind = 'pagelink';
               start = from - 1;
               triggerLen = 2;
-            } else if (/^[\p{L}\p{N}_+-]$/u.test(text)) {
-              const m = /(?:^|\s):([\p{L}\p{N}_+-])$/u.exec(before);
-              if (m) {
-                kind = 'emoji';
-                start = from - 2;
-              }
             }
+            // No ':' emoji trigger: the app never offers emoji (owner ruling, docs/DESIGN.md §8).
             if (!kind) return false;
             const tr = state.tr.insertText(text, from, to).setMeta(suggestKey, { open: { kind, from: start, triggerLen } } satisfies Meta);
             view.dispatch(tr);

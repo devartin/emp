@@ -91,11 +91,11 @@
 .emp-btn:is([data-variant="primary"], [data-variant="destructive"]) .emp-kbd {
   color: inherit;
   background: rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 :root:is([data-theme="dark"], [data-theme="midnight"]) .emp-btn:is([data-variant="primary"], [data-variant="destructive"]) .emp-kbd {
   background: rgba(0, 0, 0, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
+  border-color: rgba(0, 0, 0, 0.16);
 }
 .emp-btn-wrap { display: inline-flex; }
 .emp-btn-wrap[data-block] { display: flex; width: 100%; }
@@ -235,7 +235,7 @@
   border: 0;
   padding: 0;
   background: var(--control-bg);
-  box-shadow: inset 0 0 0 1.25px var(--well-rim-state);
+  border: 1.25px solid var(--well-rim-state);
   color: var(--lit-fg);
   display: inline-flex;
   align-items: center;
@@ -243,7 +243,7 @@
 }
 .emp-check-cap {
   position: absolute;
-  inset: 0;
+  inset: -1.25px;
   border-radius: inherit;
   background: var(--lit-a);
   opacity: 0;
@@ -251,7 +251,7 @@
   pointer-events: none;
 }
 .emp-check:is([data-state="checked"], [data-state="indeterminate"]) .emp-check-cap { opacity: 1; }
-.emp-check:is([data-state="checked"], [data-state="indeterminate"]) { box-shadow: none; }
+.emp-check:is([data-state="checked"], [data-state="indeterminate"]) { border-color: var(--lit-a); }
 .emp-check-ind { position: relative; display: flex; align-items: center; justify-content: center; }
 .emp-check svg { width: 11px; height: 11px; overflow: visible; }
 .emp-check-tick,
@@ -264,7 +264,7 @@
 .emp-check[data-state="indeterminate"] .emp-check-dash { stroke-dashoffset: 0; }
 .emp-check:focus-visible { outline: 2px solid var(--ring); outline-offset: var(--focus-offset); }
 .emp-check:disabled { opacity: 0.45; }
-.emp-check[data-error] { box-shadow: inset 0 0 0 1.25px var(--loss); }
+.emp-check[data-error] { border-color: var(--loss); }
 .emp-check-bar { width: 8px; height: 1.5px; border-radius: 1px; background: currentColor; }
 /* checking a to-do: the strike-through draws left to right in 150ms and the text fades to tertiary */
 .emp-check-label { position: relative; transition: color 150ms var(--ease-out); }
@@ -292,12 +292,12 @@
   border: 0;
   padding: 0;
   background: var(--control-bg);
-  box-shadow: inset 0 0 0 1.25px var(--well-rim-state);
+  border: 1.25px solid var(--well-rim-state);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-.emp-radio[data-state="checked"] { box-shadow: inset 0 0 0 1.25px var(--lit-a); }
+.emp-radio[data-state="checked"] { border-color: var(--lit-a); }
 .emp-radio-dot {
   width: 8px;
   height: 8px;
@@ -477,7 +477,8 @@
 }
 .emp-tab-hover { display: none; }
 .emp-tab:hover { color: var(--text-primary); }
-.emp-tab[data-state="active"] { color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
+.emp-tab[data-state="active"] { color: var(--text-primary); }
+.emp-tab[data-state="active"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--text-primary); }
 .emp-tab:disabled { opacity: 0.45; }
 .emp-tab svg { width: 14px; height: 14px; }
 .emp-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: var(--radius-xs); }
@@ -576,10 +577,8 @@
 }
 .emp-glide[data-on] { opacity: 1; }
 .emp-glide[data-tone="danger"] { background: var(--loss-soft); }
-.emp-glide[data-tone="slab"] {
-  background: var(--segmented-indicator);
-  box-shadow: 0 0 0 1px var(--key-paper-ring), 0 1px 1px var(--key-paper-drop);
-}
+/* "slab" tone (sidebar, palette selection) is a flat selected wash in v3: selection is never raised */
+.emp-glide[data-tone="slab"] { background: var(--state-selected); }
 
 .emp-popover {
   max-width: 360px;
@@ -616,7 +615,7 @@
 .emp-tip .emp-kbd {
   color: color-mix(in oklab, var(--tooltip-fg) 78%, transparent);
   background: transparent;
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tooltip-fg) 22%, transparent);
+  border-color: color-mix(in oklab, var(--tooltip-fg) 22%, transparent);
 }
 
 /* ════════ Dialog / Sheet — opaque paper, E3 / E4. Open = 160ms fade + .98 → 1 (C2); content never staggers ════════ */
@@ -1002,9 +1001,7 @@
 /* Delta — written as text: "↗ $1,342 (4.6%)". No pill, no fill. */
 .emp-delta {
   --df: var(--text-secondary);
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.25em;
+  display: inline;
   font-size: inherit;
   line-height: inherit;
   font-weight: inherit;
@@ -1012,11 +1009,11 @@
   font-variant-numeric: tabular-nums;
   color: var(--df);
 }
-.emp-delta svg { display: none; }
+.emp-delta svg:not(.emp-delta-arrow) { display: none; }
 .emp-delta[data-dir="up"] { --df: var(--gain-text); }
 .emp-delta[data-dir="down"] { --df: var(--loss-text); }
 .emp-delta[data-plain] { padding: 0; }
-.emp-delta-arrow { display: inline; }
+.emp-delta-arrow { display: inline-block; width: 0.85em; height: 0.85em; vertical-align: -0.06em; }
 .emp-delta-label { color: var(--text-secondary); }
 .emp-gain { color: var(--gain-text); }
 .emp-loss { color: var(--loss-text); }
@@ -1037,6 +1034,7 @@
 .emp-amount[data-role="axis"] { font-size: calc(11rem / 14); line-height: calc(14 / 11); font-weight: 400; color: var(--text-tertiary); }
 .emp-amount-cents { color: var(--text-tertiary); }
 .emp-amount-sup { font-size: 0.55em; vertical-align: 0.42em; line-height: 0; color: var(--text-secondary); margin-left: 0.04em; }
+.emp-amount-sep { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .emp-amount[data-tone="gain"] { color: var(--gain-text); }
 .emp-amount[data-tone="loss"] { color: var(--loss-text); }
 
@@ -1054,8 +1052,10 @@
 .emp-text[data-v="mono"] { font-family: var(--font-mono-code); font-size: calc(13rem / 14); line-height: calc(20 / 13); }
 .emp-text[data-tone="secondary"] { color: var(--text-secondary); }
 .emp-text[data-tone="tertiary"] { color: var(--text-tertiary); }
+.emp-text[data-weight="400"] { font-weight: 400; }
 .emp-text[data-weight="500"] { font-weight: 500; }
 .emp-text[data-weight="600"] { font-weight: 600; }
+.emp-text[data-weight="700"] { font-weight: 700; }
 .emp-text[data-tabular] { font-variant-numeric: tabular-nums; }
 
 /* ════════ Rolling number — the final value is always in the DOM; the roll is an aria-hidden overlay ════════ */
@@ -1357,7 +1357,8 @@
 .emp-swatch svg { width: 12px; height: 12px; }
 .emp-accent-swatch { width: 24px; height: 24px; }
 
-.emp-iconpick { width: 332px; display: flex; flex-direction: column; gap: 8px; }
+.emp-iconpick { width: 332px; max-width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.emp-iconpick[data-loading] { height: 384px; }
 .emp-iconpick-head { display: flex; align-items: center; gap: 8px; }
 .emp-iconpick-head .emp-input { flex: 1; }
 .emp-iconpick-scroll { max-height: 300px; overflow-y: auto; margin: 0 -4px; padding: 0 4px; overscroll-behavior: contain; }
@@ -1389,10 +1390,10 @@
 .emp-chart svg:focus { outline: none; }
 .emp-chart .recharts-cartesian-axis-tick-value,
 .emp-chart .emp-axis-tick { font-size: 11px; font-weight: 400; fill: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-/* Lines draw in for ≤ 300ms on the first data load only (ChartFrame [data-entering]); bars grow from zero. */
-.emp-chart [data-entering] :is(.recharts-line, .recharts-area, .emp-reveal) { animation: emp-reveal-x 300ms var(--ease-out) both; }
-.emp-chart [data-entering] .emp-grow { transform-box: fill-box; transform-origin: 50% 100%; animation: emp-grow-y 240ms var(--ease-out) both; }
-.emp-chart [data-entering] .emp-grow-x { transform-box: fill-box; transform-origin: 0% 50%; animation: emp-grow-x 240ms var(--ease-out) both; }
+/* Lines draw in for ≤ 220ms on the first data load only (ChartFrame [data-entering]); bars grow from zero. */
+.emp-chart [data-entering] :is(.recharts-line, .recharts-area, .emp-reveal) { animation: emp-reveal-x 220ms var(--ease-out) both; }
+.emp-chart [data-entering] .emp-grow { transform-box: fill-box; transform-origin: 50% 100%; animation: emp-grow-y 220ms var(--ease-out) both; }
+.emp-chart [data-entering] .emp-grow-x { transform-box: fill-box; transform-origin: 0% 50%; animation: emp-grow-x 220ms var(--ease-out) both; }
 .emp-chart [data-entering] .emp-fade-enter { animation: emp-fade-in 150ms var(--ease-out) both; }
 .emp-chart [data-entering] .emp-pop-enter { animation: emp-fade-in 150ms var(--ease-out) both; }
 .emp-chart [data-entering] .recharts-pie-sector { animation: emp-fade-in 150ms var(--ease-out) both; }
@@ -1468,7 +1469,7 @@
 /* ════════ Compat: raw markup that uses kit classes without the TSX components ════════ */
 .emp-check:is([data-state="checked"], [data-state="indeterminate"]):not(:has(> .emp-check-cap)) {
   background: var(--lit-a);
-  box-shadow: none;
+  border-color: var(--lit-a);
 }
 .emp-btn:not(.slab):not([data-variant="link"]) { position: relative; background: transparent; color: var(--text-secondary); transition: background-color var(--dur-hover-out) var(--ease-out), color var(--dur-hover-out) var(--ease-out); }
 .emp-btn:not(.slab):not([data-variant="link"]):hover { background: var(--state-hover); color: var(--text-primary); transition-duration: 0ms; }
@@ -1476,5 +1477,5 @@
 button.emp-menu-item:not([role="menuitem"]):not([role="menuitemcheckbox"]):not([role="menuitemradio"]):not([role="option"]):hover,
 button.emp-menu-item.is-hi,
 button.emp-menu-item.is-sel { background: var(--state-hover); }
-.emp-spark-reveal { animation: emp-reveal-x 300ms var(--ease-out) both; }
+.emp-spark-reveal { animation: emp-reveal-x 250ms var(--ease-out) both; }
 :root[data-motion="reduced"] .emp-spark-reveal { animation: none; }

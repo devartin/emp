@@ -54,9 +54,12 @@ function buildLane(id: Lane["id"], title: string, plan: DebtPlan, debts: DebtIn[
 export function DebtRace({ plans, debts, minimumLabel }: { plans: Record<string, DebtPlan>; debts: DebtIn[]; minimumLabel?: string }) {
   const lanes = useMemo<Lane[]>(() => [buildLane("avalanche", "Avalanche", plans.avalanche, debts), buildLane("snowball", "Snowball", plans.snowball, debts)], [plans, debts]);
   const maxMonths = Math.max(1, ...lanes.map((l) => l.months));
-  const clock = useMotionValue(0);
-  const [done, setDone] = useState(false);
+  // Earned motion (PROGRAMME-v3 K3: no arrival choreography, no count-up on view): the race starts finished, so the
+  // DOM, copy and accessibility text hold the plan's totals from frame 1; it runs only when the user asks (Replay).
+  const clock = useMotionValue(maxMonths);
+  const [done, setDone] = useState(true);
   const [run, setRun] = useState(0);
+  const played = useRef(0);
   const ctl = useRef<ReturnType<typeof animate> | null>(null);
   const key = lanes.map((l) => `${l.months}:${Math.round(l.interest[l.interest.length - 1] ?? 0)}`).join("|");
 
@@ -68,11 +71,12 @@ export function DebtRace({ plans, debts, minimumLabel }: { plans: Record<string,
 
   useEffect(() => {
     ctl.current?.stop();
-    if (isReducedMotion()) {
+    if (isReducedMotion() || run === played.current) {
       clock.set(maxMonths);
       setDone(true);
       return;
     }
+    played.current = run;
     setDone(false);
     clock.set(0);
     // the race runs on one clock: ~2.6s for the full field, eased so the start and the finish read

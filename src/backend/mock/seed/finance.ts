@@ -21,6 +21,21 @@ import { kvWrite } from '../commands/kv';
 import type { KnownServices, MockCtx } from '../ctx';
 import { closeOn, instrument } from '../market';
 import { createRng, type Rng } from '../rng';
+import { TAX_DEDUCTION_CATEGORIES, type TaxDeductionCategory } from '../../taxDeductions';
+
+const TAX_CATEGORY_COLORS: Record<TaxDeductionCategory['key'], BlockColor> = {
+  charity: 'pink',
+  medical: 'red',
+  salt: 'blue',
+  mortgage: 'brown',
+  home_office: 'purple',
+  business: 'orange',
+  education: 'green',
+  childcare: 'yellow',
+  hsa: 'yellow',
+  ira: 'gray',
+  other: 'gray',
+};
 
 export const order = 150;
 
@@ -954,8 +969,10 @@ export function provisionTax(ctx: MockCtx, o: ProvisionOpts & { year?: number })
     properties: [
       { name: 'Description', type: 'title', role: 'taxded.desc' },
       { name: 'Date', type: 'date', role: 'taxded.date' },
-      { name: 'Category', type: 'select', role: 'taxded.category', config: { options: [{ id: 'charity', name: 'Charitable gifts', color: 'pink' }, { id: 'medical', name: 'Medical & dental', color: 'red' }, { id: 'salt', name: 'State & local taxes', color: 'blue' }, { id: 'mortgage', name: 'Mortgage interest', color: 'brown' }, { id: 'home_office', name: 'Home office', color: 'purple' }, { id: 'business', name: 'Business expense', color: 'orange' }, { id: 'education', name: 'Education', color: 'green' }, { id: 'hsa', name: 'HSA contribution', color: 'yellow' }, { id: 'ira', name: 'Traditional IRA contribution', color: 'gray' }] } },
+      // The same keys and names as the desktop manifest (`TAX_DEDUCTION_CATEGORIES`, held by the parity test).
+      { name: 'Category', type: 'select', role: 'taxded.category', config: { options: TAX_DEDUCTION_CATEGORIES.map((c) => ({ id: c.key, name: c.name, color: TAX_CATEGORY_COLORS[c.key] })) } },
       { name: 'Amount', type: 'money', role: 'taxded.amount', config: { currency: 'USD' } },
+      // A fraction (1 = 100%), as on desktop.
       { name: 'Deductible %', type: 'number', role: 'taxded.pct', config: { format: 'percent' } },
       { name: 'Payee', type: 'text', role: 'taxded.payee' },
       { name: 'Receipt', type: 'checkbox', role: 'taxded.receipt' },
@@ -1009,7 +1026,10 @@ function seedTaxSample(ctx: MockCtx, set: TaxSet): void {
     ['Home office (simplified method)', `${y}-09-30`, 'home_office', 1_500_00, 1, 'Self', false],
     ['Design software subscription', `${y}-03-01`, 'business', 659_88, 1, 'Studio Suite', true],
     ['Co-working day passes', `${y}-07-14`, 'business', 340_00, 1, 'Commons Workspace', false],
-    ['HSA contributions (payroll)', `${y}-10-31`, 'hsa', 2_400_00, 1, 'Acme Studio', true],
+    // Made directly to the HSA, not through payroll: only those are an adjustment (`adjustments: hsa` below).
+    // Payroll (cafeteria-plan) contributions are already left out of W-2 wages and are not deductible again
+    // (IRS Pub 969, https://www.irs.gov/publications/p969).
+    ['HSA contributions (direct, not through payroll)', `${y}-10-31`, 'hsa', 2_400_00, 1, 'Northbank HSA', true],
   ];
   for (const [desc, date, cat, amt, pct, payee, receipt] of ded) {
     createRow(ctx, set.dbs.deductions, { silent: true, sample: true, values: { [P(set.dbs.deductions)]: V.text(desc), [X['taxded.date']]: V.date(date), [X['taxded.category']]: V.sel(cat), [X['taxded.amount']]: V.money(amt), [X['taxded.pct']]: V.num(pct), [X['taxded.payee']]: V.text(payee), [X['taxded.receipt']]: V.check(receipt), [X['taxded.year']]: V.num(y) } });

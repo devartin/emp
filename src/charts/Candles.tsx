@@ -62,7 +62,7 @@ function chartOptions(t: ChartTheme, fmt: (n: number) => string) {
     layout: {
       background: { type: ColorType.Solid, color: "transparent" },
       textColor: t.textTertiary,
-      fontFamily: "Inter Variable, Inter, ui-sans-serif, system-ui, sans-serif",
+      fontFamily: t.fontFamily,
       fontSize: 11,
       attributionLogo: false,
     },
@@ -80,7 +80,7 @@ function chartOptions(t: ChartTheme, fmt: (n: number) => string) {
 }
 
 /**
- * lightweight-charts v5 wrapper (§13.5): transparent layout, tertiary Inter 11 text, horizontal gridlines only,
+ * lightweight-charts v5 wrapper (§13.5): transparent layout, tertiary 11px text in the UI face (--font-ui), horizontal gridlines only,
  * magnet dashed crosshair, gain/loss candles without borders, volume histogram on its own scale (alpha .35),
  * Line/Area/Candles modes and SMA overlays. Theme changes call applyOptions — the chart is never recreated.
  */

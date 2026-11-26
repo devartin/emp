@@ -1,59 +1,35 @@
-/** Onboarding model (§6.2): step order, the "What should EMP help with?" catalogue and the draft state. */
-import {
-  Briefcase,
-  CalendarDays,
-  FileText,
-  GraduationCap,
-  HeartPulse,
-  House,
-  ListTodo,
-  Plane,
-  ReceiptText,
-  Sheet,
-  TrendingUp,
-  Wallet,
-  type LucideIcon,
-} from "lucide-react";
+/**
+ * First run (PROGRAMME-v3 K4; Flow r2 §2.6): three screens, five with encryption, then the picked life apps are built
+ * for real and the app opens on Home.
+ *
+ *   welcome (name, how you start) → track (pick life apps) → protect → [password → recovery] → building → Home
+ */
+import { CandlestickChart, HeartPulse, Kanban, ReceiptText, Sheet, Wallet, type LucideIcon } from "lucide-react";
 import type { AutoLock } from "@/backend/types";
 
-export type StepId = "launch" | "welcome" | "personalize" | "protect" | "password" | "recovery" | "help" | "connections" | "building";
+export type StepId = "welcome" | "track" | "protect" | "password" | "recovery" | "building";
 
-export interface HelpOption {
-  id: string;
+/** How the person starts: from nothing, with pages from another app, or with a bank file. */
+export type StartWith = "fresh" | "pages" | "money";
+
+export interface TrackOption {
+  appId: string;
   label: string;
+  detail: string;
   icon: LucideIcon;
-  /** The v1 life app this installs (§16), if any. */
-  appId?: string;
-  /** Non-app picks create a starter page instead. */
-  starter?: { title: string; emoji: string };
 }
 
-/** 3×4 grid, in SPEC order. Only the six v1 apps produce installs; the rest create a starter page ("More coming"). */
-export const HELP_OPTIONS: HelpOption[] = [
-  { id: "notes", label: "Notes & docs", icon: FileText },
-  { id: "tasks", label: "Tasks & projects", icon: ListTodo, appId: "life-os" },
-  { id: "finance", label: "Personal finance", icon: Wallet, appId: "money-hq" },
-  { id: "investing", label: "Investing", icon: TrendingUp, appId: "portfolio" },
-  { id: "taxes", label: "Taxes", icon: ReceiptText, appId: "tax-organizer" },
-  { id: "calendar", label: "Calendar & planning", icon: CalendarDays, appId: "life-os" },
-  { id: "habits", label: "Health & habits", icon: HeartPulse, appId: "habits" },
-  { id: "home", label: "Home & life admin", icon: House, starter: { title: "Home & life admin", emoji: "🏠" } },
-  { id: "learning", label: "Learning", icon: GraduationCap, starter: { title: "Learning", emoji: "🎓" } },
-  { id: "travel", label: "Travel", icon: Plane, starter: { title: "Travel", emoji: "✈️" } },
-  { id: "career", label: "Career", icon: Briefcase, starter: { title: "Career", emoji: "💼" } },
-  { id: "sheets", label: "Spreadsheets", icon: Sheet, appId: "spreadsheet-studio" },
+/** The six v1 life apps (§16), in the order people usually start with them. Each one is built with defaults. */
+export const TRACK_OPTIONS: TrackOption[] = [
+  { appId: "life-os", label: "Tasks and projects", detail: "Life OS", icon: Kanban },
+  { appId: "habits", label: "Habits and routines", detail: "Habits", icon: HeartPulse },
+  { appId: "money-hq", label: "Spending and budget", detail: "Money HQ", icon: Wallet },
+  { appId: "portfolio", label: "Investments", detail: "Portfolio", icon: CandlestickChart },
+  { appId: "tax-organizer", label: "Taxes", detail: "Tax Organizer", icon: ReceiptText },
+  { appId: "spreadsheet-studio", label: "Spreadsheets", detail: "Spreadsheet Studio", icon: Sheet },
 ];
 
-export const DEFAULT_PICKS = ["notes", "tasks"];
-
-export function appsFor(picks: Iterable<string>): string[] {
-  const out: string[] = [];
-  for (const id of picks) {
-    const app = HELP_OPTIONS.find((o) => o.id === id)?.appId;
-    if (app && !out.includes(app)) out.push(app);
-  }
-  return out;
-}
+export const DEFAULT_PICKS = ["life-os"];
 
 export type AutoLockChoice = "5" | "15" | "30" | "60" | "sleep";
 
@@ -69,6 +45,7 @@ export function autoLockFor(choice: AutoLockChoice): AutoLock {
 
 export interface Draft {
   name: string;
+  start: StartWith;
   encrypt: boolean | null;
   password: string;
   confirm: string;
@@ -76,14 +53,13 @@ export interface Draft {
   recoveryWords: string[] | null;
   recoveryConfirmed: boolean;
   vaultCreated: boolean;
+  /** Life app ids to build. */
   picks: string[];
-  updates: boolean;
-  delayedMarketData: boolean;
-  importAfter: boolean;
 }
 
 export const INITIAL_DRAFT: Draft = {
   name: "",
+  start: "fresh",
   encrypt: true,
   password: "",
   confirm: "",
@@ -92,15 +68,19 @@ export const INITIAL_DRAFT: Draft = {
   recoveryConfirmed: false,
   vaultCreated: false,
   picks: DEFAULT_PICKS,
-  updates: false,
-  delayedMarketData: true,
-  importAfter: false,
 };
 
-/** Visible steps for the current draft (the launch beat is not part of the stepper). */
+/** The apps to build: the picks, plus Money HQ when the person starts with a bank file (it imports into Money HQ). */
+export function appsFor(d: Pick<Draft, "picks" | "start">): string[] {
+  const out = TRACK_OPTIONS.map((o) => o.appId).filter((id) => d.picks.includes(id));
+  if (d.start === "money" && !out.includes("money-hq")) out.unshift("money-hq");
+  return out;
+}
+
+/** Visible steps for the current draft (building is the progress screen, not a question). */
 export function stepsFor(d: Draft): StepId[] {
-  const s: StepId[] = ["welcome", "personalize", "protect"];
+  const s: StepId[] = ["welcome", "track", "protect"];
   if (d.encrypt) s.push("password", "recovery");
-  s.push("help", "connections", "building");
+  s.push("building");
   return s;
 }

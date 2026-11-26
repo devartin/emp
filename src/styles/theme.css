@@ -312,6 +312,10 @@
   :focus:not(:focus-visible) {
     outline: none;
   }
+  /* Programmatic focus targets (route containers, dialogs' first focus) are not controls: no ring. */
+  [tabindex="-1"]:focus-visible {
+    outline: none;
+  }
   /* Desktop app convention: only links use the pointer cursor (§5.1). */
   button,
   [role="button"],

@@ -282,7 +282,7 @@
       "optional": false,
       "spec": {
         "title": "How Life OS works",
-        "icon": "🧠",
+        "icon": "lucide:brain",
         "blocks": [
           {
             "t": "md",
@@ -297,7 +297,7 @@
       "optional": false,
       "spec": {
         "title": "Weekly review",
-        "icon": "🔁",
+        "icon": "lucide:repeat",
         "template": true,
         "blocks": [
           {
@@ -359,7 +359,7 @@
       "optional": false,
       "spec": {
         "title": "Tasks",
-        "icon": "✅",
+        "icon": "lucide:circle-check",
         "properties": [
           {
             "key": "title",
@@ -703,7 +703,7 @@
       "optional": false,
       "spec": {
         "title": "Projects",
-        "icon": "📁",
+        "icon": "lucide:folder",
         "properties": [
           {
             "key": "name",
@@ -808,7 +808,7 @@
       "optional": false,
       "spec": {
         "title": "Areas",
-        "icon": "🧭",
+        "icon": "lucide:compass",
         "properties": [
           {
             "key": "name",
@@ -831,91 +831,81 @@
           {
             "key": "work",
             "when": "answers.areas_work",
-            "icon": "💼",
+            "icon": "lucide:briefcase",
             "values": {
-              "name": "Work",
-              "icon": "💼"
+              "name": "Work"
             }
           },
           {
             "key": "health",
             "when": "answers.areas_health",
-            "icon": "💪",
+            "icon": "lucide:biceps-flexed",
             "values": {
-              "name": "Health",
-              "icon": "💪"
+              "name": "Health"
             }
           },
           {
             "key": "money",
             "when": "answers.areas_money",
-            "icon": "💰",
+            "icon": "lucide:piggy-bank",
             "values": {
-              "name": "Money",
-              "icon": "💰"
+              "name": "Money"
             }
           },
           {
             "key": "home",
             "when": "answers.areas_home",
-            "icon": "🏡",
+            "icon": "lucide:house",
             "values": {
-              "name": "Home",
-              "icon": "🏡"
+              "name": "Home"
             }
           },
           {
             "key": "relationships",
             "when": "answers.areas_relationships",
-            "icon": "❤️",
+            "icon": "lucide:heart",
             "values": {
-              "name": "Relationships",
-              "icon": "❤️"
+              "name": "Relationships"
             }
           },
           {
             "key": "learning",
             "when": "answers.areas_learning",
-            "icon": "📚",
+            "icon": "lucide:library",
             "values": {
-              "name": "Learning",
-              "icon": "📚"
+              "name": "Learning"
             }
           },
           {
             "key": "fun",
             "when": "answers.areas_fun",
-            "icon": "🎉",
+            "icon": "lucide:party-popper",
             "values": {
-              "name": "Fun",
-              "icon": "🎉"
+              "name": "Fun"
             }
           },
           {
             "key": "side_project",
             "when": "answers.areas_side_project",
-            "icon": "🚀",
+            "icon": "lucide:rocket",
             "values": {
-              "name": "Side project",
-              "icon": "🚀"
+              "name": "Side project"
             }
           },
           {
             "key": "family",
             "when": "answers.areas_family",
-            "icon": "👪",
+            "icon": "lucide:users",
             "values": {
-              "name": "Family",
-              "icon": "👪"
+              "name": "Family"
             }
           },
           {
             "key": "community",
             "when": "answers.areas_community",
-            "icon": "🤝",
+            "icon": "lucide:handshake",
             "values": {
-              "name": "Community",
-              "icon": "🤝"
+              "name": "Community"
             }
           }
         ]
@@ -927,7 +917,7 @@
       "optional": false,
       "spec": {
         "title": "Resources",
-        "icon": "📚",
+        "icon": "lucide:library",
         "properties": [
           {
             "key": "name",
@@ -963,7 +953,7 @@
       "optional": false,
       "spec": {
         "title": "Daily notes",
-        "icon": "📓",
+        "icon": "lucide:notebook",
         "properties": [
           {
             "key": "title",

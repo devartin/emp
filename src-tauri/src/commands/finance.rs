@@ -2397,7 +2397,9 @@ fn run_preview(
     .map_err(|_| ApiError::invalid("mapping", "This statement could not be read"))?
     .map_err(fin_err)?;
     let rows: Vec<StatementTxn> = parsed.transactions().cloned().collect();
-    let statement = parsed.closing_balance(&account_name).map(StatementDto::from);
+    let statement = parsed
+        .closing_balance(&account_name)
+        .map(StatementDto::from);
     let existing: Vec<emp_finance::dedupe::Existing> = l
         .txns
         .iter()
@@ -2583,20 +2585,26 @@ pub async fn finance_import_commit(
     let sink = job_sink(&webview, &req.on_event);
     let cell = super::import::import_cell();
     let out = Arc::clone(&cell);
-    let job = state.jobs.spawn("finance_import_commit", true, store.now(), sink, move |ctx| {
-        let (undo_id, result) = commit_import(
-            &store,
-            ctx,
-            &req.import_id,
-            &req.mapping,
-            &req.account_id,
-            &req.skip,
-            &overrides,
-            req.save_profile_as.as_deref(),
-        )?;
-        *out.lock() = Some(undo_id);
-        Ok(result)
-    });
+    let job = state.jobs.spawn(
+        "finance_import_commit",
+        true,
+        store.now(),
+        sink,
+        move |ctx| {
+            let (undo_id, result) = commit_import(
+                &store,
+                ctx,
+                &req.import_id,
+                &req.mapping,
+                &req.account_id,
+                &req.skip,
+                &overrides,
+                req.save_profile_as.as_deref(),
+            )?;
+            *out.lock() = Some(undo_id);
+            Ok(result)
+        },
+    );
     super::import::remember_job(&job, cell);
     Ok(job)
 }
@@ -2639,9 +2647,9 @@ fn commit_import(
     let cleared_col = d.col("txn.cleared", &["Cleared"]);
     let cleared_opt = |want: &str| cleared_col.and_then(|p| InstanceDb::option_id(p, want));
     let (opt_cleared, opt_uncleared) = (cleared_opt("cleared"), cleared_opt("uncleared"));
-    let source = d.col("txn.source", &["Source"]).and_then(|p| {
-        InstanceDb::option_id(p, "import").map(|o| (p.id.clone(), o))
-    });
+    let source = d
+        .col("txn.source", &["Source"])
+        .and_then(|p| InstanceDb::option_id(p, "import").map(|o| (p.id.clone(), o)));
     let reviewed = d.col_id("txn.reviewed", &["Reviewed"]);
     let cur = l
         .accounts
@@ -2705,7 +2713,11 @@ fn commit_import(
         if let Some(p) = &imp {
             v.insert(p.clone(), CellValue::text(&r.import_key));
         }
-        let status = if r.cleared { &opt_cleared } else { &opt_uncleared };
+        let status = if r.cleared {
+            &opt_cleared
+        } else {
+            &opt_uncleared
+        };
         if let (Some(p), Some(opt)) = (cleared_col, status) {
             v.insert(
                 p.id.clone(),
@@ -3440,6 +3452,430 @@ pub(crate) mod test_support {
         .unwrap();
         let r = store.lifeapp_install(&req, &emp_store::NoProgress).unwrap();
         (ws, r.instance_id)
+    }
+}
+
+#[cfg(test)]
+mod parity {
+    //! Mock ↔ desktop parity (PROGRAMME-v3 K5): the fixture `crates/emp-finance/tests/fixtures/parity/fixture.json`
+    //! runs through the app's own command path here and through the browser mock in
+    //! `src/backend/mock/parity.test.ts`; both must produce exactly its `expect`.
+
+    use super::*;
+    use emp_store::Clock;
+
+    const FIXTURE: &str =
+        include_str!("../../../crates/emp-finance/tests/fixtures/parity/fixture.json");
+    const DIR: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../crates/emp-finance/tests/fixtures/parity/"
+    );
+
+    struct Fixed(i64);
+    impl Clock for Fixed {
+        fn now_ms(&self) -> i64 {
+            self.0
+        }
+    }
+
+    fn m2(s: &str) -> String {
+        let mut d: Decimal = s.trim().parse().unwrap();
+        d = d.round_dp(2);
+        d.rescale(2);
+        d.to_string()
+    }
+
+    fn rate(x: f64) -> f64 {
+        (x * 1e10).round() / 1e10
+    }
+
+    fn store_at(today: &str) -> (tempfile::TempDir, Store) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut opts = emp_store::StoreOptions::new(dir.path().join("device.key"));
+        opts.background_indexing = false;
+        let ms = chrono::DateTime::parse_from_rfc3339(&format!("{today}T15:30:00Z"))
+            .unwrap()
+            .timestamp_millis();
+        opts.clock = Arc::new(Fixed(ms));
+        let created = emp_store::Store::create(
+            dir.path(),
+            emp_store::CreateOptions {
+                password: None,
+                kdf: emp_crypto::KdfParams::INSECURE_TEST,
+                auto_lock: emp_store::model::AutoLock::default(),
+                workspace_name: Some("Parity".into()),
+            },
+            opts,
+        )
+        .unwrap();
+        (dir, created.store)
+    }
+
+    fn stage(instance: &str, name: &str, bytes: Vec<u8>) -> (String, ImportMapping) {
+        let opts = ImportOptions {
+            confirmed_large: true,
+            ..ImportOptions::default()
+        };
+        let st = emp_finance::import::start(&bytes, Some(name), &opts).unwrap();
+        let id = emp_store::model::ids::new_id();
+        IMPORTS.lock().insert(
+            id.clone(),
+            StagedImport {
+                instance_id: instance.to_owned(),
+                name: name.to_owned(),
+                bytes: Arc::new(bytes),
+                format: st.format,
+                fingerprint: st.header_fingerprint,
+                expires: Instant::now() + IMPORT_TTL,
+            },
+        );
+        (id, st.mapping_guess)
+    }
+
+    #[test]
+    fn parity_fixture_matches_the_mock() {
+        let fx: Value = serde_json::from_str(FIXTURE).unwrap();
+        let today_s = fx["today"].as_str().unwrap();
+        let (_dir, store) = store_at(today_s);
+        let today = local_today(&store);
+        assert_eq!(today.to_string(), today_s);
+        let ws = store.workspace_list().unwrap().remove(0).id;
+        let req: emp_store::LifeappInstall = serde_json::from_value(json!({
+            "appId": "money-hq", "answers": {}, "mode": "quick", "disabledKeys": [], "workspaceId": ws, "sampleData": false
+        }))
+        .unwrap();
+        let inst = store
+            .lifeapp_install(&req, &emp_store::NoProgress)
+            .unwrap()
+            .instance_id;
+        let l = Ledger::load(&store, &inst).unwrap();
+        let cur = l.currency.clone();
+        let money = |v: &str| CellValue::Money {
+            v: Some(v.to_owned()),
+            cur: cur.clone(),
+        };
+
+        // Accounts.
+        let a = l.db("accounts").unwrap();
+        let a_type = a.col("acct.type", &["Type"]).unwrap();
+        let a_open = a.col_id("acct.opening", &["Opening balance"]).unwrap();
+        let a_budget = a.col_id("acct.on_budget", &["On budget"]).unwrap();
+        let mut acct: HashMap<String, String> = HashMap::new();
+        for x in fx["accounts"].as_array().unwrap() {
+            let name = x["name"].as_str().unwrap();
+            let mut v = BTreeMap::new();
+            v.insert(a.title_id().to_owned(), CellValue::text(name));
+            v.insert(
+                a_type.id.clone(),
+                CellValue::Select {
+                    v: InstanceDb::option_id(a_type, x["type"].as_str().unwrap()),
+                },
+            );
+            v.insert(a_open.clone(), money(x["opening"].as_str().unwrap()));
+            v.insert(a_budget.clone(), CellValue::Check { v: true });
+            let id = store
+                .db_rows_insert_bulk(a.id(), vec![v], None)
+                .unwrap()
+                .remove(0);
+            acct.insert(name.to_owned(), id);
+        }
+
+        // Transactions (entered by hand: cleared, reviewed, source manual).
+        let d = l.db("transactions").unwrap();
+        let col = |role: &str, n: &str| d.col_id(role, &[n]).unwrap();
+        let cleared = d.col("txn.cleared", &["Cleared"]).unwrap();
+        let source = d.col("txn.source", &["Source"]).unwrap();
+        let mut rows = Vec::new();
+        for t in fx["transactions"].as_array().unwrap() {
+            let cat = t["category"].as_str().unwrap();
+            let cid = l
+                .categories
+                .iter()
+                .find(|c| c.name == cat)
+                .unwrap_or_else(|| panic!("desktop has no category {cat}"))
+                .id
+                .clone();
+            let mut v = BTreeMap::new();
+            v.insert(
+                d.col_id("txn.raw", &[])
+                    .unwrap_or_else(|| d.title_id().to_owned()),
+                CellValue::text(t["payee"].as_str().unwrap()),
+            );
+            v.insert(
+                col("txn.date", "Date"),
+                CellValue::Date {
+                    v: Some(emp_store::dbmodel::DateValue {
+                        start: t["date"].as_str().unwrap().to_owned(),
+                        end: None,
+                        time: false,
+                        tz: None,
+                    }),
+                },
+            );
+            v.insert(
+                col("txn.amount", "Amount"),
+                money(t["amount"].as_str().unwrap()),
+            );
+            v.insert(
+                col("txn.account", "Account"),
+                CellValue::Relation {
+                    v: vec![acct[t["account"].as_str().unwrap()].clone()],
+                },
+            );
+            v.insert(
+                col("txn.category", "Category"),
+                CellValue::Relation { v: vec![cid] },
+            );
+            v.insert(
+                cleared.id.clone(),
+                CellValue::Status {
+                    v: InstanceDb::option_id(cleared, "cleared"),
+                },
+            );
+            v.insert(
+                source.id.clone(),
+                CellValue::Select {
+                    v: InstanceDb::option_id(source, "manual"),
+                },
+            );
+            v.insert(
+                col("txn.reviewed", "Reviewed"),
+                CellValue::Check { v: true },
+            );
+            rows.push(v);
+        }
+        store.db_rows_insert_bulk(d.id(), rows, None).unwrap();
+        let before: HashSet<String> = Ledger::load(&store, &inst)
+            .unwrap()
+            .db("transactions")
+            .unwrap()
+            .rows
+            .iter()
+            .map(|r| r.id.clone())
+            .collect();
+
+        // Statement imports through the command path (`run_preview` + the `finance_import_commit` job body).
+        let mut imports = Vec::new();
+        for imp in fx["imports"].as_array().unwrap() {
+            let file = imp["file"].as_str().unwrap();
+            let bytes = std::fs::read(format!("{DIR}{file}")).unwrap();
+            let (id, guess) = stage(&inst, file, bytes);
+            let mapping: ImportMapping = match imp.get("mapping") {
+                Some(m) => serde_json::from_value(m.clone()).unwrap(),
+                None => guess,
+            };
+            let account = acct[imp["account"].as_str().unwrap()].clone();
+            let (_, pv, _, _) = run_preview(&store, &id, &mapping, &account).unwrap();
+            let (_, r) = commit_import(
+                &store,
+                &crate::jobs::JobCtx::detached(),
+                &id,
+                &mapping,
+                &account,
+                &[],
+                &HashMap::new(),
+                None,
+            )
+            .unwrap();
+            imports.push(json!({
+                "file": file,
+                "inserted": r["inserted"],
+                "skipped": r["skipped"],
+                "newCount": pv.new_count,
+                "duplicates": pv.duplicates,
+                "statement": pv.statement.as_ref().map(|s| serde_json::to_value(s).unwrap()),
+            }));
+        }
+        let l = Ledger::load(&store, &inst).unwrap();
+        let d = l.db("transactions").unwrap();
+        let reviewed = d.col_id("txn.reviewed", &["Reviewed"]).unwrap();
+        let opt = |p: &Property, r: &RowDto| d.option_name(r, Some(p)).map(|n| norm(&n));
+        let date_col = d.col_id("txn.date", &["Date"]).unwrap();
+        let amt_col = d.col_id("txn.amount", &["Amount"]).unwrap();
+        let mut imported: Vec<Value> = d
+            .rows
+            .iter()
+            .filter(|r| !before.contains(&r.id))
+            .map(|r| {
+                let date = match r.values.get(&date_col) {
+                    Some(CellValue::Date { v: Some(dv) }) => dv.start.clone(),
+                    _ => String::new(),
+                };
+                let amount = match r.values.get(&amt_col) {
+                    Some(CellValue::Money { v: Some(a), .. }) => m2(a),
+                    _ => String::new(),
+                };
+                let rv = match r.values.get(&reviewed) {
+                    Some(CellValue::Check { v }) => json!(v),
+                    _ => Value::Null,
+                };
+                json!({ "date": date, "amount": amount, "cleared": opt(d.col("txn.cleared", &[]).unwrap(), r),
+                        "source": opt(d.col("txn.source", &[]).unwrap(), r), "reviewed": rv })
+            })
+            .collect();
+        imported.sort_by_key(|v| {
+            format!(
+                "{}{}",
+                v["date"].as_str().unwrap_or(""),
+                v["amount"].as_str().unwrap_or("")
+            )
+        });
+
+        let month: YearMonth = fx["month"].as_str().unwrap().parse().unwrap();
+        let ov = serde_json::to_value(overview(&store, &inst, month, None).unwrap()).unwrap();
+        let from = month.first_day();
+        let spent: Decimal = emp_finance::metrics::spending_breakdown(
+            &l.txns,
+            &l.categories,
+            emp_finance::metrics::BreakdownBy::Category,
+            from,
+            today,
+        )
+        .iter()
+        .map(|r| r.amount)
+        .sum();
+        let mut tax = Vec::new();
+        for t in fx["tax"].as_array().unwrap() {
+            let input: emp_finance::tax::engine::TaxInput =
+                serde_json::from_value(t["input"].clone()).unwrap();
+            let e = super::super::tax::run_estimate(&input, today).unwrap();
+            tax.push(json!({
+                "name": t["name"],
+                "agi": m2(&e.agi.to_string()),
+                "taxable": m2(&e.taxable.to_string()),
+                "deduction": {
+                    "kind": e.deduction.kind,
+                    "amount": m2(&e.deduction.amount.to_string()),
+                    "standardWouldBe": m2(&e.deduction.standard_would_be.to_string()),
+                    "itemizedWouldBe": e.deduction.itemized_would_be.map(|x| m2(&x.to_string())),
+                },
+                "totalTax": m2(&e.total_tax.to_string()),
+                "balance": m2(&e.balance.to_string()),
+                "effectiveRate": rate(e.effective_rate),
+            }));
+        }
+        // Tax Organizer Deductions rows → TaxInput (the Tax hub's path): category option (by name; desktop option
+        // ids are generated) → engine kind, amount × pct (a fraction).
+        let req: emp_store::LifeappInstall = serde_json::from_value(json!({
+            "appId": "tax-organizer", "answers": {}, "mode": "quick", "disabledKeys": [], "workspaceId": ws, "sampleData": false
+        }))
+        .unwrap();
+        let tax_inst = store
+            .lifeapp_install(&req, &emp_store::NoProgress)
+            .unwrap()
+            .instance_id;
+        let (_, dbs) = load_instance(&store, &tax_inst).unwrap();
+        let ded = &dbs["deductions"];
+        let cat = ded.col("taxded.category", &[]).unwrap();
+        let pct_col = ded.col_id("taxded.pct", &[]).unwrap();
+        let amt = ded.col_id("taxded.amount", &[]).unwrap();
+        let categories: Vec<String> = cat.select_options().into_iter().map(|o| o.name).collect();
+        let mut rows = Vec::new();
+        for r in fx["deductionRows"]["rows"].as_array().unwrap() {
+            let name = r["category"].as_str().unwrap();
+            let mut v = BTreeMap::new();
+            v.insert(
+                ded.title_id().to_owned(),
+                CellValue::text(r["desc"].as_str().unwrap()),
+            );
+            v.insert(
+                cat.id.clone(),
+                CellValue::Select {
+                    v: Some(
+                        InstanceDb::option_id(cat, name)
+                            .unwrap_or_else(|| panic!("desktop has no deduction category {name}")),
+                    ),
+                },
+            );
+            v.insert(amt.clone(), money(r["amount"].as_str().unwrap()));
+            v.insert(
+                pct_col.clone(),
+                CellValue::Number {
+                    v: r["pct"].as_f64(),
+                },
+            );
+            rows.push(v);
+        }
+        store.db_rows_insert_bulk(ded.id(), rows, None).unwrap();
+        let (_, dbs) = load_instance(&store, &tax_inst).unwrap();
+        let ded = &dbs["deductions"];
+        let kinds: HashMap<String, String> = fx["deductionCategories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|c| {
+                Some((
+                    c["name"].as_str()?.to_owned(),
+                    c["kind"].as_str()?.to_owned(),
+                ))
+            })
+            .collect();
+        let itemized: Vec<Value> = ded
+            .rows
+            .iter()
+            .filter_map(|r| {
+                let kind = kinds.get(&ded.option_name(r, ded.col("taxded.category", &[]))?)?;
+                let a: Decimal = match r.values.get(&amt) {
+                    Some(CellValue::Money { v: Some(a), .. }) => a.parse().ok()?,
+                    _ => return None,
+                };
+                let p = match r.values.get(&pct_col) {
+                    Some(CellValue::Number { v: Some(p) }) => Decimal::try_from(*p).ok()?,
+                    _ => Decimal::ONE,
+                };
+                Some(json!({ "kind": kind, "amount": m2(&(a * p).to_string()) }))
+            })
+            .collect();
+        let mut d_input = fx["deductionRows"]["input"].clone();
+        d_input["deductions"]["itemized"] = Value::Array(itemized.clone());
+        let d_input: emp_finance::tax::engine::TaxInput = serde_json::from_value(d_input).unwrap();
+        let de = super::super::tax::run_estimate(&d_input, today).unwrap();
+        let deduction_rows = json!({
+            "categories": categories,
+            "itemized": itemized,
+            "deduction": {
+                "kind": de.deduction.kind,
+                "amount": m2(&de.deduction.amount.to_string()),
+                "standardWouldBe": m2(&de.deduction.standard_would_be.to_string()),
+                "itemizedWouldBe": de.deduction.itemized_would_be.map(|x| m2(&x.to_string())),
+            },
+            "totalTax": m2(&de.total_tax.to_string()),
+        });
+        let names: Vec<&str> = fx["deductionCategories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|c| c["name"].as_str())
+            .collect();
+        assert_eq!(
+            categories, names,
+            "Deductions categories differ from the fixture"
+        );
+
+        let amount = |k: &str| m2(ov[k]["amount"].as_str().unwrap_or("0"));
+        let to_review = imported
+            .iter()
+            .filter(|r| r["reviewed"] == json!(false))
+            .count();
+        let got = json!({
+            "netWorth": amount("netWorth"),
+            "assets": amount("assets"),
+            "liabilities": amount("liabilities"),
+            "savingsRate3m": rate(ov["savingsRate3m"].as_f64().unwrap()),
+            "spent": m2(&spent.to_string()),
+            "toReview": to_review,
+            "imports": imports,
+            "imported": imported,
+            "tax": tax,
+            "deductionRows": deduction_rows,
+        });
+        if std::env::var("PARITY_PRINT").is_ok() {
+            println!("{}", serde_json::to_string_pretty(&got).unwrap());
+        }
+        assert_eq!(
+            got, fx["expect"],
+            "desktop figures differ from the parity fixture"
+        );
     }
 }
 

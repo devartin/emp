@@ -371,19 +371,21 @@ pub mod fp {
 
 // ───────────────────────────────────────────────────────────────────────────── helpers
 
-/// `lucide:<name>` / emoji → icon.
+/// `lucide:<name>` → icon. A legacy emoji maps through the canonical emoji map (owner ruling: no emoji); unmapped
+/// emoji give no icon.
 #[must_use]
 pub fn icon_of(s: Option<&str>, color: Option<&str>) -> Option<Icon> {
     let s = s?.trim();
     if s.is_empty() {
         return None;
     }
-    Some(match s.strip_prefix("lucide:") {
-        Some(name) => Icon::Lucide {
-            v: name.to_owned(),
-            color: color.map(str::to_owned),
-        },
-        None => Icon::Emoji { v: s.to_owned() },
+    let name = match s.strip_prefix("lucide:") {
+        Some(name) => name,
+        None => crate::icons::lucide_for_emoji(s)?,
+    };
+    Some(Icon::Lucide {
+        v: name.to_owned(),
+        color: color.map(str::to_owned),
     })
 }
 
@@ -1753,9 +1755,13 @@ mod tests {
             })
         );
         assert_eq!(
-            icon_of(Some("🎯"), None),
-            Some(Icon::Emoji { v: "🎯".into() })
+            icon_of(Some("\u{1F3AF}"), None),
+            Some(Icon::Lucide {
+                v: "target".into(),
+                color: None
+            })
         );
+        assert_eq!(icon_of(Some("\u{1FAE0}"), None), None);
         assert_eq!(icon_of(Some(" "), None), None);
     }
 }

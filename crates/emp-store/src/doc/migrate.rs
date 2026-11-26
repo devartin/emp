@@ -31,6 +31,9 @@ pub fn migrate(mut value: Value) -> Result<TipTapDoc> {
     }
     obj.entry("content")
         .or_insert_with(|| Value::Array(Vec::new()));
+    // Emoji icons (legacy callout icons from the old importers included) upcast to Lucide on read, until the
+    // schema-v2 payload migration has rewritten the stored document (owner ruling: no emoji in the app).
+    crate::icons::migrate_doc_icons(&mut value);
     serde_json::from_value(value).map_err(|e| StoreError::invalid(format!("invalid document: {e}")))
 }
 

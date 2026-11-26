@@ -13,8 +13,8 @@ export interface RingProps {
   /** Centre content (64/96 sizes). */
   children?: ReactNode;
   /**
-   * Completion moment (S8): when the value reaches 100% the ring emits --glow-gain once and a centre check pops on
-   * the `pop` spring. Defaults to on for rings ≥ 40px without centre content.
+   * Completion: when the value reaches 100% a centre check appears (no glow, no pop). Defaults to on for rings
+   * ≥ 40px without centre content. (Money, Portfolio and Tax use 4px bars instead of rings.)
    */
   completeMoment?: boolean;
   className?: string;
@@ -70,7 +70,6 @@ export function Ring({ value, size = 24, color, children, completeMoment, classN
           style={shown === 0 ? { opacity: 0 } : undefined}
         />
       </svg>
-      {done ? <span key={`g${done}`} className="emp-ring-glow" aria-hidden /> : null}
       {children ? (
         <span className="absolute inset-0 flex items-center justify-center tabular">{children}</span>
       ) : done ? (

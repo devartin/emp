@@ -1,10 +1,13 @@
-/** Money HQ overview: net-worth hero with scrub readout, key metrics, budget envelopes, spending donut, cash-flow
- * Sankey, recent transactions, upcoming bills and insights. */
-import { ArrowRight, CalendarClock, CheckCircle2, Repeat, Sparkles } from "lucide-react";
-import { m } from "motion/react";
-import { useMemo, useState } from "react";
+/**
+ * Money HQ overview: net-worth hero with scrub readout, key figures, budget envelopes, spending by category, cash
+ * flow, recent transactions, upcoming bills and insights. Every headline number is a `<Figure>` (shared/Figure.tsx):
+ * one label and one definition from shared/definitions.ts, with its inputs one click away. Numbers are final from the
+ * first frame (K3: no count-up on arrival).
+ */
+import { ArrowRight, CalendarClock, CheckCircle2, Repeat } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/backend";
-import type { Insight } from "@/backend/types";
+import type { FinanceOverview, Insight } from "@/backend/types";
 import { LineChart } from "@/charts/Line";
 import { Sankey } from "@/charts/Sankey";
 import { useChartTheme, seriesColor } from "@/charts/theme";
@@ -15,53 +18,52 @@ import { Button } from "@/ui/Button";
 import { DeltaPill } from "@/ui/DeltaPill";
 import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
-import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { addMonths, assignColors, dayLabel, fmtMoney, fmtPct, monthLabel, num, relDays, toMoney, todayIso, fmtWhole } from "../shared/format";
-import { isIncomeGroup, isSavingGroup, spendingBudget } from "../shared/figures";
+import { allSpending, budgetLeft, budgetSpent, keptFromSankey } from "../shared/definitions";
+import { isSavingGroup, spendingBudget } from "../shared/figures";
+import { Figure } from "../shared/Figure";
+import { loadDebtPlanChoice, STRATEGY_LABEL, useDebtPlanChoice } from "../shared/debtPlanChoice";
 import { useAsync, useDbChanged, useScrubIdx, useScrubStore, type ScrubStore } from "../shared/hooks";
 import { InsightCard, Quiet, Section } from "../shared/ui";
 import { SpendWheel, WheelLegendRow } from "../shared/SpendWheel";
 import { localInsights } from "./insights";
-import { debtInputs, useLedgerCtx } from "./ledger";
+import { debtInputs, debtPlanStart, useLedgerCtx } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 import { BudgetRing, Envelope, HeroMoney, MetricCard, TxnLine, type EnvelopeData } from "./widgets";
-import { DetailBars, KpiDetail, KpiMorphStage, KpiMorphTile } from "./KpiMorph";
 
 type Range = "6m" | "1y" | "3y" | "5y";
 
 export function Overview() {
   return (
-    <KpiMorphStage details={(id, close) => <MetricDetail id={id} onClose={close} />}>
-    <m.div className="fh-grid" variants={staggerList(0.04)} initial="hidden" animate="show">
-      <m.div variants={staggerItem} className="fh-span-8">
+    <div className="fh-grid">
+      <div className="fh-span-8">
         <NetWorthHero />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-4">
+      </div>
+      <div className="fh-span-4">
         <SideMetrics />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-7">
+      </div>
+      <div className="fh-span-7">
         <Envelopes />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-5">
+      </div>
+      <div className="fh-span-5">
         <SpendingDonut />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-12">
+      </div>
+      <div className="fh-span-12">
         <CashFlow />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-7">
+      </div>
+      <div className="fh-span-7">
         <Recent />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-5">
+      </div>
+      <div className="fh-span-5">
         <Upcoming />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-12">
+      </div>
+      <div className="fh-span-12">
         <Insights />
-      </m.div>
-    </m.div>
-    </KpiMorphStage>
+      </div>
+    </div>
   );
 }
 
@@ -73,12 +75,24 @@ const xfLong = (v: unknown) => {
   const d = String(v);
   return `${monthLabel(d.slice(0, 7), true)} '${d.slice(2, 4)}`;
 };
-const PERIOD_LABEL: Record<Range, string> = { "6m": "past 6 months", "1y": "past year", "3y": "past 3 years", "5y": "past 5 years" };
+// The change reads "since <first month>": a 1Y range is 12 month-end points, i.e. 11 months of change, so "past year"
+// would disagree with the Accounts tab's 12-month figure (networth.change = end of range minus its start).
+const sinceLabel = (data: readonly { t: string }[]) => (data[0] ? `since ${xfLong(data[0].t)}` : "");
 
 type NwPoint = { t: string; net: number; assets: number; liabilities: number };
 
+/** The inputs behind net worth, for its popover: assets, debts and the Portfolio share. */
+export function netWorthInputs(ov: FinanceOverview | undefined) {
+  if (!ov) return undefined;
+  return [
+    { label: "Assets", value: fmtWhole(ov.assets.amount, { currency: ov.assets.currency }) },
+    { label: "Debts", value: fmtWhole(ov.liabilities.amount, { currency: ov.liabilities.currency }) },
+    ...(ov.investments ? [{ label: "of which Portfolio", value: fmtWhole(ov.investments.amount, { currency: ov.investments.currency }) }] : []),
+  ];
+}
+
 function NetWorthHero() {
-  const { instanceId, overview } = useMoney();
+  const { instanceId, overview, go } = useMoney();
   const l = useLedgerCtx();
   const [range, setRange] = useState<Range>("1y");
   const s = useAsync(() => api.finance.networthSeries({ instanceId, range }), [instanceId, range]);
@@ -91,7 +105,7 @@ function NetWorthHero() {
     <section className="fh-card fh-hero" data-light="" ref={scrub.hostRef} style={{ paddingBottom: 10 }}>
       <EdgeLight specular />
       <div className="flex items-start justify-between gap-4">
-        <NetWorthReadout scrub={scrub} data={data} periodLabel={PERIOD_LABEL[range]} />
+        <NetWorthReadout scrub={scrub} data={data} periodLabel={sinceLabel(data)} overview={overview} onAccounts={() => go("accounts")} />
         <Segmented
           size="sm"
           value={range}
@@ -127,7 +141,10 @@ function NetWorthHero() {
         <span className="ml-auto text-caption text-tertiary" style={{ fontWeight: 400 }}>
           {overview ? (
             <>
-              <Sensitive>{fmtWhole(overview.netWorthDelta30d.amount, { signed: true, currency: overview.netWorthDelta30d.currency })}</Sensitive> in the last 30 days
+              <Figure id="networth.30d">
+                <Sensitive>{fmtWhole(overview.netWorthDelta30d.amount, { signed: true, currency: overview.netWorthDelta30d.currency })}</Sensitive>
+              </Figure>{" "}
+              in the last 30 days
             </>
           ) : null}
         </span>
@@ -136,25 +153,36 @@ function NetWorthHero() {
   );
 }
 
-function NetWorthReadout({ scrub, data, periodLabel }: { scrub: ScrubStore; data: NwPoint[]; periodLabel: string }) {
+function NetWorthReadout({ scrub, data, periodLabel, overview, onAccounts }: { scrub: ScrubStore; data: NwPoint[]; periodLabel: string; overview: FinanceOverview | undefined; onAccounts: () => void }) {
   const idx = useScrubIdx(scrub);
   const cur = data[idx ?? data.length - 1];
   const first = data[0];
   const change = cur && first && first.net ? (cur.net - first.net) / Math.abs(first.net) : 0;
   const delta = cur && first ? cur.net - first.net : 0;
   const scrubbing = idx !== null;
+  const currency = overview?.netWorth.currency;
   return (
     <div className="min-w-0">
       <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
         Net worth
       </div>
-      <div className="mt-1 h-[48px] flex items-center">{cur ? <HeroMoney value={cur.net} cents={false} countUpKey="money:networth" scrubbing={scrubbing} /> : <Skeleton width={220} height={38} radius={8} />}</div>
+      <div className="mt-1 h-[48px] flex items-center">
+        {cur ? (
+          <Figure id="networth" block inputs={netWorthInputs(overview)} action={{ label: "See accounts", onSelect: onAccounts }}>
+            <HeroMoney value={cur.net} cents={false} currency={currency} scrubbing={scrubbing} />
+          </Figure>
+        ) : (
+          <Skeleton width={220} height={38} radius={8} />
+        )}
+      </div>
       <div className="flex items-center gap-2 h-6 mt-1">
         {cur ? (
           <>
             <DeltaPill value={change} />
-            <span className="text-caption tabular" style={{ fontWeight: 560, color: delta >= 0 ? "var(--gain-text)" : "var(--loss-text)", transition: "color 200ms var(--ease-out)" }} data-sensitive="">
-              <RollingNumber value={delta} format={(n) => fmtWhole(Math.round(n), { signed: true })} scrubbing={scrubbing} countUp={false} sensitive />
+            <span className="text-caption tabular" style={{ fontWeight: 500, color: delta >= 0 ? "var(--gain-text)" : "var(--loss-text)" }} data-sensitive="">
+              <Figure id="networth.change" inputs={first ? [{ label: dayLabel(first.t, true), value: fmtWhole(first.net, { currency }) }, { label: dayLabel(cur.t, true), value: fmtWhole(cur.net, { currency }) }] : undefined}>
+                <RollingNumber value={delta} format={(n) => fmtWhole(n, { signed: true, currency })} scrubbing={scrubbing} countUp={false} sensitive />
+              </Figure>
             </span>
             <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
               {scrubbing ? dayLabel(cur.t, true) : periodLabel}
@@ -172,20 +200,27 @@ function NetWorthMinis({ scrub, data }: { scrub: ScrubStore; data: NwPoint[] }) 
   const scrubbing = idx !== null;
   return (
     <>
-      <MiniStat label="Assets" value={cur?.assets} scrubbing={scrubbing} />
-      <MiniStat label="Liabilities" value={cur ? -cur.liabilities : undefined} scrubbing={scrubbing} />
+      <MiniStat id="assets" label="Assets" value={cur?.assets} scrubbing={scrubbing} />
+      {/* Debts are shown positive, as everywhere else (N-MO3 `debts`). */}
+      <MiniStat id="debts" label="Debts" value={cur?.liabilities} scrubbing={scrubbing} />
     </>
   );
 }
 
-function MiniStat({ label, value, scrubbing }: { label: string; value: number | undefined; scrubbing?: boolean }) {
+function MiniStat({ id, label, value, scrubbing }: { id: "assets" | "debts"; label: string; value: number | undefined; scrubbing?: boolean }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">
       <span className="text-caption text-tertiary" style={{ fontWeight: 500 }}>
         {label}
       </span>
       <span className="text-body-sm font-medium tabular" data-sensitive="">
-        {value === undefined ? "—" : <RollingNumber value={value} format={(n) => fmtWhole(Math.round(n))} scrubbing={scrubbing} countUp={false} sensitive />}
+        {value === undefined ? (
+          "—"
+        ) : (
+          <Figure id={id}>
+            <RollingNumber value={value} format={(n) => fmtWhole(n)} scrubbing={scrubbing} countUp={false} sensitive />
+          </Figure>
+        )}
       </span>
     </span>
   );
@@ -194,20 +229,45 @@ function MiniStat({ label, value, scrubbing }: { label: string; value: number | 
 // ───────────────────────────────────────────────────────────────────────────── side metrics
 
 /**
- * The Debt-free tile's month: `FinanceOverview.debtFreeDate` — the one definition (minimum payments only, from next
- * month, the Debt tab's debts) the `debt_free_date` metric and KPI tile show too. `""` with nothing owed, `null`
- * when minimums never clear the debts, undefined while loading.
+ * The Debt-free figure, one scenario per label (definitions.ts):
+ *   - `debtFree.plan` "Debt-free with your plan" when the Debt planner has a saved choice — computed here with the
+ *     same inputs the planner uses (ledger debts, that strategy and extra, from next month);
+ *   - otherwise `debtFree.minimum` "Debt-free at minimum payments" — `FinanceOverview.debtFreeDate`, the planner's
+ *     "At minimum payments" line.
+ * `month`: undefined while loading, "" with nothing owed, null when the scenario never clears the debts.
  */
-function useMinimumDebtFree(debtFreeDate: string | undefined, loaded: boolean): string | null | undefined {
+export function useDebtFree(debtFreeDate: string | undefined, loaded: boolean): { kind: "plan" | "minimum"; month: string | null | undefined; detail: string } {
+  const { instanceId } = useMoney();
   const l = useLedgerCtx();
-  if (!loaded || l.loading) return undefined;
-  if (debtFreeDate) return debtFreeDate;
-  return debtInputs(l.accounts).length ? null : "";
+  // `undefined` while the saved choice loads from the vault: the figure waits rather than show the wrong scenario.
+  const saved = useDebtPlanChoice(instanceId);
+  useEffect(() => void loadDebtPlanChoice(instanceId), [instanceId]);
+  const choice = saved ?? undefined;
+  const debts = l.loading ? [] : debtInputs(l.accounts);
+  const key = JSON.stringify({ debts: debts.map((d) => [d.balance, d.aprPct, d.minPayment]), choice });
+  const plan = useAsync(
+    async () => {
+      if (!choice || !debts.length) return null;
+      const res = await api.finance.debtPlan({ debts: debts.map(({ name, balance, aprPct, minPayment }) => ({ name, balance, aprPct, minPayment })), strategy: choice.strategy, extraMonthly: String(choice.extra), startMonth: debtPlanStart() });
+      return res.strategies.find((x) => x.strategy === choice.strategy) ?? null;
+    },
+    [key],
+    { enabled: !l.loading },
+  );
+  if (!loaded || l.loading || saved === undefined) return { kind: choice ? "plan" : "minimum", month: undefined, detail: "" };
+  if (!debts.length) return { kind: choice ? "plan" : "minimum", month: "", detail: "" };
+  if (choice) {
+    const p = plan.data;
+    const detail = `${STRATEGY_LABEL[choice.strategy]} · ${choice.extra > 0 ? `${fmtWhole(choice.extra)}/mo extra` : "no extra"}`;
+    if (p === undefined || (plan.loading && !p)) return { kind: "plan", month: undefined, detail };
+    return { kind: "plan", month: p && p.months < 600 ? p.payoffDate.slice(0, 7) : null, detail };
+  }
+  return { kind: "minimum", month: debtFreeDate ?? null, detail: "" };
 }
 
 function SideMetrics() {
   const { overview: ov, go } = useMoney();
-  const debtFree = useMinimumDebtFree(ov?.debtFreeDate, !!ov);
+  const debtFree = useDebtFree(ov?.debtFreeDate, !!ov);
   if (!ov) {
     return (
       <div className="flex flex-col gap-3 h-full">
@@ -218,17 +278,22 @@ function SideMetrics() {
     );
   }
   const tba = ov.toBeAssigned ? num(ov.toBeAssigned.amount) : null;
-  // `debtFree`: undefined while loading, "" with nothing owed, null when minimums never clear it, else the month
   const rate = ov.savingsRate3m;
+  const cur = ov.netWorth.currency;
+  // While the scenario is still loading the label names no scenario (it would otherwise guess "at minimum payments").
+  const dfLabel = debtFree.month === undefined ? "Debt-free" : debtFree.kind === "plan" ? "Debt-free with your plan" : "Debt-free at minimum payments";
   return (
     <div className="flex flex-col gap-3 h-full">
       {tba !== null ? (
         <MetricCard
           label="To be assigned"
           tone={tba < 0 ? "warn" : undefined}
-          value={<RollingNumber value={tba} format={(n) => fmtMoney(n)} countUpKey="money:tba" sensitive />}
-          sub={tba > 0.005 ? "Give every dollar a job" : tba < -0.005 ? "Assigned more than you have" : "Every dollar has a job"}
-          onClick={tba > 0.005 ? undefined : () => go("budget")}
+          value={
+            <Figure id="budget.toAssign" action={{ label: "Open budget", onSelect: () => go("budget") }}>
+              <Sensitive>{fmtMoney(tba, ov.toBeAssigned?.currency ?? cur)}</Sensitive>
+            </Figure>
+          }
+          sub={tba > 0.005 ? "Not in a category yet" : tba < -0.005 ? "More assigned than you have" : "All assigned"}
           visual={
             tba > 0.005 ? (
               <Button size="sm" variant="primary" onClick={() => go("budget")}>
@@ -242,133 +307,55 @@ function SideMetrics() {
           }
         />
       ) : (
-        <MetricCard label="Left to spend" value={<Sensitive>{fmtMoney(ov.leftToSpend?.amount ?? 0)}</Sensitive>} onClick={() => go("budget")} />
+        <MetricCard
+          label="Left this month"
+          value={
+            <Figure id="budget.left">
+              <Sensitive>{fmtWhole(budgetLeft(ov.budget), { currency: cur })}</Sensitive>
+            </Figure>
+          }
+        />
       )}
-      <KpiMorphTile
-        id="savings"
-        label="Savings rate · 3 months"
-        value={<RollingNumber value={rate * 100} format={(n) => `${n.toFixed(1)}%`} countUp={false} />}
-        sub={rate >= 0.2 ? "Above the common 20% guideline" : "Common guideline: 20% or more"}
-        visual={<BudgetRing ratio={Math.max(0, Math.min(1, rate / 0.4))} size={40} stroke={4} color={rate >= 0.2 ? "var(--gain)" : "var(--warning)"} delay={0.25} />}
-      />
-      <KpiMorphTile
-        id="ef"
-        label="Emergency fund"
-        value={`${ov.efMonths.toFixed(1)} months`}
-        sub={ov.efMonths >= 6 ? "of essentials · fully funded" : "of essentials · goal 6 months"}
-        visual={<BudgetRing ratio={Math.min(1, ov.efMonths / 6)} size={40} stroke={4} color={efColor(ov.efMonths)} delay={0.3} />}
+      <MetricCard
+        label="Kept from income · 3 months"
+        value={
+          <Figure id="savingsRate3m" action={{ label: "See cash flow by month", onSelect: () => document.getElementById("fh-cashflow")?.scrollIntoView({ block: "start" }) }}>
+            {fmtPct(rate, 1)}
+          </Figure>
+        }
+        sub="Income minus spending"
+        visual={<BudgetRing ratio={Math.max(0, Math.min(1, rate))} size={40} stroke={4} color="var(--chart-line)" />}
       />
       <MetricCard
-        label="Debt-free"
-        value={debtFree === undefined ? <span className="flex items-center h-[28px]"><Skeleton width={110} height={20} radius={6} /></span> : debtFree ? monthLabel(debtFree) : debtFree === "" ? "Debt-free" : "Not on minimums"}
-        sub={debtFree === undefined ? "\u00a0" : debtFree ? "at minimum payments · see the planner" : debtFree === "" ? "No balances owed" : "minimums never clear it · see the planner"}
-        onClick={() => go("debt")}
-        visual={<ArrowRight size={16} className="text-tertiary fh-nudge-x" />}
+        label="Emergency fund"
+        value={
+          <Figure id="efMonths" inputs={[...(ov.efBalance ? [{ label: "Fund balance", value: fmtWhole(ov.efBalance.amount, { currency: ov.efBalance.currency }) }] : []), ...(ov.essentialMonthly ? [{ label: "Essentials a month", value: fmtWhole(ov.essentialMonthly.amount, { currency: ov.essentialMonthly.currency }) }] : [])]} action={{ label: "Open goals", onSelect: () => go("goals") }}>
+            {`${ov.efMonths.toFixed(1)} months`}
+          </Figure>
+        }
+        sub={ov.efMonths >= 6 ? "of essentials · goal reached" : "of essentials · goal 6 months"}
+        visual={<BudgetRing ratio={Math.min(1, ov.efMonths / 6)} size={40} stroke={4} color={efColor(ov.efMonths)} />}
+      />
+      <MetricCard
+        label={dfLabel}
+        value={
+          debtFree.month === undefined ? (
+            <span className="flex items-center h-[28px]">
+              <Skeleton width={110} height={20} radius={6} />
+            </span>
+          ) : (
+            <Figure id={debtFree.kind === "plan" ? "debtFree.plan" : "debtFree.minimum"} inputs={debtFree.detail ? [{ label: "Plan", value: debtFree.detail, sensitive: false }] : undefined} action={{ label: "Open the debt planner", onSelect: () => go("debt") }}>
+              {debtFree.month ? monthLabel(debtFree.month) : debtFree.month === "" ? "Nothing owed" : "Never"}
+            </Figure>
+          )
+        }
+        sub={debtFree.month === undefined ? "\u00a0" : debtFree.month === "" ? "No balances owed" : debtFree.month === null ? "Payments never clear the balance" : debtFree.kind === "plan" ? debtFree.detail : "Paying only the minimums"}
       />
     </div>
   );
 }
 
-const fmtCompact = (v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : fmtWhole(v));
 const efColor = (months: number) => (months >= 6 ? "var(--gain)" : months >= 3 ? "var(--chart-line)" : "var(--warning)");
-
-/** Month-by-month figures from the ledger (non-transfer flows; splits counted by their parts). */
-function useMonthlyFlows(months = 6) {
-  const l = useLedgerCtx();
-  return useMemo(() => {
-    const cur = todayIso().slice(0, 7);
-    const keys = Array.from({ length: months }, (_, i) => addMonths(cur, i - months + 1));
-    const acc = new Map(keys.map((k) => [k, { income: 0, spend: 0, essential: 0 }]));
-    for (const t of l.txns) {
-      const k = t.date.slice(0, 7);
-      const row = acc.get(k);
-      if (!row || t.transferId) continue;
-      const parts = t.splits.length ? t.splits : [t];
-      for (const p of parts) {
-        // The backend's §15.5 definition (savingsRate3m): income = income categories; savings & debt categories are
-        // saving; everything else — uncategorised rows and refunds too — is net spending.
-        const c = p.categoryId ? l.cat.get(p.categoryId) : undefined;
-        if (c && isIncomeGroup(c.group)) row.income += p.amount;
-        else if (c && isSavingGroup(c.group)) continue;
-        else {
-          row.spend -= p.amount;
-          if (c?.essential) row.essential -= p.amount;
-        }
-      }
-    }
-    return keys.map((k) => ({ month: k, ...(acc.get(k) ?? { income: 0, spend: 0, essential: 0 }) }));
-  }, [l.txns, l.cat, months]);
-}
-
-function MetricDetail({ id, onClose }: { id: string; onClose: () => void }) {
-  const { overview: ov, go } = useMoney();
-  // completed months only — the current one is partial
-  const flows = useMonthlyFlows(7).slice(0, 6);
-  if (!ov) return null;
-  if (id === "savings") {
-    const rate = ov.savingsRate3m;
-    const bars = flows.map((f) => {
-      const r = f.income > 0 ? (f.income - f.spend) / f.income : 0;
-      return { key: f.month, label: monthLabel(f.month, true), value: Math.max(0, r), display: f.income > 0 ? `${r < 0 ? "\u2212" : ""}${Math.abs(Math.round(r * 100))}%` : "—", tone: (r >= 0.2 ? "ink" : "muted") as "ink" | "muted" };
-    });
-    const last = flows.slice(-3);
-    const inc = last.reduce((a, f) => a + f.income, 0) / Math.max(1, last.length);
-    const sp = last.reduce((a, f) => a + f.spend, 0) / Math.max(1, last.length);
-    return (
-      <KpiDetail
-        id="savings"
-        label="Savings rate · 3 months"
-        value={`${(rate * 100).toFixed(1)}%`}
-        visual={<BudgetRing ratio={Math.max(0, Math.min(1, rate / 0.4))} size={40} stroke={4} color={rate >= 0.2 ? "var(--gain)" : "var(--warning)"} />}
-        onClose={onClose}
-        aside={
-          <>
-            <div className="fh-kv">Avg income <b data-sensitive="">{fmtWhole(inc)}</b></div>
-            <div className="fh-kv">Avg spending <b data-sensitive="">{fmtWhole(sp)}</b></div>
-            <div className="fh-kv">Kept <b data-sensitive="">{fmtWhole(inc - sp)}/mo</b></div>
-            <Button size="sm" variant="secondary" iconRight={ArrowRight} iconMotion="arrow" className="mt-auto" onClick={() => go("transactions")}>
-              See transactions
-            </Button>
-          </>
-        }
-      >
-        <div className="text-caption text-tertiary mb-3" style={{ fontWeight: 400 }}>
-          Share of income kept each month (excluding transfers, savings and debt payments). The dashed line is the common 20% guideline.
-        </div>
-        <DetailBars bars={bars} guide={0.2} guideLabel="20%" />
-      </KpiDetail>
-    );
-  }
-  const months = ov.efMonths;
-  // The backend's figures behind efMonths, so "Covered today" is the fund itself, not a re-derivation.
-  const ess = ov.essentialMonthly ? num(ov.essentialMonthly.amount) : flows.slice(-3).reduce((a, f) => a + f.essential, 0) / 3;
-  const covered = ov.efBalance ? num(ov.efBalance.amount) : ess * months;
-  const bars = flows.map((f) => ({ key: f.month, label: monthLabel(f.month, true), value: f.essential, display: fmtCompact(f.essential), tone: "ink" as const }));
-  return (
-    <KpiDetail
-      id="ef"
-      label="Emergency fund"
-      value={`${months.toFixed(1)} months`}
-      visual={<BudgetRing ratio={Math.min(1, months / 6)} size={40} stroke={4} color={efColor(months)} />}
-      onClose={onClose}
-      aside={
-        <>
-          <div className="fh-kv">Essentials / month <b data-sensitive="">{fmtWhole(ess)}</b></div>
-          <div className="fh-kv">Covered today <b data-sensitive="">{fmtWhole(covered)}</b></div>
-          <div className="fh-kv">To 6 months <b data-sensitive="">{months >= 6 ? "Funded" : fmtWhole(Math.max(0, ess * 6 - covered))}</b></div>
-          <Button size="sm" variant="secondary" iconRight={ArrowRight} iconMotion="arrow" className="mt-auto" onClick={() => go("goals")}>
-            Open goals
-          </Button>
-        </>
-      }
-    >
-      <div className="text-caption text-tertiary mb-3" style={{ fontWeight: 400 }}>
-        Essential spending by month — rent, utilities, groceries, insurance and the like. Your fund is measured against it.
-      </div>
-      <DetailBars bars={bars} />
-    </KpiDetail>
-  );
-}
 
 // ───────────────────────────────────────────────────────────────────────────── envelopes
 
@@ -383,15 +370,23 @@ function Envelopes() {
       .sort((a, b) => b.spent / Math.max(1, b.assigned) - a.spent / Math.max(1, a.assigned))
       .slice(0, 8);
   }, [ov, l.cat]);
-  const { assigned: totalAssigned, spent: totalSpent } = spendingBudget(ov?.budget);
+  const sb = spendingBudget(ov?.budget);
   const pace = ov?.budget[0]?.pace ?? 0;
+  const cur = ov?.netWorth.currency;
   return (
     <Section
       title="Budget envelopes"
       subtitle={
         ov ? (
           <>
-            <Sensitive>{fmtWhole(totalSpent)}</Sensitive> of <Sensitive>{fmtWhole(totalAssigned)}</Sensitive> spent · {Math.round(pace * 100)}% through {monthLabel(month, true)} · dot = where you should be today
+            <Figure id="budget.spent" inputs={[{ label: "Assigned to spending", value: fmtWhole(sb.assigned, { currency: cur }) }, { label: "Spent in budget", value: fmtWhole(sb.spent, { currency: cur }) }]}>
+              <Sensitive>{fmtWhole(sb.spent, { currency: cur })}</Sensitive>
+            </Figure>{" "}
+            spent in budget of <Sensitive>{fmtWhole(sb.assigned, { currency: cur })}</Sensitive> ·{" "}
+            <Figure id="budget.left">
+              <Sensitive>{fmtWhole(sb.remaining, { currency: cur })}</Sensitive>
+            </Figure>{" "}
+            left this month · {Math.round(pace * 100)}% through {monthLabel(month, true)}
           </>
         ) : (
           "\u00a0"
@@ -432,7 +427,8 @@ function SpendingDonut() {
   const s = useAsync(() => api.finance.spendingBreakdown({ instanceId, from, to, by: "category" }), [instanceId, month]);
   useDbChanged([l.schemas.txns?.database.id], s.reload, 400);
   const rows = s.data ?? [];
-  const total = rows.reduce((a, x) => a + num(x.amount), 0);
+  // `spending.all` — "All spending" (definitions.ts allSpending): the breakdown's total, uncategorised included.
+  const total = allSpending(rows);
   const prev = rows.reduce((a, x) => a + (x.deltaPct !== undefined ? num(x.amount) / (1 + x.deltaPct) : num(x.amount)), 0);
   const slices = useMemo(() => {
     const sorted = rows.map((x) => ({ id: x.key, label: x.label, value: num(x.amount) })).sort((a, b) => b.value - a.value);
@@ -444,9 +440,26 @@ function SpendingDonut() {
     return out;
   }, [rows, t]);
   const [active, setActive] = useState<string | null>(null);
-  const { go } = useMoney();
+  const { go, overview: ov } = useMoney();
   return (
-    <Section title="Spending by category" subtitle={s.data ? <span className="inline-flex items-center gap-2">{monthLabel(month)}{prev > 0 ? <DeltaPill value={(total - prev) / prev} invert plain label="vs last month" /> : null}</span> : "\u00a0"}>
+    <Section
+      title="Spending by category"
+      subtitle={
+        s.data ? (
+          <span className="inline-flex items-center gap-2">
+            <span>
+              <Figure id="spending.all" inputs={[{ label: "Spent in budget", value: fmtWhole(budgetSpent(ov?.budget)) }, ...rows.filter((x) => x.key === "uncategorized").map((x) => ({ label: "Uncategorised", value: fmtWhole(x.amount) })), { label: "All spending", value: fmtWhole(total) }]}>
+                <Sensitive>{fmtWhole(total)}</Sensitive>
+              </Figure>{" "}
+              all spending in {monthLabel(month, true)}
+            </span>
+            {prev > 0 ? <DeltaPill value={(total - prev) / prev} invert plain label="vs last month" /> : null}
+          </span>
+        ) : (
+          "\u00a0"
+        )
+      }
+    >
       {s.loading && !s.data ? (
         <div className="flex items-center gap-5 h-[222px]">
           <Skeleton width={160} height={160} radius={80} />
@@ -463,7 +476,7 @@ function SpendingDonut() {
             active={active}
             onActive={setActive}
             onSelect={(id) => go("transactions", id === "uncategorized" ? { filter: "uncategorized" } : undefined)}
-            centerLabel="Spent"
+            centerLabel="All spending"
             format={(n) => fmtWhole(n)}
             total={total}
             summary={`Spending by category, ${monthLabel(month)}: ${slices.map((x) => `${x.label} ${fmtWhole(x.value)}`).join(", ")}`}
@@ -512,15 +525,20 @@ function CashFlow() {
       return { name: n.name, color: (pn && groupColor.get(pn)) || t.textTertiary };
     });
   }, [data, t]);
-  const income = s.data ? s.data.links.filter((lk) => s.data!.nodes[lk.target]?.name === "Income").reduce((a, lk) => a + lk.value, 0) : 0;
-  const saved = s.data ? s.data.links.filter((lk) => s.data!.nodes[lk.target]?.name === "Saved & paid down").reduce((a, lk) => a + lk.value, 0) : 0;
+  // `cashflow.kept` — the 3-month savings-rate definition for one month (definitions.ts keptFromSankey).
+  const kept = keptFromSankey(s.data);
   return (
     <Section
+      id="fh-cashflow"
       title="Where the money went"
       subtitle={
-        s.data && income ? (
+        s.data && kept.income ? (
           <>
-            <Sensitive>{fmtWhole(income)}</Sensitive> in · <Sensitive>{fmtWhole(saved)}</Sensitive> saved or paid down ({fmtPct(saved / income, 0)})
+            In <Sensitive>{fmtWhole(kept.income)}</Sensitive> · Kept{" "}
+            <Figure id="cashflow.kept" range={monthLabel(month)} inputs={[{ label: "Income", value: fmtWhole(kept.income) }, { label: "Spending", value: fmtWhole(kept.spending) }, { label: "Kept", value: fmtWhole(kept.kept) }]}>
+              <Sensitive>{fmtWhole(kept.kept)}</Sensitive> ({fmtPct(kept.ratio, 0)})
+            </Figure>{" "}
+            in {monthLabel(month)}
           </>
         ) : (
           monthLabel(month)
@@ -627,7 +645,16 @@ function Upcoming() {
   return (
     <Section
       title="Upcoming bills"
-      subtitle={ov ? <><Sensitive>{fmtWhole(-total)}</Sensitive> due in the next 7 days</> : null}
+      subtitle={
+        ov ? (
+          <>
+            <Figure id="upcoming.7d">
+              <Sensitive>{fmtWhole(-total)}</Sensitive>
+            </Figure>{" "}
+            due in the next 7 days
+          </>
+        ) : null
+      }
       actions={
         <Button size="xs" variant="ghost" iconRight={ArrowRight} onClick={() => go("recurring")}>
           Recurring
@@ -695,7 +722,7 @@ function Insights() {
     api.lifeapp.insightMute({ instanceId, ruleId: i.ruleId, until: Date.now() + 30 * 86_400_000 }).catch(() => undefined);
   };
   return (
-    <Section title={<span className="inline-flex items-center gap-2"><Sparkles size={15} className="text-accent-text" />Insights</span>} subtitle="Common guidelines applied to your own numbers — consider, not commands.">
+    <Section title="Insights">
       {!overview ? (
         <div className="grid grid-cols-3 gap-3">
           {[0, 1, 2].map((k) => (
@@ -703,7 +730,7 @@ function Insights() {
           ))}
         </div>
       ) : list.length === 0 ? (
-        <Quiet icon={CheckCircle2} title="Nothing needs your attention" body="Budgets are on pace, bills are covered and your emergency fund is on track." />
+        <Quiet icon={CheckCircle2} title="Nothing to flag" />
       ) : (
         <div className="fh-insights">
           {list.slice(0, 6).map((i) => (

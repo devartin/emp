@@ -526,21 +526,25 @@ function isSavingCat(c: Category | undefined): boolean {
 }
 
 /**
- * Income and spending over `[from, to]` — the §15.5 definition shared with Rust `metrics::income_spending`:
- * transfers never count; income = rows in income categories; rows in saving categories are saving (neither);
- * every other row — uncategorised ones and refunds included — is (net) spending. Split parents are replaced by
- * their parts.
+ * Income and spending over `[from, to]` — the N-MO3 definition shared with Rust `metrics::income_spending`:
+ * transfers never count; income = net flows in income categories; flows in saving categories are saving, never
+ * spending; spending = net outflow in every other known category (a refund nets only inside its own category) plus
+ * the outflows without a category; inflows without a category are neither income nor spending until categorised.
+ * Split parents are replaced by their parts.
  */
-export function flows(l: Ledger, from: string, to: string): { income: number; spending: number } {
+export function flows(l: Ledger, from: string, to: string): { income: number; spending: number; uncategorisedIn: number } {
   let income = 0;
   let spending = 0;
+  let uncategorisedIn = 0;
   for (const t of spendRows(l)) {
     if (t.date < from || t.date > to || isTransfer(l, t)) continue;
     const cat = t.categoryId ? l.catById.get(t.categoryId) : undefined;
     if (cat?.income) income += t.amount;
-    else if (!isSavingCat(cat)) spending += -t.amount;
+    else if (isSavingCat(cat)) continue;
+    else if (cat || t.amount < 0) spending += -t.amount;
+    else uncategorisedIn += t.amount;
   }
-  return { income, spending };
+  return { income, spending, uncategorisedIn };
 }
 
 /** `day` moved by `n` calendar months, the day clamped to the target month (Rust `period::add_months`). */
@@ -1368,9 +1372,11 @@ export const handlers: MockHandlers = {
     const sum = (a: string, b2: string) => {
       const m = new Map<string, { label: string; color?: string; amount: number }>();
       for (const t of spendRows(l)) {
-        if (t.date < a || t.date > b2 || isTransfer(l, t) || t.amount >= 0) continue;
+        // Net spending per key (Rust `metrics::spend_by`, the N-MO3 definition of {@link flows}): income and saving
+        // categories are not spending, an uncategorised inflow is no refund; keys at or below zero are dropped below.
+        if (t.date < a || t.date > b2 || isTransfer(l, t)) continue;
         const c = t.categoryId ? l.catById.get(t.categoryId) : undefined;
-        if (c?.income) continue;
+        if (c?.income || isSavingCat(c) || (!c && t.amount > 0)) continue;
         const k = keyOf(t);
         const e = m.get(k.key) ?? { label: k.label, color: k.color, amount: 0 };
         e.amount += -t.amount;
@@ -1380,12 +1386,13 @@ export const handlers: MockHandlers = {
     };
     const curr = sum(from, to);
     const prev = sum(prevFrom, prevTo);
-    const total = [...curr.values()].reduce((s, e) => s + e.amount, 0);
-    return [...curr.entries()]
+    const positive = [...curr.entries()].filter(([, e]) => e.amount > 0);
+    const total = positive.reduce((s, [, e]) => s + e.amount, 0);
+    return positive
       .sort((a, b2) => b2[1].amount - a[1].amount)
       .map(([key, e]) => {
         const p = prev.get(key)?.amount;
-        return { key, label: e.label, color: e.color, amount: centsToStr(e.amount), pct: total ? e.amount / total : 0, deltaPct: p ? (e.amount - p) / p : undefined };
+        return { key, label: e.label, color: e.color, amount: centsToStr(e.amount), pct: total ? e.amount / total : 0, deltaPct: p !== undefined && p > 0 ? (e.amount - p) / p : undefined };
       });
   },
 
@@ -1415,9 +1422,10 @@ export const handlers: MockHandlers = {
       }
       if (acct && acct.type === 'investment') continue;
       const c = t.categoryId ? l.catById.get(t.categoryId) : undefined;
-      if (c?.income || (!c && t.amount > 0)) {
-        const k = c?.name ?? 'Other income';
-        incomeBy.set(k, (incomeBy.get(k) ?? 0) + t.amount);
+      // Uncategorised inflows are neither income nor spending until categorised (N-MO3, Rust `cashflow_sankey`).
+      if (!c && t.amount > 0) continue;
+      if (c?.income) {
+        incomeBy.set(c.name, (incomeBy.get(c.name) ?? 0) + t.amount);
         continue;
       }
       if (t.amount >= 0) continue;
@@ -1867,8 +1875,7 @@ function previewRows(ctx: MockCtx, l: Ledger, s: ImportSession, mapping: ImportM
 /**
  * `FinanceImportPreview.statement`: the closing balance the file reports. Mirrors Rust
  * `ParsedStatement::closing_balance` — OFX: the section whose account number's last four digits appear in the
- * account name, else the only section with a balance; CSV: the balance column on the latest-dated row (last in file
- * order on ties); QIF: none.
+ * account name, else the only section with a balance; CSV: {@link csvClosing}; QIF: none.
  */
 function closingBalance(s: ImportSession, mapping: ImportMapping, accountName: string): import('../../types').FinanceImportStatement | undefined {
   if (s.format === 'ofx' || s.format === 'qfx') {
@@ -1880,18 +1887,44 @@ function closingBalance(s: ImportSession, mapping: ImportMapping, accountName: s
   }
   if (s.format === 'csv' && mapping.balance !== undefined) {
     const fmt = mapping.dateFormat ?? 'YYYY-MM-DD';
-    let best: { date: string; bal: number } | undefined;
+    // Rust drops rows without a valid date or amount before it looks at balances; do the same.
+    const rows: { date: string; amount: number; bal: number | null }[] = [];
     for (const r of s.rows) {
       const date = mapping.date !== undefined ? parseDate(r[mapping.date] ?? '', fmt) : null;
-      const bal = parseAmount(r[mapping.balance] ?? '', mapping.decimalComma);
-      if (!date || bal === null) continue;
-      // Rust drops rows without a valid amount before it looks at balances; do the same.
-      if (rowAmount(r, mapping) === null) continue;
-      if (!best || date >= best.date) best = { date, bal };
+      const amount = rowAmount(r, mapping);
+      if (!date || amount === null) continue;
+      const raw = parseAmount(r[mapping.balance] ?? '', mapping.decimalComma);
+      // `invert` applies to the balance too: it carries the ledger's sign (an owed card balance is negative).
+      rows.push({ date, amount, bal: raw === null ? null : mapping.invert ? -raw : raw });
     }
-    return best ? { balance: centsToStr(best.bal), asOf: best.date, source: 'csv' } : undefined;
+    const closing = csvClosing(rows);
+    return closing ? { balance: centsToStr(closing.bal), asOf: closing.date, source: 'csv' } : undefined;
   }
   return undefined;
+}
+
+/**
+ * The closing row of a CSV statement (Rust `import::csv_closing`): the balance column on the last row of the latest
+ * date, worked out rather than taken from file order — one row that day: it; several: the row whose balance no other
+ * same-day row continues from (`bal(r) + amount(s) = bal(s)`), when exactly one qualifies; otherwise the file's
+ * direction (majority of neighbouring date steps): the first same-day row of a newest-first file, else the last.
+ */
+export function csvClosing(rows: { date: string; amount: number; bal: number | null }[]): { date: string; bal: number } | undefined {
+  let latest: string | undefined;
+  for (const r of rows) if (r.bal !== null && (!latest || r.date > latest)) latest = r.date;
+  if (!latest) return undefined;
+  const day = rows.map((r, i) => ({ ...r, i })).filter((r) => r.date === latest && r.bal !== null) as { date: string; amount: number; bal: number; i: number }[];
+  if (day.length === 1) return { date: latest, bal: day[0].bal };
+  const ends = day.filter((r) => !day.some((s) => s.i !== r.i && Math.round(r.bal + s.amount) === Math.round(s.bal)));
+  if (ends.length === 1) return { date: latest, bal: ends[0].bal };
+  let up = 0;
+  let down = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i].date > rows[i - 1].date) up++;
+    else if (rows[i].date < rows[i - 1].date) down++;
+  }
+  const pick = down > up ? day[0] : day[day.length - 1];
+  return { date: latest, bal: pick.bal };
 }
 
 const CADENCES: { cadence: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly'; days: number; tol: number }[] = [

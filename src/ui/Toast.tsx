@@ -3,7 +3,7 @@ import { animate, AnimatePresence, m, useMotionValue, type PanInfo } from "motio
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "./Button";
 import { IconButton } from "./IconButton";
-import { spring } from "./motion/tokens";
+
 import { useReducedMotionPref } from "./motion/useReducedEffects";
 
 /* ───────────────────────── store ───────────────────────── */
@@ -154,7 +154,7 @@ const MAX_VISIBLE = 3;
 const GAP = 8;
 
 /**
- * Toaster (docs/DESIGN.md §6.3): glass-1 toasts rising from the bottom-centre dock on the `thumb` spring, max 3 visible;
+ * Toaster (docs/DESIGN.md §5.7): opaque paper toasts (E3) at the bottom-centre dock, in 150ms / out 100ms (C1), max 3 visible;
  * a groove progress bar drains over each toast's lifetime. Cards behind the newest sit at
  * y −8n, scale 1−0.05n, opacity 1−0.2n; hovering expands the stack with 8px gaps. Timers pause on hover, focus-within
  * and window blur. Swipe right to dismiss (45% width or 0.11px/ms). ⌘⇧. focuses the newest toast.
@@ -320,9 +320,9 @@ function ToastCard({
       aria-atomic="true"
       tabIndex={0}
       style={{ zIndex: 10 - n, height: hiddenBehind ? frontHeight : undefined }}
-      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.92 }}
-      animate={{ opacity, y, scale, transition: n === 0 ? spring.thumb : spring.glide }}
-      exit={reduced ? { opacity: 0, transition: { duration: 0.12 } } : { opacity: 0, y: 8, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
+      animate={{ opacity, y, scale, transition: { duration: 0.15, ease: [0.2, 0, 0, 1] } }}
+      exit={reduced ? { opacity: 0, transition: { duration: 0.1 } } : { opacity: 0, transition: { duration: 0.1, ease: [0.4, 0, 1, 1] } }}
       drag={reduced ? false : "x"}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={{ left: 0.05, right: 0.9 }}

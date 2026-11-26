@@ -37,7 +37,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { id: 'privacy.toggle', keys: 'mod+shift+h', description: 'Hide numbers', scope: 'app' },
   { id: 'network.offline', keys: 'mod+shift+o', description: 'Offline mode', scope: 'app' },
   { id: 'theme.toggle', keys: 'mod+shift+d', description: 'Toggle theme', scope: 'app' },
-  { id: 'daily.today', keys: 'mod+alt+d', description: 'Today’s daily note', scope: 'app' },
+  { id: 'daily.today', keys: 'mod+alt+d', description: 'Today’s note', scope: 'app' },
   { id: 'settings.open', keys: 'mod+,', description: 'Settings', scope: 'app' },
   { id: 'page.copyLink', keys: 'mod+l', description: 'Copy link to current page', scope: 'app' },
   { id: 'shortcuts.open', keys: ['mod+/', '?'], description: 'Keyboard shortcuts', scope: 'app' },

@@ -83,9 +83,10 @@ function skeletonFor(route: AppRoute, kind?: PageMeta["kind"]): RouteSkeletonVar
     case "sheet":
       return "grid";
     case "app":
-    case "lifeapps":
     case "markets":
       return "dashboard";
+    case "lifeapps":
+      return "list";
     case "calendar":
       return "calendar";
     case "settings":

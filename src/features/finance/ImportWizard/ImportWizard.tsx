@@ -3,7 +3,7 @@
  * preview → review with dedupe (exact skipped, possible duplicates in a review lane), transfer pairs and
  * categorisation (rule / learned / none, overridable) → rules & profile → import with progress.
  */
-import { AlertTriangle, ArrowLeftRight, ArrowRight, Check, ChevronLeft, Copy, FileSpreadsheet, FileUp, Sparkles, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, ArrowRight, Check, ChevronLeft, Copy, FileSpreadsheet, FileUp, Wand2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
@@ -26,7 +26,7 @@ import { Spinner } from "@/ui/Spinner";
 import { Switch } from "@/ui/Switch";
 import { Tooltip } from "@/ui/Tooltip";
 import { dayLabel, fmtMoney, num, toMoney, todayIso } from "../shared/format";
-import { useStatements } from "../shared/statements";
+import { rememberStatement } from "../shared/statements";
 import type { FinanceImportFile } from "./request";
 import { Sensitive } from "@/ui/Sensitive";
 import { Glyph } from "../shared/ui";
@@ -59,7 +59,6 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
   const doneRef = useRef<HTMLDivElement>(null);
 
   const [fileName, setFileName] = useState<string | undefined>(initialFile?.displayName);
-  const rememberStatement = useStatements((st) => st.remember);
   const startWith = async (file: FinanceImportFile) => {
     setError(null);
     setBusy(true);
@@ -142,7 +141,7 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
       const r = await job.result;
       setResult(r);
       // The file's own closing balance, kept for the reconcile dialog (labelled with its source and date there).
-      if (preview?.statement) rememberStatement(accountId, { ...preview.statement, fileName, importedOn: todayIso() });
+      if (preview?.statement) void rememberStatement(accountId, { ...preview.statement, fileName, importedOn: todayIso() });
       // A chore, not a moment: no confetti (K3). The result line below is the confirmation.
       notify.success(`${r.inserted.toLocaleString()} ${r.inserted === 1 ? "row" : "rows"} imported`, { description: l.acct.get(accountId)?.name });
     } catch (e) {
@@ -392,7 +391,7 @@ function Summary({ preview, skip }: { preview: FinanceImportPreview; skip: Set<n
       {items.map((x, i) => (
         <div key={x.l} className="fh-import-stat fh-cascade" data-tone={x.tone} style={{ ["--i" as string]: i * 2 }}>
           <span className="tabular">
-            <RollingNumber value={x.n} format={(n) => Math.round(n).toLocaleString()} countUpKey={`import:${x.l}`} countUpDuration={0.8} />
+            <RollingNumber value={x.n} format={(n) => Math.round(n).toLocaleString()} countUp={false} />
           </span>
           <span>{x.l}</span>
         </div>
@@ -531,7 +530,7 @@ function RuleSuggestions({ preview, instanceId, ledger, overrides }: { preview: 
             const done = made.has(s.payee);
             return (
               <div key={s.payee} className="flex items-center gap-3 py-1">
-                <Sparkles size={13} className="text-tertiary" />
+                <Wand2 size={13} className="text-tertiary" />
                 <span className="flex-1 text-body-sm">
                   <b>{s.payee}</b> <span className="text-tertiary">({s.n}×)</span> → {cat?.name}
                 </span>

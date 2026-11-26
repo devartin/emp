@@ -8,6 +8,7 @@ import { CalendarDays, CheckCircle2, FileArchive, FileSpreadsheet, FileText, Fil
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useState } from "react";
 import { navigate } from "@/app/router";
+import { openFinanceImport } from "@/features/finance/ImportWizard/request";
 import { api, errorMessage, hasCode } from "@/backend";
 import type { FileGrant, ImportKind } from "@/backend/types";
 import { formatBytes } from "@/lib/format";
@@ -33,7 +34,7 @@ type Phase =
 const KIND: Partial<Record<ImportKind, { label: string; icon: typeof FileText; note: string }>> = {
   markdown: { label: "Markdown file", icon: FileText, note: "Becomes a page. Front matter, tables, tasks and images are kept." },
   markdown_folder: { label: "Markdown folder", icon: FileArchive, note: "Each file becomes a page; folders become parent pages." },
-  notion_zip: { label: "Notion export", icon: FileArchive, note: "Pages, databases, relations and attachments are rebuilt as Ultra Note pages and databases." },
+  notion_zip: { label: "Notion export", icon: FileArchive, note: "Pages and simple databases come across. Relations and formulas may not survive." },
   ics: { label: "Calendar file", icon: CalendarDays, note: "Events are added to your Ultra Note calendar." },
   csv: { label: "CSV file", icon: Table, note: "Becomes a new database. Column types are detected from the values." },
   xlsx: { label: "Excel workbook", icon: FileSpreadsheet, note: "Becomes a new workbook with formulas and formatting." },
@@ -117,6 +118,11 @@ export function ImportDialog() {
     }
   };
 
+  // Home's "Get started" list ticks "Import pages or a bank file" once anything has been imported.
+  useEffect(() => {
+    if (phase.t === "done") void api.kv.set({ ns: "ui.gettingStarted", key: "import", value: Date.now() }).catch(() => undefined);
+  }, [phase.t]);
+
   const undo = async (jobId: string) => {
     try {
       const { removed } = await api.import.undo({ importJobId: jobId });
@@ -140,7 +146,7 @@ export function ImportDialog() {
                 onFiles={() => notify.info("Click to choose the file", { description: "In this preview, files are opened through the file picker." })}
                 icon={UploadCloud}
                 title="Choose a file to import"
-                hint="Markdown, Notion export (.zip), CSV, Excel, calendar (.ics)"
+                hint="Markdown, Notion export (.zip), CSV, Excel, calendar (.ics), bank files (OFX, QFX)"
                 accept={ACCEPT.map((e) => `.${e}`)}
               />
               <ul className="grid grid-cols-3 gap-2 text-caption text-tertiary" style={{ fontWeight: 400 }}>
@@ -225,13 +231,24 @@ export function ImportDialog() {
 
 function Ready({ grant, kind, onRun, onPickAgain, onClose }: { grant: FileGrant; kind: ImportKind; onRun: () => void; onPickAgain: () => void; onClose: () => void }) {
   const info = KIND[kind];
+  const hasMoney = useWorkspace((s) => s.lifeapps.some((a) => a.appId === "money-hq" && !a.detached));
   if (kind === "ofx" || kind === "qfx" || kind === "qif") {
     return (
-      <Redirect icon={Landmark} title="Bank statement" body="Bank files are imported in Money HQ, where you can map them to an account and review each transaction." action="Open life apps" onAction={() => (onClose(), navigate({ t: "lifeapps", appId: "money-hq" }))} onPickAgain={onPickAgain} />
+      <Redirect
+        icon={Landmark}
+        title="Bank statement"
+        body={hasMoney ? "Bank files go into Money HQ: pick the account, then review each transaction." : "Bank files go into Money HQ. Set it up first, then import this file there."}
+        action={hasMoney ? "Import into Money HQ" : "Set up Money HQ"}
+        onAction={() => {
+          onClose();
+          openFinanceImport({ grantId: grant.grantId, displayName: grant.displayName });
+        }}
+        onPickAgain={onPickAgain}
+      />
     );
   }
   if (kind === "empbackup") {
-    return <Redirect icon={FileArchive} title="Ultra Note backup" body="Backups are restored from Settings → Backups. A restore always opens as a new vault, so nothing here is overwritten." action="Open Backups" onAction={() => (onClose(), navigate({ t: "settings", section: "backups" }))} onPickAgain={onPickAgain} />;
+    return <Redirect icon={FileArchive} title="Ultra Note backup" body="Backups are restored from Settings, Backups. A restore always opens as a new vault, so nothing here is overwritten." action="Open Backups" onAction={() => (onClose(), navigate({ t: "settings", section: "backups" }))} onPickAgain={onPickAgain} />;
   }
   if (!info) {
     return <Redirect icon={FileText} title="Unsupported file" body={`Ultra Note can't import ${grant.displayName}. Try Markdown, a Notion export zip, CSV, XLSX or an .ics calendar.`} onPickAgain={onPickAgain} />;

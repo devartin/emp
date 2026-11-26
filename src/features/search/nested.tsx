@@ -149,7 +149,7 @@ export const NESTED: Record<NestedId, NestedPage> = {
     options: () =>
       ([
         ["system", "Match system", "Follows your OS “reduce motion” setting"],
-        ["reduced", "Reduced", "Crossfades only — no movement"],
+        ["reduced", "Reduced", "Crossfades only, no movement"],
         ["full", "Full", "Every transition and celebration"],
       ] as const).map(([v, name, sub]) => ({
         value: v,

@@ -1,6 +1,7 @@
 /**
- * Life-app landing header (§6.5): no tinted banner (the app colour lives on the tile only), 40px icon tile, h1 + subtitle, KPI row, underline tabs,
- * and the app menu — Tune up, sample data, detach and uninstall (with typed confirmation for removing content).
+ * Life-app landing header (§6.5, PROGRAMME-v3): a monochrome glyph (no coloured tile), the h1 and a one-line
+ * subtitle, underline tabs, and the app menu — Tune up, sample data, detach and uninstall (with typed confirmation
+ * for removing content). `kpis` stays for hubs that still pass a row; Life OS and Habits lead with their work instead.
  */
 import { Database, Ellipsis, FlaskConical, Settings2, Trash2, Unlink } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -17,7 +18,6 @@ import { IconButton } from "@/ui/IconButton";
 import { Input } from "@/ui/Input";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/ui/Menu";
 import { Tabs, type TabItem } from "@/ui/Tabs";
-import { AppTile } from "./AppTile";
 import { wasJustInstalled } from "./handoff";
 import { appVars, identity } from "./identity";
 import { openWizard } from "./wizardStore";
@@ -82,8 +82,9 @@ export function AppHeader<V extends string>({ instance, title, subtitle, kpis, t
       <div className="la-hero-inner">
         <div className="la-hero-row">
           <span className="la-sweep" data-run={sweep ? "" : undefined} aria-hidden onAnimationEnd={() => setSweep(false)} />
-          <span data-app-tile={instance.appId} className="inline-flex">
-            <AppTile appId={instance.appId} size="xl" />
+          {/* The build stage's hand-off lands on this anchor (handoff.ts). */}
+          <span data-app-tile={instance.appId} className="la-hero-glyph">
+            <id.icon size={20} strokeWidth={1.75} aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">

@@ -17,7 +17,7 @@ import { createDatabase, createProperty, createRow, refreshResultTypes, type New
 export const order = 20;
 
 const DAY = 86_400_000;
-const emoji = (v: string): Icon => ({ t: 'emoji', v });
+const lucide = (v: string): Icon => ({ t: 'lucide', v });
 
 type Opt = { id: string; name: string; color: string; group?: 'todo' | 'in_progress' | 'complete' };
 const slug = (s: string) => 'o_' + s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -151,7 +151,7 @@ function seedCrm(ctx: MockCtx, ws: Id, now: number) {
     workspaceId: ws,
     parentId: null,
     title: 'Client CRM',
-    icon: emoji('🤝'),
+    icon: lucide('handshake'),
     description: 'Every relationship, deal and next step in one place.',
     properties: props,
     createdAt: now - 40 * DAY,
@@ -219,7 +219,7 @@ function seedCrm(ctx: MockCtx, ws: Id, now: number) {
       b.todo('Confirm SSO provider (Okta vs Entra ID)', true),
       b.todo('Agree on data residency (EU region)', false),
       b.todo('Send revised MSA', false),
-      b.callout('Decision expected before the end of the month.', { icon: emoji('📅'), tone: 'blue' }),
+      b.callout('Decision expected before the end of the month.', { icon: lucide('calendar'), tone: 'blue' }),
     ]),
   );
   return { db, P, ids };
@@ -253,7 +253,7 @@ function seedProjects(ctx: MockCtx, ws: Id, now: number, parentId: Id | null, cr
     workspaceId: ws,
     parentId,
     title: 'Project tracker',
-    icon: emoji('🚀'),
+    icon: lucide('rocket'),
     description: 'Everything the studio is shipping this quarter.',
     createdAt: now - 60 * DAY,
     properties: [
@@ -283,20 +283,20 @@ function seedProjects(ctx: MockCtx, ws: Id, now: number, parentId: Id | null, cr
   });
   const P = schemaIds(ctx, db.id);
   const rows: [string, string, string, string, string[], number, number, number, number, string, string | null, string][] = [
-    ['Website relaunch', 'In progress', 'Urgent', 'Maya Chen', ['Design', 'Engineering'], -18, 9, 0.62, 13, '24000', 'Juniper Retail Group', '🌐'],
-    ['Onboarding checklist v2', 'In review', 'High', 'Priya Natarajan', ['Design', 'Customer'], -10, 2, 0.9, 5, '6000', 'Cobalt Systems', '✅'],
-    ['Pricing page experiment', 'Planned', 'Medium', 'Amara Okafor', ['Marketing', 'Research'], 4, 18, 0, 3, '3500', null, '💸'],
-    ['SOC 2 Type II audit', 'In progress', 'Urgent', 'Leo Fischer', ['Ops'], -30, 21, 0.45, 21, '38000', null, '🛡️'],
-    ['Mobile app beta', 'Backlog', 'High', 'Jonah Reyes', ['Engineering'], 20, 60, 0, 34, '52000', null, '📱'],
-    ['Customer interviews · Q4', 'Done', 'Medium', 'Priya Natarajan', ['Research', 'Customer'], -40, -12, 1, 8, '2000', 'Northwind Analytics', '🎙️'],
-    ['Data warehouse migration', 'In progress', 'High', 'Jonah Reyes', ['Engineering', 'Ops'], -25, -2, 0.78, 21, '18000', 'Ledgerline', '🗄️'],
-    ['Brand refresh', 'Planned', 'Low', 'Maya Chen', ['Design', 'Marketing'], 12, 45, 0, 13, '15000', null, '🎨'],
-    ['Helios pilot rollout', 'In review', 'Urgent', 'Amara Okafor', ['Customer'], -14, 3, 0.85, 8, '9000', 'Helios Health', '🏥'],
-    ['Support macros cleanup', 'Done', 'Low', 'Leo Fischer', ['Ops', 'Customer'], -20, -15, 1, 2, '0', null, '🧹'],
-    ['Quarterly business review deck', 'Backlog', 'Medium', 'Maya Chen', ['Marketing'], 25, 28, 0, 3, '0', 'Cobalt Systems', '📊'],
-    ['Billing service refactor', 'In progress', 'Medium', 'Jonah Reyes', ['Engineering'], -6, 14, 0.3, 13, '12000', 'Orbit Payments', '🧾'],
-    ['Partner portal discovery', 'Planned', 'Medium', 'Priya Natarajan', ['Research'], 6, 20, 0, 5, '4000', 'Vantage Logistics', '🧭'],
-    ['Accessibility audit', 'Done', 'High', 'Amara Okafor', ['Design', 'Engineering'], -35, -21, 1, 8, '7000', null, '♿'],
+    ['Website relaunch', 'In progress', 'Urgent', 'Maya Chen', ['Design', 'Engineering'], -18, 9, 0.62, 13, '24000', 'Juniper Retail Group', 'globe'],
+    ['Onboarding checklist v2', 'In review', 'High', 'Priya Natarajan', ['Design', 'Customer'], -10, 2, 0.9, 5, '6000', 'Cobalt Systems', 'circle-check'],
+    ['Pricing page experiment', 'Planned', 'Medium', 'Amara Okafor', ['Marketing', 'Research'], 4, 18, 0, 3, '3500', null, 'hand-coins'],
+    ['SOC 2 Type II audit', 'In progress', 'Urgent', 'Leo Fischer', ['Ops'], -30, 21, 0.45, 21, '38000', null, 'shield'],
+    ['Mobile app beta', 'Backlog', 'High', 'Jonah Reyes', ['Engineering'], 20, 60, 0, 34, '52000', null, 'smartphone'],
+    ['Customer interviews · Q4', 'Done', 'Medium', 'Priya Natarajan', ['Research', 'Customer'], -40, -12, 1, 8, '2000', 'Northwind Analytics', 'mic'],
+    ['Data warehouse migration', 'In progress', 'High', 'Jonah Reyes', ['Engineering', 'Ops'], -25, -2, 0.78, 21, '18000', 'Ledgerline', 'archive'],
+    ['Brand refresh', 'Planned', 'Low', 'Maya Chen', ['Design', 'Marketing'], 12, 45, 0, 13, '15000', null, 'palette'],
+    ['Helios pilot rollout', 'In review', 'Urgent', 'Amara Okafor', ['Customer'], -14, 3, 0.85, 8, '9000', 'Helios Health', 'hospital'],
+    ['Support macros cleanup', 'Done', 'Low', 'Leo Fischer', ['Ops', 'Customer'], -20, -15, 1, 2, '0', null, 'brush-cleaning'],
+    ['Quarterly business review deck', 'Backlog', 'Medium', 'Maya Chen', ['Marketing'], 25, 28, 0, 3, '0', 'Cobalt Systems', 'chart-column'],
+    ['Billing service refactor', 'In progress', 'Medium', 'Jonah Reyes', ['Engineering'], -6, 14, 0.3, 13, '12000', 'Orbit Payments', 'receipt'],
+    ['Partner portal discovery', 'Planned', 'Medium', 'Priya Natarajan', ['Research'], 6, 20, 0, 5, '4000', 'Vantage Logistics', 'compass'],
+    ['Accessibility audit', 'Done', 'High', 'Amara Okafor', ['Design', 'Engineering'], -35, -21, 1, 8, '7000', null, 'accessibility'],
   ];
   const ids: Record<string, Id> = {};
   rows.forEach(([name, st, pr, owner, tg, s, e, prog, effort, budget, client, icon], i) => {
@@ -315,14 +315,14 @@ function seedProjects(ctx: MockCtx, ws: Id, now: number, parentId: Id | null, cr
     if (client && crm.ids[client]) values[P.Client] = V.rel([crm.ids[client]]);
     if (name === 'Quarterly business review deck') values[P.Repeats] = { t: 'recurrence', v: { rrule: 'FREQ=MONTHLY;INTERVAL=3', dtstart: dayOf(ctx, 25), mode: 'schedule' } };
     if (name === 'Support macros cleanup') values[P.Repeats] = { t: 'recurrence', v: { rrule: 'FREQ=WEEKLY;BYDAY=FR', dtstart: dayOf(ctx, -20), mode: 'completion' } };
-    const r = createRow(ctx, db.id, { values, icon: emoji(icon), createdAt: now - (55 - i * 3) * DAY, updatedAt: now - (i % 5) * DAY - 3600_000 * i, silent: true });
+    const r = createRow(ctx, db.id, { values, icon: lucide(icon), createdAt: now - (55 - i * 3) * DAY, updatedAt: now - (i % 5) * DAY - 3600_000 * i, silent: true });
     ids[name] = r.id;
   });
   ctx.docs.save(
     ids['Website relaunch'],
     'row',
     makeDoc([
-      b.callout('Launch target: two weeks from Friday. Content freeze on Monday.', { icon: emoji('🎯'), tone: 'orange' }),
+      b.callout('Launch target: two weeks from Friday. Content freeze on Monday.', { icon: lucide('target'), tone: 'orange' }),
       b.h2('Goals'),
       b.numbered('Cut time-to-first-value on the homepage in half'),
       b.numbered('Ship the new pricing page with annual toggle'),
@@ -338,8 +338,8 @@ function seedProjects(ctx: MockCtx, ws: Id, now: number, parentId: Id | null, cr
   );
   // Row templates (§8.6)
   const tpl = [
-    { id: 'tpl_feature', name: 'Feature project', icon: emoji('✨'), values: { [P.Status]: V.status('Planned'), [P.Priority]: V.sel('Medium'), [P.Tags]: V.multi('Engineering'), [P.Timeline]: '@today+14d', [P.Project]: 'New feature' } as Record<Id, CellValue | string>, doc: makeDoc([b.h2('Problem'), b.p(''), b.h2('Proposal'), b.p(''), b.h2('Success metrics'), b.bullet('')]) },
-    { id: 'tpl_research', name: 'Research study', icon: emoji('🔬'), values: { [P.Status]: V.status('Backlog'), [P.Tags]: V.multi('Research'), [P.Timeline]: '@today+7d' } as Record<Id, CellValue | string>, doc: makeDoc([b.h2('Questions'), b.bullet(''), b.h2('Participants'), b.p(''), b.h2('Findings'), b.p('')]) },
+    { id: 'tpl_feature', name: 'Feature project', icon: lucide('sparkle'), values: { [P.Status]: V.status('Planned'), [P.Priority]: V.sel('Medium'), [P.Tags]: V.multi('Engineering'), [P.Timeline]: '@today+14d', [P.Project]: 'New feature' } as Record<Id, CellValue | string>, doc: makeDoc([b.h2('Problem'), b.p(''), b.h2('Proposal'), b.p(''), b.h2('Success metrics'), b.bullet('')]) },
+    { id: 'tpl_research', name: 'Research study', icon: lucide('microscope'), values: { [P.Status]: V.status('Backlog'), [P.Tags]: V.multi('Research'), [P.Timeline]: '@today+7d' } as Record<Id, CellValue | string>, doc: makeDoc([b.h2('Questions'), b.bullet(''), b.h2('Participants'), b.p(''), b.h2('Findings'), b.p('')]) },
   ];
   ctx.db.table<{ id: Id; templates: unknown[]; defaultTemplateId?: Id }>('db_databases').update(db.id, (d) => {
     d.templates = tpl;
@@ -370,7 +370,7 @@ function seedReading(ctx: MockCtx, ws: Id, now: number, rng: Rng) {
     workspaceId: ws,
     parentId: null,
     title: 'Reading list',
-    icon: emoji('📖'),
+    icon: lucide('book-open'),
     description: 'Books I want to read, am reading, and loved.',
     createdAt: now - 120 * DAY,
     properties: [
@@ -451,7 +451,7 @@ function seedContent(ctx: MockCtx, ws: Id, now: number, rng: Rng) {
     workspaceId: ws,
     parentId: null,
     title: 'Content calendar',
-    icon: emoji('🗓️'),
+    icon: lucide('calendar'),
     description: 'What goes out, where, and when.',
     createdAt: now - 70 * DAY,
     properties: [
@@ -565,7 +565,7 @@ function seedPerf(ctx: MockCtx, ws: Id, now: number): void {
     workspaceId: ws,
     parentId: null,
     title: 'Orders (10k rows)',
-    icon: emoji('📦'),
+    icon: lucide('package'),
     createdAt: now - 400 * DAY,
     properties: [
       { name: 'Order', type: 'title' },

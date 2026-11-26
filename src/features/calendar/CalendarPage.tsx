@@ -28,7 +28,6 @@ import { Segmented } from "@/ui/Segmented";
 import { Select } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
 import { Textarea } from "@/ui/Textarea";
-import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { GoogleSetupSheet } from "@/features/integrations/GoogleSetupSheet";
@@ -583,7 +582,7 @@ export default function CalendarPage() {
     try {
       const id = prefs.eventsDb;
       if (!id) {
-        notify.info("Nothing to export yet", { description: "Add an event first — exports include your Events calendar." });
+        notify.info("Nothing to export yet", { description: "Add an event first. Exports include your Events calendar." });
         return;
       }
       const schema = await api.db.getSchema({ id });
@@ -702,7 +701,6 @@ export default function CalendarPage() {
     setDir(Math.sign(VIEWS.indexOf(v) - VIEWS.indexOf(view)));
     setView(v);
   };
-  const eventCount = visible.filter((e) => daysOf(e).some((d) => d >= dayOf(from) && d <= dayOf(to))).length;
 
   return (
     <div className="cal-page">
@@ -721,9 +719,6 @@ export default function CalendarPage() {
               </m.h1>
             </AnimatePresence>
           </div>
-          <span className="cal-count" aria-live="polite">
-            <RollingNumber value={events ? eventCount : 0} /> {eventCount === 1 ? "event" : "events"}
-          </span>
           <div className="cal-nav">
             <IconButton icon={ChevronLeft} label="Previous" size="sm" onClick={() => step(-1)} />
             <Button size="sm" variant="ghost" onClick={() => { setDir(0); setCursor(new Date()); }}>Today</Button>
@@ -797,7 +792,7 @@ export default function CalendarPage() {
               </>
             ) : (
               <>
-                <p className="text-caption text-secondary">See your Google Calendar here — read-only, cached on this device.</p>
+                <p className="text-caption text-secondary">See your Google Calendar here. Read-only, cached on this device.</p>
                 <Button size="sm" variant="secondary" onClick={() => setSetupOpen(true)}>Connect Google</Button>
               </>
             )}

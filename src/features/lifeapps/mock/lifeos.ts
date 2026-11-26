@@ -3,7 +3,7 @@ import type { Id } from '@/backend/types';
 import { createReminder } from '@/backend/mock/commands/reminder';
 import { LIFE_AREAS } from '../engine/manifests';
 import { md } from './content';
-import { c, DAY, emoji, F, isoDay, lucide, multi, P, prng, sel, type DbHandle, type Env } from './env';
+import { c, DAY, F, isoDay, lucide, multi, P, prng, sel, type DbHandle, type Env } from './env';
 
 export const TASK_STATUSES = [
   { name: 'Inbox', color: 'gray', group: 'todo' as const },
@@ -25,7 +25,7 @@ const QUADRANTS = [
   { name: 'Delegate', color: 'orange' },
   { name: 'Drop', color: 'gray' },
 ];
-const AREA_ICON: Record<string, string> = { Work: '💼', Health: '🫀', Money: '💰', Home: '🏡', Relationships: '💞', Learning: '📚', Fun: '🎈', 'Side project': '🛠️', Family: '👨‍👩‍👧', Community: '🤝' };
+const AREA_ICON: Record<string, string> = { Work: 'briefcase', Health: 'heart-pulse', Money: 'piggy-bank', Home: 'house', Relationships: 'heart', Learning: 'library', Fun: 'party-popper', 'Side project': 'wrench', Family: 'users', Community: 'handshake' };
 const AREA_STANDARD: Record<string, string> = {
   Work: 'Clear priorities each week; no surprises for my team.',
   Health: 'Move daily, sleep 7+ hours, check-ups on time.',
@@ -45,23 +45,20 @@ export async function installLifeOs(env: Env): Promise<void> {
   const priority = String(answers.priority ?? 'p1p4');
   const areas = (Array.isArray(answers.areas) ? (answers.areas as string[]) : ['Work', 'Health', 'Home']).filter((a) => typeof a === 'string').slice(0, 20);
 
-  await env.step('Creating your Today page');
-  env.page('today', { title: 'Today', icon: lucide('sun'), kind: 'dashboard' });
-
   await env.step('Setting up Areas');
   const areasDb = env.database('areas_db', {
     title: 'Areas',
-    icon: emoji('🧭'),
+    icon: lucide('compass'),
     props: [P.title('Name', 'area.name'), P.text('Standard', 'area.standard'), P.text('Icon')],
     firstView: { name: 'All areas', layout: 'gallery' },
   });
   const areaIds: Record<string, Id> = {};
-  for (const a of areas) areaIds[a] = env.row(areasDb, { Name: c.text(a), Standard: c.text(AREA_STANDARD[a] ?? ''), Icon: c.text(AREA_ICON[a] ?? '') }, { icon: emoji(AREA_ICON[a] ?? '🧭'), sample: false });
+  for (const a of areas) areaIds[a] = env.row(areasDb, { Name: c.text(a), Standard: c.text(AREA_STANDARD[a] ?? ''), Icon: c.text('') }, { icon: lucide(AREA_ICON[a] ?? 'compass'), sample: false });
 
   await env.step('Creating Projects');
   const projects = env.database('projects', {
     title: 'Projects',
-    icon: emoji('🎯'),
+    icon: lucide('target'),
     props: [
       P.title('Name', 'project.name'),
       P.rel('Area', areasDb.id, 'project.area', 'one'),
@@ -79,8 +76,8 @@ export async function installLifeOs(env: Env): Promise<void> {
   await env.step('Creating Tasks with your views');
   const tasks = env.database('tasks', {
     title: 'Tasks',
-    icon: emoji('✅'),
-    description: 'Every task in one place. Views slice it into Inbox, Today, Upcoming and more.',
+    icon: lucide('circle-check'),
+    description: 'Every task in one place. Views slice it into Inbox, Due, Upcoming and more.',
     props: [
       P.title('Title', 'task.title'),
       P.status('Status', TASK_STATUSES, 'task.status'),
@@ -102,7 +99,7 @@ export async function installLifeOs(env: Env): Promise<void> {
   });
   const prioName = priority === 'eisenhower' ? 'Quadrant' : 'Priority';
   setViewFilter(env, tasks, 'Inbox', F.eq(tasks, 'Status', 'Inbox'), [F.sort(tasks, 'Due')]);
-  env.view(tasks, 'Today', 'list', {
+  env.view(tasks, 'Due', 'list', {
     filter: F.and(F.noneOf(tasks, 'Status', ['Done']), F.or(F.within(tasks, 'Due', 'today'), F.within(tasks, 'Scheduled', 'today'), F.before(tasks, 'Due', env.today))),
     sorts: [F.sort(tasks, 'Scheduled'), F.sort(tasks, prioName)],
     visibleProps: F.visible(tasks, ['Title', prioName, 'Due', 'Scheduled', 'Project']),
@@ -120,7 +117,7 @@ export async function installLifeOs(env: Env): Promise<void> {
     await env.step('Adding Resources');
     resources = env.database('resources', {
       title: 'Resources',
-      icon: emoji('📚'),
+      icon: lucide('library'),
       props: [P.title('Name'), P.rel('Area', areasDb.id, undefined, 'one'), P.select('Type', ['Article', 'Book', 'Course', 'Reference', 'Tool']), P.url('Link')],
       firstView: { name: 'All resources', layout: 'gallery' },
     });
@@ -129,7 +126,7 @@ export async function installLifeOs(env: Env): Promise<void> {
   await env.step('Creating Daily notes');
   const daily = env.database('daily', {
     title: 'Daily notes',
-    icon: emoji('📓'),
+    icon: lucide('notebook'),
     props: [P.title('Day'), P.date('Date', 'daily.date'), P.text('Top 3', 'daily.top3'), P.text('Log', 'daily.log'), P.text('Gratitude', 'daily.gratitude'), P.check('Shutdown done', 'daily.shutdown')],
     firstView: { name: 'Recent', layout: 'table' },
   });
@@ -138,7 +135,7 @@ export async function installLifeOs(env: Env): Promise<void> {
   if (env.on('goals')) {
     goals = env.database('goals', {
       title: 'Goals',
-      icon: emoji('🏔️'),
+      icon: lucide('mountain'),
       props: [P.title('Goal', 'goal.name'), P.rel('Area', areasDb.id, undefined, 'one'), P.date('Target date', 'goal.date'), P.progress('Progress', 'goal.progress'), P.select('Status', [{ name: 'On track', color: 'green' }, { name: 'At risk', color: 'orange' }, { name: 'Achieved', color: 'blue' }])],
       firstView: { name: 'Goals', layout: 'gallery' },
     });
@@ -147,7 +144,7 @@ export async function installLifeOs(env: Env): Promise<void> {
   await env.step('Writing your weekly review');
   env.page('weekly', {
     title: 'Weekly review',
-    icon: emoji('🔁'),
+    icon: lucide('repeat'),
     blocks: md(`> [!tip] About 30 minutes, ideally ${ritualLabel(answers, 'weekly', 'Friday 4:00 PM')}. Tick items as you go.
 ## 1 · Get clear
 - [ ] Empty your inbox to zero — every item becomes Next, Someday, Waiting or Done
@@ -238,12 +235,12 @@ export function sampleLifeOs(
   const pr = (p: 1 | 2 | 3 | 4) => (prioName === 'Quadrant' ? sel(['Do now', 'Schedule', 'Delegate', 'Drop'][p - 1]) : sel(`P${p}`));
 
   const proj = (name: string, areaName: string, status: string, outcome: string, deadline: number | null, icon: string) =>
-    env.row(projects, { Name: c.text(name), Area: c.rel([area(areaName)]), Status: sel(status), Outcome: c.text(outcome), Deadline: deadline === null ? null : c.date(day(deadline)), 'Review date': c.date(day(3)) }, { icon: emoji(icon) });
-  const pWeb = proj('Website relaunch', 'Work', 'Active', 'New marketing site live with case studies', 18, '🚀');
-  const pKitchen = proj('Kitchen refresh', 'Home', 'Active', 'Painted cabinets, new lighting, under budget', 40, '🏡');
-  const pRun = proj('Run a half marathon', 'Health', 'Active', 'Finish the spring half under 2:05', 120, '🏃');
-  const pLang = proj('Conversational Portuguese', 'Learning', 'Active', 'Hold a 10-minute conversation in Lisbon', 95, '🗣️');
-  proj('Plan summer trip', 'Fun', 'Planned', 'Booked flights and lodging by March', 70, '🧳');
+    env.row(projects, { Name: c.text(name), Area: c.rel([area(areaName)]), Status: sel(status), Outcome: c.text(outcome), Deadline: deadline === null ? null : c.date(day(deadline)), 'Review date': c.date(day(3)) }, { icon: lucide(icon) });
+  const pWeb = proj('Website relaunch', 'Work', 'Active', 'New marketing site live with case studies', 18, 'rocket');
+  const pKitchen = proj('Kitchen refresh', 'Home', 'Active', 'Painted cabinets, new lighting, under budget', 40, 'house');
+  const pRun = proj('Run a half marathon', 'Health', 'Active', 'Finish the spring half under 2:05', 120, 'footprints');
+  const pLang = proj('Conversational Portuguese', 'Learning', 'Active', 'Hold a 10-minute conversation in Lisbon', 95, 'languages');
+  proj('Plan summer trip', 'Fun', 'Planned', 'Booked flights and lodging by March', 70, 'luggage');
 
   type T = { title: string; status: string; p?: 1 | 2 | 3 | 4; due?: number; sched?: [number, string, string]; est?: number; area?: string; project?: Id; ctxs?: string[]; energy?: string; waiting?: string; done?: number; top3?: boolean; source?: string; repeat?: string };
   const list: T[] = [
@@ -316,8 +313,8 @@ export function sampleLifeOs(
     env.row(daily, { Day: c.text(label), Date: c.date(isoDay(d)), 'Top 3': c.text(i === 0 ? 'Homepage copy · Case studies · Easy run' : 'Plan · Build · Move'), Gratitude: c.text(grat[i]), 'Shutdown done': c.check(i > 0) });
   }
   if (h.goals) {
-    env.row(h.goals, { Goal: c.text('Run a sub-2:05 half marathon'), Area: c.rel([area('Health')]), 'Target date': c.date(day(120)), Progress: c.progress(0.35), Status: sel('On track') }, { icon: emoji('🏃') });
-    env.row(h.goals, { Goal: c.text('Hold a conversation in Portuguese'), Area: c.rel([area('Learning')]), 'Target date': c.date(day(95)), Progress: c.progress(0.2), Status: sel('At risk') }, { icon: emoji('🗣️') });
+    env.row(h.goals, { Goal: c.text('Run a sub-2:05 half marathon'), Area: c.rel([area('Health')]), 'Target date': c.date(day(120)), Progress: c.progress(0.35), Status: sel('On track') }, { icon: lucide('footprints') });
+    env.row(h.goals, { Goal: c.text('Hold a conversation in Portuguese'), Area: c.rel([area('Learning')]), 'Target date': c.date(day(95)), Progress: c.progress(0.2), Status: sel('At risk') }, { icon: lucide('languages') });
   }
   if (h.resources) {
     env.row(h.resources, { Name: c.text('Shape Up — Basecamp'), Type: sel('Book'), Link: c.url('https://basecamp.com/shapeup'), Area: c.rel([area('Work')]) });

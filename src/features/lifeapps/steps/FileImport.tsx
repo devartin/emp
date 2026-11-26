@@ -38,7 +38,7 @@ export function FileImport({ step, value, onChange }: StepProps) {
       </div>
       {source === "import" ? (
         <div className="flex flex-col gap-2">
-          <FileDropZone onBrowse={browse} title="Choose bank files" hint="CSV, OFX, QFX or QIF — you map columns after setup." accept={[".csv", ".ofx", ".qfx", ".qif"]} />
+          <FileDropZone onBrowse={browse} title="Choose bank files" hint="CSV, OFX, QFX or QIF. You map columns after setup." accept={[".csv", ".ofx", ".qfx", ".qif"]} />
           {grants.map((g) => (
             <div key={g.grantId} className="la-file well" data-static="">
               <FileText size={14} aria-hidden />

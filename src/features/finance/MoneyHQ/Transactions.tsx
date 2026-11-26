@@ -33,13 +33,24 @@ import { disclose, Glyph, Quiet } from "../shared/ui";
 import { useLedgerCtx, type Category, type Txn } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 
-type Filter = "all" | "uncategorized" | "transfers" | "income";
+type Filter = "all" | "review" | "uncategorized" | "transfers" | "income";
+
+/** A plain key press outside text fields and menus (bound hints, N-FL4). */
+function isPlainKey(e: KeyboardEvent, key: string): boolean {
+  if (e.key.toLowerCase() !== key || e.metaKey || e.ctrlKey || e.altKey || e.repeat || e.defaultPrevented) return false;
+  const t = e.target as HTMLElement | null;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.closest("[role=dialog],[role=menu],[role=listbox]"))) return false;
+  return true;
+}
 
 export default function Transactions() {
   const l = useLedgerCtx();
   const { instanceId, txnFilter, clearTxnFilter, reloadOverview } = useMoney();
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<Filter>(() => (txnFilter === "uncategorized" ? "uncategorized" : "all"));
+  // `review.count` (definitions.ts): rows not yet reviewed, when the Transactions database has the Reviewed property.
+  const reviewCount = l.hasReviewed ? l.txns.filter((t) => t.reviewed === false).length : 0;
+  // Lands on the To review lane while it has rows (K4), unless a link asked for another filter.
+  const [filter, setFilter] = useState<Filter>(() => (txnFilter === "uncategorized" || txnFilter === "review" ? txnFilter : l.hasReviewed && reviewCount > 0 ? "review" : "all"));
   const [account, setAccount] = useState<string>("all");
   const [selected, setSelected] = useState<Set<Id>>(new Set());
   const [splitting, setSplitting] = useState<Txn | null>(null);
@@ -55,6 +66,7 @@ export default function Transactions() {
     return l.txns.filter((t) => {
       if (account !== "all" && t.accountId !== account) return false;
       if (filter === "uncategorized" && (t.categoryId || t.transferId || t.splits.length)) return false;
+      if (filter === "review" && t.reviewed !== false) return false;
       if (filter === "transfers" && !t.transferId) return false;
       if (filter === "income" && !(t.amount > 0 && !t.transferId)) return false;
       if (!needle) return true;
@@ -135,6 +147,17 @@ export default function Transactions() {
 
   const uncategorizedCount = l.txns.filter((t) => !t.categoryId && !t.transferId && !t.splits.length).length;
 
+  // The "N" hint on Add is bound (N-FL4): N opens quick add while this tab is showing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isPlainKey(e, "n")) return;
+      e.preventDefault();
+      setAdding(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2 flex-wrap">
@@ -145,8 +168,9 @@ export default function Transactions() {
           onValueChange={setFilter}
           aria-label="Filter"
           options={[
+            ...(l.hasReviewed ? [{ value: "review" as const, label: reviewCount ? `To review · ${reviewCount}` : "To review" }] : []),
             { value: "all", label: "All" },
-            { value: "uncategorized", label: uncategorizedCount ? `To categorise · ${uncategorizedCount}` : "To categorise" },
+            { value: "uncategorized", label: uncategorizedCount ? `Uncategorised · ${uncategorizedCount}` : "Uncategorised" },
             { value: "income", label: "Income" },
             { value: "transfers", label: "Transfers" },
           ]}
@@ -197,7 +221,7 @@ export default function Transactions() {
               ))}
             </div>
           ) : rows.length === 0 ? (
-            <Quiet icon={Check} title={filter === "uncategorized" ? "Everything is categorised" : "No transactions match"} body={filter === "uncategorized" ? "Nice work — your reports are up to date." : "Try a different search or filter."} />
+            <Quiet icon={Check} title={filter === "uncategorized" ? "Nothing uncategorised" : filter === "review" ? "Nothing to review" : "No transactions match"} body={filter === "uncategorized" || filter === "review" ? undefined : "Try a different search or filter."} />
           ) : (
             <div ref={virtRef} className="fh-txn-virt" style={{ height: virt.getTotalSize(), position: "relative" }}>
               {virt.getVirtualItems().map((vi) => {
@@ -257,6 +281,19 @@ export default function Transactions() {
                 </Button>
               }
             />
+            {l.hasReviewed ? (
+              <Button
+                size="xs"
+                variant="secondary"
+                icon={Check}
+                onClick={() => {
+                  for (const id of selected) void l.updateTxn(id, { reviewed: true });
+                  setSelected(new Set());
+                }}
+              >
+                Mark reviewed
+              </Button>
+            ) : null}
             <Button size="xs" variant="destructive-ghost" icon={Trash2} onClick={() => void l.deleteTxns([...selected]).then(() => setSelected(new Set()))}>
               Delete
             </Button>

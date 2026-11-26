@@ -2,9 +2,9 @@
  * Budget (§15.3): per-month envelopes grouped by category group. Assigned is edited inline (MoneyField with `=`
  * expressions); Available = rollover + assigned + activity; To be assigned updates live from `finance_budget_assign`.
  */
-import { Check, ChevronRight, RotateCcw, Sparkles, Target } from "lucide-react";
+import { ArrowRightLeft, Check, ChevronRight, RotateCcw, Target } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { BudgetMonth } from "@/backend/types";
 import { cn } from "@/lib/cn";
@@ -13,7 +13,6 @@ import { Amount } from "@/ui/Amount";
 import { Button } from "@/ui/Button";
 import { MoneyField } from "@/ui/MoneyField";
 import { BudgetProgress } from "@/ui/Progress";
-import { burst } from "@/ui/motion/Celebrate";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { Skeleton } from "@/ui/Skeleton";
@@ -21,6 +20,8 @@ import { Tooltip } from "@/ui/Tooltip";
 import { fmtMoney, monthLabel, num, toMoney, todayIso, fmtWhole } from "../shared/format";
 import { useAsync, useDbChanged, useFlip } from "../shared/hooks";
 import { disclose, Glyph } from "../shared/ui";
+import { Figure } from "../shared/Figure";
+import { budgetActivity, type FigureId } from "../shared/definitions";
 import { useLedgerCtx } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 import { HeroMoney } from "./widgets";
@@ -47,6 +48,7 @@ export default function Budget() {
   }, [bm.data, l.categories]);
 
   const tba = num(bm.data?.toBeAssigned);
+  const activity = budgetActivity(bm.data?.categories, (id) => l.cat.get(id)?.group);
   const totals = rows.flatMap(([, cs]) => cs).reduce((a, c) => ({ assigned: a.assigned + c.assigned, spent: a.spent - c.activity, available: a.available + c.available }), { assigned: 0, spent: 0, available: 0 });
   const isPast = month < todayIso().slice(0, 7);
   const pace = isPast ? 1 : month > todayIso().slice(0, 7) ? 0 : Number(todayIso().slice(8, 10)) / new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
@@ -84,16 +86,6 @@ export default function Budget() {
   };
   const overCount = rows.flatMap(([, cs]) => cs).filter((c) => c.available < -0.004).length;
 
-  // "Balanced" moment: when To be assigned reaches exactly zero, the hero figure gets an 8-ray burst (S13 rays).
-  const heroRef = useRef<HTMLDivElement>(null);
-  const prevTba = useRef<number | null>(null);
-  useEffect(() => {
-    if (!bm.data) return;
-    const was = prevTba.current;
-    prevTba.current = tba;
-    if (was !== null && Math.abs(was) > 0.004 && Math.abs(tba) <= 0.004 && heroRef.current) burst(heroRef.current, { rays: 10, radius: 34 });
-  }, [tba, bm.data]);
-  let rowIndex = 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -102,30 +94,36 @@ export default function Budget() {
           <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
             To be assigned · {monthLabel(month)}
           </div>
-          <div className="mt-1 flex items-baseline gap-3" ref={heroRef}>
-            {bm.data ? <HeroMoney value={tba} /> : <Skeleton width={180} height={36} radius={8} />}
+          <div className="mt-1 flex items-baseline gap-3">
+            {bm.data ? (
+              <Figure id="budget.toAssign" block>
+                <HeroMoney value={tba} currency={bm.data.currency} />
+              </Figure>
+            ) : (
+              <Skeleton width={180} height={36} radius={8} />
+            )}
             {bm.data && Math.abs(tba) <= 0.004 ? (
-              <m.span className="fh-balanced" initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.pop}>
+              <m.span className="fh-balanced" initial={false} animate={{ scale: 1, opacity: 1 }} transition={spring.pop}>
                 <Check size={12} strokeWidth={3} /> Balanced
               </m.span>
             ) : null}
           </div>
           <div className={cn("mt-1 text-body-sm", tba < -0.004 ? "text-warning-text" : "text-tertiary")}>
-            {tba > 0.004 ? "Give these dollars a job — assign them to a category or a goal." : tba < -0.004 ? "You've assigned more than you have. Lower an assignment to rebalance." : "Every dollar has a job. Zero-based and balanced."}
+            {tba > 0.004 ? "Not in a category yet." : tba < -0.004 ? "More assigned than you have. Lower an assignment." : "All assigned."}
           </div>
         </div>
         <div className="fh-budget-figs">
           <Fig label="Assigned" value={totals.assigned} />
-          {/* Net activity across every envelope, savings & debt payments included (the table column). "Spent" is kept
-              for the spending-only figure on Overview and Home (shared/figures.ts) so the two never collide. */}
-          <Fig label="Activity" value={-totals.spent} />
+          {/* `budget.activity` (definitions.ts): net movement in every non-income category, savings & debt payments
+              included. Never labelled "Spent": that word belongs to the spending figures on Overview and Home. */}
+          <Fig label="Activity" value={activity} figure="budget.activity" />
           <Fig label="Available" value={totals.available} />
         </div>
         <div className="flex flex-col gap-1.5 flex-none">
           <Button size="sm" variant="primary" icon={Target} onClick={fillTargets}>
             Assign to targets
           </Button>
-          <Button size="sm" variant="ghost" icon={Sparkles} disabled={!overCount} onClick={coverOverspending}>
+          <Button size="sm" variant="ghost" icon={ArrowRightLeft} disabled={!overCount} onClick={coverOverspending}>
             {overCount ? `Cover ${overCount} overspent` : "No overspending"}
           </Button>
         </div>
@@ -183,7 +181,7 @@ export default function Budget() {
                     {open ? (
                       <m.div key="rows" {...disclose}>
                         {cs.map((c) => (
-                          <div key={c.id} className="fh-bud-row fh-cascade" style={{ ["--i" as string]: Math.min(12, rowIndex++) }}>
+                          <div key={c.id} className="fh-bud-row">
                             <span className="flex-1 min-w-0 flex items-center gap-2.5">
                               <Glyph name={c.icon} color={c.color} size={24} />
                               <span className="truncate text-body-sm font-medium">{c.name}</span>
@@ -227,14 +225,15 @@ export default function Budget() {
   );
 }
 
-function Fig({ label, value }: { label: string; value: number }) {
+function Fig({ label, value, figure }: { label: string; value: number; figure?: FigureId }) {
+  const v = <RollingNumber value={value} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive />;
   return (
     <div className="flex flex-col">
       <span className="text-caption text-tertiary" style={{ fontWeight: 500 }}>
         {label}
       </span>
-      <span className="text-title tabular" style={{ fontWeight: 620 }} data-sensitive="">
-        <RollingNumber value={value} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive />
+      <span className="text-title tabular" style={{ fontWeight: 500 }} data-sensitive="">
+        {figure ? <Figure id={figure}>{v}</Figure> : v}
       </span>
     </div>
   );

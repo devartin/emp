@@ -89,7 +89,10 @@ pub fn migrate_icon_field(slot: &mut serde_json::Map<String, Value>, key: &str) 
         .and_then(lucide_for_emoji);
     match mapped {
         Some(name) => {
-            slot.insert(key.to_owned(), serde_json::json!({ "t": "lucide", "v": name }));
+            slot.insert(
+                key.to_owned(),
+                serde_json::json!({ "t": "lucide", "v": name }),
+            );
         }
         None => {
             slot.remove(key);
@@ -109,6 +112,70 @@ pub fn lucide_attr(name: &str) -> Value {
 #[must_use]
 pub fn callout_attr_for_emoji(emoji: &str) -> Option<Value> {
     lucide_for_emoji(emoji).map(lucide_attr)
+}
+
+/// The Lucide icon generated callouts and migrated legacy callouts fall back to.
+pub const CALLOUT_FALLBACK: &str = "lightbulb";
+
+/// A callout `icon` attribute from a legacy value: a bare string (what the old importers wrote: an emoji,
+/// `lucide:<name>` or a Lucide name) or a `{t:'emoji'}` object. Unmapped emoji fall back to [`CALLOUT_FALLBACK`].
+/// `None` when the value is already a non-emoji icon object (or null) and needs no change.
+fn callout_icon_upgrade(icon: &Value) -> Option<Value> {
+    let name = match icon {
+        Value::String(s) => {
+            let t = s.trim();
+            let bare = t.strip_prefix("lucide:").unwrap_or(t);
+            if is_lucide_name(bare) {
+                bare.to_owned()
+            } else {
+                lucide_for_emoji(t).unwrap_or(CALLOUT_FALLBACK).to_owned()
+            }
+        }
+        Value::Object(o) if o.get("t").and_then(Value::as_str) == Some("emoji") => o
+            .get("v")
+            .and_then(Value::as_str)
+            .and_then(lucide_for_emoji)
+            .unwrap_or(CALLOUT_FALLBACK)
+            .to_owned(),
+        _ => return None,
+    };
+    Some(lucide_attr(&name))
+}
+
+/// Rewrites the emoji icons inside a TipTap document in place (the store's schema-v2 doc migration and the lazy
+/// upcast on read; the mock's `migrateIcons` does the same): a callout's legacy `icon` (bare string or
+/// `{t:'emoji'}`) becomes a Lucide icon, [`CALLOUT_FALLBACK`] when unmapped; any other node's `{t:'emoji'}` icon
+/// attribute becomes its Lucide icon or is removed. Text is never touched. Returns whether anything changed.
+pub fn migrate_doc_icons(node: &mut Value) -> bool {
+    migrate_doc_node(node, 0)
+}
+
+fn migrate_doc_node(node: &mut Value, depth: usize) -> bool {
+    // TipTap documents nest far less than this; the bound keeps a hostile payload from exhausting the stack.
+    if depth > 256 {
+        return false;
+    }
+    let Some(o) = node.as_object_mut() else {
+        return false;
+    };
+    let mut changed = false;
+    let is_callout = o.get("type").and_then(Value::as_str) == Some("callout");
+    if let Some(attrs) = o.get_mut("attrs").and_then(Value::as_object_mut) {
+        if is_callout {
+            if let Some(next) = attrs.get("icon").and_then(callout_icon_upgrade) {
+                attrs.insert("icon".into(), next);
+                changed = true;
+            }
+        } else {
+            changed |= migrate_icon_field(attrs, "icon");
+        }
+    }
+    if let Some(list) = o.get_mut("content").and_then(Value::as_array_mut) {
+        for child in list.iter_mut() {
+            changed |= migrate_doc_node(child, depth + 1);
+        }
+    }
+    changed
 }
 
 /// `true` when `s` contains an emoji pictograph (used to keep generated content emoji-free).
@@ -153,6 +220,58 @@ mod tests {
             color: Some("blue".into()),
         };
         assert_eq!(migrate_icon(l.clone()), Some(l));
+    }
+
+    #[test]
+    fn doc_icons_migrate() {
+        let mut doc = serde_json::json!({"type": "doc", "content": [
+            {"type": "callout", "attrs": {"icon": "\u{1F4A1}"}, "content": [{"type": "text", "text": "Keep \u{1F600} text"}]},
+            {"type": "callout", "attrs": {"icon": {"t": "emoji", "v": "\u{1F680}"}}},
+            {"type": "callout", "attrs": {"icon": {"t": "emoji", "v": "qq"}}},
+            {"type": "callout", "attrs": {"icon": "lucide:info"}},
+            {"type": "callout", "attrs": {"icon": "\u{1FAE0}\u{1FAE0}"}},
+            {"type": "callout", "attrs": {"icon": {"t": "lucide", "v": "star"}}},
+            {"type": "callout", "attrs": {"icon": null}},
+            {"type": "columns", "content": [{"type": "column", "content": [
+                {"type": "pageLink", "attrs": {"icon": {"t": "emoji", "v": "\u{1F680}"}}},
+                {"type": "pageLink", "attrs": {"icon": {"t": "emoji", "v": "qq"}}}
+            ]}]}
+        ]});
+        assert!(migrate_doc_icons(&mut doc));
+        let c = &doc["content"];
+        assert_eq!(
+            c[0]["attrs"]["icon"],
+            serde_json::json!({"t": "lucide", "v": "lightbulb"})
+        );
+        assert_eq!(c[0]["content"][0]["text"], "Keep \u{1F600} text");
+        assert_eq!(
+            c[1]["attrs"]["icon"],
+            serde_json::json!({"t": "lucide", "v": "rocket"})
+        );
+        assert_eq!(
+            c[2]["attrs"]["icon"],
+            serde_json::json!({"t": "lucide", "v": "lightbulb"})
+        );
+        assert_eq!(
+            c[3]["attrs"]["icon"],
+            serde_json::json!({"t": "lucide", "v": "info"})
+        );
+        assert_eq!(
+            c[4]["attrs"]["icon"],
+            serde_json::json!({"t": "lucide", "v": "lightbulb"})
+        );
+        assert_eq!(
+            c[5]["attrs"]["icon"],
+            serde_json::json!({"t": "lucide", "v": "star"})
+        );
+        assert_eq!(c[6]["attrs"]["icon"], Value::Null);
+        let links = &c[7]["content"][0]["content"];
+        assert_eq!(
+            links[0]["attrs"]["icon"],
+            serde_json::json!({"t": "lucide", "v": "rocket"})
+        );
+        assert!(links[1]["attrs"].get("icon").is_none());
+        assert!(!migrate_doc_icons(&mut doc), "idempotent");
     }
 
     #[test]

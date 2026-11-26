@@ -2,7 +2,7 @@
  * Renders a page `Icon` (§11.2): emoji, lucide (optionally tinted with a block colour or the accent) or an uploaded
  * asset. Pages without an icon get a kind-specific default glyph in tertiary colour.
  */
-import { Database, FileText, LayoutDashboard, Sheet, Sparkles } from "lucide-react";
+import { Database, FileText, LayoutDashboard, LayoutGrid, Sheet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/backend";
 import type { Icon, Id, PageKind } from "@/backend/types";
@@ -48,7 +48,7 @@ const KIND_ICON: Record<PageKind, typeof FileText> = {
   doc: FileText,
   database: Database,
   sheet: Sheet,
-  app: Sparkles,
+  app: LayoutGrid,
   dashboard: LayoutDashboard,
 };
 

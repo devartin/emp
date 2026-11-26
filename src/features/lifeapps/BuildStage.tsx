@@ -7,14 +7,13 @@
  * and the stage hands off to the app page (handoff.ts) — the veil lifts off the new hub and the tile lands in its
  * header. Skippable at any time; under reduced motion everything crossfades in place.
  */
-import { ArrowRight, Bell, Database, Eye, FileText, LayoutDashboard, Repeat, Sheet as SheetIcon, Target, Wand2 } from "lucide-react";
+import { Bell, Database, Eye, FileText, LayoutDashboard, Repeat, Sheet as SheetIcon, Target, Wand2 } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { GenerationPlanItem } from "@/backend/types";
 import { Button } from "@/ui/Button";
 import { celebrate } from "@/ui/motion/Celebrate";
-import { Magnetic } from "@/ui/motion/primitives";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
@@ -200,11 +199,9 @@ export function BuildStage({ appId, title, items, progress, label, done, error, 
               Back to setup
             </Button>
           ) : ready ? (
-            <Magnetic>
-              <Button variant="primary" size="lg" sheen iconRight={ArrowRight} iconMotion="arrow" onClick={land}>
-                Open {title}
-              </Button>
-            </Magnetic>
+            <Button variant="primary" size="lg" onClick={land}>
+              Open {title}
+            </Button>
           ) : (
             <Button variant="ghost" size="sm" onClick={() => setSkip(true)} kbd="esc">
               Skip
@@ -212,7 +209,6 @@ export function BuildStage({ appId, title, items, progress, label, done, error, 
           )}
           <div className="la-groove" aria-hidden>
             <m.i initial={false} animate={{ scaleX: pct }} transition={reduced ? { duration: 0 } : { duration: 0.32, ease: [0.2, 0, 0, 1] }} style={{ originX: 0 }} />
-            {!ready && !error ? <b /> : null}
           </div>
           <span className="la-sweep" data-run={ready ? "" : undefined} aria-hidden />
         </m.header>

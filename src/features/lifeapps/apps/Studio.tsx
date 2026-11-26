@@ -2,9 +2,8 @@
  * Spreadsheet Studio hub (§16.5): start a workbook from a well-built template (a tune-up that adds a workbook), import
  * a file or a Google Sheet, and pick up recent workbooks from anywhere in the workspace.
  */
-import { ArrowRight, FileSpreadsheet, FileUp, Sheet as SheetIcon } from "lucide-react";
-import { m } from "motion/react";
-import { useMemo, useState, type CSSProperties } from "react";
+import { FileSpreadsheet, FileUp, Sheet as SheetIcon } from "lucide-react";
+import { useMemo, useState } from "react";
 import { api, errorMessage } from "@/backend";
 import type { LifeAppInstance } from "@/backend/types";
 import { navigate } from "@/app/router";
@@ -19,8 +18,6 @@ import { Dialog } from "@/ui/Dialog";
 import { Input } from "@/ui/Input";
 import { Spinner } from "@/ui/Spinner";
 import { Switch } from "@/ui/Switch";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
-import { spring } from "@/ui/motion/tokens";
 import { PageIcon } from "@/features/shell/PageIcon";
 import { GoogleSetupSheet } from "@/features/integrations/GoogleSetupSheet";
 import { AppHeader } from "../AppHeader";
@@ -28,7 +25,6 @@ import { useMetrics } from "../data";
 import { SHEET_INTENTS } from "../engine/manifests";
 import { SHEET_TITLES } from "../engine/plan";
 import { iconByName, identity } from "../identity";
-import { StartHere } from "../StartHere";
 
 /** A tiny abstract thumbnail per template: header row, input cells, an output cell. */
 const THUMBS: Record<string, { in: number[]; out: number[] }> = {
@@ -137,16 +133,15 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
             <section>
               <h2 className="la-section-title">Start from a template <span className="la-dim">· inputs, checks and a legend included</span></h2>
               <div className="st-grid">
-                {SHEET_INTENTS.map((t, i) => {
+                {SHEET_INTENTS.map((t) => {
                   const Icon = iconByName(t.icon) ?? SheetIcon;
                   const th = THUMBS[t.value] ?? THUMBS.blank;
                   return (
-                    <m.button key={t.value} type="button" className="st-tpl panel" data-raise="" data-light="" aria-busy={creating === t.value || undefined} onClick={() => void create(t.value)} disabled={!!creating} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { ...spring.settle, delay: Math.min(i, 7) * 0.04 } }}>
-                      <EdgeLight />
+                    <button key={t.value} type="button" className="st-tpl panel" aria-busy={creating === t.value || undefined} onClick={() => void create(t.value)} disabled={!!creating}>
                       <div className="st-thumb well" data-static="" aria-hidden>
                         {Array.from({ length: 25 }, (_, k) => {
                           const kind = th.in.includes(k) ? "is-in" : th.out.includes(k) ? "is-out" : k < 5 ? "is-h" : undefined;
-                          return <span key={k} className={kind} style={kind === "is-in" || kind === "is-out" ? ({ ["--i" as string]: th.in.indexOf(k) >= 0 ? th.in.indexOf(k) : th.out.indexOf(k) } as CSSProperties) : undefined} />;
+                          return <span key={k} className={kind} />;
                         })}
                       </div>
                       <div className="st-meta">
@@ -156,7 +151,7 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
                         </div>
                         <span className="text-caption text-tertiary">{t.description}</span>
                       </div>
-                    </m.button>
+                    </button>
                   );
                 })}
               </div>
@@ -175,7 +170,6 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
                             <span className="truncate text-caption text-tertiary">{pathOf(p.id) || "Workspace"}</span>
                           </span>
                           <span className="text-caption text-tertiary">{formatRelative(p.updatedAt)}</span>
-                          <ArrowRight size={14} className="st-go text-tertiary" aria-hidden />
                         </button>
                       </li>
                     ))}
@@ -187,10 +181,9 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
             </section>
           </div>
           <div className="flex min-w-0 flex-col gap-5">
-            <StartHere instance={instance} />
             <Card title="How these workbooks are built">
               <ul className="flex flex-col gap-2.5 text-body-sm text-secondary">
-                <li className="flex gap-2.5"><span className="st-legend" style={{ background: `color-mix(in oklab, ${color} 26%, transparent)`, boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--app) 30%, transparent)" }} />Tinted cells are inputs — change these.</li>
+                <li className="flex gap-2.5"><span className="st-legend" style={{ background: `color-mix(in oklab, ${color} 26%, transparent)`, boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--app) 30%, transparent)" }} />Tinted cells are inputs. Change these.</li>
                 <li className="flex gap-2.5"><span className="st-legend" style={{ background: `linear-gradient(180deg, color-mix(in oklab, ${color} 70%, white), ${color})` }} /><span><strong className="font-semibold text-primary">Bold</strong> cells are outputs.</span></li>
                 <li className="flex gap-2.5"><span className="st-legend bg-gain-soft" style={{ boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--gain) 35%, transparent)" }} />Checks turn green when the model adds up.</li>
                 <li className="flex gap-2.5"><span className="st-legend well" data-static="" />Constants live in named ranges; headers are frozen; dates are ISO.</li>

@@ -104,16 +104,34 @@ pub enum DeductionMode {
     Auto,
 }
 
+/// Which deduction `{ itemized, mode }` takes (PROGRAMME-v3 K5, additive; absent = `auto`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeductionChoice {
+    /// The larger of the itemised total and the standard deduction plus the non-itemiser charitable deduction.
+    #[default]
+    Auto,
+    /// The standard deduction plus the non-itemiser charitable deduction (2026+); the entries still report
+    /// `itemizedWouldBe`.
+    Standard,
+    /// Itemise even when the total is smaller (the election of IRC §63(e)); `standardWouldBe` still reports the
+    /// alternative.
+    Itemized,
+}
+
 /// `deductions` field.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Deductions {
-    /// `standard` / `auto`.
+    /// `standard` / `auto` without entries (so no non-itemiser charitable deduction and no `itemizedWouldBe`).
     Mode(DeductionMode),
-    /// `{ itemized: [...] }`; with `auto` semantics left to the caller, this always itemises.
+    /// `{ itemized: [...], mode? }`: the entries are the itemisable candidates; `mode` picks the deduction.
     Itemized {
         /// Entries.
         itemized: Vec<ItemizedEntry>,
+        /// Which deduction to take (default `auto`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mode: Option<DeductionChoice>,
     },
 }
 
@@ -540,27 +558,30 @@ fn compute(p: &TaxPack, input: &TaxInput, income_scale: Decimal) -> Result<Core>
     let standard = rd(get(&p.standard_deduction, status)
         + get(&p.additional_std_deduction65_or_blind, status)
             * Decimal::from(input.age65_or_blind.unwrap_or(0)));
-    // Entries are itemisable candidates: the deduction is the larger of the itemised total (after floors and caps)
-    // and the standard deduction plus the non-itemiser charitable deduction (§15.6 step 3; same in the mock).
-    let entries: &[ItemizedEntry] = match &input.deductions {
-        Deductions::Itemized { itemized } => itemized,
-        Deductions::Mode(_) => &[],
+    // Entries are itemisable candidates. `auto` takes the larger of the itemised total (after floors and caps) and
+    // the standard deduction plus the non-itemiser charitable deduction; `standard` takes the latter; `itemized`
+    // itemises regardless (§15.6 step 3; same in the mock).
+    let (entries, choice): (&[ItemizedEntry], DeductionChoice) = match &input.deductions {
+        Deductions::Itemized { itemized, mode } => (itemized, mode.unwrap_or_default()),
+        Deductions::Mode(_) => (&[], DeductionChoice::Standard),
     };
-    let itemized_would_be =
-        (!entries.is_empty()).then(|| rd(itemized_amount(p, entries, agi, status)));
-    let charity_non_itemizer = p
-        .non_itemizer_charity
-        .as_ref()
-        .map_or(Decimal::ZERO, |nc| {
-            let gifts: Decimal = entries
-                .iter()
-                .filter(|e| nc.kinds.iter().any(|k| k == &e.kind))
-                .map(|e| e.amount.max(Decimal::ZERO))
-                .sum();
-            rd(gifts.min(get(&nc.cap, status)))
-        });
+    let itemized_would_be = (!entries.is_empty() || choice == DeductionChoice::Itemized)
+        .then(|| rd(itemized_amount(p, entries, agi, status)));
+    let charity_non_itemizer = p.non_itemizer_charity.as_ref().map_or(Decimal::ZERO, |nc| {
+        let gifts: Decimal = entries
+            .iter()
+            .filter(|e| nc.kinds.iter().any(|k| k == &e.kind))
+            .map(|e| e.amount.max(Decimal::ZERO))
+            .sum();
+        rd(gifts.min(get(&nc.cap, status)))
+    });
+    let itemize = match (choice, itemized_would_be) {
+        (DeductionChoice::Itemized, _) => true,
+        (DeductionChoice::Auto, Some(it)) => it > standard + charity_non_itemizer,
+        _ => false,
+    };
     let deduction = match itemized_would_be {
-        Some(it) if it > standard + charity_non_itemizer => DeductionResult {
+        Some(it) if itemize => DeductionResult {
             kind: "itemized".into(),
             amount: it,
             standard_would_be: standard,
@@ -868,6 +889,7 @@ fn estimate_inner(
         let mut it = input.clone();
         it.deductions = Deductions::Itemized {
             itemized: items.to_vec(),
+            mode: None,
         };
         let it_core = compute(&p, &it, Decimal::ONE)?;
         if it_core.deduction.amount > std_core.deduction.amount {
@@ -1135,7 +1157,12 @@ mod tests {
         assert_eq!(e.deduction.kind, "standard");
         assert_eq!(e.deduction.amount, dec("16100"));
         // `standard` mode carries no entries, so no itemizedWouldBe.
-        let plain = estimate(&us, &input(json!({"incomes":[{"kind":"wages","amount":"50000"}]})), today()).unwrap();
+        let plain = estimate(
+            &us,
+            &input(json!({"incomes":[{"kind":"wages","amount":"50000"}]})),
+            today(),
+        )
+        .unwrap();
         assert_eq!(plain.deduction.itemized_would_be, None);
     }
 
@@ -1147,8 +1174,10 @@ mod tests {
         let gifts = |status: &str, wages: &str, gift: &str| {
             estimate(
                 &us,
-                &input(json!({"filingStatus": status, "incomes":[{"kind":"wages","amount": wages}],
-                    "deductions":{"itemized":[{"kind":"charity","amount": gift}]}})),
+                &input(
+                    json!({"filingStatus": status, "incomes":[{"kind":"wages","amount": wages}],
+                    "deductions":{"itemized":[{"kind":"charity","amount": gift}]}}),
+                ),
                 today(),
             )
             .unwrap()
@@ -1177,6 +1206,65 @@ mod tests {
         assert_eq!(e.taxable, dec("169000"));
         // Effective rate is total tax over AGI.
         assert!((e.effective_rate - 33158.0 / 200_000.0).abs() < 1e-12);
+    }
+
+    /// `{ itemized, mode }`: `standard` keeps the 2026 non-itemiser cash-gift deduction, `itemized` itemises even
+    /// when smaller (IRC §63(e) election, https://www.law.cornell.edu/uscode/text/26/63), `auto`/absent takes the
+    /// larger. Every mode reports both alternatives.
+    #[test]
+    fn deduction_modes() {
+        let us = builtin("us-federal-2026").unwrap();
+        let run = |mode: Option<&str>| {
+            let mut d = json!({"itemized":[{"kind":"charity","amount":"1500"},{"kind":"salt","amount":"5200"},
+                {"kind":"mortgage","amount":"4800"}]});
+            if let Some(m) = mode {
+                d["mode"] = json!(m);
+            }
+            estimate(
+                &us,
+                &input(json!({"incomes":[{"kind":"wages","amount":"72000"}],"deductions": d})),
+                today(),
+            )
+            .unwrap()
+        };
+        // Itemised: 5,200 + 4,800 + (1,500 − 0.5% × 72,000 = 360) = 11,140.
+        let auto = run(None);
+        assert_eq!(auto.deduction.kind, "standard");
+        assert_eq!(auto.deduction.amount, dec("17100"));
+        assert_eq!(auto.deduction.itemized_would_be, Some(dec("11140")));
+        assert_eq!(run(Some("auto")).deduction, auto.deduction);
+        let std = run(Some("standard"));
+        assert_eq!(std.deduction, auto.deduction);
+        let it = run(Some("itemized"));
+        assert_eq!(it.deduction.kind, "itemized");
+        assert_eq!(it.deduction.amount, dec("11140"));
+        assert_eq!(it.deduction.standard_would_be, dec("16100"));
+        assert_eq!(it.taxable, dec("60860"));
+        // A large itemised total under `standard` stays standard.
+        let big = estimate(
+            &us,
+            &input(json!({"incomes":[{"kind":"wages","amount":"72000"}],
+                "deductions": {"itemized":[{"kind":"mortgage","amount":"30000"}], "mode": "standard"}})),
+            today(),
+        )
+        .unwrap();
+        assert_eq!(big.deduction.kind, "standard");
+        assert_eq!(big.deduction.amount, dec("16100"));
+        assert_eq!(big.deduction.itemized_would_be, Some(dec("30000")));
+        // Forced itemising without entries itemises zero.
+        let none = estimate(
+            &us,
+            &input(json!({"incomes":[{"kind":"wages","amount":"72000"}],
+                "deductions": {"itemized":[], "mode": "itemized"}})),
+            today(),
+        )
+        .unwrap();
+        assert_eq!(none.deduction.kind, "itemized");
+        assert_eq!(none.deduction.amount, dec("0"));
+        assert_eq!(none.deduction.itemized_would_be, Some(dec("0")));
+        assert!(serde_json::from_value::<TaxInput>(json!({"packId":"us-federal-2026","year":2026,
+            "filingStatus":"single","dependents":0,"incomes":[],"deductions":{"itemized":[],"mode":"bogus"},
+            "withheld":"0","estimatedPaid":"0"})).is_err());
     }
 
     #[test]

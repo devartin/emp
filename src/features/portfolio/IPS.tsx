@@ -123,7 +123,7 @@ export default function IPS({ instanceId, summary: s }: { instanceId: Id; summar
             Typical range for this profile: <b>{RISK[`${doc.horizon}|${doc.drop}`]}</b>. Your targets hold <b>{stocks}% in stocks</b>
             {(() => {
               const [lo, hi] = RISK[`${doc.horizon}|${doc.drop}`].match(/\d+/g)!.map(Number);
-              return stocks < lo || stocks > hi ? <span className="text-warning-text"> — outside that range; worth a second look.</span> : <span className="text-gain-text"> — inside it.</span>;
+              return stocks < lo || stocks > hi ? <span className="text-warning-text">: outside that range.</span> : <span className="text-gain-text">: inside it.</span>;
             })()}
           </div>
         </Section>

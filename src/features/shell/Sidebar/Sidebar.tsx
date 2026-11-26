@@ -26,7 +26,7 @@ import {
 import { AnimatePresence, LayoutGroup, m } from "motion/react";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { createPageAndOpen, runCommand } from "@/app/commands";
+import { createPageAndOpen, openPaletteHeld, runCommand } from "@/app/commands";
 import { navigate, routesEqual, useRoute, type AppRoute } from "@/app/router";
 import { preloadRoute } from "@/app/routes";
 import { api } from "@/backend";
@@ -53,6 +53,7 @@ import { ease, spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PageIcon } from "../PageIcon";
 import { PageContextItems, PageMenuItems, pageActions } from "../PageMenu";
+import { LockIndicator } from "../LockIndicator";
 import { lifeAppIdentity } from "./lifeAppIdentity";
 import { LazyMenu, PageTree } from "./PageTree";
 import { SelectionSlab } from "./SelectionSlab";
@@ -244,9 +245,11 @@ interface NavRowProps {
   shortcut?: string;
   trailing?: ReactNode;
   match?: (r: AppRoute) => boolean;
+  /** Secondary row (tertiary ink). */
+  muted?: boolean;
 }
 
-function NavRow({ icon: Icon, label, route, onClick, shortcut, trailing, match }: NavRowProps) {
+function NavRow({ icon: Icon, label, route, onClick, shortcut, trailing, match, muted }: NavRowProps) {
   const current = useRoute();
   const active = route ? (match ? match(current) : routesEqual(route, current)) : false;
   return (
@@ -260,7 +263,7 @@ function NavRow({ icon: Icon, label, route, onClick, shortcut, trailing, match }
       <span className="ico">
         <Icon aria-hidden />
       </span>
-      <span className="label">{label}</span>
+      <span className={cn("label", muted && "text-tertiary")}>{label}</span>
       {trailing}
       {shortcut ? (
         <span className="trail kbd-hint">
@@ -281,7 +284,7 @@ function PrimaryRows() {
         shortcut="mod+k"
         onClick={(e) => {
           setPaletteOrigin(e.currentTarget);
-          useUi.getState().openPalette("all");
+          openPaletteHeld("all");
         }}
       />
       <NavRow icon={House} label="Home" route={{ t: "home" }} />
@@ -496,7 +499,7 @@ function LifeAppsSection() {
   const route = useRoute();
   const markets = useShowMarkets(apps.some((a) => a.appId === "portfolio" && !a.detached));
   return (
-    <Section id="lifeapps" title="Life apps" onAdd={() => navigate({ t: "lifeapps" })} addLabel="Add a life app">
+    <Section id="lifeapps" title="Life apps">
       {apps.map((inst, i) => {
         const id = lifeAppIdentity(inst.appId);
         const Icon = id.icon;
@@ -520,7 +523,8 @@ function LifeAppsSection() {
         );
       })}
       {markets ? <NavRow icon={CandlestickChart} label="Markets" route={{ t: "markets" }} match={(r) => r.t === "markets"} /> : null}
-      {!apps.length ? <NavRow icon={Plus} label="Add a life app" route={{ t: "lifeapps" }} match={(r) => r.t === "lifeapps"} /> : null}
+      {/* Always visible (W3C Visible Controls), not only on header hover. */}
+      <NavRow icon={Plus} label="Add a life app" route={{ t: "lifeapps" }} match={(r) => r.t === "lifeapps"} muted />
     </Section>
   );
 }
@@ -682,11 +686,7 @@ function SidebarFooter() {
         </button>
       </Tooltip>
       <IconButton size="xs" icon={Settings} label="Settings" shortcut="mod+," onClick={() => navigate({ t: "settings", section: "general" })} />
-      {encrypted ? (
-        <IconButton size="xs" icon={Lock} label="Lock Ultra Note" shortcut="mod+shift+l" onClick={() => runCommand("vault.lock")} />
-      ) : (
-        <IconButton size="xs" icon={LockOpen} label="Turn on encryption" onClick={() => navigate({ t: "settings", section: "security" })} />
-      )}
+      <LockIndicator size="xs" />
     </footer>
   );
 }

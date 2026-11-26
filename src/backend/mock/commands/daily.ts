@@ -22,7 +22,7 @@ export const handlers: MockHandlers = {
         parentId: null,
         kind: 'doc',
         title: 'Journal',
-        icon: { t: 'emoji', v: '📓' },
+        icon: { t: 'lucide', v: 'notebook' },
         templateKey: 'daily:root',
       });
     }
@@ -34,7 +34,7 @@ export const handlers: MockHandlers = {
       parentId: root.id,
       kind: 'doc',
       title: dailyTitle(req.date),
-      icon: { t: 'emoji', v: req.date === ctx.clock.today() ? '☀️' : '🗓️' },
+      icon: { t: 'lucide', v: req.date === ctx.clock.today() ? 'sun' : 'calendar' },
       templateKey: key,
       beforeId: before?.id,
       doc: dailyNoteDoc(),

@@ -15,6 +15,7 @@ import { useUndo } from '@/stores/undo';
 import { useVault } from '@/stores/vault';
 import { useWorkspace } from '@/stores/workspace';
 import { switchThemeWithReveal } from '@/ui/motion/themeTransition';
+import { openFinanceImport } from '@/features/finance/ImportWizard/request';
 import { holdKeys } from '@/features/search/keyBuffer';
 import { navigate, routePageId, type AppRoute } from './router';
 
@@ -211,7 +212,7 @@ export function registerAppCommands(): () => void {
       icon: 'landmark',
       keywords: ['ofx', 'qfx', 'csv', 'bank', 'statement', 'money'],
       when: () => inShell() && !!app('money-hq'),
-      run: () => useUi.getState().setImportOpen(true),
+      run: () => void openFinanceImport(),
     },
     {
       id: 'habit.checkin',

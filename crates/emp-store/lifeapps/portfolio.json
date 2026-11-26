@@ -405,11 +405,11 @@
       "optional": false,
       "spec": {
         "title": "Investment Policy Statement",
-        "icon": "📜",
+        "icon": "lucide:scroll-text",
         "blocks": [
           {
             "t": "callout",
-            "icon": "🧭",
+            "icon": "lucide:compass",
             "color": "blue",
             "md": "An IPS is a one-page promise to your future self. Write it while markets are calm; read it when they are not."
           },
@@ -434,7 +434,7 @@
       "optional": false,
       "spec": {
         "title": "Rebalance planner",
-        "icon": "⚖️",
+        "icon": "lucide:scale",
         "blocks": [
           {
             "t": "md",
@@ -457,7 +457,7 @@
       "optional": false,
       "spec": {
         "title": "Annual investing review",
-        "icon": "🔎",
+        "icon": "lucide:search",
         "template": true,
         "blocks": [
           {
@@ -484,7 +484,7 @@
       "optional": false,
       "spec": {
         "title": "Investment accounts",
-        "icon": "🏛️",
+        "icon": "lucide:landmark",
         "properties": [
           {
             "key": "name",
@@ -597,7 +597,7 @@
       "optional": false,
       "spec": {
         "title": "Securities",
-        "icon": "📈",
+        "icon": "lucide:trending-up",
         "properties": [
           {
             "key": "name",
@@ -787,7 +787,7 @@
       "optional": false,
       "spec": {
         "title": "Investment transactions",
-        "icon": "🧾",
+        "icon": "lucide:receipt",
         "properties": [
           {
             "key": "name",
@@ -925,7 +925,7 @@
       "optional": false,
       "spec": {
         "title": "Lots",
-        "icon": "🧱",
+        "icon": "lucide:brick-wall",
         "description": "Computed by Ultra Note from investment transactions (read-only).",
         "properties": [
           {
@@ -985,7 +985,7 @@
       "optional": false,
       "spec": {
         "title": "Holdings",
-        "icon": "💼",
+        "icon": "lucide:briefcase",
         "description": "Computed view of positions by security.",
         "properties": [
           {
@@ -1031,7 +1031,7 @@
       "optional": false,
       "spec": {
         "title": "Target allocation",
-        "icon": "🎯",
+        "icon": "lucide:target",
         "properties": [
           {
             "key": "name",
@@ -1307,7 +1307,7 @@
       "optional": true,
       "spec": {
         "title": "Watchlist",
-        "icon": "👀",
+        "icon": "lucide:eye",
         "properties": [
           {
             "key": "name",
@@ -1358,7 +1358,7 @@
       "optional": false,
       "spec": {
         "title": "Dividends",
-        "icon": "💸",
+        "icon": "lucide:hand-coins",
         "properties": [
           {
             "key": "name",

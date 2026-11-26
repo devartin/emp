@@ -15,18 +15,18 @@
     "title_case": "Title Case button / label (sentence case is the rule)"
   },
   "totals": {
-    "greeting": 4,
-    "coach_voice": 12,
-    "hedge": 79,
-    "show_math": 5,
-    "needs_attention": 2,
-    "dollar_job": 5,
-    "we_voice": 27,
-    "device_verb": 7,
+    "greeting": 0,
+    "coach_voice": 4,
+    "hedge": 44,
+    "show_math": 1,
+    "needs_attention": 1,
+    "dollar_job": 2,
+    "we_voice": 15,
+    "device_verb": 2,
     "exclamation": 0,
-    "em_dash": 244,
+    "em_dash": 190,
     "coming_soon": 0,
-    "title_case": 1
+    "title_case": 0
   },
   "files": {
     "crates/emp-store/lifeapps/habits.json": {
@@ -117,9 +117,6 @@
     "src/backend/mock/seed/shell.ts": {
       "em_dash": 2
     },
-    "src/features/calendar/CalendarPage.tsx": {
-      "em_dash": 2
-    },
     "src/features/databases/TemplatesDialog.tsx": {
       "em_dash": 1
     },
@@ -144,40 +141,8 @@
     "src/features/editor/page/ConflictSheet.tsx": {
       "em_dash": 1
     },
-    "src/features/finance/DebtPlanner.tsx": {
-      "em_dash": 4
-    },
-    "src/features/finance/MoneyHQ/Budget.tsx": {
-      "em_dash": 1
-    },
-    "src/features/finance/MoneyHQ/Goals.tsx": {
-      "em_dash": 1
-    },
-    "src/features/finance/MoneyHQ/MoneyHQ.tsx": {
-      "title_case": 1
-    },
-    "src/features/finance/MoneyHQ/Overview.tsx": {
-      "dollar_job": 1,
-      "em_dash": 2,
-      "hedge": 2
-    },
-    "src/features/finance/MoneyHQ/Recurring.tsx": {
-      "em_dash": 1,
-      "we_voice": 1
-    },
-    "src/features/finance/MoneyHQ/Transactions.tsx": {
-      "em_dash": 1
-    },
-    "src/features/finance/MoneyHQ/insights.ts": {
-      "hedge": 3
-    },
     "src/features/finance/shared/ui.tsx": {
-      "em_dash": 2,
-      "hedge": 1,
-      "show_math": 1
-    },
-    "src/features/home/HomePage.tsx": {
-      "greeting": 4
+      "hedge": 1
     },
     "src/features/integrations/GoogleSetupSheet.tsx": {
       "em_dash": 6
@@ -194,56 +159,19 @@
     "src/features/integrations/mock/sampleCalendar.ts": {
       "em_dash": 1
     },
-    "src/features/lifeapps/Gallery.tsx": {
-      "em_dash": 2
-    },
-    "src/features/lifeapps/Insights.tsx": {
-      "hedge": 1,
-      "show_math": 1
-    },
-    "src/features/lifeapps/PlanPreview.tsx": {
-      "we_voice": 1
-    },
-    "src/features/lifeapps/StartHere.tsx": {
-      "coach_voice": 1
-    },
-    "src/features/lifeapps/WizardSheet.tsx": {
-      "em_dash": 2
-    },
-    "src/features/lifeapps/apps/Habits.tsx": {
-      "coach_voice": 2,
-      "device_verb": 3,
-      "em_dash": 2
-    },
-    "src/features/lifeapps/apps/LifeOS.tsx": {
-      "coach_voice": 1,
-      "em_dash": 4
-    },
-    "src/features/lifeapps/apps/Studio.tsx": {
-      "em_dash": 1
-    },
     "src/features/lifeapps/engine/manifests.ts": {
-      "coach_voice": 3,
-      "device_verb": 1,
-      "em_dash": 7,
-      "hedge": 14,
-      "we_voice": 5
+      "em_dash": 5
     },
     "src/features/lifeapps/engine/moneyHqSteps.ts": {
-      "dollar_job": 1,
-      "em_dash": 6,
-      "hedge": 2,
-      "we_voice": 2
+      "em_dash": 6
     },
     "src/features/lifeapps/engine/plan.ts": {
-      "em_dash": 5,
-      "hedge": 7
+      "em_dash": 4
     },
     "src/features/lifeapps/mock/finance.ts": {
       "dollar_job": 1,
       "em_dash": 14,
-      "hedge": 5,
-      "show_math": 1
+      "hedge": 2
     },
     "src/features/lifeapps/mock/habits.ts": {
       "em_dash": 1
@@ -257,16 +185,6 @@
     "src/features/lifeapps/mock/workbooks.ts": {
       "em_dash": 5
     },
-    "src/features/lifeapps/steps/Connect.tsx": {
-      "em_dash": 1
-    },
-    "src/features/lifeapps/steps/FileImport.tsx": {
-      "em_dash": 1
-    },
-    "src/features/lifeapps/steps/ListBuilder.tsx": {
-      "device_verb": 1,
-      "em_dash": 1
-    },
     "src/features/markets/MarketsPage.tsx": {
       "em_dash": 1
     },
@@ -274,20 +192,12 @@
       "em_dash": 1
     },
     "src/features/portfolio/IPS.tsx": {
-      "em_dash": 3
-    },
-    "src/features/portfolio/Performance.tsx": {
       "em_dash": 1
     },
     "src/features/portfolio/PortfolioDashboard.tsx": {
-      "em_dash": 3,
-      "hedge": 3,
-      "needs_attention": 1
-    },
-    "src/features/portfolio/RebalancePlanner.tsx": {
       "em_dash": 1
     },
-    "src/features/search/nested.tsx": {
+    "src/features/portfolio/RebalancePlanner.tsx": {
       "em_dash": 1
     },
     "src/features/settings/data/ImportFlow.tsx": {
@@ -323,32 +233,11 @@
     "src/features/sheets/engine/templates.ts": {
       "em_dash": 9
     },
-    "src/features/taxes/Estimator.tsx": {
-      "em_dash": 2,
-      "show_math": 1
-    },
-    "src/features/taxes/QuarterlyPlan.tsx": {
-      "em_dash": 3
-    },
     "src/features/taxes/TaxHub.tsx": {
-      "em_dash": 2,
       "hedge": 2
     },
-    "src/features/vault/Onboarding/steps.tsx": {
-      "coach_voice": 1,
-      "em_dash": 1,
-      "we_voice": 2
-    },
-    "src/features/vault/RecoveryCeremony.tsx": {
-      "em_dash": 1
-    },
     "src/ui/Gallery.tsx": {
-      "em_dash": 4,
-      "we_voice": 2
-    },
-    "src/ui/GalleryV2.tsx": {
-      "dollar_job": 1,
-      "em_dash": 4
+      "we_voice": 1
     }
   }
 }

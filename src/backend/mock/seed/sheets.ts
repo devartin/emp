@@ -21,7 +21,7 @@ export function seed(ctx: MockCtx): void {
       workspaceId: ws,
       parentId: null,
       title: 'Household budget 2026',
-      icon: { t: 'emoji', v: '🧾' },
+      icon: { t: 'lucide', v: 'receipt' },
       createdAt: now - 40 * DAY,
       silent: true,
       build: (b) => buildBudget(b),
@@ -30,7 +30,7 @@ export function seed(ctx: MockCtx): void {
       workspaceId: ws,
       parentId: null,
       title: 'Mortgage calculator',
-      icon: { t: 'emoji', v: '🏡' },
+      icon: { t: 'lucide', v: 'house' },
       createdAt: now - 12 * DAY,
       silent: true,
       build: (b) => buildLoan(b),
@@ -45,7 +45,7 @@ export function seed(ctx: MockCtx): void {
       workspaceId: ws,
       parentId: null,
       title: 'Large sheet (200k cells)',
-      icon: { t: 'emoji', v: '📈' },
+      icon: { t: 'lucide', v: 'trending-up' },
       silent: true,
       build: (b) => {
         const sh = b.sheet('Data');

@@ -85,7 +85,7 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
         </Section>
         <Section className="fh-span-8" title="Before and after" subtitle={plan ? `${plan.trades.length} trades · buys ${fmtWhole(buys)} · sells ${fmtWhole(sells)}` : null}>
           <div className="pf-ba">
-            {classes.map((c, i) => (
+            {classes.map((c) => (
               <div key={c.assetClass} className="pf-ba-row">
                 <span className="pf-ba-label">
                   <span className="w-2 h-2 rounded-[2px]" style={{ background: c.color }} />
@@ -98,9 +98,9 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
                   <m.span
                     className="pf-ba-after"
                     style={{ ["--c" as string]: c.color, originX: 0 }}
-                    initial={reduced ? false : { scaleX: Math.min(1, c.current / 70) }}
+                    initial={false}
                     animate={{ scaleX: Math.min(1, c.after / 70) }}
-                    transition={reduced ? { duration: 0 } : { ...spring.settle, delay: 0.18 + i * 0.04 }}
+                    transition={reduced ? { duration: 0 } : spring.settle}
                   />
                   <span className="pf-ba-target" style={{ left: `${Math.min(100, (c.target / 70) * 100)}%` }} title={`Target ${c.target}%`} />
                 </div>

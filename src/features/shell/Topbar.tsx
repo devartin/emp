@@ -20,7 +20,6 @@ import { IconButton } from "@/ui/IconButton";
 import { ease, spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Breadcrumbs } from "./Breadcrumbs";
-import { LockIndicator } from "./LockIndicator";
 import { ExportMenu, FavoriteButton, PageMoreMenu } from "./PageActions";
 import { WindowControls } from "./WindowControls";
 
@@ -120,7 +119,6 @@ export function Topbar({ sidebarHidden, compact, scrolled }: TopbarProps) {
         {meta ? <FavoriteButton meta={meta} /> : null}
         {meta ? <ExportMenu meta={meta} /> : null}
         <IconButton size="sm" icon={hidden ? EyeOff : Eye} active={hidden} label={hidden ? "Show numbers" : "Hide numbers"} shortcut="mod+shift+h" onClick={() => runCommand("privacy.toggle")} />
-        <LockIndicator />
         {hasPanel ? (
           <IconButton size="sm" icon={PanelRight} active={rightOpen} label={rightOpen ? "Hide panel" : "Show panel"} onClick={() => runCommand("panel.toggle")} />
         ) : null}

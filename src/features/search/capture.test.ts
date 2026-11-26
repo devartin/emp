@@ -67,6 +67,9 @@ describe("parseCapture", () => {
     if (c?.kind !== "money") throw new Error(String(c?.kind));
     expect(c.amount).toBe("-12.5");
   });
+  test("spent without a number is not a capture", () => {
+    expect(parseCapture("spent last month", REF)).toBeNull();
+  });
   test("-abc → failure row", () => {
     expect(parseCapture("-abc", REF)).toMatchObject({ kind: "error", target: "money", message: "Couldn’t read an amount" });
   });

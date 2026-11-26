@@ -1,8 +1,14 @@
 //! Money HQ metrics (§15.5 Metrics) and report helpers for `finance_spending_breakdown` and
 //! `finance_cashflow_sankey`.
 //!
-//! Transfers are always excluded. Outflows to categories flagged `is_saving` (investment contributions,
-//! savings) count as saving, not spending. Uncategorised outflows count as spending.
+//! One definition of spending (N-MO3 `spending.all` / `savingsRate3m`, shared with the mock's `flows` and
+//! `finance_spending_breakdown` in `src/backend/mock/commands/finance.ts`):
+//! - transfers never count;
+//! - income = net flows in income categories;
+//! - flows in categories flagged `is_saving` (savings, investing, extra debt payments) are saving, never spending;
+//! - spending = net outflow in every other known category (a refund nets only inside its own category) plus the
+//!   *outflows* without a category;
+//! - inflows without a category are neither income nor spending until they are categorised ("money in to review").
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -29,6 +35,8 @@ pub struct IncomeSpending {
     pub spending: Decimal,
     /// Net saving outflows (saving categories).
     pub saving: Decimal,
+    /// Inflows without a category (neither income nor spending until categorised).
+    pub uncategorised_in: Decimal,
 }
 
 /// Sums income, spending and saving for `[from, to]`.
@@ -47,7 +55,9 @@ pub fn income_spending(
         match t.category_id.as_deref().and_then(|c| cats.get(c)) {
             Some(c) if c.is_income => r.income += t.amount,
             Some(c) if c.is_saving => r.saving -= t.amount,
-            _ => r.spending -= t.amount,
+            Some(_) => r.spending -= t.amount,
+            None if t.amount < Decimal::ZERO => r.spending -= t.amount,
+            None => r.uncategorised_in += t.amount,
         }
     }
     r
@@ -171,7 +181,10 @@ fn spend_by(
         .filter(|t| t.counts() && !t.is_transfer() && t.date >= from && t.date <= to)
     {
         let cat = t.category_id.as_deref().and_then(|c| cats.get(c));
-        if cat.is_some_and(|c| c.is_income) {
+        // Income and saving are not spending; an uncategorised inflow is not a refund of anything.
+        if cat.is_some_and(|c| c.is_income || c.is_saving)
+            || (cat.is_none() && t.amount > Decimal::ZERO)
+        {
             continue;
         }
         let (key, label) = match by {
@@ -295,6 +308,8 @@ pub fn cashflow_sankey(
                     .entry(c.name.clone())
                     .or_default() -= t.amount
             }
+            // Uncategorised inflows are neither income nor spending (see the module docs).
+            None if t.amount > Decimal::ZERO => {}
             None => {
                 *groups
                     .entry("Uncategorized".into())
@@ -455,6 +470,45 @@ mod tests {
         assert_eq!(ef_months(dec("1"), dec("0")), None);
         assert!((utilization(dec("-450"), dec("1500")).unwrap() - 0.3).abs() < 1e-12);
         assert_eq!(utilization(dec("20"), dec("1500")), Some(0.0));
+    }
+
+    /// N-MO3: uncategorised inflows are neither income nor spending, refunds net only inside their category and
+    /// saving categories are never spending (the mock's `flows` / `finance_spending_breakdown` agree).
+    #[test]
+    fn one_spending_definition() {
+        let c = cats();
+        let l = vec![
+            t("pay", "2026-03-01", "4000", Some("salary")),
+            t("food", "2026-03-05", "-300", Some("food")),
+            t("fr", "2026-03-06", "50", Some("food")),
+            t("unc", "2026-03-07", "-200", None),
+            t("gift", "2026-03-08", "250", None),
+            t("refund", "2026-03-09", "125", None),
+            t("inv", "2026-03-10", "-500", Some("invest")),
+        ];
+        let (from, to) = ("2026-03-01".parse().unwrap(), "2026-03-31".parse().unwrap());
+        let f = income_spending(&l, &c, from, to);
+        assert_eq!(f.income, dec("4000"));
+        assert_eq!(f.spending, dec("450"));
+        assert_eq!(f.saving, dec("500"));
+        assert_eq!(f.uncategorised_in, dec("375"));
+        let rate = savings_rate(&l, &c, from, to).unwrap();
+        assert!((rate - 3550.0 / 4000.0).abs() < 1e-12);
+        let rows = spending_breakdown(&l, &c, BreakdownBy::Category, from, to);
+        let keys: Vec<(&str, Decimal)> = rows.iter().map(|r| (r.key.as_str(), r.amount)).collect();
+        assert_eq!(
+            keys,
+            vec![("food", dec("250")), ("uncategorized", dec("200"))]
+        );
+        let total: Decimal = rows.iter().map(|r| r.amount).sum();
+        assert_eq!(total, f.spending);
+        // The payee view drops the gift and the uncategorised refund too (the gift shares a payee with the grocery
+        // row and does not net against it); the food refund nets per payee only, so it cannot reduce another payee.
+        let by_payee = spending_breakdown(&l, &c, BreakdownBy::Payee, from, to);
+        assert_eq!(
+            by_payee.iter().map(|r| r.amount).sum::<Decimal>(),
+            dec("500")
+        );
     }
 
     #[test]

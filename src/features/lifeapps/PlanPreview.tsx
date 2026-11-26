@@ -1,6 +1,6 @@
 /**
  * Live plan preview (§6.5 right column, a recessed bay): a miniature of the hub — a raised panel that reacts to
- * answers — then "What we'll create": every generated item as a small skeleton slab (the plates the S6 build stage
+ * answers — then "What gets created": every generated item as a small skeleton slab (the plates the S6 build stage
  * drops in), grouped by kind, with a switch on each optional one so the user can opt out (an opted-out slab sinks into
  * the bay).
  */
@@ -43,7 +43,7 @@ export function PlanPreview({ manifest, plan, answers, disabled, onToggle, curre
     <div className="la-preview">
       <MiniHub manifest={manifest} answers={answers} currency={currency} />
       <div className="la-preview-head">
-        <span className="text-micro uppercase text-tertiary">What we’ll create</span>
+        <span className="text-caption text-tertiary">What gets created</span>
         <AnimatePresence mode="wait" initial={false}>
           <m.span key={counts} className="la-preview-counts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
             {counts || " "}
@@ -182,7 +182,7 @@ function miniContent(appId: string, a: Record<string, unknown>, currency: string
       const income = Array.isArray(a.income) ? (a.income as string[]) : [];
       return {
         key: `${j.year}-${income.join()}`,
-        title: `Tax Year ${j.year ?? new Date().getFullYear()}`,
+        title: `Tax year ${j.year ?? new Date().getFullYear()}`,
         node: (
           <>
             <div className="grid grid-cols-2 gap-1.5">

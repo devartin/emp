@@ -516,10 +516,12 @@ pub fn apply_mapping(
             },
         );
         t.memo = memo;
+        // The balance column follows `invert` too, so it carries the ledger's sign (an owed card balance is negative).
         t.balance = m.balance.and_then(|c| {
             opt_amount(table.cell(row, c), m.decimal_comma)
                 .ok()
                 .flatten()
+                .map(|b| if m.invert { -b } else { b })
         });
         out.txns.push(t);
     }

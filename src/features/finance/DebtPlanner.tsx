@@ -3,7 +3,7 @@
  * balance over time against minimum payments, a per-debt payoff stack for the chosen strategy, and the payoff
  * order. Debts start from Money HQ's loan and card accounts and can be edited as a what-if.
  */
-import { Check, Plus, Snowflake, Sparkles, TrendingDown, Trophy, X, Zap } from "lucide-react";
+import { Blend, Check, Plus, Snowflake, TrendingDown, Trophy, X, Zap } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "@/backend";
@@ -26,6 +26,9 @@ import { StackedAreaChart } from "./shared/charts";
 import { addMonths, monthLabel, num, fmtWhole } from "./shared/format";
 import { Quiet, Section } from "./shared/ui";
 import { debtInputs, debtPlanStart, useLedgerCtx } from "./MoneyHQ/ledger";
+import { useMoney } from "./MoneyHQ/MoneyHQ";
+import { Figure } from "./shared/Figure";
+import { loadDebtPlanChoice, saveDebtPlanChoice, useDebtPlanChoice } from "./shared/debtPlanChoice";
 
 interface DebtRow {
   key: string;
@@ -36,16 +39,26 @@ interface DebtRow {
 }
 
 const STRATS: { id: DebtStrategy; title: string; blurb: string; icon: typeof Zap }[] = [
-  { id: "avalanche", title: "Avalanche", blurb: "Highest APR first — least interest", icon: Zap },
-  { id: "snowball", title: "Snowball", blurb: "Smallest balance first — quick wins", icon: Snowflake },
-  { id: "hybrid", title: "Hybrid", blurb: "Two quick wins, then avalanche", icon: Sparkles },
+  { id: "avalanche", title: "Avalanche", blurb: "Highest APR first. Least interest", icon: Zap },
+  { id: "snowball", title: "Snowball", blurb: "Smallest balance first", icon: Snowflake },
+  { id: "hybrid", title: "Hybrid", blurb: "Two quick wins, then avalanche", icon: Blend },
 ];
 
 export default function DebtPlanner() {
   const l = useLedgerCtx();
+  const { instanceId } = useMoney();
+  const saved = useDebtPlanChoice(instanceId);
+  useEffect(() => void loadDebtPlanChoice(instanceId), [instanceId]);
   const [debts, setDebts] = useState<DebtRow[] | null>(null);
-  const [extra, setExtra] = useState(200);
-  const [strategy, setStrategy] = useState<DebtStrategy>("avalanche");
+  const [extra, setExtra] = useState(saved?.extra ?? 200);
+  const [strategy, setStrategy] = useState<DebtStrategy>(saved?.strategy ?? "avalanche");
+  // The saved choice arrives from the vault: start from it once, unless the user has already changed something.
+  const interacted = useRef(false);
+  useEffect(() => {
+    if (!saved || interacted.current) return;
+    setStrategy(saved.strategy);
+    setExtra(saved.extra);
+  }, [saved]);
   const [plans, setPlans] = useState<Record<string, DebtPlan> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +91,21 @@ export default function DebtPlanner() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reqKey]);
+
+  // "Your plan" (definitions.ts `debtFree.plan`) is what the user chose here — saved only by a user action (picking a
+  // strategy, releasing the slider), never by opening the planner, and only while the debts are the ledger's, not an
+  // edited what-if. Until then the Overview keeps `debtFree.minimum`.
+  const ledgerDebts = useMemo(() => JSON.stringify(debtInputs(l.accounts).map((d) => [d.name, d.balance, d.aprPct, d.minPayment])), [l.accounts]);
+  const isLedger = !!debts && JSON.stringify(debts.map((d) => [d.name, d.balance, d.aprPct, d.minPayment])) === ledgerDebts;
+  const choose = (next: { strategy?: DebtStrategy; extra?: number }) => {
+    interacted.current = true;
+    const st = next.strategy ?? strategy;
+    const ex = next.extra ?? extra;
+    if (next.strategy) setStrategy(next.strategy);
+    if (next.extra !== undefined) setExtra(next.extra);
+    if (isLedger && st !== "custom") void saveDebtPlanChoice(instanceId, { strategy: st, extra: ex });
+  };
+  const isYourPlan = isLedger && !!saved && saved.strategy === strategy && saved.extra === extra;
 
   const summary = plans?.avalanche.strategies ?? [];
   const byId = Object.fromEntries(summary.map((s) => [s.strategy, s]));
@@ -146,10 +174,10 @@ export default function DebtPlanner() {
                 on top of <Sensitive>{fmtWhole(totalMin)}</Sensitive> in minimums
               </span>
             </div>
-            <Slider className="mt-4" value={[extra]} onValueChange={(v) => setExtra(v[0])} min={0} max={2000} step={25} formatValue={(n) => fmtWhole(n)} aria-label="Extra monthly payment" />
+            <Slider className="mt-4" value={[extra]} onValueChange={(v) => { interacted.current = true; setExtra(v[0]); }} onValueCommit={(v) => choose({ extra: v[0] })} min={0} max={2000} step={25} formatValue={(n) => fmtWhole(n)} aria-label="Extra monthly payment" />
             <div className="flex justify-between text-caption text-tertiary mt-1.5" style={{ fontWeight: 400 }}>
-              <span>$0</span>
-              <span>$2,000</span>
+              <span>{fmtWhole(0)}</span>
+              <span>{fmtWhole(2000)}</span>
             </div>
           </div>
           <div className="fh-divider" />
@@ -159,7 +187,7 @@ export default function DebtPlanner() {
               const I = s.icon;
               const selected = strategy === s.id;
               return (
-                <button key={s.id} type="button" className="fh-strat" data-selected={selected ? "" : undefined} onClick={() => setStrategy(s.id)} aria-pressed={selected}>
+                <button key={s.id} type="button" className="fh-strat" data-selected={selected ? "" : undefined} onClick={() => choose({ strategy: s.id })} aria-pressed={selected}>
                   <span className="fh-strat-icon">
                     <I size={15} />
                   </span>
@@ -192,9 +220,13 @@ export default function DebtPlanner() {
         </section>
         <section className="fh-card fh-span-7 flex flex-col">
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <BigFact label="Debt-free" value={sel ? <SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /> : "—"} sub={sel ? `${sel.months} months · ${extra > 0 ? `${fmtWhole(extra)}/mo extra` : "no extra"}` : ""} />
+            <BigFact
+              label={isYourPlan ? "Debt-free with your plan" : isLedger ? "Debt-free with this plan" : "Debt-free in this what-if"}
+              value={sel ? isYourPlan ? <Figure id="debtFree.plan" inputs={[{ label: "Strategy", value: STRATS.find((x) => x.id === strategy)?.title ?? strategy, sensitive: false }, { label: "Extra a month", value: fmtWhole(extra) }, { label: "Months", value: String(sel.months), sensitive: false }]}><SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /></Figure> : <SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /> : "—"}
+              sub={sel ? `${STRATS.find((x) => x.id === strategy)?.title ?? ""} · ${extra > 0 ? `${fmtWhole(extra)}/mo extra` : "no extra"} · ${sel.months} months` : ""}
+            />
             <BigFact label="Interest saved" value={sel ? <RollingNumber value={num(sel.interestSavedVsMin)} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive /> : "—"} sub="vs minimums only" good sensitive />
-            <BigFact label="Months sooner" value={sel && minimum ? <RollingNumber value={Math.max(0, minimum.months - sel.months)} format={(n) => String(Math.round(n))} countUp={false} /> : "—"} sub={minimum ? `minimums: ${minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)}` : ""} good />
+            <BigFact label="Months sooner" value={sel && minimum ? <RollingNumber value={Math.max(0, minimum.months - sel.months)} format={(n) => String(Math.round(n))} countUp={false} /> : "—"} sub={minimum ? `Debt-free at minimum payments: ${minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)}` : ""} good />
           </div>
           {error ? <div className="text-body-sm text-loss-text">{error}</div> : null}
           <LineChart
@@ -217,7 +249,7 @@ export default function DebtPlanner() {
         </section>
       </div>
 
-      <Section title="The race" subtitle="Avalanche vs snowball on one clock — each notch is a debt cleared, the ticker is interest paid so far.">
+      <Section title="The race" subtitle="Avalanche and snowball on one clock. Each notch is a debt cleared; the ticker is interest paid so far.">
         {plans ? <DebtRace plans={plans} debts={debts} minimumLabel={minimum ? (minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)) : undefined} /> : <Skeleton height={150} radius={12} />}
       </Section>
 
@@ -243,7 +275,7 @@ export default function DebtPlanner() {
         </Section>
       </div>
 
-      <Section title="Debts in this plan" subtitle="Edit to explore a what-if — your accounts are not changed." pad={false}>
+      <Section title="Debts in this plan" subtitle="Edits are a what-if. Your accounts are not changed." pad={false}>
         <div className="fh-debt-head">
           <span className="flex-1">Name</span>
           <span className="w-[150px]">Balance</span>

@@ -108,7 +108,7 @@ export const b = {
   quote: (content: Inline, opts?: BlockOpts) => container(inlineNode('quote', undefined, content), opts),
   callout: (content: Inline, opts?: BlockOpts & { icon?: Icon; tone?: BlockColor }) =>
     container(
-      inlineNode('callout', { icon: opts?.icon ?? { t: 'emoji', v: '💡' }, color: opts?.tone ?? 'gray' }, content),
+      inlineNode('callout', { icon: opts?.icon ?? { t: 'lucide', v: 'lightbulb' }, color: opts?.tone ?? 'gray' }, content),
       opts,
     ),
   code: (code: string, language = 'plain', opts?: BlockOpts & { caption?: string; wrap?: boolean }) =>

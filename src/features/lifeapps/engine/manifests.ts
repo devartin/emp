@@ -9,9 +9,9 @@ import type { LifeAppManifest, Step, Template } from '@/backend/types';
 import { MONEY_HQ_STEPS } from './moneyHqSteps';
 
 export const FINANCE_DISCLAIMER =
-  'Ultra Note provides estimates and common guidelines for education, not financial advice. Check important decisions with a qualified professional.';
+  'Estimates for planning. Check important decisions with a qualified professional.';
 const TAX_DISCLAIMER =
-  'Ultra Note provides estimates for planning, not tax advice or a filed return. Rules change; check figures with the IRS or a qualified tax professional.';
+  'Estimates for planning. This is not a filed return; rules change, so check figures with the IRS or a tax professional.';
 
 export interface TemplateSpec {
   title: string;
@@ -40,7 +40,7 @@ const moneyHq: LifeAppManifest = {
   id: 'money-hq',
   version: '1.0.0',
   title: 'Money HQ',
-  tagline: 'Budget, accounts, goals and bills — with a plan for every dollar.',
+  tagline: 'Budget, accounts and bills.',
   icon: 'wallet',
   color: 'jade',
   category: 'finance',
@@ -50,16 +50,16 @@ const moneyHq: LifeAppManifest = {
   steps: [...MONEY_HQ_STEPS, review()],
   templates: [
     tpl('hq', 'dashboard', 'Money HQ', { icon: 'lucide:wallet', note: 'KPIs, Sankey, budget vs actual, forecast' }),
-    tpl('how', 'page', 'How your budget works', { icon: '📘' }),
-    tpl('order', 'page', 'Financial order of operations', { icon: '🪜' }),
-    tpl('weekly', 'page', 'Weekly check-in', { icon: '🗓️', optional: true }),
-    tpl('monthly', 'page', 'Monthly review', { icon: '📅', optional: true }),
-    tpl('accounts', 'database', 'Accounts', { icon: '🏦' }),
-    tpl('transactions', 'database', 'Transactions', { icon: '💳' }),
-    tpl('categories', 'database', 'Categories', { icon: '🏷️' }),
-    tpl('recurring', 'database', 'Recurring', { icon: '🔁' }),
-    tpl('goals', 'database', 'Goals', { icon: '🏁' }),
-    tpl('subscriptions', 'database', 'Subscriptions', { icon: '📺', optional: true }),
+    tpl('how', 'page', 'How your budget works', { icon: 'book-open' }),
+    tpl('order', 'page', 'Financial order of operations', { icon: 'list-ordered' }),
+    tpl('weekly', 'page', 'Weekly check-in', { icon: 'calendar', optional: true }),
+    tpl('monthly', 'page', 'Monthly review', { icon: 'calendar', optional: true }),
+    tpl('accounts', 'database', 'Accounts', { icon: 'landmark' }),
+    tpl('transactions', 'database', 'Transactions', { icon: 'credit-card' }),
+    tpl('categories', 'database', 'Categories', { icon: 'tag' }),
+    tpl('recurring', 'database', 'Recurring', { icon: 'repeat' }),
+    tpl('goals', 'database', 'Goals', { icon: 'flag' }),
+    tpl('subscriptions', 'database', 'Subscriptions', { icon: 'tv', optional: true }),
     tpl('rules', 'rule', 'Categorisation rules', { optional: true, count: 6 }),
     tpl('bill_reminders', 'reminder', 'Bill reminders', { optional: true, count: 'max(answers.bills_count, 1)' }),
     tpl('rituals', 'recurring', 'Weekly check-in & monthly review', { optional: true, count: 2 }),
@@ -70,11 +70,11 @@ const moneyHq: LifeAppManifest = {
     'debt_free_date', 'upcoming_bills_7d', 'uncategorized_count', 'utilization_max', 'forecast_min_balance_30d',
   ].map((name) => ({ name, kind: 'rust' as const, fn: `money.${name}`, deps: ['transactions.txn.amount'] })),
   advisor: [
-    { id: 'cat-over', when: 'metrics.cat_over_count > 0', severity: 'warn', title: '{{metrics.cat_over_count}} {{if(metrics.cat_over_count == 1, "category is", "categories are")}} overspent', body: 'Consider moving money from a category with room so the month still balances.', mathMetrics: ['cat_over_count'], actions: [{ label: 'Open budget', route: 'tab:budget' }] },
-    { id: 'cat-90pct', when: 'metrics.cat_90pct_count > 0', severity: 'tip', title: '{{metrics.cat_90pct_count}} {{if(metrics.cat_90pct_count == 1, "category is", "categories are")}} almost spent', body: 'These categories have used 90% or more of their budget with at least 10 days left.', mathMetrics: ['cat_90pct_count'], actions: [{ label: 'Open budget', route: 'tab:budget' }] },
-    { id: 'uncategorized', when: 'metrics.uncategorized_count >= 10', severity: 'info', title: '{{metrics.uncategorized_count}} transactions need a category', body: 'Categorising keeps budgets and reports accurate.', mathMetrics: ['uncategorized_count'], actions: [{ label: 'Review transactions', route: 'tab:transactions' }] },
-    { id: 'ef-below-target', when: 'metrics.ef_months < answers.emergency_months', severity: 'tip', title: 'Your emergency fund covers {{fmt_months(metrics.ef_months)}}', body: 'Common guideline: 3–6 months of essential expenses. A small automatic transfer each payday adds up.', mathMetrics: ['ef_months', 'essential_monthly_spend'], actions: [{ label: 'Open goals', route: 'tab:goals' }] },
-    { id: 'util-30', when: 'metrics.utilization_max > 0.3', severity: 'tip', title: 'Card utilization is {{fmt_pct(metrics.utilization_max)}}', body: 'Keeping utilization under 30% is a common guideline for credit health.', mathMetrics: ['utilization_max'], actions: [{ label: 'Open accounts', route: 'tab:accounts' }] },
+    { id: 'cat-over', when: 'metrics.cat_over_count > 0', severity: 'warn', title: '{{metrics.cat_over_count}} {{if(metrics.cat_over_count == 1, "category is", "categories are")}} over budget', body: 'Cover it from a category with money left.', mathMetrics: ['cat_over_count'], actions: [{ label: 'Open budget', route: 'tab:budget' }] },
+    { id: 'cat-90pct', when: 'metrics.cat_90pct_count > 0', severity: 'tip', title: '{{metrics.cat_90pct_count}} {{if(metrics.cat_90pct_count == 1, "category is", "categories are")}} almost spent', body: '90% or more used, with at least 10 days left this month.', mathMetrics: ['cat_90pct_count'], actions: [{ label: 'Open budget', route: 'tab:budget' }] },
+    { id: 'uncategorized', when: 'metrics.uncategorized_count >= 10', severity: 'info', title: '{{metrics.uncategorized_count}} transactions to categorise', body: '', mathMetrics: ['uncategorized_count'], actions: [{ label: 'Review transactions', route: 'tab:transactions' }] },
+    { id: 'ef-below-target', when: 'metrics.ef_months < answers.emergency_months', severity: 'tip', title: 'Emergency fund: {{fmt_months(metrics.ef_months)}}', body: 'Below your target.', mathMetrics: ['ef_months', 'essential_monthly_spend'], actions: [{ label: 'Open goals', route: 'tab:goals' }] },
+    { id: 'util-30', when: 'metrics.utilization_max > 0.3', severity: 'tip', title: 'Card utilization is {{fmt_pct(metrics.utilization_max)}}', body: 'Under 30% is the usual target.', mathMetrics: ['utilization_max'], actions: [{ label: 'Open accounts', route: 'tab:accounts' }] },
   ],
   checklist: [
     { id: 'import', label: 'Import transactions', autoTick: { event: 'finance.import_committed' } },
@@ -96,7 +96,7 @@ const portfolio: LifeAppManifest = {
   id: 'portfolio',
   version: '1.0.0',
   title: 'Portfolio',
-  tagline: 'Holdings, allocation, drift and dividends across every account.',
+  tagline: 'Holdings and allocation across accounts.',
   icon: 'candlestick-chart',
   color: 'ocean',
   category: 'investing',
@@ -162,8 +162,8 @@ const portfolio: LifeAppManifest = {
       ],
     },
     {
-      id: 'rebalance', kind: 'choice_cards', title: 'When should we flag a rebalance?', quick: false, skippable: true, default: 'hybrid',
-      why: 'Common guideline: check on a schedule and act only when drift exceeds a band.',
+      id: 'rebalance', kind: 'choice_cards', title: 'When to flag a rebalance', quick: false, skippable: true, default: 'hybrid',
+      why: 'Check on a schedule; act only when drift leaves the band.',
       options: [
         { value: 'calendar', label: 'Calendar', description: 'Quarterly, semiannual or annual.' },
         { value: 'threshold', label: 'Threshold', description: '5 percentage points or 25% relative drift.' },
@@ -198,18 +198,18 @@ const portfolio: LifeAppManifest = {
   ],
   templates: [
     tpl('dashboard', 'dashboard', 'Portfolio', { icon: 'lucide:candlestick-chart', note: 'Value, allocation, drift, dividends' }),
-    tpl('ips', 'page', 'Investment Policy Statement', { icon: '📜' }),
-    tpl('rebalance', 'page', 'Rebalance planner', { icon: '⚖️' }),
-    tpl('annual', 'page', 'Annual investing review', { icon: '🗓️', optional: true }),
-    tpl('inv_accounts', 'database', 'Investment accounts', { icon: '🏦' }),
-    tpl('securities', 'database', 'Securities', { icon: '🔖' }),
-    tpl('inv_txns', 'database', 'Investment transactions', { icon: '🔁' }),
-    tpl('targets_db', 'database', 'Target allocation', { icon: '🎯' }),
+    tpl('ips', 'page', 'Investment Policy Statement', { icon: 'scroll-text' }),
+    tpl('rebalance', 'page', 'Rebalance planner', { icon: 'scale' }),
+    tpl('annual', 'page', 'Annual investing review', { icon: 'calendar', optional: true }),
+    tpl('inv_accounts', 'database', 'Investment accounts', { icon: 'landmark' }),
+    tpl('securities', 'database', 'Securities', { icon: 'bookmark' }),
+    tpl('inv_txns', 'database', 'Investment transactions', { icon: 'repeat' }),
+    tpl('targets_db', 'database', 'Target allocation', { icon: 'target' }),
     tpl('review_rem', 'reminder', 'Rebalance check reminders', { optional: true, count: 4 }),
   ],
   metrics: ['total_value', 'day_change', 'unrealized', 'xirr_ytd', 'xirr_all', 'div_ttm', 'div_fwd_12m', 'max_drift', 'fees_per_year'].map((name) => ({ name, kind: 'rust' as const, fn: `portfolio.${name}`, deps: ['inv_txns.inv.qty'] })),
   advisor: [
-    { id: 'drift-band', when: 'metrics.max_drift > 0.05', severity: 'warn', title: 'Allocation drifted {{round(metrics.max_drift * 100, 1)}} points', body: 'One asset class is outside its band. Consider directing new contributions to the underweight class first.', mathMetrics: ['max_drift'], actions: [{ label: 'Open rebalance planner', route: 'page:rebalance' }] },
+    { id: 'drift-band', when: 'metrics.max_drift > 0.05', severity: 'warn', title: 'Allocation drifted {{round(metrics.max_drift * 100, 1)}} points', body: 'Put new contributions into the underweight class first.', mathMetrics: ['max_drift'], actions: [{ label: 'Open rebalance planner', route: 'page:rebalance' }] },
   ],
   checklist: [
     { id: 'accounts', label: 'Add accounts' },
@@ -228,7 +228,7 @@ const taxOrganizer: LifeAppManifest = {
   id: 'tax-organizer',
   version: '1.0.0',
   title: 'Tax Organizer',
-  tagline: 'Documents, deductions, deadlines and a running estimate for the year.',
+  tagline: 'Documents, deadlines and a running estimate.',
   icon: 'receipt-text',
   color: 'amber',
   category: 'tax',
@@ -271,7 +271,7 @@ const taxOrganizer: LifeAppManifest = {
     {
       id: 'deductions', kind: 'choice_cards', title: 'Standard deduction or itemize?', quick: false, skippable: true, default: 'not_sure',
       options: [
-        { value: 'not_sure', label: 'Not sure', description: 'We compare both as you log deductions.' },
+        { value: 'not_sure', label: 'Not sure', description: 'Both are compared as you log deductions.' },
         { value: 'standard', label: 'Standard' },
         { value: 'itemized', label: 'Itemized' },
       ],
@@ -285,31 +285,31 @@ const taxOrganizer: LifeAppManifest = {
       id: 'preparer', kind: 'choice_cards', title: 'Who will prepare your return?', quick: false, skippable: true, default: 'software',
       options: [
         { value: 'software', label: 'Me, with software' },
-        { value: 'professional', label: 'A professional', description: 'We generate a preparer packet.' },
+        { value: 'professional', label: 'A professional', description: 'A preparer packet is generated for you.' },
         { value: 'not_sure', label: 'Not sure yet' },
       ],
     },
-    { id: 'documents', kind: 'toggle', title: 'Store original documents encrypted?', quick: false, skippable: true, default: true, help: 'Recommended. Otherwise we only track each document’s status.' },
+    { id: 'documents', kind: 'toggle', title: 'Store original documents encrypted?', quick: false, skippable: true, default: true, help: 'Recommended. Otherwise only each document’s status is tracked.' },
     { id: 'reminders', kind: 'number', title: 'Remind me before deadlines (days)', quick: false, skippable: true, default: 14, min: 1, max: 60, step: 1 },
     review(),
   ],
   templates: [
-    tpl('hub', 'dashboard', 'Tax Year 2026', { icon: 'lucide:receipt-text', note: 'Status ring, countdown, estimate, timeline' }),
-    tpl('estimator', 'page', 'Estimator', { icon: '🧮' }),
-    tpl('quarterly', 'page', 'Quarterly payments', { icon: '🗓️', when: 'answers.income_self_employment' }),
-    tpl('packet', 'page', 'Preparer packet', { icon: '📦', when: 'answers.preparer != "software"' }),
-    tpl('yearend', 'page', 'Year-end planning checklist', { icon: '✅' }),
-    tpl('retention', 'page', 'Record retention guide', { icon: '🗄️', optional: true }),
-    tpl('documents_db', 'database', 'Document checklist', { icon: '📄' }),
-    tpl('deductions_db', 'database', 'Deductions & credits', { icon: '🧾' }),
-    tpl('estimates_db', 'database', 'Estimated payments', { icon: '💸' }),
-    tpl('deadlines_db', 'database', 'Deadlines', { icon: '⏰' }),
-    tpl('mileage_db', 'database', 'Mileage log', { icon: '🚗', when: 'answers.income_self_employment' }),
+    tpl('hub', 'dashboard', 'Tax year 2026', { icon: 'lucide:receipt-text', note: 'Status ring, countdown, estimate, timeline' }),
+    tpl('estimator', 'page', 'Estimator', { icon: 'calculator' }),
+    tpl('quarterly', 'page', 'Quarterly payments', { icon: 'calendar', when: 'answers.income_self_employment' }),
+    tpl('packet', 'page', 'Preparer packet', { icon: 'package', when: 'answers.preparer != "software"' }),
+    tpl('yearend', 'page', 'Year-end planning checklist', { icon: 'circle-check' }),
+    tpl('retention', 'page', 'Record retention guide', { icon: 'archive', optional: true }),
+    tpl('documents_db', 'database', 'Document checklist', { icon: 'file-text' }),
+    tpl('deductions_db', 'database', 'Deductions & credits', { icon: 'receipt' }),
+    tpl('estimates_db', 'database', 'Estimated payments', { icon: 'hand-coins' }),
+    tpl('deadlines_db', 'database', 'Deadlines', { icon: 'alarm-clock' }),
+    tpl('mileage_db', 'database', 'Mileage log', { icon: 'car', when: 'answers.income_self_employment' }),
     tpl('deadline_rem', 'reminder', 'Deadline reminders', { optional: true, count: 8 }),
   ],
   metrics: ['docs_received_pct', 'next_deadline', 'est_balance', 'est_effective_rate', 'deductions_total', 'quarterly_next'].map((name) => ({ name, kind: 'rust' as const, fn: `tax.${name}`, deps: ['documents_db'] })),
   advisor: [
-    { id: 'deadline-14', when: 'metrics.days_to_deadline <= 14 and metrics.days_to_deadline > 3', severity: 'tip', title: '{{metrics.next_deadline_label}} in {{metrics.days_to_deadline}} days', body: 'Gather what you need now so the deadline is calm.', mathMetrics: ['next_deadline'], actions: [{ label: 'Open deadlines', route: 'db:deadlines_db' }] },
+    { id: 'deadline-14', when: 'metrics.days_to_deadline <= 14 and metrics.days_to_deadline > 3', severity: 'tip', title: '{{metrics.next_deadline_label}} in {{metrics.days_to_deadline}} days', body: 'Check the document list.', mathMetrics: ['next_deadline'], actions: [{ label: 'Open deadlines', route: 'db:deadlines_db' }] },
   ],
   checklist: [
     { id: 'status', label: 'Confirm filing status' },
@@ -340,7 +340,7 @@ const spreadsheetStudio: LifeAppManifest = {
   id: 'spreadsheet-studio',
   version: '1.0.0',
   title: 'Spreadsheet Studio',
-  tagline: 'Well-built calculators and trackers, with checks you can trust.',
+  tagline: 'Calculators and trackers built on sheets.',
   icon: 'sheet',
   color: 'iris',
   category: 'sheets',
@@ -348,10 +348,10 @@ const spreadsheetStudio: LifeAppManifest = {
   estMinutes: 2,
   steps: [
     { id: 'intent', kind: 'choice_cards', title: 'What do you want to build?', quick: true, skippable: false, default: 'loan', options: SHEET_INTENTS },
-    { id: 'excel_compat', kind: 'toggle', title: 'Will you share this with Excel users?', quick: false, skippable: true, default: false, help: 'When on, we stick to functions that round-trip to Excel and warn about ones only Ultra Note has (STOCK, FX).' },
+    { id: 'excel_compat', kind: 'toggle', title: 'Will you share this with Excel users?', quick: false, skippable: true, default: false, help: 'When on, workbooks stick to functions that round-trip to Excel and warn about ones only Ultra Note has (STOCK, FX).' },
     {
       id: 'structure', kind: 'multi_chips', title: 'Which sections should the workbook have?', quick: false, skippable: true, default: ['inputs', 'calculations', 'output', 'checks', 'changelog'],
-      why: 'Separating inputs from formulas is a common guideline that makes models easier to audit.',
+      why: 'Separating inputs from formulas makes models easier to audit.',
       options: [
         { value: 'inputs', label: 'Inputs' }, { value: 'calculations', label: 'Calculations' }, { value: 'output', label: 'Output' }, { value: 'checks', label: 'Checks' }, { value: 'changelog', label: 'Changelog' },
       ],
@@ -364,8 +364,8 @@ const spreadsheetStudio: LifeAppManifest = {
   ],
   templates: [
     tpl('studio', 'dashboard', 'Spreadsheet Studio', { icon: 'lucide:sheet', note: 'Templates and recent workbooks' }),
-    tpl('workbook', 'workbook', 'Workbook', { icon: '📊' }),
-    tpl('guide', 'page', 'How these workbooks are built', { icon: '📐', optional: true }),
+    tpl('workbook', 'workbook', 'Workbook', { icon: 'chart-column' }),
+    tpl('guide', 'page', 'How these workbooks are built', { icon: 'ruler', optional: true }),
   ],
   metrics: [
     { name: 'workbook_count', kind: 'rust', fn: 'sheets.workbook_count', deps: [] },
@@ -389,7 +389,7 @@ const lifeOs: LifeAppManifest = {
   id: 'life-os',
   version: '1.0.0',
   title: 'Life OS',
-  tagline: 'Tasks, projects and goals with a calm daily plan.',
+  tagline: 'Tasks, projects and a daily plan.',
   icon: 'kanban',
   color: 'blue',
   category: 'planning',
@@ -399,7 +399,7 @@ const lifeOs: LifeAppManifest = {
     {
       id: 'style', kind: 'choice_cards', title: 'How do you like to plan?', quick: true, skippable: false, default: 'simple',
       options: [
-        { value: 'simple', label: 'Simple', description: 'Today and Upcoming. Nothing more.', icon: 'sun' },
+        { value: 'simple', label: 'Simple', description: 'Inbox and next tasks only.', icon: 'sun' },
         { value: 'gtd', label: 'GTD', description: 'Inbox, next actions, waiting, someday.', icon: 'inbox' },
         { value: 'timeblock', label: 'Time-blocking', description: 'Schedule tasks into your calendar.', icon: 'calendar-clock' },
         { value: 'para', label: 'PARA', description: 'Projects, Areas, Resources, Archive.', icon: 'folders' },
@@ -425,7 +425,7 @@ const lifeOs: LifeAppManifest = {
       itemSchema: { days: 'enum(weekdays,everyday,custom)', start: 'time', end: 'time', focusStart: 'time', focusEnd: 'time', maxFocusBlocks: 'number' },
     },
     {
-      id: 'calendar', kind: 'connect', title: 'Show your Google Calendar on Today?', quick: false, skippable: true, default: { provider: 'none' },
+      id: 'calendar', kind: 'connect', title: 'Show Google Calendar on Home?', quick: false, skippable: true, default: { provider: 'none' },
       help: 'Read-only. Events are cached on this device; nothing is sent back.',
       options: [{ value: 'google', label: 'Connect Google Calendar' }, { value: 'none', label: 'Not now' }],
     },
@@ -433,22 +433,21 @@ const lifeOs: LifeAppManifest = {
       id: 'rituals', kind: 'recurrence', title: 'Your planning rituals', quick: true, skippable: true,
       default: { daily: { rrule: 'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR', time: '08:30' }, shutdown: { rrule: 'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR', time: '17:30' }, weekly: { rrule: 'FREQ=WEEKLY;BYDAY=FR', time: '16:00' }, monthly: { rrule: 'FREQ=MONTHLY;BYMONTHDAY=1', time: '09:00' } },
       itemSchema: { daily: 'recurrence', shutdown: 'recurrence', weekly: 'recurrence', monthly: 'recurrence' },
-      why: 'A short daily plan and a weekly review are common guidelines for keeping lists trustworthy.',
+      why: 'A short daily plan and a weekly review keep the lists current.',
     },
     { id: 'capture', kind: 'toggle', title: 'Understand dates as you type?', quick: false, skippable: true, default: true, help: '“Call mom tomorrow 6pm !high #home” becomes a task with a due date, priority and tag.' },
     review(),
   ],
   templates: [
-    tpl('os', 'dashboard', 'Life OS', { icon: 'lucide:kanban', note: 'Today, projects and goals' }),
-    tpl('today', 'dashboard', 'Today', { icon: 'lucide:sun', note: 'Agenda, Top 3, due and overdue' }),
-    tpl('tasks', 'database', 'Tasks', { icon: '✅', note: 'Inbox, Today, Upcoming, Board, Someday, Waiting, Completed' }),
-    tpl('projects', 'database', 'Projects', { icon: '🎯' }),
-    tpl('areas_db', 'database', 'Areas', { icon: '🧭' }),
-    tpl('resources', 'database', 'Resources', { icon: '📚', when: 'answers.style == "para" or answers.style == "mix"' }),
-    tpl('daily', 'database', 'Daily notes', { icon: '📓' }),
+    tpl('os', 'dashboard', 'Life OS', { icon: 'lucide:kanban', note: 'Tasks, projects and goals' }),
+    tpl('tasks', 'database', 'Tasks', { icon: 'circle-check', note: 'Inbox, Due, Upcoming, Board, Someday, Waiting, Completed' }),
+    tpl('projects', 'database', 'Projects', { icon: 'target' }),
+    tpl('areas_db', 'database', 'Areas', { icon: 'compass' }),
+    tpl('resources', 'database', 'Resources', { icon: 'library', when: 'answers.style == "para" or answers.style == "mix"' }),
+    tpl('daily', 'database', 'Daily notes', { icon: 'notebook' }),
     tpl('eisenhower', 'view', 'Eisenhower board', { when: 'answers.priority == "eisenhower"' }),
-    tpl('weekly', 'page', 'Weekly review', { icon: '🔁' }),
-    tpl('goals', 'database', 'Goals', { icon: '🏔️', optional: true }),
+    tpl('weekly', 'page', 'Weekly review', { icon: 'repeat' }),
+    tpl('goals', 'database', 'Goals', { icon: 'mountain', optional: true }),
     tpl('ritual_rem', 'reminder', 'Planning & shutdown reminders', { optional: true, count: 4 }),
   ],
   metrics: [
@@ -461,10 +460,10 @@ const lifeOs: LifeAppManifest = {
     { name: 'due_today', kind: 'rust', fn: 'lifeos.due_today', deps: ['tasks.task.due'] },
   ],
   advisor: [
-    { id: 'overdue-5', when: 'metrics.overdue_count > 5', severity: 'warn', title: '{{metrics.overdue_count}} tasks are overdue', body: 'Consider rescheduling, delegating or dropping a few — a shorter list you trust beats a long one you avoid.', mathMetrics: ['overdue_count'], actions: [{ label: 'Review overdue', route: 'tab:tasks' }] },
-    { id: 'overbooked', when: 'metrics.today_scheduled_min > metrics.working_min', severity: 'warn', title: 'Today is overbooked', body: 'You have scheduled {{metrics.today_scheduled_min}} minutes of tasks into {{metrics.working_min}} working minutes.', mathMetrics: ['today_scheduled_min', 'working_min'], actions: [{ label: 'Open Today', route: 'tab:today' }] },
-    { id: 'inbox-20', when: 'metrics.inbox_count > 20', severity: 'tip', title: 'Your inbox has {{metrics.inbox_count}} items', body: 'A quick pass to sort each one into Next, Someday or Done keeps the list trustworthy.', mathMetrics: ['inbox_count'], actions: [{ label: 'Process inbox', route: 'tab:tasks' }] },
-    { id: 'project-no-next', when: 'metrics.projects_without_next > 0', severity: 'tip', title: '{{metrics.projects_without_next}} {{if(metrics.projects_without_next == 1, "project has", "projects have")}} no next action', body: 'Projects move when the next physical step is written down.', mathMetrics: ['projects_without_next'], actions: [{ label: 'Open projects', route: 'tab:projects' }] },
+    { id: 'overdue-5', when: 'metrics.overdue_count > 5', severity: 'warn', title: '{{metrics.overdue_count}} overdue tasks', body: 'Reschedule or drop the ones that no longer matter.', mathMetrics: ['overdue_count'], actions: [{ label: 'Review overdue', route: 'tab:tasks' }] },
+    { id: 'overbooked', when: 'metrics.today_scheduled_min > metrics.working_min', severity: 'warn', title: 'Today is overbooked', body: 'You have scheduled {{metrics.today_scheduled_min}} minutes of tasks into {{metrics.working_min}} working minutes.', mathMetrics: ['today_scheduled_min', 'working_min'], actions: [{ label: 'Open tasks', route: 'tab:tasks' }] },
+    { id: 'inbox-20', when: 'metrics.inbox_count > 20', severity: 'tip', title: '{{metrics.inbox_count}} items in Inbox', body: '', mathMetrics: ['inbox_count'], actions: [{ label: 'Process inbox', route: 'tab:tasks' }] },
+    { id: 'project-no-next', when: 'metrics.projects_without_next > 0', severity: 'tip', title: '{{metrics.projects_without_next}} {{if(metrics.projects_without_next == 1, "project has", "projects have")}} no next task', body: '', mathMetrics: ['projects_without_next'], actions: [{ label: 'Open projects', route: 'tab:projects' }] },
     { id: 'review-missed', when: 'metrics.days_since_review > 8', severity: 'tip', title: 'Weekly review is due', body: 'It has been {{metrics.days_since_review}} days since your last review.', mathMetrics: ['last_review_date'], actions: [{ label: 'Start review', route: 'page:weekly' }] },
   ],
   checklist: [
@@ -480,26 +479,26 @@ const lifeOs: LifeAppManifest = {
 // ───────────────────────────────────────────────────────────────────────────── Habits (§16.7)
 
 export const HABIT_LIBRARY: { value: string; label: string; description: string; icon: string }[] = [
-  { value: 'sleep', label: 'Sleep 7–9 h', description: 'duration · daily', icon: '😴' },
-  { value: 'walk', label: 'Walk 8k steps', description: 'count · daily', icon: '🚶' },
-  { value: 'strength', label: 'Strength train', description: 'yes/no · 3× week', icon: '🏋️' },
-  { value: 'water', label: 'Water', description: '8 glasses · daily', icon: '💧' },
-  { value: 'read', label: 'Read 20 min', description: 'duration · daily', icon: '📖' },
-  { value: 'meditate', label: 'Meditate', description: '10 min · daily', icon: '🧘' },
-  { value: 'journal', label: 'Journal', description: 'yes/no · daily', icon: '✍️' },
-  { value: 'nophone', label: 'No phone first hour', description: 'avoid · daily', icon: '📵' },
-  { value: 'inbox', label: 'Inbox zero', description: 'yes/no · weekdays', icon: '📥' },
-  { value: 'language', label: 'Language practice', description: '15 min · daily', icon: '🗣️' },
-  { value: 'floss', label: 'Floss', description: 'yes/no · daily', icon: '🦷' },
-  { value: 'budget', label: 'Budget check-in', description: 'yes/no · weekly', icon: '💰' },
-  { value: 'stretch', label: 'Stretch', description: '5 min · daily', icon: '🤸' },
+  { value: 'sleep', label: 'Sleep 7–9 h', description: 'duration · daily', icon: 'moon' },
+  { value: 'walk', label: 'Walk 8k steps', description: 'count · daily', icon: 'footprints' },
+  { value: 'strength', label: 'Strength train', description: 'yes/no · 3× week', icon: 'dumbbell' },
+  { value: 'water', label: 'Water', description: '8 glasses · daily', icon: 'droplet' },
+  { value: 'read', label: 'Read 20 min', description: 'duration · daily', icon: 'book-open' },
+  { value: 'meditate', label: 'Meditate', description: '10 min · daily', icon: 'flower-2' },
+  { value: 'journal', label: 'Journal', description: 'yes/no · daily', icon: 'pen-line' },
+  { value: 'nophone', label: 'No phone first hour', description: 'avoid · daily', icon: 'phone-off' },
+  { value: 'inbox', label: 'Inbox zero', description: 'yes/no · weekdays', icon: 'inbox' },
+  { value: 'language', label: 'Language practice', description: '15 min · daily', icon: 'languages' },
+  { value: 'floss', label: 'Floss', description: 'yes/no · daily', icon: 'smile' },
+  { value: 'budget', label: 'Budget check-in', description: 'yes/no · weekly', icon: 'piggy-bank' },
+  { value: 'stretch', label: 'Stretch', description: '5 min · daily', icon: 'activity' },
 ];
 
 const habits: LifeAppManifest = {
   id: 'habits',
   version: '1.0.0',
   title: 'Habits',
-  tagline: 'Small daily wins, streaks and a weekly reflection.',
+  tagline: 'Daily habits and streaks.',
   icon: 'heart-pulse',
   color: 'ruby',
   category: 'health',
@@ -508,8 +507,8 @@ const habits: LifeAppManifest = {
   steps: [
     {
       id: 'pick', kind: 'list_builder', title: 'Which habits do you want to build?', quick: true, skippable: false,
-      help: 'Start with two or three. Tap a chip or add your own; open a habit to set its schedule, cue and two-minute version.',
-      why: 'Common guideline: start small and stack new habits onto existing routines.',
+      help: 'Start with two or three. Click a chip or add your own; open a habit to set its schedule, cue and two-minute version.',
+      why: 'Small habits attached to existing routines stick better.',
       default: [
         { name: 'Read 20 min', type: 'duration', schedule: 'daily', target: 20, unit: 'min', twoMinute: 'Read one page', cue: 'After dinner', timeOfDay: 'evening' },
         { name: 'Walk 8k steps', type: 'count', schedule: 'daily', target: 8000, unit: 'steps', twoMinute: 'Walk around the block', cue: 'After lunch', timeOfDay: 'afternoon' },
@@ -531,9 +530,9 @@ const habits: LifeAppManifest = {
   ],
   templates: [
     tpl('dash', 'dashboard', 'Habits', { icon: 'lucide:heart-pulse', note: 'Heatmaps, streaks, weekly score' }),
-    tpl('habits_db', 'database', 'Habits', { icon: '🌱' }),
-    tpl('log', 'database', 'Habit log', { icon: '🗒️' }),
-    tpl('weekly', 'page', 'Weekly habit review', { icon: '🪞', when: 'answers.review' }),
+    tpl('habits_db', 'database', 'Habits', { icon: 'sprout' }),
+    tpl('log', 'database', 'Habit log', { icon: 'notebook' }),
+    tpl('weekly', 'page', 'Weekly habit review', { icon: 'scan-face', when: 'answers.review' }),
     tpl('habit_rem', 'reminder', 'Habit reminders', { optional: true, count: 'answers.pick_count' }),
   ],
   metrics: [
@@ -543,10 +542,10 @@ const habits: LifeAppManifest = {
     { name: 'rate_30d_avg', kind: 'rust', fn: 'habits.rate_30d_avg', deps: ['log'] },
   ],
   advisor: [
-    { id: 'dont-miss-twice', when: 'metrics.missed_yesterday > 0', severity: 'tip', title: 'Don’t miss twice', body: '{{metrics.missed_yesterday_names}} slipped yesterday. Doing even the two-minute version today keeps the streak alive.', mathMetrics: ['missed_yesterday'], actions: [{ label: 'Check in', route: 'tab:today' }] },
-    { id: 'make-smaller', when: 'metrics.struggling_count > 0', severity: 'tip', title: 'Make {{metrics.struggling_name}} smaller', body: 'It has been under 40% for three weeks. Consider shrinking it to its two-minute version for a while.', mathMetrics: ['rate_30d_avg'], actions: [{ label: 'Edit habit', route: 'db:habits_db' }] },
-    { id: 'level-up', when: 'metrics.thriving_count > 0', severity: 'info', title: 'Ready to level up {{metrics.thriving_name}}?', body: '90% or better for 21 days. Consider raising the target a little.', mathMetrics: ['best_streak'], actions: [{ label: 'Edit habit', route: 'db:habits_db' }] },
-    { id: 'too-many', when: 'metrics.recent_started > 6', severity: 'tip', title: 'That’s a lot of new habits', body: 'More than six started in two weeks. Common guideline: add one at a time.', mathMetrics: ['active_count'], actions: [] },
+    { id: 'dont-miss-twice', when: 'metrics.missed_yesterday > 0', severity: 'tip', title: '{{metrics.missed_yesterday_names}} missed yesterday', body: '', mathMetrics: ['missed_yesterday'], actions: [{ label: 'Check in', route: 'tab:checkin' }] },
+    { id: 'make-smaller', when: 'metrics.struggling_count > 0', severity: 'tip', title: '{{metrics.struggling_name}}: under 40% for 3 weeks', body: 'A smaller target may stick better.', mathMetrics: ['rate_30d_avg'], actions: [{ label: 'Edit habit', route: 'db:habits_db' }] },
+    { id: 'level-up', when: 'metrics.thriving_count > 0', severity: 'info', title: '{{metrics.thriving_name}}: 90% for 21 days', body: '', mathMetrics: ['best_streak'], actions: [{ label: 'Raise the target', route: 'db:habits_db' }] },
+    { id: 'too-many', when: 'metrics.recent_started > 6', severity: 'tip', title: '{{metrics.recent_started}} habits started in 2 weeks', body: 'New habits stick better one at a time.', mathMetrics: ['active_count'], actions: [] },
   ],
   checklist: [
     { id: 'checkin', label: 'Check in today' },

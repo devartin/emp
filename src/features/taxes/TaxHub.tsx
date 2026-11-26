@@ -16,7 +16,6 @@ import { Checkbox } from "@/ui/Checkbox";
 import { Dialog } from "@/ui/Dialog";
 import { Input } from "@/ui/Input";
 import { MoneyField } from "@/ui/MoneyField";
-import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { Select } from "@/ui/Select";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
@@ -26,7 +25,9 @@ import "../finance/shared/finance.css";
 import { daysBetween, dayLabel, fmtMoney, num, todayIso, fmtWhole } from "../finance/shared/format";
 import { HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
 import { BudgetRing } from "../finance/MoneyHQ/widgets";
-import { DOC_FLOW, DOC_LABEL, STATUS_LABEL, TaxCtx, useTax, useTaxData, type DocRow } from "./data";
+import { DOC_FLOW, DOC_LABEL, STATUS_LABEL, TaxCtx, dueAtFilingText, useTax, useTaxData, type DocRow } from "./data";
+import { Figure } from "../finance/shared/Figure";
+import { figureLabel, itemisedComparison, noPaymentNeeded, safeHarbourKnown, type FigureId } from "../finance/shared/definitions";
 import Estimator, { Result } from "./Estimator";
 import QuarterlyPlan, { useQuarterly } from "./QuarterlyPlan";
 import "./taxes.css";
@@ -102,29 +103,36 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
   const next = deadlines[0];
   const nextDays = next ? daysBetween(todayIso(), next.date) : null;
   const est = tx.estimate;
-  const itemized = tx.deductions.filter((d) => ["charity", "medical", "salt", "mortgage"].includes(d.category)).reduce((a, d) => a + d.amount * d.pct, 0);
-  const std = est ? num(est.deduction.standardWouldBe) : 0;
+  // `tax.itemised` (definitions.ts): the engine's own itemised total, floors and caps applied (the 7.5% of AGI medical
+  // floor, the SALT cap). The raw organiser sum is only a fallback, under its own label "Logged so far".
+  const logged = tx.deductions.filter((d) => ["charity", "medical", "salt", "mortgage"].includes(d.category)).reduce((a, d) => a + d.amount * d.pct, 0);
+  const cmp = itemisedComparison(est, logged);
+  const itemized = cmp?.itemised ?? 0;
+  const std = cmp?.standard ?? 0;
+  const dueAtFiling = dueAtFilingText(est, tx.year, (v) => fmtWhole(v), (d) => dayLabel(d));
+  // The same status words as the Quarterly plan (definitions.ts noPaymentNeeded): late first, then a $0 suggestion.
+  const noPayment = noPaymentNeeded(dueAtFiling?.amount ?? 0, dueAtFiling?.text ?? "", safeHarbourKnown(tx.profile));
   const insights = useMemo(() => {
     const out: Insight[] = [];
     const tab = (t: string) => ({ t: "app" as const, instanceId, tab: t });
     if (next && nextDays !== null && nextDays <= 14) out.push({ id: "dl", appInstanceId: instanceId, ruleId: nextDays <= 3 ? "deadline-3" : "deadline-14", severity: nextDays <= 3 ? "warn" : "tip", title: `${next.name} in ${nextDays} days`, body: `Due ${dayLabel(next.date, true)}.`, actions: [{ label: "See plan", route: tab("quarterly") }] });
     const se = tx.input?.incomes.filter((i) => i.kind === "self_employment").reduce((a, i) => a + num(i.amount), 0) ?? 0;
     if (se > 0 && !tx.payments.some((p) => p.paidOn)) out.push({ id: "se", appInstanceId: instanceId, ruleId: "se-no-estimates", severity: "warn", title: "Self-employment income but no estimated payments yet", body: "The US pack expects quarterly payments when you'll owe $1,000 or more beyond withholding.", actions: [{ label: "Plan payments", route: tab("quarterly") }] });
-    if (std && itemized >= std * 0.9 && itemized < std) out.push({ id: "item", appInstanceId: instanceId, ruleId: "itemize-close", severity: "info", title: "Itemised deductions are close to the standard deduction", body: `${fmtWhole(itemized)} itemised vs ${fmtWhole(std)} standard — a few more gifts or receipts could tip it.`, actions: [{ label: "Open deductions", route: tab("deductions") }] });
+    if (std && itemized >= std * 0.9 && itemized < std) out.push({ id: "item", appInstanceId: instanceId, ruleId: "itemize-close", severity: "info", title: "Itemised deductions are close to the standard deduction", body: `${fmtWhole(itemized)} itemised against ${fmtWhole(std)} standard.`, math: [{ label: cmp ? figureLabel(cmp.id) : "Itemised", value: fmtWhole(itemized) }, { label: "Standard deduction", value: fmtWhole(std) }], actions: [{ label: "Open deductions", route: tab("deductions") }] });
     const noReceipt = tx.deductions.filter((d) => d.amount > 250 && !d.receipt);
     if (noReceipt.length) out.push({ id: "rcpt", appInstanceId: instanceId, ruleId: "receipt-missing", severity: "tip", title: `${noReceipt.length} ${noReceipt.length === 1 ? "deduction over $250 has" : "deductions over $250 have"} no receipt`, body: noReceipt.map((d) => d.desc).slice(0, 3).join(", "), actions: [{ label: "Open deductions", route: tab("deductions") }] });
     const late = tx.docs.filter((d) => d.status === "expected" && d.expected && daysBetween(d.expected, todayIso()) > 14);
     if (late.length) out.push({ id: "late", appInstanceId: instanceId, ruleId: "doc-late", severity: "tip", title: `${late.length} expected ${late.length === 1 ? "document is" : "documents are"} late`, body: late.map((d) => `${d.name} (${d.issuer})`).join(", "), actions: [{ label: "Open documents", route: tab("documents") }] });
     if (tx.pack?.stale) out.push({ id: "stale", appInstanceId: instanceId, ruleId: "pack-stale", severity: "warn", title: "The tax pack may be out of date", body: "Figures come from a pack verified more than 13 months ago or for a different year.", actions: [] });
     return out;
-  }, [next, nextDays, tx, std, itemized, instanceId]);
+  }, [next, nextDays, tx, std, itemized, cmp, instanceId]);
 
   return (
-    <m.div className="fh-grid" variants={staggerList(0.04)} initial="hidden" animate="show">
-      <m.div variants={staggerItem} className="fh-span-7">
+    <div className="fh-grid">
+      <div className="fh-span-7">
         <Result est={est} loading={tx.estimating && !est} unsure={tx.profile?.unsure} compact />
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-5 flex flex-col gap-3">
+      </div>
+      <div className="fh-span-5 flex flex-col gap-3">
         <button type="button" className="fh-metric" onClick={() => go("documents")}>
           <BudgetRing ratio={expected ? received / expected : 0} size={56} stroke={5} color={received === expected && expected ? "var(--gain)" : "var(--accent-solid)"}>
             <span className="text-caption font-semibold tabular">{received}/{expected}</span>
@@ -146,8 +154,8 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
             <span className="block text-caption text-tertiary">{next ? dayLabel(next.date, true) : ""}</span>
           </span>
         </button>
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-7">
+      </div>
+      <div className="fh-span-7">
         <Section title="Quarterly timeline" actions={<Button size="xs" variant="ghost" iconRight={ChevronRight} onClick={() => go("quarterly")}>Plan</Button>}>
           {!plan.data ? (
             <Skeleton height={74} />
@@ -158,52 +166,56 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
                   <span className="tx-mini-dot">{d.status === "paid" ? <Check size={11} strokeWidth={3} /> : null}</span>
                   <span className="text-body-sm font-semibold">{d.period}</span>
                   <span className="text-caption text-tertiary">{dayLabel(d.date)}</span>
-                  <span className="text-caption tabular font-medium">{d.status !== "paid" && num(d.suggested) === 0 ? <span className="text-gain-text">Covered</span> : <Sensitive>{fmtWhole(d.status === "paid" ? d.paid : d.suggested)}</Sensitive>}</span>
+                  <span className="text-caption tabular font-medium">{d.status === "late" ? <span className="text-loss-text">Past due{num(d.suggested) > 0 ? <> · <Sensitive>{fmtWhole(d.suggested)}</Sensitive></> : null}</span> : d.status !== "paid" && num(d.suggested) === 0 ? <span className={noPayment.needsInput ? "text-warning-text" : "text-tertiary"}>{noPayment.short}</span> : <Sensitive>{fmtWhole(d.status === "paid" ? d.paid : d.suggested)}</Sensitive>}</span>
                 </div>
               ))}
             </div>
           )}
         </Section>
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-5">
+      </div>
+      <div className="fh-span-5">
         <Section title="Deductions vs standard" actions={<Button size="xs" variant="ghost" iconRight={ChevronRight} onClick={() => go("deductions")}>Log</Button>}>
           {est ? (
             <div className="flex flex-col gap-3">
-              <DedBar label="Itemisable so far" value={itemized} max={Math.max(std, itemized) * 1.08} tone={itemized > std ? "gain" : "neutral"} />
-              <DedBar label="Standard deduction" value={std} max={Math.max(std, itemized) * 1.08} tone="accent" />
+              <DedBar figure={cmp?.id ?? "tax.logged"} label={figureLabel(cmp?.id ?? "tax.logged")} value={itemized} max={Math.max(std, itemized) * 1.08} tone={itemized > std ? "gain" : "neutral"} inputs={cmp?.id === "tax.itemised" ? [{ label: "Logged before floors and caps", value: fmtWhole(logged) }, ...(est ? [{ label: "AGI (medical floor 7.5%)", value: fmtWhole(est.agi) }] : [])] : undefined} />
+              <DedBar figure="tax.standard" label={figureLabel("tax.standard")} value={std} max={Math.max(std, itemized) * 1.08} tone="accent" inputs={cmp && cmp.nonItemiserCharity > 0.5 ? [{ label: "Standard deduction alone", value: fmtWhole(cmp.standardBase) }, { label: "Cash gifts (non-itemiser deduction)", value: fmtWhole(cmp.nonItemiserCharity) }] : undefined} />
               <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-                {itemized > std ? "Itemising looks better this year." : `${fmtWhole(std - itemized)} more in itemised deductions would be needed to beat the standard.`}
+                {itemized > std ? "Itemising is larger this year." : `Itemising is ${fmtWhole(std - itemized)} short of the standard deduction.`}
               </span>
             </div>
           ) : (
             <Skeleton height={120} />
           )}
         </Section>
-      </m.div>
-      <m.div variants={staggerItem} className="fh-span-12">
-        <Section title="Insights" subtitle="From the pack's rules and your organiser.">
+      </div>
+      <div className="fh-span-12">
+        <Section title="Insights">
           {insights.length ? (
             <div className="fh-insights">
               {insights.map((i) => <InsightCard key={i.id} insight={i} />)}
             </div>
           ) : (
-            <Quiet title="You're on track" body="No deadlines in the next two weeks and nothing missing." />
+            <Quiet title="Nothing due in the next two weeks" />
           )}
         </Section>
-      </m.div>
-    </m.div>
+      </div>
+    </div>
   );
 }
 
-function DedBar({ label, value, max, tone }: { label: string; value: number; max: number; tone: "gain" | "accent" | "neutral" }) {
+function DedBar({ label, value, max, tone, figure, inputs }: { label: string; value: number; max: number; tone: "gain" | "accent" | "neutral"; figure: FigureId; inputs?: { label: string; value: string }[] }) {
   return (
     <div>
       <div className="flex items-baseline justify-between text-body-sm mb-1">
         <span className="text-secondary">{label}</span>
-        <span className="tabular font-semibold"><Sensitive>{fmtWhole(value)}</Sensitive></span>
+        <span className="tabular font-semibold">
+          <Figure id={figure} inputs={inputs}>
+            <Sensitive>{fmtWhole(value)}</Sensitive>
+          </Figure>
+        </span>
       </div>
       <div className="fh-meter" style={{ height: 10 }}>
-        <m.i initial={{ scaleX: 0 }} animate={{ scaleX: max ? value / max : 0 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} style={{ background: tone === "gain" ? "var(--gain)" : tone === "accent" ? "var(--accent-solid)" : "color-mix(in oklab, var(--text-primary) 35%, transparent)" }} />
+        <m.i initial={false} animate={{ scaleX: max ? value / max : 0 }} transition={{ duration: 0.24, ease: [0.2, 0, 0, 1] }} style={{ background: tone === "gain" ? "var(--gain)" : tone === "accent" ? "var(--accent-solid)" : "color-mix(in oklab, var(--text-primary) 35%, transparent)" }} />
       </div>
     </div>
   );
@@ -351,7 +363,7 @@ function Deductions() {
             </tbody>
           </table>
         ) : (
-          <Quiet icon={ReceiptText} title="No deductions yet" body="Log gifts, medical bills and business costs as they happen — it's much easier than in April." action={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>Log deduction</Button>} />
+          <Quiet icon={ReceiptText} title="No deductions yet" body="Log gifts, medical bills and business costs as they happen." action={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>Log deduction</Button>} />
         )}
       </Section>
       {adding ? <AddDeduction onClose={() => setAdding(false)} /> : null}

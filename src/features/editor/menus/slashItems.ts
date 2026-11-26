@@ -36,7 +36,6 @@ import {
   Rows3,
   Sheet,
   Sigma,
-  Smile,
   Sparkles,
   SquareCheck,
   SquareFunction,
@@ -96,11 +95,6 @@ function openInlineTrigger(editor: Editor, text: string, kind: 'mention' | 'page
   const tr = editor.state.tr.insertText(text, from).setMeta(suggestKey, { open: { kind, from, triggerLen: text.length } });
   editor.view.dispatch(tr);
   editor.view.focus();
-}
-
-function caretRect(editor: Editor) {
-  const c = editor.view.coordsAtPos(editor.state.selection.from);
-  return { x: c.left, y: c.top, width: 1, height: c.bottom - c.top };
 }
 
 const BASE: SlashItem[] = [
@@ -165,15 +159,6 @@ const BASE: SlashItem[] = [
         if (r) openOverlay({ kind: 'date', editorId: e.instanceId, pos, rect: { x: r.left, y: r.top, width: r.width, height: r.height }, data: { date: { start: isoDay(), time: false } } });
       });
     },
-  },
-  {
-    id: 'emoji',
-    title: 'Emoji',
-    description: 'Search for an emoji to insert.',
-    group: 'Inline',
-    icon: Smile,
-    aliases: ['emoticon', 'smiley', ':'],
-    run: (e) => openOverlay({ kind: 'calloutIcon', editorId: e.instanceId, pos: -1, rect: caretRect(e), data: { insert: true } }),
   },
   {
     id: 'inline-eq',

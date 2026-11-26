@@ -65,8 +65,8 @@ export function md(src: string): TipTapNode[] {
     const callout = /^>\s*\[!(note|tip|warn|info)\]\s*(.*)$/i.exec(line);
     if (callout) {
       const tone = callout[1].toLowerCase();
-      const icon = tone === 'warn' ? '⚠️' : tone === 'tip' ? '💡' : 'ℹ️';
-      out.push(b.callout(inline(callout[2]), { icon: { t: 'emoji', v: icon }, tone: tone === 'warn' ? 'yellow' : tone === 'tip' ? 'green' : 'blue' }));
+      const icon = tone === 'warn' ? 'triangle-alert' : tone === 'tip' ? 'lightbulb' : 'info';
+      out.push(b.callout(inline(callout[2]), { icon: { t: 'lucide', v: icon }, tone: tone === 'warn' ? 'yellow' : tone === 'tip' ? 'green' : 'blue' }));
       i++;
       continue;
     }

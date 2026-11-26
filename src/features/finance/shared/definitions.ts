@@ -9,7 +9,7 @@
  * The figures the backend computes (net worth, savings rate, debt-free at minimums, portfolio returns, tax) are only
  * *named* here; the pure functions below compute the ones the UI derives, each documented where it is computed.
  */
-import type { BudgetLine, BudgetMonth, SankeyData, SpendingSlice, TaxEstimate } from "@/backend/types";
+import type { BudgetLine, BudgetMonth, PortfolioSummary, SankeyData, SpendingSlice, TaxEstimate } from "@/backend/types";
 import { isIncomeGroup, isSavingGroup, spendingBudget } from "./figures";
 
 export interface FigureDef {
@@ -31,7 +31,7 @@ export const FIGURES = {
   "budget.left": { label: "Left this month", definition: "Assigned to spending categories this month minus spent in budget, never below zero." },
   "spending.all": { label: "All spending", definition: "Spent in budget plus uncategorised outflow and spending in categories without an assignment. Transfers, savings and debt payments are not counted." },
   "budget.activity": { label: "Activity", definition: "Net movement this month in every non-income category, savings and debt payments included." },
-  savingsRate3m: { label: "Kept from income · 3 months", definition: "Income minus spending, divided by income, over the last 3 full months. Transfers, savings and debt payments are not spending." },
+  savingsRate3m: { label: "Kept from income · 3 months", definition: "Income minus spending, divided by income, over the 3 months up to today. Transfers, savings and debt payments are not spending." },
   "cashflow.kept": { label: "Kept", definition: "Income minus spending for the month, as a share of income. The same definition as the 3-month figure, for one month." },
   efMonths: { label: "Emergency fund", definition: "Emergency-fund balance divided by your average essential spending per month." },
   "debtFree.minimum": { label: "Debt-free at minimum payments", definition: "The month your debts reach zero if you pay only each minimum, from next month." },
@@ -40,11 +40,11 @@ export const FIGURES = {
   "uncat.count": { label: "Uncategorised", definition: "Transactions with no category that are not a transfer or a split." },
   "upcoming.7d": { label: "Due in the next 7 days", definition: "Scheduled bills and transfers out falling due in the next 7 days." },
   // ── Portfolio
-  "pf.value": { label: "Value", definition: "Quantity times the last price, summed over every holding." },
+  "pf.value": { label: "Total value", definition: "Quantity times the last price, summed over every holding, plus any uninvested cash the portfolio records." },
   "pf.day": { label: "Today", definition: "Change in value since the previous close." },
-  "pf.unrealised": { label: "Unrealised gain", definition: "Value minus the cost basis of the lots you still hold (first in, first out)." },
+  "pf.unrealised": { label: "Unrealised gain", definition: "The value of your holdings minus the cost basis of the lots you still hold (first in, first out). Uninvested cash is not counted." },
   "pf.mwr.all": { label: "Money-weighted · since first buy", definition: "The yearly rate that turns every deposit and withdrawal since your first purchase into today's value (XIRR), annualised." },
-  "pf.mwr.ytd": { label: "Money-weighted · this year", definition: "The same money-weighted return measured from January 1, for this year so far. Not annualised." },
+  "pf.mwr.ytd": { label: "Money-weighted · this year", definition: "The money-weighted return from January 1 to today: the YTD range's XIRR, turned into this year's own return. Not annualised." },
   "pf.mwr.range": { label: "Money-weighted · range", definition: "The money-weighted return (XIRR) over the selected range. Annualised only when the range is a year or longer." },
   "pf.twr": { label: "Time-weighted · range", definition: "Growth over the selected range with the timing of your deposits removed, so it compares fairly with an index. Cumulative." },
   "pf.vsBench": { label: "Versus benchmark", definition: "Your time-weighted return minus the benchmark's return over the same range, in percentage points." },
@@ -53,9 +53,9 @@ export const FIGURES = {
   "tax.due": { label: "Due at filing", definition: "Estimated total tax minus withholding and estimated payments. A negative amount is a refund." },
   "tax.effective": { label: "Effective rate", definition: "Total tax divided by adjusted gross income." },
   "tax.marginal": { label: "Marginal rate", definition: "The rate on the next dollar of ordinary income." },
-  "tax.itemised": { label: "Itemised would be", definition: "Your itemised deductions after the pack's floors and caps (the 7.5% of AGI medical floor, the SALT cap), as the estimator applies them." },
+  "tax.itemised": { label: "Itemised would be", definition: "Your itemised deductions after the pack's floors and caps (medical above 7.5% of AGI, the SALT cap, charity above 0.5% of AGI), as the estimator applies them." },
   "tax.logged": { label: "Logged so far", definition: "Itemisable entries in your organiser before floors and caps. The estimator applies those when it compares with the standard deduction." },
-  "tax.standard": { label: "Standard deduction", definition: "The pack's standard deduction for your filing status." },
+  "tax.standard": { label: "Standard deduction", definition: "The pack's standard deduction for your filing status, plus the cash-gift deduction non-itemisers get when the pack has one. This is what itemising has to beat." },
 } as const satisfies Record<string, FigureDef>;
 
 export type FigureId = keyof typeof FIGURES;
@@ -118,8 +118,8 @@ export interface KeptFigure {
 /**
  * `cashflow.kept` — "Kept · {month}": income minus spending for one month, over income. The same definition as the
  * 3-month savings rate (`FinanceOverview.savingsRate3m`), read off that month's cash-flow Sankey: income is every flow
- * into the "Income" hub; spending is every flow out of it except "Saved & paid down" (savings and debt payments are
- * not spending). What is neither spent nor moved to savings still counts as kept.
+ * into the "Income" hub; spending is every flow out of it except "Saved & paid down" and a Savings & Debt group
+ * (savings and debt payments are not spending). What is neither spent nor moved to savings still counts as kept.
  */
 export function keptFromSankey(d: SankeyData | undefined): KeptFigure {
   if (!d) return { income: 0, spending: 0, kept: 0, ratio: 0 };
@@ -128,7 +128,10 @@ export function keptFromSankey(d: SankeyData | undefined): KeptFigure {
   let spending = 0;
   for (const l of d.links) {
     if (l.target === hub) income += l.value;
-    else if (l.source === hub && d.nodes[l.target]?.name !== "Saved & paid down") spending += l.value;
+    else if (l.source === hub) {
+      const name = d.nodes[l.target]?.name ?? "";
+      if (name !== "Saved & paid down" && !isSavingGroup(name)) spending += l.value;
+    }
   }
   const kept = income - spending;
   return { income, spending, kept, ratio: income > 0 ? kept / income : 0 };
@@ -155,6 +158,24 @@ const YEAR_MS = 365.25 * 86_400_000;
 export function rangeYears(t: readonly number[] | undefined): number {
   if (!t || t.length < 2) return 0;
   return Math.max(0, (t[t.length - 1] - t[0]) / YEAR_MS);
+}
+
+/**
+ * The inputs behind `pf.value` and `pf.unrealised`, from the summary itself:
+ *   - `holdings`: Σ holding market value (quantity × last price) — what the heat map totals;
+ *   - `cash`: uninvested cash the portfolio records, `totalValue − holdings` (0 when the backend records none);
+ *   - `cost`: Σ cost basis of the lots still held. Unrealised gain = holdings − cost; "on cost" = gain ÷ cost.
+ * Cash is in Total value but never in the gain, so the unrealised popover lists holdings and cost, not total value.
+ */
+export function portfolioParts(s: Pick<PortfolioSummary, "totalValue" | "holdings">): { holdings: number; cost: number; cash: number } {
+  let holdings = 0;
+  let cost = 0;
+  for (const h of s.holdings) {
+    holdings += Number(h.value.amount) || 0;
+    cost += Number(h.costBasis.amount) || 0;
+  }
+  const rest = Math.round(((Number(s.totalValue.amount) || 0) - holdings) * 100) / 100;
+  return { holdings, cost, cash: Math.abs(rest) < 0.5 ? 0 : rest };
 }
 
 /**
@@ -188,7 +209,12 @@ export interface ItemisedComparison {
   /** Which figure is shown, and so which label: the engine's, or the raw log while the engine has none. */
   id: "tax.itemised" | "tax.logged";
   itemised: number;
+  /** `tax.standard`: what itemising has to beat — the standard deduction plus the non-itemiser cash-gift deduction. */
   standard: number;
+  /** The pack's standard deduction alone (`deduction.standardWouldBe`). */
+  standardBase: number;
+  /** The non-itemiser cash-gift deduction inside `standard` (0 when none applies, or when the engine itemised). */
+  nonItemiserCharity: number;
   /** itemised − standard (positive: itemising wins) */
   margin: number;
 }
@@ -198,20 +224,46 @@ export interface ItemisedComparison {
  * itemizedWouldBe`, or `amount` when the engine itemised). The hub never re-adds raw entries: that skipped the 7.5% of
  * AGI medical floor and the SALT cap. Without an engine figure it falls back to the raw log under its own label,
  * `tax.logged` ("Logged so far"), so a raw sum is never presented as the comparison.
+ *
+ * `tax.standard` — the alternative the engine actually compares against: when it took the standard deduction,
+ * `deduction.amount` (standard plus the non-itemiser cash-gift deduction); when it itemised, `standardWouldBe` (the
+ * engine does not report the cash-gift part then, and itemising already won).
  */
 export function itemisedComparison(est: Pick<TaxEstimate, "deduction"> | undefined, loggedRaw: number): ItemisedComparison | null {
   if (!est) return null;
-  const standard = Number(est.deduction.standardWouldBe) || 0;
-  const engine = est.deduction.itemizedWouldBe !== undefined ? Number(est.deduction.itemizedWouldBe) : est.deduction.kind === "itemized" ? Number(est.deduction.amount) : null;
-  if (engine !== null && Number.isFinite(engine)) return { id: "tax.itemised", itemised: engine, standard, margin: engine - standard };
-  return { id: "tax.logged", itemised: loggedRaw, standard, margin: loggedRaw - standard };
+  const d = est.deduction;
+  const standardBase = Number(d.standardWouldBe) || 0;
+  const standard = d.kind === "standard" ? Math.max(standardBase, Number(d.amount) || 0) : standardBase;
+  const nonItemiserCharity = standard - standardBase;
+  const engine = d.itemizedWouldBe !== undefined ? Number(d.itemizedWouldBe) : d.kind === "itemized" ? Number(d.amount) : null;
+  const base = { standard, standardBase, nonItemiserCharity };
+  if (engine !== null && Number.isFinite(engine)) return { id: "tax.itemised", itemised: engine, ...base, margin: engine - standard };
+  return { id: "tax.logged", itemised: loggedRaw, ...base, margin: loggedRaw - standard };
 }
 
 /**
- * The quarterly status for a period with no payment suggested (`tax.safeHarbour`): safe harbour is met, so no
- * penalty is expected — which is not the same as owing nothing. With a balance due at filing it says so
- * ("No penalty expected · $1,224 due Apr 15"); "Covered" is never used while money is owed.
+ * Whether the inputs the chosen sizing method's penalty test depends on are known (`tax.safeHarbour`):
+ *   - `safe_harbor` works from last year's total tax (100%, or 110% when last year's AGI was over $150k), so both
+ *     must be entered. A profile default of "0" is not an answer: it reads as unknown.
+ *   - `current_90` works from this year's estimate alone.
+ *   - `even_split` is not a penalty test, so it never supports a "no penalty" claim.
  */
-export function noPaymentNeededLabel(balanceDue: number, dueText: string): string {
-  return balanceDue > 0.5 ? `No penalty expected · ${dueText}` : "No payment needed";
+export function safeHarbourKnown(p: { method: string; priorYearTax: string; priorYearAgi: string } | null | undefined): boolean {
+  if (!p) return false;
+  if (p.method === "current_90") return true;
+  if (p.method === "safe_harbor") return (Number(p.priorYearTax) || 0) > 0 && (Number(p.priorYearAgi) || 0) > 0;
+  return false;
+}
+
+/**
+ * The quarterly status for an unpaid, not-late period with no payment suggested. Only a period whose penalty test has
+ * known inputs may say "No penalty expected"; that is still not owing nothing, so with a balance due at filing it says
+ * so ("No penalty expected · $1,224 due Apr 15"). "Covered" is never used while money is owed. With no balance due at
+ * filing nothing is owed, so no payment is needed whatever the method. `short` is for tight spots (hub timeline);
+ * `needsInput` marks the unknown case.
+ */
+export function noPaymentNeeded(balanceDue: number, dueText: string, known: boolean): { label: string; short: string; needsInput: boolean } {
+  if (balanceDue <= 0.5) return { label: "No payment needed", short: "None needed", needsInput: false };
+  if (known) return { label: `No penalty expected · ${dueText}`, short: "No penalty", needsInput: false };
+  return { label: "Enter last year's tax and AGI to check the safe harbor", short: "Check safe harbor", needsInput: true };
 }

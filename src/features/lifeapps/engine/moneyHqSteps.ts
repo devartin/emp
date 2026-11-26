@@ -67,7 +67,7 @@ export const MONEY_HQ_STEPS: Step[] = [
   "title": "Who shares this budget?",
   "quick": false,
   "skippable": true,
-  "help": "Partners can keep joint, separate or split money; we add a Shared group when it helps.",
+  "help": "Partners can keep joint, separate or split money; a Shared group is added when it helps.",
   "default": {
    "mode": "single",
    "dependents": 0,
@@ -162,7 +162,7 @@ export const MONEY_HQ_STEPS: Step[] = [
    {
     "value": "zero_based",
     "label": "Zero-based",
-    "description": "Give every dollar a job before the month starts.",
+    "description": "Assign all income to categories before the month starts.",
     "icon": "target"
    },
    {
@@ -191,7 +191,7 @@ export const MONEY_HQ_STEPS: Step[] = [
   "title": "Which bills do you pay?",
   "quick": false,
   "skippable": true,
-  "help": "Add your regular bills. We create recurring items and remind you before each one is due.",
+  "help": "Add your regular bills. Each becomes a recurring item with a reminder before it is due.",
   "default": [],
   "options": [
    {
@@ -330,7 +330,7 @@ export const MONEY_HQ_STEPS: Step[] = [
   "quick": false,
   "skippable": true,
   "help": "Tell us what you have saved for emergencies and pick a target.",
-  "why": "Common guideline: 3–6 months of essential expenses; 9–12 if income is irregular.",
+  "why": "3–6 months of essential expenses; 9–12 if income is irregular.",
   "recommend": "recommend_ef_months",
   "default": {
    "current": 0,
@@ -445,7 +445,7 @@ export const MONEY_HQ_STEPS: Step[] = [
   "quick": false,
   "skippable": true,
   "help": "A short weekly check-in and a monthly review keep the budget honest.",
-  "why": "Ten minutes a week is a common guideline for staying on track.",
+  "why": "Ten minutes a week keeps it current.",
   "default": {
    "weekly": {
     "rrule": "FREQ=WEEKLY;BYDAY=SU",

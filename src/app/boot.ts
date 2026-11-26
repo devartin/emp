@@ -27,7 +27,7 @@ import { installJobTracking } from '@/stores/jobs';
 import { resetMarket } from '@/stores/market';
 import { registerAppCommands } from './commands';
 import { installGlass, syncGlassFromKv } from './glass';
-import { initialHashRoute, isContentRoute, startRouter, type AppRoute } from './router';
+import { formatRoute, initialHashRoute, isContentRoute, startRouter, type AppRoute } from './router';
 import { installShortcuts } from './shortcuts';
 
 // ───────────────────────────────────────────────────────────────────────────── flush registry (autosave)
@@ -134,6 +134,10 @@ export async function enterShell(opts: { route?: AppRoute } = {}): Promise<void>
   if (!isContentRoute(route)) route = { t: 'home' };
   pendingRoute = null;
   useNav.getState().reset(route);
+  // The URL shows where the shell opened (first run lands on #/home), so a reload returns there.
+  if (typeof window !== 'undefined' && window.location.hash !== formatRoute(route)) {
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${formatRoute(route)}`);
+  }
   if (route.t === 'page') useTree.getState().reveal(route.id);
 
   if (!shellInstalled) {

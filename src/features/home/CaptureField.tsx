@@ -1,14 +1,15 @@
 /**
  * Home's one capture field: "Add a task, note or expense…". The same prefix grammar as ⌘K (search/capture.ts), with
- * the parse previewed under the field before Enter. Tab cycles the account of a money capture.
+ * the parse previewed under the field before Enter. Tab cycles the account of a money capture. The parser (chrono,
+ * decimal maths) loads as its own chunk when the field is first focused, so Home's first paint doesn't wait for it.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Id } from "@/backend/types";
 import { cn } from "@/lib/cn";
 import { useWorkspace } from "@/stores/workspace";
 import { Kbd } from "@/ui/Kbd";
-import { captureAccount, describeCapture, loadMoneyTarget, parseCapture, type MoneyTarget } from "@/features/search/capture";
-import { runCapture } from "@/features/search/runCapture";
+import type { MoneyTarget } from "@/features/search/capture";
+import { loadExtras, useExtras } from "@/features/search/useExtras";
 
 export function CaptureField({ autoFocus }: { autoFocus: boolean }) {
   const [text, setText] = useState("");
@@ -16,7 +17,9 @@ export function CaptureField({ autoFocus }: { autoFocus: boolean }) {
   const ref = useRef<HTMLInputElement>(null);
   const lifeOs = useWorkspace((s) => s.lifeapps.some((a) => a.appId === "life-os" && !a.detached));
   const hasMoney = useWorkspace((s) => s.lifeapps.some((a) => a.appId === "money-hq" && !a.detached));
-  const parsed = useMemo(() => (text.trim() ? parseCapture(text) : null), [text]);
+  const [wanted, setWanted] = useState(autoFocus);
+  const extras = useExtras(wanted || !!text);
+  const parsed = useMemo(() => (extras && text.trim() ? extras.parseCapture(text) : null), [extras, text]);
   const [target, setTarget] = useState<MoneyTarget | null>(null);
   const [account, setAccount] = useState<{ id: Id; name: string } | null>(null);
 
@@ -27,24 +30,27 @@ export function CaptureField({ autoFocus }: { autoFocus: boolean }) {
   // Money captures preview the account they land in; load it the first time one is typed.
   const wantsMoney = parsed?.kind === "money";
   useEffect(() => {
-    if (!wantsMoney || target || !hasMoney) return;
+    if (!wantsMoney || target || !hasMoney || !extras) return;
     let live = true;
-    void loadMoneyTarget().then(async (t) => {
+    void extras.loadMoneyTarget().then(async (t) => {
       if (!live || !t) return;
       setTarget(t);
-      setAccount(await captureAccount(t));
+      setAccount(await extras.captureAccount(t));
     });
     return () => {
       live = false;
     };
-  }, [wantsMoney, target, hasMoney]);
+  }, [wantsMoney, target, hasMoney, extras]);
 
-  const preview = parsed ? describeCapture(parsed, { lifeOs, money: hasMoney, account: account?.name }) : null;
+  const preview = parsed && extras ? extras.describeCapture(parsed, { lifeOs, money: hasMoney, account: account?.name }) : null;
 
   const submit = async () => {
-    if (!parsed || parsed.kind === "error" || busy) return;
+    if (busy || !text.trim()) return;
     setBusy(true);
-    const ok = await runCapture(parsed, account?.id);
+    // Enter pressed before the parser arrived still captures what was typed.
+    const ex = extras ?? (await loadExtras().catch(() => null));
+    const c = ex?.parseCapture(text) ?? null;
+    const ok = !!ex && !!c && c.kind !== "error" && (await ex.runCapture(c, account?.id));
     setBusy(false);
     if (ok) setText("");
   };
@@ -62,6 +68,7 @@ export function CaptureField({ autoFocus }: { autoFocus: boolean }) {
           aria-describedby="hm-capture-help"
           autoComplete="off"
           spellCheck={false}
+          onFocus={() => setWanted(true)}
           onChange={(e) => setText(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.nativeEvent.isComposing) {

@@ -10,7 +10,7 @@ export const order = 90;
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
-const emoji = (v: string): Icon => ({ t: 'emoji', v });
+const lucide = (v: string): Icon => ({ t: 'lucide', v });
 
 export function seed(ctx: MockCtx): void {
   if (ctx.seedKind !== 'demo') return;
@@ -22,7 +22,7 @@ export function seed(ctx: MockCtx): void {
   const items: { title: string; icon: Icon; parent: string | null; age: number; doc: ReturnType<typeof makeDoc>; kids?: string[] }[] = [
     {
       title: 'Kitchen renovation quotes',
-      icon: emoji('🔨'),
+      icon: lucide('hammer'),
       parent: null,
       age: 2 * HOUR,
       doc: makeDoc([b.p('Three quotes so far; the second one includes the worktop.'), b.bullet('Quote A — 6 weeks'), b.bullet('Quote B — 4 weeks')]),
@@ -30,14 +30,14 @@ export function seed(ctx: MockCtx): void {
     },
     {
       title: 'Q2 offsite agenda (draft)',
-      icon: emoji('🗓️'),
+      icon: lucide('calendar'),
       parent: projects,
       age: 26 * HOUR,
       doc: makeDoc([b.h2('Day one'), b.p('Morning: retrospective. Afternoon: planning.')]),
     },
     {
       title: 'Untitled',
-      icon: emoji('📝'),
+      icon: lucide('notebook-pen'),
       parent: null,
       age: 9 * DAY,
       doc: makeDoc([b.p('')]),

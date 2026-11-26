@@ -9,7 +9,8 @@ import type { Id, RichText } from '@/backend/types';
 import { navigate } from '@/app/router';
 import { notify } from '@/stores/toasts';
 import { useTree } from '@/stores/tree';
-import { EmojiPicker } from '@/ui/EmojiPicker';
+import { glyphName, PageGlyph } from '@/ui/icons/Icon';
+import { IconPicker } from '@/ui/IconPicker';
 import { DatabaseView } from './DatabaseView';
 import { plainText, rt } from './engine/values';
 import { useSchemas } from './store';
@@ -92,11 +93,15 @@ export default function DatabasePage({ pageId, viewId }: DatabasePageProps) {
           const title = meta?.title ?? schema.database.title;
           return (
             <header className="edb-page-head">
-              <EmojiPicker onSelect={(e) => void useTree.getState().updateMeta(pageId, { icon: { t: 'emoji', v: e } })}>
+              <IconPicker
+                value={glyphName(icon)}
+                onSelect={(name) => void useTree.getState().updateMeta(pageId, { icon: { t: 'lucide', v: name } })}
+                onRemove={icon ? () => void useTree.getState().updateMeta(pageId, { icon: null }) : undefined}
+              >
                 <button type="button" className="edb-page-icon" aria-label="Change icon">
-                  {icon?.t === 'emoji' ? <span aria-hidden>{icon.v}</span> : <Database size={28} aria-hidden />}
+                  {glyphName(icon) ? <PageGlyph icon={icon} context="header" size={28} /> : <Database size={28} strokeWidth={1.75} absoluteStrokeWidth className="text-tertiary" aria-hidden />}
                 </button>
-              </EmojiPicker>
+              </IconPicker>
               <TitleInput id={pageId} title={title} />
               <div className="edb-page-meta">
                 <Description id={pageId} value={schema.database.description} />

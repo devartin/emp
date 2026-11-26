@@ -9,12 +9,14 @@
  *   Recent       six pages
  *
  * Empty sections are omitted. A new vault adds a self-ticking "Get started" list and one Life apps line. Not
- * customisable by design. j/k (or ↓/↑) move through the rows, x or Space ticks a to-do, Enter opens.
+ * customisable by design. j/k (or ↓/↑) move through the rows from the moment Home opens, x ticks the focused to-do,
+ * Enter or Space opens it.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { api, listen } from "@/backend";
 import type { CalendarEvent, Id, RowDTO } from "@/backend/types";
-import { openTodayNote, runCommand } from "@/app/commands";
+import { openPaletteHeld, openTodayNote, runCommand } from "@/app/commands";
+import { shortcutLabel } from "@/lib/platform";
 import { navigate } from "@/app/router";
 import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/format";
@@ -49,13 +51,31 @@ function Section({ title, link, children, label }: { title: string; link?: { lab
   );
 }
 
+/** Marks a section that is still loading, so `emp:route-ready` waits for it (routeReady.ts) and nothing is shown
+ * until its data is real. */
+const Loading = () => <span data-route-busy="" hidden />;
+
+/** Times always carry minutes ("4:00 PM", not "4 PM") so the time column lines up. */
+const clock = (v: Date | string) => {
+  const s = formatTime(v);
+  return /^\d{1,2} \S+$/.test(s) ? s.replace(" ", ":00 ") : s;
+};
+
 const daysLate = (due: string, today: string) => Math.round((Date.parse(`${today}T12:00:00`) - Date.parse(`${due}T12:00:00`)) / 86_400_000);
 
 // ───────────────────────────────────────────────────────────────────────────── agenda
 
+function NowLine({ now }: { now: Date }) {
+  return (
+    <li className="hm-now">
+      <span className="sr-only">Now, {clock(now)}</span>
+    </li>
+  );
+}
+
 function Agenda({ events, now, taskIds }: { events: CalendarEvent[]; now: Date; taskIds: ReadonlySet<Id> }) {
   const t = now.getTime();
-  // Life OS time blocks are tasks: they are listed (with their time) under To do, not twice.
+  // Tasks that To do lists (time blocks included) are not listed twice; other Life OS rows stay on the agenda.
   const timed = events.filter((e) => !e.allDay && !(e.source === "db" && e.link?.t === "row" && taskIds.has(e.link.id)));
   const nowIndex = timed.findIndex((e) => Date.parse(e.end) > t);
   const rows: ReactNode[] = [];
@@ -63,7 +83,7 @@ function Agenda({ events, now, taskIds }: { events: CalendarEvent[]; now: Date; 
     const start = Date.parse(e.start);
     const end = Date.parse(e.end);
     const live = start <= t && end > t;
-    if (i === nowIndex && !live) rows.push(<li key="now" className="hm-now" aria-label={`Now, ${formatTime(now)}`} />);
+    if (i === nowIndex && !live) rows.push(<NowLine key="now" now={now} />);
     rows.push(
       <li key={e.id}>
         <button
@@ -72,14 +92,14 @@ function Agenda({ events, now, taskIds }: { events: CalendarEvent[]; now: Date; 
           className={cn("hm-row hm-event", end <= t && "is-past")}
           onClick={() => (e.link ? useUi.getState().openPeek(e.link) : navigate({ t: "calendar" }))}
         >
-          <span className="hm-time tabular">{formatTime(e.start)}</span>
+          <span className="hm-time tabular">{clock(e.start)}</span>
           <span className="hm-row-title">{e.title}</span>
-          <span className="hm-row-meta">{live ? `until ${formatTime(e.end)}` : e.location ?? ""}</span>
+          <span className="hm-row-meta">{live ? `until ${clock(e.end)}` : e.location ?? ""}</span>
         </button>
       </li>,
     );
   });
-  if (nowIndex < 0 && timed.length) rows.push(<li key="now" className="hm-now" aria-label={`Now, ${formatTime(now)}`} />);
+  if (nowIndex < 0 && timed.length) rows.push(<NowLine key="now" now={now} />);
   if (!timed.length) return null;
   return (
     <Section title="Agenda" link={{ label: "Calendar", go: () => navigate({ t: "calendar" }) }}>
@@ -105,15 +125,19 @@ function useLifeOsTodos(today: string): { db: AppDb | undefined; items: TodoItem
   const { byRole, dbs } = useAppDatabases(lifeos?.id);
   const db = byRole("task.status");
   const { rows, setRows } = useRows(db?.id);
-  // Rows ticked during this visit stay in place (struck through) until you leave Home.
-  const kept = useRef(new Set<Id>());
+  // Rows ticked during this visit stay in place (struck through) until you leave Home, and remember the status they
+  // had, so unticking puts a Scheduled or Waiting task back where it was.
+  const kept = useRef(new Map<Id, string | null>());
   const complete = useCallback(
     async (r: RowDTO, done: boolean) => {
       if (!db) return;
       const status = db.p("task.status");
-      const next = optionId(status, done ? "Done" : "Next");
-      if (!status || !next) return;
-      kept.current.add(r.id);
+      if (!status) return;
+      const current = r.values[status.id];
+      const before = current && current.t === "status" ? current.v : null;
+      if (done && !kept.current.get(r.id)) kept.current.set(r.id, before);
+      const next = done ? optionId(status, "Done") : (kept.current.get(r.id) ?? optionId(status, "Next"));
+      if (!next) return;
       setRows((list) => list.map((x) => (x.id === r.id ? { ...x, values: { ...x.values, [status.id]: write.status(next) } } : x)));
       const values: Record<Id, ReturnType<typeof write.status> | null> = { [status.id]: write.status(next) };
       const completed = db.p("task.completed");
@@ -126,54 +150,70 @@ function useLifeOsTodos(today: string): { db: AppDb | undefined; items: TodoItem
     },
     [db, setRows, today],
   );
-  const items = useMemo(() => {
+  const picked = useMemo(() => {
     if (!lifeos) return [];
     if (!dbs || (db && !rows)) return null;
     if (!db || !rows) return [];
     const isDone = (r: RowDTO) => read.opt(r, db.p("task.status"))?.name === "Done";
-    const due = (r: RowDTO) => read.date(r, db.p("task.due"));
+    const day = (r: RowDTO, role: string) => read.date(r, db.p(role))?.start?.slice(0, 10);
     const starred = (r: RowDTO) => read.bool(r, db.p("task.top3"));
-    const picked = rows.filter((r) => {
+    const list = rows.filter((r) => {
       if (kept.current.has(r.id)) return true;
       if (isDone(r)) return false;
-      const d = due(r)?.start?.slice(0, 10);
-      return starred(r) || (!!d && d <= today);
+      const d = day(r, "task.due");
+      return starred(r) || (!!d && d <= today) || day(r, "task.scheduled") === today;
     });
+    // The time a row shows: its time block today, else the due time.
+    const at = (r: RowDTO) => {
+      const sched = read.date(r, db.p("task.scheduled"));
+      const due = read.date(r, db.p("task.due"));
+      return sched?.time && sched.start?.slice(0, 10) === today ? sched.start : due?.time && due.start ? due.start : null;
+    };
     const rank = (r: RowDTO) => {
-      const d = due(r)?.start?.slice(0, 10);
+      const d = day(r, "task.due");
       return starred(r) ? 0 : d && d < today ? 1 : 2;
     };
-    picked.sort((a, b) => rank(a) - rank(b) || (due(a)?.start ?? "").localeCompare(due(b)?.start ?? ""));
-    return picked.map((r): TodoItem => {
-      const d = due(r);
-      const day = d?.start?.slice(0, 10);
-      const late = !!day && day < today;
-      const n = day ? daysLate(day, today) : 0;
-      const sched = read.date(r, db.p("task.scheduled"));
-      const at = sched?.time && sched.start && sched.start.slice(0, 10) === today ? sched.start : d?.time && d.start ? d.start : null;
-      const meta = late ? (n === 1 ? "Yesterday" : `${n} days late`) : at ? formatTime(at) : "";
-      return {
-        key: r.id,
-        title: read.text(r, db.p("task.title")) || "Untitled task",
-        meta,
-        late: late && !isDone(r),
-        checked: isDone(r),
-        toggle: (v) => void complete(r, v),
-        open: () => useUi.getState().openPeek({ t: "row", id: r.id }),
-      };
-    });
-  }, [lifeos, dbs, db, rows, today, complete]);
-  const ids = useMemo(() => new Set((rows ?? []).map((r) => r.id)), [rows]);
+    const ms = (r: RowDTO) => {
+      const t = at(r);
+      return t ? Date.parse(t) : Number.POSITIVE_INFINITY;
+    };
+    list.sort((x, y) => rank(x) - rank(y) || ms(x) - ms(y) || (day(x, "task.due") ?? "9999").localeCompare(day(y, "task.due") ?? "9999"));
+    return list.map((r) => ({ r, at: at(r), late: (day(r, "task.due") ?? "9999") < today, done: isDone(r) }));
+  }, [lifeos, dbs, db, rows, today]);
+  const items = useMemo(
+    () =>
+      picked?.map(({ r, at, late, done }): TodoItem => {
+        const n = late ? daysLate(day10(read.date(r, db?.p("task.due"))?.start), today) : 0;
+        return {
+          key: r.id,
+          title: read.text(r, db?.p("task.title")) || "Untitled task",
+          meta: late ? (n === 1 ? "Yesterday" : `${n} days late`) : at ? clock(at) : "",
+          late: late && !done,
+          checked: done,
+          toggle: (v) => void complete(r, v),
+          open: () => useUi.getState().openPeek({ t: "row", id: r.id }),
+        };
+      }) ?? null,
+    [picked, db, today, complete],
+  );
+  // Only the tasks To do lists leave the agenda; any other Life OS time block stays there.
+  const ids = useMemo(() => new Set((picked ?? []).map((x) => x.r.id)), [picked]);
   return { db, items, instanceId: lifeos?.id, ids };
 }
+
+const day10 = (v: string | undefined) => (v ?? "").slice(0, 10);
+
+/** To do shows this many rows at first; the rest open in place. */
+const TODO_FIRST = 5;
 
 function Todo({ today, noteId, lifeos }: { today: string; noteId: Id | null; lifeos: ReturnType<typeof useLifeOsTodos> }) {
   const { items: tasks, instanceId } = lifeos;
   const note = useTodayNoteMeta(today);
   const { todos, setChecked } = useNoteTodos(note);
   const kept = useRef(new Set<string>());
-  const habits = useHabitsToday();
-  if (tasks === null || todos === null) return null;
+  const habits = useHabitsToday(today);
+  const [all_, setAll] = useState(false);
+  if (tasks === null || todos === null || habits === null) return <Loading />;
   const noteItems: TodoItem[] = todos
     .filter((t) => !t.checked || kept.current.has(t.blockId))
     .map((t) => ({
@@ -189,20 +229,31 @@ function Todo({ today, noteId, lifeos }: { today: string; noteId: Id | null; lif
       open: () => noteId && navigate({ t: "page", id: noteId, blockId: t.blockId }),
     }));
   const all = [...tasks, ...noteItems];
-  const habitLine = habits && habits.total > 0 ? habits : null;
+  const habitLine = habits ?? null;
   if (!all.length && !habitLine) return null;
+  // A long list would push Money below the fold: the first rows show, the rest open in place.
+  const over = all.length - TODO_FIRST;
+  const hidden = all_ || over <= 1 ? 0 : over;
+  const shown = hidden ? all.slice(0, TODO_FIRST) : all;
   return (
     <Section title="To do" link={instanceId ? { label: "Life OS", go: () => navigate({ t: "app", instanceId }) } : undefined}>
       <ul className="hm-list">
-        {all.map((t) => (
+        {shown.map((t) => (
           <li key={t.key} className={cn("hm-row hm-todo", t.checked && "is-done")}>
             <Checkbox checked={t.checked} onCheckedChange={t.toggle} aria-label={t.checked ? `Mark “${t.title}” not done` : `Complete “${t.title}”`} />
-            <button type="button" data-home-item="" data-toggle="" className="hm-row-title hm-todo-title" onClick={t.open}>
+            <button type="button" data-home-item="" data-toggle="" className="hm-row-title hm-todo-title" onClick={t.open} aria-keyshortcuts="x">
               {t.title}
             </button>
             <span className={cn("hm-row-meta tabular", t.late && "is-late")}>{t.meta}</span>
           </li>
         ))}
+        {hidden ? (
+          <li className="hm-row">
+            <button type="button" data-home-item="" className="hm-quiet-link" onClick={() => setAll(true)}>
+              {hidden} more
+            </button>
+          </li>
+        ) : null}
         {habitLine ? (
           <li className="hm-row hm-habits">
             <span className="hm-row-title">
@@ -222,6 +273,7 @@ function Todo({ today, noteId, lifeos }: { today: string; noteId: Id | null; lif
 
 function MoneyLine({ today }: { today: string }) {
   const g = useMoneyGlance(today);
+  if (g === null) return <Loading />;
   if (!g) return null;
   const fmt = (n: number) => formatCurrency(Math.round(n), g.currency, { maximumFractionDigits: 0 });
   const parts: ReactNode[] = [];
@@ -299,7 +351,7 @@ function Recent() {
 
 const GET_STARTED: { key: string; label: string; run: () => void }[] = [
   { key: "capture", label: "Add a task or note in the field above", run: () => document.querySelector<HTMLInputElement>(".hm-capture-input")?.focus() },
-  { key: "open_palette", label: "Search everything with ⌘K", run: () => useUi.getState().openPalette("all") },
+  { key: "open_palette", label: `Search everything with ${shortcutLabel("mod+k")}`, run: () => openPaletteHeld("all") },
   { key: "try_slash", label: "Type / in a page to add a block", run: () => runCommand("page.new") },
   { key: "import", label: "Import pages or a bank file", run: () => useUi.getState().setImportOpen(true) },
 ];
@@ -330,7 +382,7 @@ function GetStarted({ state }: { state: { done: Record<string, boolean> } }) {
       <ul className="hm-list">
         {GET_STARTED.map((g) => (
           <li key={g.key} className={cn("hm-row hm-todo", state.done[g.key] && "is-done")}>
-            <Checkbox checked={!!state.done[g.key]} disabled aria-label={state.done[g.key] ? "Done" : "Not done yet"} />
+            <Checkbox checked={!!state.done[g.key]} disabled aria-label={`${g.label}: ${state.done[g.key] ? "done" : "not done"}`} />
             <button type="button" data-home-item="" className="hm-row-title hm-todo-title" onClick={g.run}>
               {g.label}
             </button>
@@ -357,23 +409,43 @@ function LifeAppsLine() {
 
 // ───────────────────────────────────────────────────────────────────────────── page
 
-/** j/k and ↓/↑ move through Home's rows; x and Space tick the focused to-do. */
-function onListKeys(e: KeyboardEvent<HTMLDivElement>) {
-  const t = e.target as HTMLElement;
-  if (t.closest("input, textarea, [contenteditable='true']") || e.metaKey || e.ctrlKey || e.altKey) return;
-  const items = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-home-item]")];
-  const i = items.indexOf(t.closest<HTMLElement>("[data-home-item]") ?? (null as unknown as HTMLElement));
-  if (e.key === "j" || e.key === "ArrowDown" || e.key === "k" || e.key === "ArrowUp") {
-    const dir = e.key === "j" || e.key === "ArrowDown" ? 1 : -1;
-    const next = items[i < 0 ? (dir > 0 ? 0 : items.length - 1) : Math.max(0, Math.min(items.length - 1, i + dir))];
-    if (next) {
-      e.preventDefault();
-      next.focus();
-    }
-  } else if ((e.key === "x" || e.key === " ") && t.hasAttribute("data-toggle")) {
-    e.preventDefault();
-    t.closest("li")?.querySelector<HTMLButtonElement>("[role=checkbox]")?.click();
-  }
+/**
+ * j/k and ↓/↑ move through Home's rows; x ticks the focused to-do. The listener is on the window so the keys work
+ * the moment Home opens, whether focus sits in the content region (Shell puts it there on every route change), on the
+ * page, or still on the sidebar's Home row after a click.
+ */
+function useListKeys(pageRef: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const page = pageRef.current;
+      if (!page || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target instanceof HTMLElement ? e.target : null;
+      if (!t || t.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='menu'], [role='listbox']")) return;
+      const inPage = page.contains(t);
+      const vertical = e.key === "j" || e.key === "k" || e.key === "ArrowDown" || e.key === "ArrowUp";
+      // From outside the page: j/k from the content region or the sidebar's main rows; the arrows only when nothing in
+      // particular has focus (so they never steal a widget's own arrow keys).
+      const idle = t === document.body || t.classList.contains("emp-content");
+      const jk = e.key === "j" || e.key === "k";
+      if (!inPage && !(idle && vertical) && !(jk && t.closest(".emp-sb-primary"))) return;
+      const items = [...page.querySelectorAll<HTMLElement>("[data-home-item]")];
+      if (vertical) {
+        const i = inPage ? items.indexOf(t.closest<HTMLElement>("[data-home-item]") ?? t) : -1;
+        const dir = e.key === "j" || e.key === "ArrowDown" ? 1 : -1;
+        const next = items[i < 0 ? (dir > 0 ? 0 : items.length - 1) : Math.max(0, Math.min(items.length - 1, i + dir))];
+        if (next) {
+          e.preventDefault();
+          next.focus();
+          next.scrollIntoView({ block: "nearest" });
+        }
+      } else if (e.key === "x" && inPage && t.hasAttribute("data-toggle")) {
+        e.preventDefault();
+        t.closest("li")?.querySelector<HTMLButtonElement>("[role=checkbox]")?.click();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pageRef]);
 }
 
 export default function HomePage() {
@@ -386,9 +458,11 @@ export default function HomePage() {
   const fresh = !!gs?.show;
   const allDay = (events ?? []).filter((e) => e.allDay);
   const date = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  const pageRef = useRef<HTMLDivElement>(null);
+  useListKeys(pageRef);
 
   return (
-    <div className="hm-page" onKeyDown={onListKeys}>
+    <div className="hm-page" ref={pageRef}>
       <header className="hm-head">
         <h1 className="hm-date">{date}</h1>
         <p className="hm-sub">
@@ -404,8 +478,8 @@ export default function HomePage() {
         </p>
       </header>
       <CaptureField autoFocus={fresh} />
-      {fresh ? <GetStarted state={gs!} /> : null}
-      {events && lifeos.items !== null ? <Agenda events={events} now={now} taskIds={lifeos.ids} /> : null}
+      {!gs ? <Loading /> : fresh ? <GetStarted state={gs} /> : null}
+      {events && lifeos.items !== null ? <Agenda events={events} now={now} taskIds={lifeos.ids} /> : <Loading />}
       <Todo today={today} noteId={note?.id ?? null} lifeos={lifeos} />
       <MoneyLine today={today} />
       <Recent />

@@ -7,12 +7,21 @@ import { Badge } from "@/ui/Badge";
 import { GainLoss } from "@/ui/DeltaPill";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
-import { dayLabel, fmtPct, fmtQty, num, fmtWhole } from "../finance/shared/format";
+import { dayLabel, fmtPct, fmtPp, fmtQty, num, fmtWhole } from "../finance/shared/format";
+import { Figure } from "../finance/shared/Figure";
+import { figureLabel, periodReturn, rangeYears, twrFigures, vsBenchmarkPts } from "../finance/shared/definitions";
 import { useAsync } from "../finance/shared/hooks";
 import { Quiet, Section, Stat } from "../finance/shared/ui";
 import { ticker } from "../markets/data";
 
 const BENCHMARK = "EMP500:INDEX";
+const PERF_RANGES: { value: PerfRange; label: string }[] = [
+  { value: "3m", label: "3M" },
+  { value: "ytd", label: "YTD" },
+  { value: "1y", label: "1Y" },
+  { value: "5y", label: "5Y" },
+  { value: "all", label: "All" },
+];
 
 export default function Performance({ instanceId, summary: s }: { instanceId: Id; summary?: PortfolioSummary }) {
   const [range, setRange] = useState<PerfRange>("1y");
@@ -23,18 +32,32 @@ export default function Performance({ instanceId, summary: s }: { instanceId: Id
   const last = data[data.length - 1];
   const long = range === "5y" || range === "all";
   const benchLabel = ticker(BENCHMARK);
+  const rangeLabel = PERF_RANGES.find((r) => r.value === range)?.label ?? range;
+  // One TWR definition (definitions.ts `pf.twr`): cumulative over the range; annualised beside it only for ≥ 1 year.
+  const years = rangeYears(perf.data?.t);
+  const twr = twrFigures(perf.data?.twr, years);
+  const mwr = perf.data?.xirr !== undefined ? periodReturn(perf.data.xirr, years) : null;
   return (
     <div className="flex flex-col gap-4">
       <Section
         title={`Time-weighted return vs ${benchLabel}`}
-        subtitle="TWR removes the effect of when you added money — the fair way to compare with an index."
-        actions={<Segmented size="sm" value={range} onValueChange={setRange} aria-label="Range" options={[{ value: "3m", label: "3M" }, { value: "ytd", label: "YTD" }, { value: "1y", label: "1Y" }, { value: "5y", label: "5Y" }, { value: "all", label: "All" }]} />}
+        actions={<Segmented size="sm" value={range} onValueChange={setRange} aria-label="Range" options={PERF_RANGES} />}
       >
         <div className="flex gap-8 mb-4">
-          <Stat label="Your portfolio (TWR)" value={last ? <GainLoss value={last.twr}>{fmtPct(last.twr, 1, true)}</GainLoss> : "—"} size="lg" />
-          <Stat label={benchLabel} value={last ? <GainLoss value={last.bench}>{fmtPct(last.bench, 1, true)}</GainLoss> : "—"} size="lg" />
-          <Stat label="Difference" value={last ? <GainLoss value={last.twr - last.bench}>{fmtPct(last.twr - last.bench, 1, true)}</GainLoss> : "—"} size="lg" />
-          <Stat label="Money-weighted (XIRR)" value={perf.data?.xirr !== undefined ? `${fmtPct(perf.data.xirr, 1, true)}/yr` : "—"} size="lg" />
+          <Stat
+            label={figureLabel("pf.twr", rangeLabel)}
+            value={twr ? <GainLoss value={twr.cumulative}><Figure id="pf.twr" range={rangeLabel} inputs={twr.annual !== null ? [{ label: "A year", value: fmtPct(twr.annual, 1, true), sensitive: false }] : undefined}>{fmtPct(twr.cumulative, 1, true)}</Figure></GainLoss> : "—"}
+            sub={twr?.annual != null && years > 1.05 ? `${fmtPct(twr.annual, 1, true)} a year` : undefined}
+            size="lg"
+          />
+          <Stat label={`${benchLabel} · ${rangeLabel}`} value={last ? <GainLoss value={last.bench}>{fmtPct(last.bench, 1, true)}</GainLoss> : "—"} size="lg" />
+          <Stat label={`vs ${benchLabel}`} value={last ? <GainLoss value={last.twr - last.bench}><Figure id="pf.vsBench" range={rangeLabel}>{fmtPp(vsBenchmarkPts(last.twr, last.bench))}</Figure></GainLoss> : "—"} size="lg" />
+          <Stat
+            label={figureLabel("pf.mwr.range", rangeLabel)}
+            value={mwr ? <Figure id="pf.mwr.range" range={rangeLabel}>{fmtPct(mwr.value, 1, true)}</Figure> : "—"}
+            sub={mwr?.annualised ? "a year" : undefined}
+            size="lg"
+          />
         </div>
         <LineChart
           data={data}

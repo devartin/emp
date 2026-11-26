@@ -3,7 +3,7 @@
  * estimated balance due / refund (≈ range when answers are uncertain), bracket visualisation, "Show math" lines,
  * standard vs itemised, and scenario toggles with deltas. Never "you owe" — always an estimate.
  */
-import { Calculator, ChevronDown, Link2, Plus, Sparkles, X } from "lucide-react";
+import { Calculator, Link2, Plus, X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
@@ -24,11 +24,12 @@ import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { Slider } from "@/ui/Slider";
 import { Switch } from "@/ui/Switch";
-import { Tooltip } from "@/ui/Tooltip";
 import { fmtMoney, fmtPct, num, fmtWhole } from "../finance/shared/format";
 import { useAsync } from "../finance/shared/hooks";
 import { disclose, Section } from "../finance/shared/ui";
 import { STATUS_LABEL, useTax } from "./data";
+import { Figure } from "../finance/shared/Figure";
+import type { FigureId } from "../finance/shared/definitions";
 
 const INCOME_KINDS: { value: TaxInput["incomes"][number]["kind"]; label: string }[] = [
   { value: "wages", label: "Wages (W-2)" },
@@ -150,7 +151,7 @@ export default function Estimator() {
             </div>
             <div className="mt-2">
               <div className="text-caption text-secondary mb-1.5" style={{ fontWeight: 500 }}>Deductions</div>
-              <Segmented block size="sm" value={p.deductions} onValueChange={(v) => tx.setProfile({ deductions: v })} options={[{ value: "auto", label: "Not sure — compare" }, { value: "standard", label: "Standard" }, { value: "itemized", label: "Itemise" }]} aria-label="Deductions" />
+              <Segmented block size="sm" value={p.deductions} onValueChange={(v) => tx.setProfile({ deductions: v })} options={[{ value: "auto", label: "Not sure, compare" }, { value: "standard", label: "Standard" }, { value: "itemized", label: "Itemise" }]} aria-label="Deductions" />
             </div>
             <Switch className="mt-2" size="sm" checked={p.unsure} onCheckedChange={(v) => tx.setProfile({ unsure: v })} label="Some of these numbers are guesses (show a range)" />
           </div>
@@ -160,7 +161,7 @@ export default function Estimator() {
       <div className="fh-span-7 flex flex-col gap-4">
         <Result est={shownEst ?? undefined} loading={tx.estimating && !est} unsure={p.unsure} scrubbing={dragging} />
         {shownEst ? <Brackets est={shownEst} scrubbing={dragging} /> : null}
-        <Section title={<span className="inline-flex items-center gap-2"><Sparkles size={14} className="text-accent-text" />What if…</span>} subtitle="Toggle a scenario to see how the estimate moves.">
+        <Section title="What if">
           <div className="flex flex-col gap-3">
             <div className="tx-scrub">
               <div className="flex items-baseline justify-between gap-3">
@@ -233,7 +234,6 @@ function ScenarioRow({ on, onChange, label }: { on: boolean; onChange: (v: boole
 }
 
 export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxEstimate | undefined; loading?: boolean; unsure?: boolean; compact?: boolean; scrubbing?: boolean }) {
-  const [math, setMath] = useState(false);
   const bal = est ? num(est.balance) : 0;
   const refund = bal < 0;
   // owe ⇄ refund crossing: the figure does one pop (1 → 1.04 → 1) and the status pill flips colour
@@ -263,8 +263,10 @@ export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxE
           </div>
           <m.div key={flips} className="tx-big tabular" data-sensitive="" initial={false} animate={flips && !reduced ? { scale: [1, 1.04, 1] } : undefined} transition={{ duration: 0.42, ease: [0.2, 0, 0, 1] }} style={{ originX: 0 }}>
             {est.range || unsure ? <span className="tx-approx">≈</span> : null}
-            <span className="tx-sym">$</span>
-            <RollingNumber value={Math.abs(Math.round(bal))} format={(n) => Math.round(n).toLocaleString()} scrubbing={scrubbing} countUpKey="tax:balance" sensitive />
+            {/* The figure discloses its own working (N-MO3): AGI, deduction, taxable income and the engine's lines. */}
+            <Figure id="tax.due" block inputs={taxWorking(est)}>
+              <RollingNumber value={Math.abs(Math.round(bal))} format={(n) => fmtWhole(n)} scrubbing={scrubbing} sensitive countUp={false} />
+            </Figure>
           </m.div>
           {est.range ? (
             <div className="text-body-sm text-secondary">
@@ -275,15 +277,13 @@ export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxE
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 flex-none">
           <Fig label="Total tax" value={fmtWhole(est.totalTax)} />
           <Fig label="Taxable income" value={fmtWhole(est.taxable)} />
-          <Fig label="Effective rate" value={fmtPct(est.effectiveRate, 1)} plain />
-          <Fig label="Marginal rate" value={fmtPct(est.marginalRate, 0)} plain />
+          <Fig label="Effective rate" value={fmtPct(est.effectiveRate, 1)} plain figure="tax.effective" inputs={[{ label: "Total tax", value: fmtWhole(est.totalTax) }, { label: "AGI", value: fmtWhole(est.agi) }]} />
+          <Fig label="Marginal rate" value={fmtPct(est.marginalRate, 0)} plain figure="tax.marginal" />
         </div>
       </div>
       {compact ? (
         <div className="tx-deduction">
-          <span className="text-body-sm">
-            {est.deduction.kind === "itemized" ? "Itemising" : "Standard deduction"} · <b className="tabular"><Sensitive>{fmtWhole(est.deduction.amount)}</Sensitive></b>
-          </span>
+          <DeductionLine est={est} />
           <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
             AGI <Sensitive>{fmtWhole(est.agi)}</Sensitive> · SE tax <Sensitive>{fmtWhole(est.seTax)}</Sensitive>
           </span>
@@ -292,59 +292,63 @@ export function Result({ est, loading, unsure, compact, scrubbing }: { est: TaxE
       {!compact ? (
         <>
           <div className="tx-deduction">
-            <span className="text-body-sm">
-              {est.deduction.kind === "itemized" ? "Itemising" : "Standard deduction"} · <b className="tabular"><Sensitive>{fmtWhole(est.deduction.amount)}</Sensitive></b>
-            </span>
-            <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-              {est.deduction.kind === "itemized" ? `beats the standard ${fmtWhole(est.deduction.standardWouldBe)}` : `standard ${fmtWhole(est.deduction.standardWouldBe)} is the better choice`}
+            <DeductionLine est={est} />
+            <span className="text-caption text-tertiary tabular" style={{ fontWeight: 400 }}>
+              {est.deduction.kind === "itemized" ? (
+                <>Standard deduction would be <Sensitive>{fmtWhole(est.deduction.standardWouldBe)}</Sensitive></>
+              ) : est.deduction.itemizedWouldBe !== undefined ? (
+                <>Itemised would be <Sensitive>{fmtWhole(est.deduction.itemizedWouldBe)}</Sensitive></>
+              ) : null}
             </span>
           </div>
-          <button type="button" className="tx-math-toggle" onClick={() => setMath((v) => !v)} aria-expanded={math}>
-            <ChevronDown size={14} style={{ transform: math ? "rotate(180deg)" : undefined, transition: "transform 160ms" }} />
-            {math ? "Hide math" : "Show math"}
-          </button>
-          <AnimatePresence initial={false} mode="popLayout">
-            {math ? (
-              <m.dl key="math" {...disclose} className="tx-math">
-                {[
-                  { label: "Gross income", value: est.gross },
-                  { label: "Adjusted gross income (AGI)", value: est.agi },
-                  { label: `${est.deduction.kind === "itemized" ? "Itemised" : "Standard"} deduction`, value: String(-num(est.deduction.amount)) },
-                  { label: "Taxable income", value: est.taxable, strong: true },
-                ].map((l) => (
-                  <div key={l.label} className={cn("tx-math-row", l.strong && "is-strong")}>
-                    <dt>{l.label}</dt>
-                    <dd className="tabular"><Sensitive>{fmtMoney(l.value)}</Sensitive></dd>
-                  </div>
-                ))}
-                <div className="fh-divider" />
-                {est.lines.map((l) => (
-                  <div key={l.label} className={cn("tx-math-row", /total|balance|refund/i.test(l.label) && "is-strong")}>
-                    <dt>
-                      {l.label}
-                      {l.packRef ? (
-                        <Tooltip content={`Pack: ${l.packRef}`}>
-                          <span className="tx-ref" tabIndex={0}>{l.packRef.split(".")[0]}</span>
-                        </Tooltip>
-                      ) : null}
-                    </dt>
-                    <dd className="tabular"><Sensitive>{fmtMoney(l.value)}</Sensitive></dd>
-                  </div>
-                ))}
-              </m.dl>
-            ) : null}
-          </AnimatePresence>
         </>
       ) : null}
     </section>
   );
 }
 
-function Fig({ label, value, plain }: { label: string; value: string; plain?: boolean }) {
+/**
+ * The deduction the estimate uses, named for what it is. With the standard deduction the engine adds the 2026
+ * non-itemiser cash charity deduction on top, so the amount is shown as its two parts rather than as a "standard
+ * deduction" that disagrees with the pack's standard figure.
+ */
+function DeductionLine({ est }: { est: TaxEstimate }) {
+  const amount = num(est.deduction.amount);
+  const std = num(est.deduction.standardWouldBe);
+  const extra = est.deduction.kind === "standard" ? Math.round(amount - std) : 0;
+  return (
+    <span className="text-body-sm">
+      {est.deduction.kind === "itemized" ? "Itemised deductions" : "Standard deduction"} ·{" "}
+      <b className="tabular">
+        <Sensitive>{fmtWhole(est.deduction.kind === "itemized" ? amount : std)}</Sensitive>
+      </b>
+      {extra > 0 ? (
+        <span className="text-secondary">
+          {" "}
+          + <Sensitive>{fmtWhole(extra)}</Sensitive> cash gifts (non-itemiser deduction)
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** The working behind the estimate, as popover rows (replaces the old "Show math" toggle). */
+function taxWorking(est: TaxEstimate) {
+  return [
+    { label: "Gross income", value: fmtWhole(est.gross) },
+    { label: "Adjusted gross income", value: fmtWhole(est.agi) },
+    { label: est.deduction.kind === "itemized" ? "Itemised deductions" : "Standard deduction and cash gifts", value: fmtWhole(-num(est.deduction.amount)) },
+    { label: "Taxable income", value: fmtWhole(est.taxable) },
+    ...est.lines.map((l) => ({ label: l.packRef ? `${l.label} (${l.packRef.split(".")[0]})` : l.label, value: fmtMoney(l.value) })),
+  ];
+}
+
+function Fig({ label, value, plain, figure, inputs }: { label: string; value: string; plain?: boolean; figure?: FigureId; inputs?: { label: string; value: string }[] }) {
+  const v = plain ? value : <Sensitive>{value}</Sensitive>;
   return (
     <div className="flex flex-col">
       <span className="text-caption text-tertiary" style={{ fontWeight: 500 }}>{label}</span>
-      <span className="text-body font-semibold tabular">{plain ? value : <Sensitive>{value}</Sensitive>}</span>
+      <span className="text-body font-semibold tabular">{figure ? <Figure id={figure} inputs={inputs}>{v}</Figure> : v}</span>
     </div>
   );
 }
@@ -370,7 +374,7 @@ export function Brackets({ est, scrubbing }: { est: TaxEstimate; scrubbing?: boo
             <div key={i} className="tx-br" style={{ flex: `${w} 1 0%` }}>
               <span className="tx-br-rate" data-active={num(b.taxed) > 0 ? "" : undefined}>{Math.round(rate * 100)}%</span>
               <div className="tx-br-bar" style={{ height: 14 + rate * 120 }}>
-                <m.i initial={{ scaleX: 0 }} animate={{ scaleX: fill }} transition={scrubbing ? spring.glide : { duration: 0.7, delay: 0.1 + i * 0.05, ease: [0.16, 1, 0.3, 1] }} style={{ ["--a" as string]: Math.min(1, 0.35 + rate * 1.6) }} data-full={fill >= 0.999 ? "" : undefined} />
+                <m.i initial={false} animate={{ scaleX: fill }} transition={scrubbing ? spring.glide : { duration: 0.24, ease: [0.2, 0, 0, 1] }} style={{ ["--a" as string]: Math.min(1, 0.35 + rate * 1.6) }} data-full={fill >= 0.999 ? "" : undefined} />
               </div>
               <span className="tx-br-range tabular">{fmtCompactK(num(b.from))}</span>
               {num(b.taxed) > 0 ? (
@@ -386,7 +390,7 @@ export function Brackets({ est, scrubbing }: { est: TaxEstimate; scrubbing?: boo
       </div>
       <div className="flex items-center justify-between mt-3 text-caption text-tertiary" style={{ fontWeight: 400 }}>
         <span>Taxable ordinary income <b className="text-primary tabular"><Sensitive>{fmtWhole(ordinaryTaxable)}</Sensitive></b></span>
-        <span>Each extra dollar is taxed at <b className="text-primary">{fmtPct(est.marginalRate, 0)}</b> — that's your marginal rate, not your average.</span>
+        <span>Each extra dollar is taxed at <b className="text-primary">{fmtPct(est.marginalRate, 0)}</b>: the marginal rate, not the average.</span>
       </div>
     </Section>
   );

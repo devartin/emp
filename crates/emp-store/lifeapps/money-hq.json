@@ -615,11 +615,11 @@
       "optional": false,
       "spec": {
         "title": "How your budget works",
-        "icon": "📘",
+        "icon": "lucide:book",
         "blocks": [
           {
             "t": "callout",
-            "icon": "🧭",
+            "icon": "lucide:compass",
             "color": "blue",
             "md": "Method: **50/30/20**. You can change it any time with a tune-up."
           },
@@ -640,11 +640,11 @@
       "optional": false,
       "spec": {
         "title": "How your budget works",
-        "icon": "📘",
+        "icon": "lucide:book",
         "blocks": [
           {
             "t": "callout",
-            "icon": "🧭",
+            "icon": "lucide:compass",
             "color": "blue",
             "md": "Method: **Zero-based**. You can change it any time with a tune-up."
           },
@@ -665,11 +665,11 @@
       "optional": false,
       "spec": {
         "title": "How your budget works",
-        "icon": "📘",
+        "icon": "lucide:book",
         "blocks": [
           {
             "t": "callout",
-            "icon": "🧭",
+            "icon": "lucide:compass",
             "color": "blue",
             "md": "Method: **Pay yourself first**. You can change it any time with a tune-up."
           },
@@ -690,11 +690,11 @@
       "optional": false,
       "spec": {
         "title": "How your budget works",
-        "icon": "📘",
+        "icon": "lucide:book",
         "blocks": [
           {
             "t": "callout",
-            "icon": "🧭",
+            "icon": "lucide:compass",
             "color": "blue",
             "md": "Method: **Envelopes**. You can change it any time with a tune-up."
           },
@@ -715,11 +715,11 @@
       "optional": false,
       "spec": {
         "title": "How your budget works",
-        "icon": "📘",
+        "icon": "lucide:book",
         "blocks": [
           {
             "t": "callout",
-            "icon": "🧭",
+            "icon": "lucide:compass",
             "color": "blue",
             "md": "Method: **Track only**. You can change it any time with a tune-up."
           },
@@ -740,7 +740,7 @@
       "optional": false,
       "spec": {
         "title": "Financial order of operations",
-        "icon": "🪜",
+        "icon": "lucide:chart-no-axes-column-increasing",
         "blocks": [
           {
             "t": "md",
@@ -774,7 +774,7 @@
       "optional": false,
       "spec": {
         "title": "Your emergency fund",
-        "icon": "🛟",
+        "icon": "lucide:life-buoy",
         "blocks": [
           {
             "t": "md",
@@ -797,7 +797,7 @@
       "optional": false,
       "spec": {
         "title": "Avalanche vs snowball",
-        "icon": "❄️",
+        "icon": "lucide:snowflake",
         "blocks": [
           {
             "t": "md",
@@ -821,7 +821,7 @@
       "optional": false,
       "spec": {
         "title": "Weekly check-in",
-        "icon": "🗓️",
+        "icon": "lucide:calendar",
         "template": true,
         "blocks": [
           {
@@ -852,7 +852,7 @@
       "optional": false,
       "spec": {
         "title": "Monthly review",
-        "icon": "📅",
+        "icon": "lucide:calendar",
         "template": true,
         "blocks": [
           {
@@ -887,7 +887,7 @@
       "optional": false,
       "spec": {
         "title": "Accounts",
-        "icon": "🏦",
+        "icon": "lucide:landmark",
         "description": "Your bank accounts, cards and loans. Card and loan balances are amounts owed.",
         "properties": [
           {
@@ -1127,7 +1127,7 @@
       "optional": false,
       "spec": {
         "title": "Payees",
-        "icon": "🧾",
+        "icon": "lucide:receipt",
         "properties": [
           {
             "key": "name",
@@ -1163,7 +1163,7 @@
       "optional": false,
       "spec": {
         "title": "Categories",
-        "icon": "🏷️",
+        "icon": "lucide:tag",
         "description": "Spending categories grouped by your budgeting method. Essential categories feed the emergency-fund target.",
         "properties": [
           {
@@ -1347,7 +1347,7 @@
               "rollover": false,
               "target_type": "none"
             },
-            "icon": "💵"
+            "icon": "lucide:banknote"
           },
           {
             "key": "Other income",
@@ -1368,7 +1368,7 @@
               "rollover": false,
               "target_type": "none"
             },
-            "icon": "🏠"
+            "icon": "lucide:house"
           },
           {
             "key": "Utilities",
@@ -1379,7 +1379,7 @@
               "rollover": false,
               "target_type": "none"
             },
-            "icon": "💡"
+            "icon": "lucide:lightbulb"
           },
           {
             "key": "Phone",
@@ -1420,7 +1420,7 @@
               "rollover": false,
               "target_type": "none"
             },
-            "icon": "🛒"
+            "icon": "lucide:shopping-cart"
           },
           {
             "key": "Transportation",
@@ -1431,7 +1431,7 @@
               "rollover": false,
               "target_type": "none"
             },
-            "icon": "🚌"
+            "icon": "lucide:bus"
           },
           {
             "key": "Medical",
@@ -1463,7 +1463,7 @@
               "rollover": false,
               "target_type": "none"
             },
-            "icon": "🍽️"
+            "icon": "lucide:utensils"
           },
           {
             "key": "Coffee",
@@ -1474,7 +1474,7 @@
               "rollover": false,
               "target_type": "none"
             },
-            "icon": "☕"
+            "icon": "lucide:coffee"
           },
           {
             "key": "Entertainment",
@@ -1525,7 +1525,7 @@
               "rollover": true,
               "target_type": "none"
             },
-            "icon": "✈️"
+            "icon": "lucide:plane"
           },
           {
             "key": "Gifts & holidays",
@@ -1536,7 +1536,7 @@
               "rollover": true,
               "target_type": "none"
             },
-            "icon": "🎁"
+            "icon": "lucide:gift"
           },
           {
             "key": "Emergency fund",
@@ -1547,7 +1547,7 @@
               "rollover": false,
               "target_type": "none"
             },
-            "icon": "🛟"
+            "icon": "lucide:life-buoy"
           },
           {
             "key": "Debt payments",
@@ -1619,7 +1619,7 @@
       "optional": false,
       "spec": {
         "title": "Transactions",
-        "icon": "💳",
+        "icon": "lucide:credit-card",
         "description": "Every inflow (positive) and outflow (negative). Imports dedupe by Import ID.",
         "properties": [
           {
@@ -1929,7 +1929,7 @@
       "optional": false,
       "spec": {
         "title": "Budgets",
-        "icon": "📊",
+        "icon": "lucide:chart-column",
         "description": "One row per month and category: what you assigned, what you spent and what is left.",
         "properties": [
           {
@@ -2029,7 +2029,7 @@
       "optional": false,
       "spec": {
         "title": "Recurring",
-        "icon": "🔁",
+        "icon": "lucide:repeat",
         "description": "Bills, paychecks and transfers on a schedule. They feed the 90-day forecast and bill reminders.",
         "properties": [
           {
@@ -2194,7 +2194,7 @@
       "optional": false,
       "spec": {
         "title": "Goals",
-        "icon": "🎯",
+        "icon": "lucide:target",
         "description": "Emergency fund, sinking funds and savings goals. Monthly needed = (target − saved) ÷ months left.",
         "properties": [
           {
@@ -2322,7 +2322,7 @@
               "saved": "${answers.emergency.current}",
               "priority": "high"
             },
-            "icon": "🛟"
+            "icon": "lucide:life-buoy"
           },
           {
             "key": "${item.name}",
@@ -2345,7 +2345,7 @@
       "optional": false,
       "spec": {
         "title": "Net worth snapshots",
-        "icon": "📈",
+        "icon": "lucide:trending-up",
         "description": "A snapshot is taken on the first unlock of each month.",
         "properties": [
           {
@@ -2434,7 +2434,7 @@
       "optional": true,
       "spec": {
         "title": "Subscriptions",
-        "icon": "📺",
+        "icon": "lucide:tv",
         "properties": [
           {
             "key": "service",
@@ -2566,7 +2566,7 @@
       "optional": true,
       "spec": {
         "title": "Rules",
-        "icon": "⚙️",
+        "icon": "lucide:settings",
         "description": "Categorisation rules applied to imports, in priority order.",
         "properties": [
           {

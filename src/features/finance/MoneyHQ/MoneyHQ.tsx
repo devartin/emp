@@ -157,7 +157,7 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
   if (ledger.error && !ledger.loading && !ledger.schemas.txns) {
     return (
       <HubPage icon={Wallet} tone="jade" title="Money HQ">
-        <Quiet title="Money HQ's databases are missing" body="Restore them from Trash, or run the setup again from Life apps." action={<Button variant="primary" onClick={() => navigate({ t: "lifeapps", appId: "money-hq" })}>Open Life apps</Button>} />
+        <Quiet title="Money HQ's databases are missing" body="Restore them from Trash, or run the setup again from Life apps." action={<Button variant="primary" onClick={() => navigate({ t: "lifeapps", appId: "money-hq" })}>Open life apps</Button>} />
       </HubPage>
     );
   }

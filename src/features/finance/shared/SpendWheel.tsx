@@ -92,7 +92,7 @@ export function SpendWheel({ data, size = 160, thickness = 16, active = null, on
             transition={spring.morph}
           />
         ))}
-        {segs.map((sg, i) => {
+        {segs.map((sg) => {
           const len = (sg.sweep / 360) * c;
           const on = active === sg.id;
           const rad = ((sg.mid - 90) * Math.PI) / 180;
@@ -115,9 +115,9 @@ export function SpendWheel({ data, size = 160, thickness = 16, active = null, on
                 strokeWidth={thickness}
                 strokeLinecap="butt"
                 style={{ stroke: sg.color, originX: "50%", originY: "50%" }}
-                initial={reduced ? false : { strokeDasharray: `0 ${c}`, rotate: sg.start - 90 }}
+                initial={false}
                 animate={{ strokeDasharray: `${len} ${c}`, rotate: sg.start - 90 }}
-                transition={reduced ? { duration: 0 } : { strokeDasharray: { duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: i * 0.04 }, rotate: spring.morph }}
+                transition={reduced ? { duration: 0 } : { duration: 0.24, ease: [0.2, 0, 0, 1] }}
               />
               {/* lit upper lip on each segment: a thin highlight on the outer edge */}
               <m.circle
@@ -127,9 +127,9 @@ export function SpendWheel({ data, size = 160, thickness = 16, active = null, on
                 fill="none"
                 strokeWidth={1.25}
                 style={{ stroke: "rgba(255,255,255,.38)", originX: "50%", originY: "50%", mixBlendMode: "soft-light" }}
-                initial={reduced ? false : { strokeDasharray: `0 ${c}`, rotate: sg.start - 90 }}
+                initial={false}
                 animate={{ strokeDasharray: `${(sg.sweep / 360) * 2 * Math.PI * (r + thickness / 2 - 1)} ${c * 2}`, rotate: sg.start - 90 }}
-                transition={reduced ? { duration: 0 } : { strokeDasharray: { duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: i * 0.04 }, rotate: spring.morph }}
+                transition={reduced ? { duration: 0 } : { duration: 0.24, ease: [0.2, 0, 0, 1] }}
               />
             </m.g>
           );

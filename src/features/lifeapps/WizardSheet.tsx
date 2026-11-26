@@ -7,7 +7,7 @@
  * install job, then hands off to the new app page. "Undo {App} setup" is offered for 10 minutes once it lands.
  * Tune-up mode re-runs the same steps with stored answers, previews the PlanDiff and applies it in the sheet.
  */
-import { ArrowLeft, ArrowRight, Check, Lightbulb, Sparkles } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { api, errorMessage } from "@/backend";
@@ -25,7 +25,6 @@ import { Segmented } from "@/ui/Segmented";
 import { Sheet } from "@/ui/Sheet";
 import { Spinner } from "@/ui/Spinner";
 import { celebrate } from "@/ui/motion/Celebrate";
-import { Magnetic } from "@/ui/motion/primitives";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { loadManifest } from "./data";
@@ -53,7 +52,7 @@ import type { Recommendation, StepProps } from "./steps/types";
 import { useWizard } from "./wizardStore";
 import "./lifeapps.css";
 
-const ENCRYPT: Step = { id: "__encrypt", kind: "toggle", title: "This data is sensitive — turn on encryption?", help: "Money, investments and taxes deserve a lock.", quick: true, skippable: true };
+const ENCRYPT: Step = { id: "__encrypt", kind: "toggle", title: "Turn on encryption?", help: "This app holds money, investment or tax data.", quick: true, skippable: true };
 const UNDO_WINDOW = 10 * 60_000;
 
 type Phase = "loading" | "questions" | "installing" | "done" | "error";
@@ -383,18 +382,16 @@ export function WizardSheet() {
               Apply tune-up
             </Button>
           ) : (
-            <Magnetic>
-              <Button variant="primary" size="lg" sheen icon={Sparkles} iconMotion="sparkle" onClick={create} disabled={!plan || compressing}>
-                {`Create ${manifest?.title} workspace`}
-              </Button>
-            </Magnetic>
+            <Button variant="primary" size="lg" onClick={create} disabled={!plan || compressing}>
+              {`Create ${manifest?.title}`}
+            </Button>
           )
         ) : step.id === ENCRYPT.id && encChoice === "encrypt" ? (
           <Button variant="ghost" onClick={() => go(1)}>
             Skip for now
           </Button>
         ) : (
-          <Button variant="primary" iconRight={ArrowRight} iconMotion="arrow" onClick={() => go(1)} kbd="↵">
+          <Button variant="primary" onClick={() => go(1)} kbd="↵">
             Continue
           </Button>
         )}
@@ -404,7 +401,7 @@ export function WizardSheet() {
         <Button variant="ghost" onClick={close}>
           Close
         </Button>
-        <Button variant="primary" iconRight={ArrowRight} onClick={openApp}>
+        <Button variant="primary" onClick={openApp}>
           Open {manifest?.title}
         </Button>
       </div>
@@ -527,7 +524,6 @@ function WhyChip({ text, source }: { text: string; source?: string }) {
     <Popover>
       <PopoverTrigger asChild>
         <button type="button" className="la-why slab" aria-label="Why this recommendation?">
-          <Lightbulb size={12} aria-hidden />
           Why?
         </button>
       </PopoverTrigger>
@@ -557,7 +553,7 @@ function DiffPreview({ diff }: { diff: PlanDiff }) {
             <span className="truncate">{u.key.replace(/_db$/, "").replace(/_/g, " ")}</span>
           </li>
         ))}
-        {!diff.add.length && !diff.update.length ? <li className="text-tertiary">No changes yet — adjust an answer to see what changes.</li> : null}
+        {!diff.add.length && !diff.update.length ? <li className="text-tertiary">No changes yet. Change an answer to see what changes.</li> : null}
       </ul>
       {conflicts.length ? <p className="mt-2 text-caption text-warning-text">You edited {conflicts.length === 1 ? "this item" : "these items"}; applying keeps your edits and adds what’s new.</p> : null}
     </div>
@@ -579,7 +575,6 @@ function BuildView({ rows, done, appTitle, appId, tuneup, refEl }: { rows: Build
       </div>
       <div className="la-groove la-build-groove" aria-hidden>
         <i style={{ transform: `scaleX(${done ? 1 : Math.max(0.06, (doneCount + 0.5) / Math.max(rows.length + 1, 2))})`, transition: "transform 320ms var(--ease-out)" }} />
-        {!done ? <b /> : null}
       </div>
       <ul className="la-build-list" aria-label="Progress">
         <AnimatePresence initial={false}>

@@ -3,7 +3,7 @@
  * finance feature's hubs (same props); Spreadsheet Studio, Life OS and Habits render here. Generated dashboard pages
  * (e.g. Life OS "Today") open the hub on their tab. The wizard is mounted for tune-ups.
  */
-import { Sparkles } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Id } from "@/backend/types";
@@ -35,7 +35,7 @@ const FINANCE: Record<string, Hub> = { "money-hq": MoneyHQ, portfolio: Portfolio
 
 /** Generated dashboard pages map to hub tabs by their title. */
 const PAGE_TABS: Record<string, Record<string, string>> = {
-  "life-os": { today: "today" },
+  "life-os": { today: "tasks" },
 };
 
 export default function AppPage({ instanceId, tab }: AppPageProps) {
@@ -69,7 +69,7 @@ export default function AppPage({ instanceId, tab }: AppPageProps) {
     return (
       <div className="flex h-full min-h-[480px] items-center justify-center p-8">
         <EmptyState
-          icon={Sparkles}
+          icon={LayoutGrid}
           title="This life app isn’t installed"
           body="It may have been uninstalled. Its pages, if you kept them, are still in your sidebar."
           actions={
@@ -92,13 +92,14 @@ export default function AppPage({ instanceId, tab }: AppPageProps) {
   else
     body = (
       <div className="flex h-full min-h-[480px] items-center justify-center p-8">
-        <EmptyState icon={Sparkles} title="Unknown life app" body={`“${inst.appId}” isn’t available in this version of Ultra Note.`} />
+        <EmptyState icon={LayoutGrid} title="Unknown life app" body={`“${inst.appId}” isn’t available in this version of Ultra Note.`} />
       </div>
     );
 
   return (
     <>
-      <Suspense fallback={<RouteSkeleton variant="dashboard" label="Loading app" />}>{body}</Suspense>
+      {/* Life OS and Habits lead with a list, so their placeholder is a list (no stat-tile shapes). */}
+      <Suspense fallback={<RouteSkeleton variant={inst.appId === "life-os" || inst.appId === "habits" ? "list" : "dashboard"} label="Loading app" />}>{body}</Suspense>
       <WizardSheet />
     </>
   );

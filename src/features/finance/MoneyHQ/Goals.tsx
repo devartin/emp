@@ -13,9 +13,7 @@ import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { Input } from "@/ui/Input";
 import { MoneyField } from "@/ui/MoneyField";
-import { celebrate } from "@/ui/motion/Celebrate";
 import { EdgeLight } from "@/ui/motion/EdgeLight";
-import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
 import { Sensitive } from "@/ui/Sensitive";
@@ -58,7 +56,7 @@ export default function Goals() {
           </div>
           <div className="tabular" style={{ fontSize: 26, lineHeight: "32px", fontWeight: 640, letterSpacing: "-0.022em" }}>
             <span data-sensitive="">
-              <RollingNumber value={totalSaved} format={(n) => fmtWhole(Math.round(n))} countUpKey="money:goals" sensitive />
+              <RollingNumber value={totalSaved} format={(n) => fmtWhole(Math.round(n))} sensitive countUp={false} />
             </span>
             <span className="text-tertiary" style={{ fontSize: 16, fontWeight: 500 }}>
               {" "}
@@ -79,11 +77,11 @@ export default function Goals() {
           <Quiet icon={Target} title="No goals yet" body="Name something you're saving for and Ultra Note works out the monthly amount it needs." action={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>New goal</Button>} />
         </section>
       ) : (
-        <m.div className="fh-goals" variants={staggerList(0.05)} initial="hidden" animate="show">
+        <div className="fh-goals">
           {l.goals.map((g, i) => (
             <GoalCard key={g.id} g={g} saved={saved(g)} plan={plans.data?.[i] ?? null} />
           ))}
-        </m.div>
+        </div>
       )}
       {l.schemas.goals ? (
         <div className="flex justify-end">
@@ -129,12 +127,8 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
     const was = prevDone.current;
     prevDone.current = done;
     if (!was && done && moment > 0) {
-      const t1 = window.setTimeout(() => ringRef.current && celebrate(ringRef.current, { glow: true, particles: 20 }), 620);
-      const t2 = window.setTimeout(() => notify.success(`${g.name} is fully funded`), 1020);
-      return () => {
-        window.clearTimeout(t1);
-        window.clearTimeout(t2);
-      };
+      // A C2 confirmation, not a moment (K3): the check and a toast, no particles.
+      notify.success(`${g.name} is fully funded`);
     }
   }, [done, moment, g.name]);
 
@@ -157,7 +151,7 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
   };
 
   return (
-    <m.article variants={staggerItem} className="fh-goal panel" data-raise="" data-light="" data-tilt="2" data-done={done ? "" : undefined}>
+    <article className="fh-goal panel" data-raise="" data-light="" data-done={done ? "" : undefined}>
       <EdgeLight />
       <div className="flex items-start gap-3">
         <div ref={ringRef} className="relative flex-none">
@@ -255,7 +249,7 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
           )}
         </AnimatePresence>
       </div>
-    </m.article>
+    </article>
   );
 }
 
@@ -297,7 +291,7 @@ function AddGoal({ onClose }: { onClose: () => void }) {
       open
       onOpenChange={(o) => !o && onClose()}
       title="New goal"
-      description="Name it, set a target and (optionally) a date — Ultra Note works out the monthly amount."
+      description="Name, target and an optional date. Ultra Note works out the monthly amount."
       size="sm"
       footer={
         <>

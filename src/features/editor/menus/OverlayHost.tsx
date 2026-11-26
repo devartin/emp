@@ -1,6 +1,7 @@
 /**
- * React overlays requested by plain-DOM node views and keymaps: callout icon / emoji insert, code language, inline
- * equation, date mention, link editing and paste prompts ("Paste as mention", "Insert as database / spreadsheet").
+ * React overlays requested by plain-DOM node views and keymaps: callout icon (curated Lucide glyphs; the app never
+ * offers emoji), code language, inline equation, date mention, link editing and paste prompts ("Paste as mention",
+ * "Insert as database / spreadsheet").
  */
 import type { Editor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
@@ -15,9 +16,9 @@ import { notify } from '@/stores/toasts';
 import { useTree } from '@/stores/tree';
 import { Button } from '@/ui/Button';
 import { Calendar } from '@/ui/DatePicker';
-import { EmojiPicker } from '@/ui/EmojiPicker';
+import { glyphName } from '@/ui/icons/Icon';
+import { IconPicker } from '@/ui/IconPicker';
 import { Switch } from '@/ui/Switch';
-import { insertEmoji } from '../lib/editorCommands';
 import { editorContext } from '../lib/context';
 import { renderKatex } from '../lib/katex';
 import { LANGUAGES, resolveLanguage } from '../lib/languages';
@@ -59,25 +60,24 @@ export function OverlayHost({ editor }: { editor: Editor }) {
   }
 }
 
-// ───────────────────────────────────────────────────────────────────────────── icon / emoji
+// ───────────────────────────────────────────────────────────────────────────── callout icon
 
 function IconOverlay({ editor, req, onDone }: { editor: Editor; req: OverlayRequest; onDone: () => void }) {
-  const insert = !!req.data?.insert;
+  const node = req.data?.insert ? null : editor.state.doc.nodeAt(req.pos);
+  const setIcon = (icon: { t: 'lucide'; v: string } | null) => {
+    const n = editor.state.doc.nodeAt(req.pos);
+    if (n?.type.name === 'callout') editor.view.dispatch(editor.state.tr.setNodeMarkup(req.pos, undefined, { ...n.attrs, icon }));
+    onDone();
+  };
   return (
-    <EmojiPicker
+    <IconPicker
       open
+      value={glyphName(node?.attrs.icon)}
       onOpenChange={(o) => !o && onDone()}
-      onSelect={(emoji) => {
-        if (insert) insertEmoji(editor, emoji, '');
-        else {
-          const node = editor.state.doc.nodeAt(req.pos);
-          if (node?.type.name === 'callout') editor.view.dispatch(editor.state.tr.setNodeMarkup(req.pos, undefined, { ...node.attrs, icon: { t: 'emoji', v: emoji } }));
-        }
-        onDone();
-      }}
+      onSelect={(name) => (req.data?.insert ? onDone() : setIcon({ t: 'lucide', v: name }))}
     >
       <span aria-hidden style={{ position: 'fixed', left: req.rect.x, top: req.rect.y, width: req.rect.width, height: req.rect.height, pointerEvents: 'none' }} />
-    </EmojiPicker>
+    </IconPicker>
   );
 }
 

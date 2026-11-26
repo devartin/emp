@@ -148,7 +148,7 @@ export function ListBuilder({ step, value, onChange, currency }: StepProps) {
             </m.div>
           ))}
         </AnimatePresence>
-        {!items.length ? <p className="la-hint">Nothing added yet — tap a suggestion above or add your own.</p> : null}
+        {!items.length ? <p className="la-hint">Nothing added yet. Click a suggestion above or add your own.</p> : null}
         <div>
           <Button variant="ghost" size="sm" icon={Plus} onClick={() => {
             commit([...items, blank()]);

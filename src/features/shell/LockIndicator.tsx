@@ -1,13 +1,12 @@
 /**
- * Top-bar lock indicator (§6.1, §9.9). Tooltip: "Encrypted · Locks in 12 min · ⌘⇧L to lock now". During the last
- * 60 s (`vault:autolock-soon`) it becomes a ring countdown. Click locks now. Unencrypted vaults show an open lock
- * that leads to Security Center.
+ * Lock button (§6.1, §9.9), in the sidebar footer beside the status (Flow IA: one place per job). Tooltip:
+ * "Encrypted · Locks in 12 min · ⌘⇧L to lock now". During the last 60 s (`vault:autolock-soon`) it becomes a ring
+ * countdown. Click locks now. An unencrypted vault has nothing to lock: the footer status leads to Security instead.
  */
-import { Lock, LockOpen } from "lucide-react";
+import { Lock } from "lucide-react";
 import { m } from "motion/react";
 import { useEffect, useState } from "react";
 import { runCommand } from "@/app/commands";
-import { navigate } from "@/app/router";
 import { shortcutLabel } from "@/lib/platform";
 import { useVault } from "@/stores/vault";
 import { IconButton } from "@/ui/IconButton";
@@ -34,22 +33,13 @@ function useMinutesLeft(idleMinutes: number | null): number | null {
   return Math.max(1, Math.ceil(idleMinutes - (Date.now() - lastInput) / 60_000));
 }
 
-export function LockIndicator() {
+export function LockIndicator({ size = "sm" }: { size?: "xs" | "sm" }) {
   const encrypted = useVault((s) => !!s.status?.encrypted);
   const idle = useVault((s) => s.status?.autoLock.idleMinutes ?? null);
   const secondsLeft = useVault((s) => s.autoLockSecondsLeft);
   const minutes = useMinutesLeft(idle);
 
-  if (!encrypted) {
-    return (
-      <IconButton
-        icon={LockOpen}
-        size="sm"
-        label="Not encrypted · Turn on encryption in Settings → Security"
-        onClick={() => navigate({ t: "settings", section: "security" })}
-      />
-    );
-  }
+  if (!encrypted) return null;
 
   const tip = `Encrypted · ${idle === null ? "Locks when your computer sleeps" : secondsLeft !== null ? `Locks in ${secondsLeft}s` : `Locks in ${minutes} min`} · ${shortcutLabel("mod+shift+l")} to lock now`;
 
@@ -59,7 +49,7 @@ export function LockIndicator() {
     const frac = Math.max(0, Math.min(1, secondsLeft / 60));
     return (
       <IconButton
-        size="sm"
+        size={size}
         label={tip}
         className="no-drag"
         onClick={() => runCommand("vault.lock")}
@@ -88,7 +78,7 @@ export function LockIndicator() {
     );
   }
 
-  return <IconButton icon={Lock} size="sm" label={tip} onClick={() => runCommand("vault.lock")} />;
+  return <IconButton icon={Lock} size={size} label={tip} onClick={() => runCommand("vault.lock")} />;
 }
 
 export default LockIndicator;

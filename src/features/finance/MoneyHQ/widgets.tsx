@@ -22,11 +22,12 @@ export function budgetTone(ratio: number): string {
 }
 
 /**
- * Progress ring with a pace tick and an overflow "second lap" at .5 (§5.10 budget bar, as a ring). Draws in with
- * pathLength on mount; reduced motion shows the final state.
+ * Progress ring with a pace tick and an overflow "second lap" at .5 (§5.10 budget bar, as a ring). Final from the
+ * first frame (K3: no draw-in on arrival); a change while mounted (your own edit) eases over 240 ms.
  */
-export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children, delay = 0, className }: { ratio: number; pace?: number | null; size?: number; stroke?: number; color?: string; children?: ReactNode; delay?: number; className?: string }) {
+export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children, className }: { ratio: number; pace?: number | null; size?: number; stroke?: number; color?: string; children?: ReactNode; delay?: number; className?: string }) {
   const reduced = useReducedMotionPref();
+  const change = reduced ? { duration: 0 } : { duration: 0.24, ease: [0.2, 0, 0, 1] as const };
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const first = Math.max(0, Math.min(1, ratio));
@@ -49,16 +50,16 @@ export function BudgetRing({ ratio, pace, size = 44, stroke = 4, color, children
           strokeLinecap="round"
           style={{ stroke: tone }}
           strokeDasharray={c}
-          initial={reduced ? false : { strokeDashoffset: c }}
+          initial={false}
           animate={{ strokeDashoffset: c * (1 - first) }}
-          transition={{ duration: 0.9, delay, ease: [0.16, 1, 0.3, 1] }}
+          transition={change}
         />
         {lap > 0 ? (
-          <m.circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" style={{ stroke: tone, opacity: 0.5 }} strokeDasharray={c} initial={reduced ? false : { strokeDashoffset: c }} animate={{ strokeDashoffset: c * (1 - lap) }} transition={{ duration: 0.7, delay: delay + 0.6, ease: [0.16, 1, 0.3, 1] }} />
+          <m.circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" style={{ stroke: tone, opacity: 0.5 }} strokeDasharray={c} initial={false} animate={{ strokeDashoffset: c * (1 - lap) }} transition={change} />
         ) : null}
         {theta !== null ? (
           /* pace marker: a small ink dome sitting on the track centre-line, not a line crossing the stroke */
-          <m.circle cx={size / 2 + r * Math.cos(theta)} cy={size / 2 + r * Math.sin(theta)} r={Math.max(1.75, stroke / 2)} style={{ fill: "var(--text-primary)", stroke: "var(--bg-surface-1)", strokeWidth: 1 }} initial={reduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: delay + 0.7 }} />
+          <m.circle cx={size / 2 + r * Math.cos(theta)} cy={size / 2 + r * Math.sin(theta)} r={Math.max(1.75, stroke / 2)} style={{ fill: "var(--text-primary)", stroke: "var(--bg-surface-1)", strokeWidth: 1 }} initial={false} animate={{ opacity: 1 }} transition={change} />
         ) : null}
       </svg>
       {children ? <span className="absolute inset-0 inline-flex items-center justify-center">{children}</span> : null}
@@ -74,12 +75,12 @@ export interface EnvelopeData {
   pace: number;
 }
 
-export function Envelope({ e, onClick, index = 0 }: { e: EnvelopeData; onClick?: () => void; index?: number }) {
+export function Envelope({ e, onClick }: { e: EnvelopeData; onClick?: () => void; index?: number }) {
   const ratio = e.assigned > 0 ? e.spent / e.assigned : e.spent > 0 ? 2 : 0;
   const over = e.available < -0.005;
   return (
     <button type="button" className="fh-envelope" onClick={onClick} data-over={over ? "" : undefined}>
-      <BudgetRing ratio={ratio} pace={e.pace} size={46} stroke={4} delay={0.12 + Math.min(index, 8) * 0.05}>
+      <BudgetRing ratio={ratio} pace={e.pace} size={46} stroke={4}>
         <Glyph name={e.category.icon} color={e.category.color} size={26} />
       </BudgetRing>
       <span className="min-w-0 flex-1 text-left">
@@ -93,8 +94,8 @@ export function Envelope({ e, onClick, index = 0 }: { e: EnvelopeData; onClick?:
   );
 }
 
-/** Large money figure with the currency symbol at 0.6× and dimmed cents; digits roll on change (count up once per session with `countUpKey`). */
-export function HeroMoney({ value, currency = baseCurrency(), cents = true, className, countUpKey, scrubbing }: { value: number; currency?: string; cents?: boolean; className?: string; countUpKey?: string; scrubbing?: boolean }) {
+/** Large money figure with dimmed cents; final from the first frame (no count-up), digits roll only on a change while mounted. */
+export function HeroMoney({ value, currency = baseCurrency(), cents = true, className, scrubbing }: { value: number; currency?: string; cents?: boolean; className?: string; scrubbing?: boolean }) {
   // Symbol, its position, the decimal mark and the minus glyph depend on the currency only — resolve them once, not
   // on every scrub frame (moneyParts builds Intl formatters).
   const shape = useMemo(() => ({ ...moneyParts(toMoney(-1.5, currency)), digits: currencyDecimals(currency) }), [currency]);
@@ -107,7 +108,7 @@ export function HeroMoney({ value, currency = baseCurrency(), cents = true, clas
     <span className={cn("fh-hero-value", className)} data-sensitive="">
       {negative ? <span>{shape.sign}</span> : null}
       {shape.symbolPosition === "prefix" ? <span className="fh-sym">{shape.symbol}</span> : null}
-      <RollingNumber value={n} format={intFmt} countUpKey={countUpKey} countUpDuration={countUpKey ? 1.3 : undefined} scrubbing={scrubbing} />
+      <RollingNumber value={n} format={intFmt} countUp={false} scrubbing={scrubbing} />
       {fraction ? (
         <span className="fh-cents">
           {shape.decimal}
@@ -130,7 +131,6 @@ export function MetricCard({ label, value, sub, visual, onClick, tone, className
       data-tone={tone}
       data-raise={onClick ? "" : undefined}
       data-light=""
-      data-tilt={onClick ? "3" : undefined}
     >
       <EdgeLight specular={!!onClick} />
       <span className="min-w-0 flex-1 text-left">

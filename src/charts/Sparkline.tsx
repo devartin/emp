@@ -1,6 +1,6 @@
-import { useId, useMemo } from "react";
+import { useMemo } from "react";
 import { lttbValues } from "@/lib/lttb";
-import { alpha, resolveColor, useChartTheme } from "./theme";
+import { resolveColor, useChartTheme } from "./theme";
 
 export interface SparklineProps {
   data: readonly number[];
@@ -13,18 +13,19 @@ export interface SparklineProps {
   area?: boolean;
   strokeWidth?: number;
   className?: string;
-  /** Pulsing halo on the end dot (live data). */
+  /** @deprecated live halos are retired; ignored. */
   live?: boolean;
   "aria-label"?: string;
 }
 
 /**
- * Sparkline (docs/DESIGN.md §6.4): stroke 1.5, area gradient .16→0, 4px end dot; a 500ms clip reveal on mount. Pure SVG (no Recharts) so dozens can render in a
- * dashboard cheaply; downsampled with LTTB above 120 points. Uses a 100-wide viewBox stretched to the box.
+ * Sparkline (docs/DESIGN.md §6.5): a 1.5px ink line on nothing, a 4px end dot, no fill, no halo, still at rest. Pure
+ * SVG (no Recharts) so dozens can render in a dashboard cheaply; downsampled with LTTB above 120 points. Uses a
+ * 100-wide viewBox stretched to the box. `area` draws a flat 6% wash only for coloured (non-ink) lines.
  */
-export function Sparkline({ data, width = "100%", height = 32, color = "ink", endDot = true, area = true, strokeWidth = 1.5, className, live, ...aria }: SparklineProps) {
+export function Sparkline({ data, width = "100%", height = 32, color = "ink", endDot = true, area = false, strokeWidth = 1.5, className, live: _live, ...aria }: SparklineProps) {
+  void _live;
   const t = useChartTheme();
-  const gid = useId().replace(/:/g, "");
   const pts = useMemo(() => (data.length > 120 ? lttbValues(data, 120) : data.slice()), [data]);
   const stroke =
     color === "trend" ? ((pts[pts.length - 1] ?? 0) >= (pts[0] ?? 0) ? t.gain : t.loss) : color === "accent" ? t.accent : color === "ink" ? t.chartLine : (resolveColor(color) ?? color);
@@ -49,14 +50,8 @@ export function Sparkline({ data, width = "100%", height = 32, color = "ink", en
     <div className={className} style={{ width, height, position: "relative" }} role="img" aria-label={aria["aria-label"] ?? "Trend"}>
       {geom ? (
         <>
-          <svg className="emp-spark-reveal" width="100%" height={height} viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" aria-hidden style={{ overflow: "visible" }}>
-            <defs>
-              <linearGradient id={`sg${gid}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor={stroke} stopOpacity={0.16} />
-                <stop offset="1" stopColor={stroke} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            {area ? <path d={geom.areaPath} fill={`url(#sg${gid})`} /> : null}
+          <svg width="100%" height={height} viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" aria-hidden style={{ overflow: "visible" }}>
+            {area && stroke !== t.chartLine ? <path d={geom.areaPath} fill={stroke} fillOpacity={0.06} /> : null}
             <path d={geom.line} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           </svg>
           {endDot ? (
@@ -71,12 +66,8 @@ export function Sparkline({ data, width = "100%", height = 32, color = "ink", en
                 height: 4,
                 borderRadius: 9999,
                 background: stroke,
-                boxShadow: `0 0 0 2px ${alpha(stroke, 0.18)}`,
-                animation: "emp-fade-in 200ms var(--ease-out) 380ms both",
               }}
-            >
-              {live ? <span className="emp-live-dot" style={{ position: "absolute", inset: -5, borderRadius: 9999, background: stroke, opacity: 0 }} /> : null}
-            </span>
+            />
           ) : null}
         </>
       ) : (

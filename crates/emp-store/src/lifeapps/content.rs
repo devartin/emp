@@ -61,10 +61,16 @@ fn text_node(kind: &str, s: &str) -> TipTapNode {
     }
 }
 
+/// A callout block. `icon` is `lucide:<name>` (manifests) or a legacy emoji, mapped through the canonical emoji map;
+/// generated callouts always carry a Lucide icon (owner ruling: no emoji), `lightbulb` when unmapped.
 fn callout(icon: &str, color: BlockColor, inline: Vec<TipTapNode>) -> Result<TipTapNode> {
+    let name = icon
+        .strip_prefix("lucide:")
+        .or_else(|| crate::icons::lucide_for_emoji(icon))
+        .unwrap_or("lightbulb");
     container(
         TipTapNode::new("callout")
-            .with_attr("icon", json!({"t": "emoji", "v": icon}))
+            .with_attr("icon", crate::icons::lucide_attr(name))
             .with_attr("color", serde_json::to_value(color)?)
             .with_content(inline),
         None,
@@ -107,13 +113,17 @@ pub fn render_blocks(blocks: &[BlockSpec], cx: &ContentCtx<'_>) -> Result<Vec<Ti
         match b {
             BlockSpec::Md { md } => out.extend(md_blocks(&render(md, &cx.scope, cx.actx))?),
             BlockSpec::Callout { icon, color, md } => out.push(callout(
-                icon.as_deref().unwrap_or("💡"),
+                icon.as_deref().unwrap_or("lucide:lightbulb"),
                 color.unwrap_or(BlockColor::Gray),
                 md_inline(&render(md, &cx.scope, cx.actx))?,
             )?),
             BlockSpec::Disclaimer => {
                 if let Some(d) = cx.disclaimer {
-                    out.push(callout("⚠️", BlockColor::Gray, vec![TipTapNode::text(d)])?);
+                    out.push(callout(
+                        "lucide:triangle-alert",
+                        BlockColor::Gray,
+                        vec![TipTapNode::text(d)],
+                    )?);
                 }
             }
             BlockSpec::Database { db, view, height } => {

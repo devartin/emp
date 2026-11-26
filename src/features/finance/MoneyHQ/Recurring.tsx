@@ -2,7 +2,7 @@
  * Recurring & subscriptions (§15.4, §16.2): a 30-day cash calendar, bills and income on a schedule, subscriptions
  * with annual cost and price-rise flags, and detected recurring payments to accept with one click.
  */
-import { ArrowUpRight, CalendarClock, Check, ExternalLink, Plus, Radar, Repeat, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowUpRight, CalendarClock, Check, ExternalLink, Plus, Radar, Repeat, TrendingUp } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useMemo, useState } from "react";
 import { api } from "@/backend";
@@ -201,8 +201,8 @@ function CashCalendar({ items }: { items: RecurringRow[] }) {
             <Tooltip key={d.day} content={d.flows.length ? <div className="flex flex-col gap-0.5"><b>{dayLabel(d.day)}</b>{d.flows.map((f, k) => <span key={k}>{f.name} · {fmtMoney(f.amount, undefined, { signed: true })}</span>)}</div> : `${dayLabel(d.day)} · nothing scheduled`}>
               <div className="fh-cal-day" data-weekend={weekend ? "" : undefined} data-today={i === 0 ? "" : undefined} tabIndex={0}>
                 <div className="fh-cal-bars">
-                  {inn ? <m.span className="fh-cal-in" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 0.5, delay: Math.min(0.3, i * 0.01), ease: [0.16, 1, 0.3, 1] }} style={{ height: `${Math.sqrt(inn / max) * 100}%` }} /> : null}
-                  {out ? <m.span className="fh-cal-out" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 0.5, delay: Math.min(0.3, i * 0.01), ease: [0.16, 1, 0.3, 1] }} style={{ height: `${Math.sqrt(out / max) * 100}%` }} /> : null}
+                  {inn ? <span className="fh-cal-in" style={{ height: `${Math.sqrt(inn / max) * 100}%` }} /> : null}
+                  {out ? <span className="fh-cal-out" style={{ height: `${Math.sqrt(out / max) * 100}%` }} /> : null}
                 </div>
                 <span className="fh-cal-num">{dt.getDate()}</span>
               </div>
@@ -234,12 +234,12 @@ function Detected({ list, onAccepted }: { list: RecurringCandidate[]; onAccepted
   const visible = list.filter((c) => !gone.has(c.payee));
   if (!visible.length) return null;
   return (
-    <Section title={<span className="inline-flex items-center gap-2"><Radar size={15} className="text-accent-text" />We spotted {visible.length} recurring {visible.length === 1 ? "payment" : "payments"}</span>} subtitle="Found in your transactions — add them so they show up in forecasts and reminders.">
+    <Section title={<span className="inline-flex items-center gap-2"><Radar size={15} className="text-accent-text" />{visible.length} recurring {visible.length === 1 ? "payment" : "payments"} found in your transactions</span>} subtitle="Add them to include them in the forecast and reminders.">
       <div className="flex flex-col gap-2">
         <AnimatePresence initial={false} mode="popLayout">
           {visible.map((c) => (
             <m.div key={c.payee} layout exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }} className="fh-detect">
-              <Sparkles size={15} className="text-accent-text flex-none" />
+              <Repeat size={15} className="text-accent-text flex-none" />
               <div className="flex-1 min-w-0">
                 <div className="text-body-sm font-medium truncate">{c.payee}</div>
                 <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>

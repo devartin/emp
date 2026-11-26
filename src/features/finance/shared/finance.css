@@ -18,7 +18,6 @@
   --edge: 3px;
   position: relative; isolation: isolate; width: 44px; height: 44px; margin-bottom: var(--edge); border-radius: 13px;
   display: inline-flex; align-items: center; justify-content: center; flex: none;
-  animation: fh-mark-in 620ms var(--spring-settle) both;
 }
 .fh-head-icon::before, .fh-head-icon::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
 .fh-head-icon::before {
@@ -36,8 +35,6 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 0 0 1px color-mix(in oklab, currentColor 26%, transparent);
 }
 :root:is([data-theme="dark"], [data-theme="midnight"]) .fh-head-icon::before { background: color-mix(in oklab, currentColor 22%, #050506); }
-@keyframes fh-mark-in { from { transform: translateY(-6px) scale(0.9); opacity: 0; } }
-:root[data-motion="reduced"] .fh-head-icon { animation: none; }
 .fh-title { margin: 0; font-size: calc(26rem / 14); line-height: calc(32 / 26); font-weight: 680; letter-spacing: -0.028em; color: var(--text-primary); }
 .fh-subtitle { margin-top: 2px; font-size: calc(13rem / 14); color: var(--text-tertiary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .fh-head-actions { display: flex; align-items: center; gap: 6px; flex: none; }
@@ -118,21 +115,20 @@
 .fh-fresh:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .fh-fresh-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); }
 .fh-fresh[data-fresh="live"] { color: var(--gain-text); }
-.fh-fresh[data-fresh="live"] .fh-fresh-dot { background: var(--gain); animation: fh-pulse 1.6s var(--ease-out) infinite; }
+.fh-fresh[data-fresh="live"] .fh-fresh-dot { background: var(--gain); }
 .fh-fresh[data-fresh="delayed"] .fh-fresh-dot { background: var(--warning); }
 .fh-fresh[data-fresh="cached"] { color: var(--warning-text); }
 .fh-fresh[data-fresh="cached"] .fh-fresh-dot { background: var(--warning); }
 .fh-mstate { display: inline-flex; align-items: center; gap: 6px; font-size: calc(12rem / 14); color: var(--text-tertiary); }
 .fh-mstate-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-disabled); }
-.fh-mstate[data-state="open"] .fh-mstate-dot { background: var(--gain); animation: fh-pulse 1.6s var(--ease-out) infinite; }
+.fh-mstate[data-state="open"] .fh-mstate-dot { background: var(--gain); }
 .fh-mstate[data-state="pre"] .fh-mstate-dot, .fh-mstate[data-state="post"] .fh-mstate-dot { background: var(--warning); }
 /* Live ping (the one allowed loop, §5.4.6): a halo pseudo that scales — transform/opacity only. */
 .fh-fresh[data-fresh="live"] .fh-fresh-dot, .fh-mstate[data-state="open"] .fh-mstate-dot { position: relative; animation: none; }
 .fh-fresh[data-fresh="live"] .fh-fresh-dot::after, .fh-mstate[data-state="open"] .fh-mstate-dot::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--gain);
-  animation: fh-ping 2.4s var(--ease-out) infinite;
+  display: none;
 }
-@keyframes fh-ping { 0% { transform: scale(1); opacity: 0.55; } 60%, 100% { transform: scale(2.8); opacity: 0; } }
 :root:is([data-motion="reduced"], [data-effects="reduced"]) :is(.fh-fresh-dot, .fh-mstate-dot)::after { animation: none !important; display: none; }
 
 /* Insights */
@@ -156,9 +152,7 @@
   width: 44px; height: 44px; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); margin-bottom: 16px;
   background: linear-gradient(180deg, var(--slab-s-face-a), var(--slab-s-face-b));
   box-shadow: inset 0 1px 0 var(--slab-s-hl), inset 0 0 0 1px var(--slab-s-rim), 0 3px 0 var(--slab-s-side-b), 0 4px 10px -2px var(--slab-s-ambient), 0 0 0 10px var(--well-bg);
-  animation: fh-mark-in 620ms var(--spring-settle) both;
 }
-:root[data-motion="reduced"] .fh-quiet-icon { animation: none; }
 .fh-quiet-title { font-size: calc(14rem / 14); font-weight: 600; color: var(--text-primary); }
 .fh-quiet-body { margin-top: 4px; font-size: calc(13rem / 14); color: var(--text-secondary); max-width: 360px; }
 
@@ -379,8 +373,7 @@ button.fh-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2
 .fh-div-label { font-size: calc(13rem / 14); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fh-div-track { position: relative; height: 10px; border-radius: 9999px; background: var(--well-bg); box-shadow: inset 0 1px 1.5px var(--well-in), inset 0 0 0 1px var(--well-rim), 0 1px 0 var(--well-lip); }
 .fh-div-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text-secondary); }
-.fh-div-bar { position: absolute; top: 1px; bottom: 1px; border-radius: 9999px; background: linear-gradient(180deg, var(--lit-b), var(--lit-a)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22); transition: transform 620ms var(--spring-settle); animation: fh-grow-x 700ms var(--ease-out-expo) both; animation-delay: calc(var(--i, 0) * 40ms + 120ms); }
-@keyframes fh-grow-x { from { scale: 0 1; } }
+.fh-div-bar { position: absolute; top: 1px; bottom: 1px; border-radius: 9999px; background: linear-gradient(180deg, var(--lit-b), var(--lit-a)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22); transition: transform 620ms var(--spring-settle); }
 :root[data-motion="reduced"] .fh-div-bar { animation: none; transition: none; }
 .fh-div-row { transition: opacity 160ms var(--ease-out); border-radius: 8px; }
 .fh-div-row[data-dim] { opacity: 0.45; }
@@ -563,8 +556,6 @@ button.fh-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2
 .fh-race-flag { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; border-radius: 2px; background: repeating-linear-gradient(180deg, var(--chart-line) 0 4px, var(--panel-top) 4px 8px); box-shadow: 0 0 0 1px var(--panel-rim); }
 .fh-race-runner-rail { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; pointer-events: none; }
 .fh-race-runner { position: absolute; left: -11px; top: 50%; margin-top: -14px; display: inline-flex; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.22)); }
-.fh-race:not([data-done]) .fh-race-runner { animation: fh-hop 360ms var(--ease-out) infinite alternate; }
-@keyframes fh-hop { from { transform: translateY(0); } to { transform: translateY(-2px); } }
 .fh-race-lane[data-won] .fh-race-runner { filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.22)) drop-shadow(0 0 8px color-mix(in oklab, var(--gain) 55%, transparent)); }
 .fh-race-result { display: flex; align-items: center; gap: 6px; font-size: calc(13rem / 14); font-weight: 600; color: var(--text-primary); white-space: nowrap; }
 .fh-race-trophy { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(180deg, color-mix(in oklab, var(--gain) 78%, white), var(--gain)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 0 color-mix(in oklab, var(--gain) 60%, black), var(--glow-gain); }
@@ -577,18 +568,12 @@ button.fh-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2
 /* Forecast fan reveal: the median draws in, then the bands open outward from it — inner first, outer after. */
 .fh-fan[data-reveal] .recharts-area,
 .fh-fan[data-reveal] .recharts-line { transform-box: fill-box; }
-.fh-fan[data-reveal] .recharts-area { transform-origin: 0% 50%; animation: fh-fan-open 900ms var(--ease-out-expo) both; }
 .fh-fan[data-reveal] .recharts-area { animation-delay: 300ms; }
 .fh-fan[data-reveal] .recharts-area + .recharts-area { animation-delay: 160ms; }
 .fh-fan[data-reveal] .recharts-line { animation: fh-fade 500ms var(--ease-out) both; }
-.fh-fan[data-reveal] .recharts-line + .recharts-line { transform-origin: 0% 50%; animation: fh-fan-line 700ms var(--ease-out-expo) both; }
-@keyframes fh-fan-open { from { opacity: 0; transform: scaleY(0.15); } 40% { opacity: 1; } to { opacity: 1; transform: none; } }
-@keyframes fh-fan-line { from { opacity: 0; transform: scaleX(0.4); } to { opacity: 1; transform: none; } }
 :root[data-motion="reduced"] .fh-fan[data-reveal] :is(.recharts-area, .recharts-line) { animation: fh-fade 140ms linear both; transform: none; }
 
 /* Import: parsed rows decode in one by one with a drawn tick; the done badge is a lit gain dome. */
-.fh-decode { animation: fh-decode 340ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
-@keyframes fh-decode { from { opacity: 0; transform: translateX(-6px); filter: blur(2px); } }
 .fh-decode-tick { flex: none; color: var(--gain-text); animation: fh-pop 380ms var(--spring-pop) both; animation-delay: calc(var(--i, 0) * 70ms + 180ms); }
 :root[data-motion="reduced"] :is(.fh-decode, .fh-decode-tick) { animation: fh-fade 140ms linear both; }
 .fh-done-badge {
@@ -634,14 +619,12 @@ button.fh-chip[data-kind="cat"]:active, button.fh-chip[data-kind="cat"][data-sta
 .fh-figure-action:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* Reconcile: an empty statement field is neutral, not a warning. */
-.fh-recon[data-empty] { background: var(--bg-surface-2); color: var(--text-secondary); box-shadow: inset 0 0 0 1px var(--border-subtle); }
+.fh-recon[data-empty] { background: var(--bg-surface-2); color: var(--text-secondary); box-shadow: none; outline: 1px solid var(--border-subtle); outline-offset: -1px; }
 /* Reconcile success — the C3 "quiet check" (≤ 600 ms): the ring fades in, the tick draws; reduced motion crossfades. */
 .fh-recon-done { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0 8px; color: var(--gain-text); }
-.fh-recon-ring { stroke: currentColor; opacity: 0.28; animation: fh-recon-ring 240ms var(--ease-out, ease-out) both; }
+.fh-recon-ring { stroke: currentColor; opacity: 0.28; }
 .fh-recon-tick { stroke: currentColor; stroke-dasharray: 1; stroke-dashoffset: 1; animation: fh-recon-tick 320ms var(--ease-out, ease-out) 140ms forwards; }
 .fh-recon-done[data-reduced] .fh-recon-ring, .fh-recon-done[data-reduced] .fh-recon-tick { animation: none; stroke-dashoffset: 0; }
-.fh-recon-done[data-reduced] { animation: fh-recon-fade 200ms ease-out both; }
-@keyframes fh-recon-ring { from { opacity: 0; } to { opacity: 0.28; } }
+.fh-recon-done[data-reduced] { animation: fh-fade 200ms ease-out both; }
 @keyframes fh-recon-tick { to { stroke-dashoffset: 0; } }
-@keyframes fh-recon-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .fh-recon-ring, .fh-recon-tick { animation: none; stroke-dashoffset: 0; } }

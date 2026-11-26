@@ -263,7 +263,8 @@ pub enum BalanceSource {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClosingBalance {
-    /// Balance.
+    /// Balance in the ledger's sign (a liability owed is negative): the CSV balance column follows `invert`; OFX
+    /// `LEDGERBAL` is taken as sent (OFX signs from the account holder's side, so an owed card balance is negative).
     pub balance: Decimal,
     /// As-of date (OFX `DTASOF`, else the latest transaction date).
     pub as_of: Option<NaiveDate>,
@@ -276,7 +277,10 @@ pub struct ClosingBalance {
 /// `true` for QIF cleared-status text that means the bank has cleared the row (`*`, `c`, `X`, `R`).
 #[must_use]
 pub fn qif_cleared(flag: Option<&str>) -> bool {
-    matches!(flag.map(str::trim), Some("*" | "c" | "C" | "x" | "X" | "R" | "r"))
+    matches!(
+        flag.map(str::trim),
+        Some("*" | "c" | "C" | "x" | "X" | "R" | "r")
+    )
 }
 
 impl ParsedStatement {
@@ -284,7 +288,7 @@ impl ParsedStatement {
     ///
     /// - OFX/QFX: the `<LEDGERBAL>` of the section whose account number's last four digits appear in
     ///   `account_name`, else of the only section that has one.
-    /// - CSV: the balance-column value on the latest-dated row; for equal dates the last such row in file order.
+    /// - CSV: the balance-column value of the closing row of the latest date ([`csv_closing`]).
     /// - QIF: none (the format carries no statement balance).
     #[must_use]
     pub fn closing_balance(&self, account_name: &str) -> Option<ClosingBalance> {
@@ -315,15 +319,8 @@ impl ParsedStatement {
                 })
             }
             ImportFormat::Csv => {
-                let mut best: Option<(NaiveDate, Decimal)> = None;
-                for t in self.transactions() {
-                    if let Some(b) = t.balance
-                        && best.is_none_or(|(d, _)| t.date >= d)
-                    {
-                        best = Some((t.date, b));
-                    }
-                }
-                best.map(|(d, b)| ClosingBalance {
+                let rows: Vec<&StatementTxn> = self.transactions().collect();
+                csv_closing(&rows).map(|(d, b)| ClosingBalance {
                     balance: b,
                     as_of: Some(d),
                     currency: None,
@@ -333,6 +330,52 @@ impl ParsedStatement {
             ImportFormat::Qif => None,
         }
     }
+}
+
+/// The closing `(date, balance)` of a CSV statement: the balance column on the last row of the latest date.
+///
+/// Bank exports list rows oldest first or newest first, so "last" is worked out rather than taken from file order:
+/// 1. one row on the latest date (with a balance): that row;
+/// 2. several: the row whose balance no other same-day row continues from (`balance(r) + amount(s) = balance(s)`),
+///    when exactly one row qualifies;
+/// 3. otherwise the file's direction decides (the majority of date steps between neighbouring rows): the first
+///    same-day row of a newest-first file, the last one of an oldest-first file (ties count as oldest first).
+///
+/// Balances carry the ledger's sign (the mapping's `invert` applies to them too), so an owed card balance is
+/// negative. The mock (`closingBalance` in `src/backend/mock/commands/finance.ts`) implements the same rule.
+#[must_use]
+pub fn csv_closing(rows: &[&StatementTxn]) -> Option<(NaiveDate, Decimal)> {
+    let latest = rows
+        .iter()
+        .filter(|t| t.balance.is_some())
+        .map(|t| t.date)
+        .max()?;
+    let day: Vec<(usize, Decimal, Decimal)> = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.date == latest)
+        .filter_map(|(i, t)| t.balance.map(|b| (i, t.amount, b)))
+        .collect();
+    if let [(_, _, b)] = day.as_slice() {
+        return Some((latest, *b));
+    }
+    let ends: Vec<&(usize, Decimal, Decimal)> = day
+        .iter()
+        .filter(|(i, _, b)| !day.iter().any(|(j, a, sb)| j != i && *b + *a == *sb))
+        .collect();
+    if let [(_, _, b)] = ends.as_slice() {
+        return Some((latest, *b));
+    }
+    let (mut up, mut down) = (0usize, 0usize);
+    for w in rows.windows(2) {
+        match w[1].date.cmp(&w[0].date) {
+            std::cmp::Ordering::Greater => up += 1,
+            std::cmp::Ordering::Less => down += 1,
+            std::cmp::Ordering::Equal => {}
+        }
+    }
+    let pick = if down > up { day.first() } else { day.last() };
+    pick.map(|(_, _, b)| (latest, *b))
 }
 
 /// Column mapping for CSV imports (IPC `ImportMapping`). Column indexes are 0-based.

@@ -19,7 +19,7 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   icon?: IconComponent | ReactNode;
   /** Trailing icon. */
   iconRight?: IconComponent | ReactNode;
-  /** Trailing shortcut hint — an inline mini keycap that depresses with the real key. */
+  /** Trailing shortcut hint: a Kbd chip that goes down when this exact shortcut fires. */
   kbd?: string;
   loading?: boolean;
   /** Controlled success morph: flips to a drawn check for 1200ms whenever this becomes true. */
@@ -33,9 +33,9 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   block?: boolean;
   /** Latched (toolbars, toggles): the key stays half-down. */
   active?: boolean;
-  /** Hover micro-motion for the leading icon (§5.7). */
+  /** @deprecated icon hover motions are retired in v3 (nothing moves on hover); accepted and ignored. */
   iconMotion?: IconMotion;
-  /** Sheen sweep on hover — defaults to on for primary lg/xl (§4.6). */
+  /** @deprecated the sheen sweep is retired in v3; accepted and ignored. */
   sheen?: boolean;
   onClick?: (e: MouseEvent<HTMLButtonElement>) => unknown;
   ref?: Ref<HTMLButtonElement>;
@@ -52,10 +52,10 @@ export function renderIcon(icon: IconComponent | ReactNode | undefined) {
 }
 
 /**
- * Button — a tactile keycap (docs/DESIGN.md §4.2, §6.1). Seven variants × five sizes on the `.slab` recipe: the face
- * lifts 1px on hover, seats onto its side in 70ms on press (pure CSS, 1-frame feedback) and springs back with 11%
- * overshoot. `active` latches it half-down. Loading fades the label behind a spinner; success lifts the label out and
- * draws a check. Primary lg/xl buttons get a one-shot sheen sweep on hover.
+ * Button — a key (docs/DESIGN.md §5.1). Seven variants × five sizes on the `.slab` recipe. Primary is the ink key
+ * (≤ 1 per view), secondary a paper key, ghost an ink wash. Hover is an instant wash (out 120ms); press travels 0.5px
+ * and the bottom edge collapses in 60ms (pure CSS, 1-frame feedback); release 100ms ease-out, no overshoot. `active`
+ * latches it down. Loading fades the label behind a spinner; success draws a check.
  */
 export function Button({
   variant = "secondary",
@@ -70,8 +70,8 @@ export function Button({
   tooltip,
   block,
   active,
-  iconMotion,
-  sheen,
+  iconMotion: _im,
+  sheen: _sh,
   className,
   children,
   disabled,
@@ -103,9 +103,10 @@ export function Button({
     prevSuccess.current = success;
   }, [success]);
 
+  void _im;
+  void _sh;
   const busy = !!loading || pending;
   const iconOnly = !children && !!icon;
-  const withSheen = sheen ?? (variant === "primary" && (size === "lg" || size === "xl"));
 
   const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
     if (busy) {
@@ -138,17 +139,11 @@ export function Button({
       data-block={block ? "" : undefined}
       data-active={active ? "" : undefined}
       data-success={showSuccess ? "" : undefined}
-      data-icon-motion={iconMotion}
       aria-busy={busy || undefined}
       disabled={disabled}
       onClick={handleClick}
       {...rest}
     >
-      {withSheen ? (
-        <span className="emp-btn-sheen-clip" aria-hidden>
-          <span className="emp-btn-sheen" />
-        </span>
-      ) : null}
       <span className="emp-btn-label">
         {renderIcon(icon)}
         {children}
@@ -165,12 +160,12 @@ export function Button({
           <m.span
             key="ok"
             className="emp-btn-overlay"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0, transition: { duration: 0.16, ease: ease.out } }}
-            exit={{ opacity: 0, transition: { duration: 0.16 } }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 0.12, ease: ease.out } }}
+            exit={{ opacity: 0, transition: { duration: 0.1 } }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <m.path d="M5 12.5l4.5 4.5L19 7.5" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.28, ease: ease.out, delay: 0.06 }} />
+              <m.path d="M5 12.5l4.5 4.5L19 7.5" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.12, ease: ease.out }} />
             </svg>
             <span className="sr-only">Done</span>
           </m.span>

@@ -578,6 +578,18 @@ impl Store {
                 for u in h.unsupported {
                     report.warnings.push(format!("{title}: {u}"));
                 }
+                // Page icons: Notion's emoji mapped to Lucide (unmapped emoji leave the page without an icon).
+                if row_header.is_none()
+                    && let Some(icon) = h.icon
+                {
+                    self.page_update_meta(
+                        &id,
+                        crate::model::PageMetaPatch {
+                            icon: Some(Some(icon)),
+                            ..Default::default()
+                        },
+                    )?;
+                }
                 (h.doc, h.unresolved)
             } else {
                 let md = match &row_header {

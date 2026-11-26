@@ -36,7 +36,7 @@ export function Connect({ step, value, onChange }: StepProps) {
             </>
           ) : (
             <>
-              <span className="flex-1 text-body-sm text-secondary">You’ll create your own Google client — about five minutes, once.</span>
+              <span className="flex-1 text-body-sm text-secondary">You create your own Google client once. It takes about five minutes.</span>
               <Button size="sm" variant="secondary" onClick={() => setGoogleOpen(true)}>Connect Google</Button>
             </>
           )}

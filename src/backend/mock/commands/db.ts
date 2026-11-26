@@ -2017,7 +2017,7 @@ export const handlers: MockHandlers = {
         workspaceId: req.target.workspaceId,
         parentId: req.target.parentId,
         title: req.target.title || 'Imported data',
-        icon: { t: 'emoji', v: '📥' },
+        icon: { t: 'lucide', v: 'inbox' },
         properties: cols.map((c) => ({ name: c.name, type: c.inferred })),
       });
       dbId = created.db.id;

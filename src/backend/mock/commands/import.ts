@@ -15,6 +15,7 @@ import { BackendError } from '../../errors';
 import type { BlockColor, CellValue, Id, ImportKind, PropType, TipTapDoc, TipTapNode } from '../../types';
 import type { GrantsService, MockCallCtx, MockCtx, MockHandlers } from '../ctx';
 import { b, makeDoc, SCHEMA_VERSION } from '../lib/doc';
+import { iconOf, lucide } from '../lib/icons';
 import type { DbApi } from './db';
 import { inferType, parseBool, parseCsv, parseDateInput, parseNumber } from '@/features/databases/engine/csv';
 import { unzip } from '@/features/sheets/engine/xlsx';
@@ -170,9 +171,10 @@ export function parseInline(src: string, cx: MdContext = {}): TipTapNode[] {
 
 // ───────────────────────────────────────────────────────────────────────────── block markdown
 
+/** Alert/callout kinds → Lucide icons (no emoji; same names the Rust importer uses for GitHub alerts). */
 const CALLOUT_ICON: Record<string, string> = {
-  note: '📝', info: 'ℹ️', tip: '💡', hint: '💡', important: '❗', warning: '⚠️', caution: '⚠️', danger: '🚨',
-  success: '✅', question: '❓', example: '📎', quote: '💬', abstract: '📋', todo: '☑️', bug: '🐞',
+  note: 'info', info: 'info', tip: 'lightbulb', hint: 'lightbulb', important: 'circle-alert', warning: 'triangle-alert', caution: 'octagon-x', danger: 'siren',
+  success: 'circle-check', question: 'circle-help', example: 'paperclip', quote: 'message-circle', abstract: 'clipboard-list', todo: 'square-check', bug: 'bug',
 };
 const CALLOUT_TONE: Record<string, BlockColor> = {
   note: 'blue', info: 'blue', tip: 'green', hint: 'green', important: 'purple', warning: 'yellow', caution: 'orange',
@@ -322,7 +324,7 @@ export function parseMarkdown(md: string, cx: MdContext = {}, opts: { takeTitle?
       if (call) {
         const kind = call[1].toLowerCase();
         const text = [call[2], ...quoted.slice(1)].filter(Boolean).join('\n');
-        push(b.callout(parseInline(text, cx), { icon: { t: 'emoji', v: CALLOUT_ICON[kind] ?? '💡' }, tone: CALLOUT_TONE[kind] ?? 'gray' }));
+        push(b.callout(parseInline(text, cx), { icon: lucide(CALLOUT_ICON[kind] ?? 'lightbulb'), tone: CALLOUT_TONE[kind] ?? 'gray' }));
       } else push(b.quote(parseInline(quoted.join('\n'), cx)));
       continue;
     }
@@ -346,7 +348,7 @@ export function parseMarkdown(md: string, cx: MdContext = {}, opts: { takeTitle?
       if (assetId) push(b.image(assetId, { caption: img[2] ? img[1] : '' }));
       else {
         const href = safeHref(path);
-        push(b.p(href ? [{ type: 'text', text: img[1] || path, marks: [{ type: 'link', attrs: { href } }] }] : [{ type: 'text', text: `🖼 ${img[1] || path}` }]));
+        push(b.p(href ? [{ type: 'text', text: img[1] || path, marks: [{ type: 'link', attrs: { href } }] }] : [{ type: 'text', text: `Image: ${img[1] || path}` }]));
       }
       continue;
     }
@@ -381,7 +383,7 @@ export function parseMarkdown(md: string, cx: MdContext = {}, opts: { takeTitle?
       .filter(([k]) => k !== 'title')
       .map(([k, v]) => `${k}: ${v}`)
       .join('\n');
-    if (text) blocks.unshift(b.callout([{ type: 'text', text }], { icon: { t: 'emoji', v: '🏷️' }, tone: 'gray' }));
+    if (text) blocks.unshift(b.callout([{ type: 'text', text }], { icon: lucide('clipboard-list'), tone: 'gray' }));
   }
   return out;
 }
@@ -539,18 +541,19 @@ function htmlBlocks(el: Element, cx: HtmlCx): TipTapNode[] {
     }
     case 'aside': {
       const iconEl = el.querySelector('.icon');
-      const icon = (iconEl?.textContent ?? '').trim() || '💡';
+      // Notion's callout emoji → its Lucide icon (unmapped: the default lightbulb).
+      const icon = iconOf(iconEl?.textContent) ?? lucide('lightbulb');
       iconEl?.closest('div,span')?.remove();
       const body = el.querySelector(':scope > div:last-child') ?? el;
-      return [b.callout(trimInline(htmlInline(body, cx)), { icon: { t: 'emoji', v: icon.slice(0, 8) }, tone: colors.bg ?? colors.color ?? 'gray' })];
+      return [b.callout(trimInline(htmlInline(body, cx)), { icon, tone: colors.bg ?? colors.color ?? 'gray' })];
     }
     case 'figure': {
       if (cls.includes('callout')) {
         const iconEl = el.querySelector('.icon');
-        const icon = (iconEl?.textContent ?? '').trim() || '💡';
+        const icon = iconOf(iconEl?.textContent) ?? lucide('lightbulb');
         const parts = Array.from(el.children);
         const body = parts.find((c) => !c.querySelector('.icon') && !c.classList.contains('icon')) ?? parts[parts.length - 1] ?? el;
-        return [b.callout(trimInline(htmlInline(body, cx)), { icon: { t: 'emoji', v: icon.slice(0, 8) }, tone: colors.bg ?? colors.color ?? 'gray' })];
+        return [b.callout(trimInline(htmlInline(body, cx)), { icon, tone: colors.bg ?? colors.color ?? 'gray' })];
       }
       if (cls.includes('equation')) {
         const tex = el.querySelector('annotation')?.textContent ?? el.textContent ?? '';
@@ -570,7 +573,7 @@ function htmlBlocks(el: Element, cx: HtmlCx): TipTapNode[] {
         const assetId = cx.assetFor(src);
         if (assetId) return [b.image(assetId, { caption })];
         const href = safeHref(src);
-        return [b.p(href ? [{ type: 'text', text: caption || href, marks: [{ type: 'link', attrs: { href } }] }] : [{ type: 'text', text: `🖼 ${caption || decodeURIComponent(src)}` }])];
+        return [b.p(href ? [{ type: 'text', text: caption || href, marks: [{ type: 'link', attrs: { href } }] }] : [{ type: 'text', text: `Image: ${caption || decodeURIComponent(src)}` }])];
       }
       const a = el.querySelector('a');
       if (a) {
@@ -722,7 +725,7 @@ async function importMarkdownFiles(ctx: MockCallCtx, files: Files, workspaceId: 
     const sibling = md.find((p) => p.replace(/\.(md|markdown)$/i, '') === dir);
     const parent = ensureFolder(dirOf(dir));
     const title = dir.split('/').pop() ?? dir;
-    const rec = ctx.pages.create({ workspaceId, parentId: parent, kind: 'doc', title, icon: sibling ? undefined : { t: 'emoji', v: '📁' }, silent: true });
+    const rec = ctx.pages.create({ workspaceId, parentId: parent, kind: 'doc', title, icon: sibling ? undefined : lucide('folder'), silent: true });
     if (parent === parentId) created.rootIds.push(rec.id);
     created.pageIds.push(rec.id);
     folderPage.set(dir, rec.id);
@@ -926,7 +929,7 @@ async function importNotionFiles(ctx: MockCallCtx, files: Files, workspaceId: Id
         title = (doc.querySelector('.page-title')?.textContent ?? '').trim() || title;
       }
     }
-    const rec = ctx.pages.create({ workspaceId, parentId: parent, kind: 'doc', title: title || 'Untitled', icon: icon ? { t: 'emoji', v: icon.slice(0, 8) } : undefined, silent: true });
+    const rec = ctx.pages.create({ workspaceId, parentId: parent, kind: 'doc', title: title || 'Untitled', icon: iconOf(icon), silent: true });
     it.newId = rec.id;
     created.pageIds.push(rec.id);
     if (parent === parentId) created.rootIds.push(rec.id);
@@ -1031,7 +1034,7 @@ async function importNotionFiles(ctx: MockCallCtx, files: Files, workspaceId: Id
         workspaceId,
         parentId: parent,
         title: it.title || 'Untitled database',
-        icon: { t: 'emoji', v: '🗂️' },
+        icon: lucide('folder-open'),
         properties: header.map((name, k) => ({ name, type: types[k], ...(options[k] ? { config: { options: options[k] } } : {}) })),
         silent: true,
       });

@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef } from "react";
-import { isReducedMotion } from "./motion/useReducedEffects";
 
 export interface GlideHighlightProps {
   /** Selector for the highlighted item inside the container (Radix menus: `[data-highlighted]`; cmdk: `[data-selected="true"]`). */
@@ -9,19 +8,19 @@ export interface GlideHighlightProps {
   /** Watched attributes (defaults cover Radix and cmdk). */
   attributes?: string[];
   /**
-   * Velocity squash: the plate stretches along its travel and thins across it, proportional to the distance jumped
+   * @deprecated the velocity squash is retired in v3 (accepted and ignored). Formerly: the plate stretched along its travel, proportional to the distance jumped
    * (≤ 14%), then settles — the S11 sidebar feel. Uses the independent `scale` property, so it composes with the
    * glide's transform. Off under reduced motion.
    */
   squash?: boolean;
 }
 
-const SQUASH_MS = 380;
+
 
 /**
- * A single highlight plate that glides between items on the `morph` spring instead of each item lighting up on its
- * own (docs/DESIGN.md §6.1 menus, S7 palette). Render it as a child of the positioned scroll container that holds the
- * items. Transform-only; the plate jumps (no glide) when it first appears or under reduced motion.
+ * A single highlight plate under the highlighted item of a menu / palette / list (docs/DESIGN.md §5.5). Render it as a
+ * child of the positioned scroll container that holds the items. It moves instantly (register.ts C0): highlight
+ * follows the pointer and the arrow keys with no glide.
  */
 export function GlideHighlight({ selector = '[data-highlighted], [data-selected="true"]', tone = "ghost", attributes = ["data-highlighted", "data-selected", "aria-selected"], squash = false }: GlideHighlightProps) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -33,14 +32,10 @@ export function GlideHighlight({ selector = '[data-highlighted], [data-selected=
     let shown = false;
     let raf = 0;
     let last: { x: number; y: number } | null = null;
-    const doSquash = (dx: number, dy: number) => {
-      const dist = Math.hypot(dx, dy);
-      if (!squash || dist < 4 || isReducedMotion() || typeof plate.animate !== "function") return;
-      const s = Math.min(dist / 1040, 0.14);
-      const along = 1 + s;
-      const across = 1 - s * 0.35;
-      const mid = Math.abs(dy) >= Math.abs(dx) ? `${across} ${along}` : `${along} ${across}`;
-      plate.animate([{ scale: "1 1" }, { scale: mid, offset: 0.32 }, { scale: "1 1" }], { duration: SQUASH_MS, easing: "cubic-bezier(.3,0,.3,1)" });
+    // v3: the plate moves instantly (register.ts C0); the velocity squash is retired.
+    const doSquash = (_dx: number, _dy: number) => {
+      void _dx;
+      void _dy;
     };
     const update = () => {
       raf = 0;

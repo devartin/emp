@@ -34,7 +34,7 @@ export const handlers: MockHandlers = {
         workspaceId: req.workspaceId,
         parentId: req.parentId,
         title: 'Trip expenses',
-        icon: { t: 'emoji', v: '🧳' },
+        icon: { t: 'lucide', v: 'luggage' },
         properties: [{ name: 'Item', type: 'title' }, { name: 'Category', type: 'select', config: { options: [{ name: 'Travel' }, { name: 'Food' }, { name: 'Transport' }, { name: 'Activities' }] } }, { name: 'Amount', type: 'money', config: { currency: 'USD' } }, { name: 'People', type: 'number' }],
       });
       const schema = db.schema(ctx, res.db.id);
@@ -48,7 +48,7 @@ export const handlers: MockHandlers = {
       workspaceId: req.workspaceId,
       parentId: req.parentId,
       title: 'Trip expenses',
-      icon: { t: 'emoji', v: '🧳' },
+      icon: { t: 'lucide', v: 'luggage' },
       build: (b) => {
         const sh = b.sheet('Expenses');
         sh.row('A1', ['Item', 'Category', 'Amount', 'People', 'Per person'], { font: { b: true }, fill: '#F1F1F0' });

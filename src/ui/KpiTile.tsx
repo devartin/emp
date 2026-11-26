@@ -2,17 +2,17 @@ import { Clock, Info } from "lucide-react";
 import type { ReactNode } from "react";
 import { Sparkline } from "@/charts/Sparkline";
 import { cn } from "@/lib/cn";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatPercent } from "@/lib/format";
 import { currencyDecimals, moneyParts, toNumber, type Money } from "@/lib/money";
 import { Card } from "./Card";
-import { DeltaPill } from "./DeltaPill";
+import { Delta } from "./Delta";
 import { RollingNumber } from "./motion/RollingNumber";
 import { Skeleton } from "./Skeleton";
 import { Tooltip } from "./Tooltip";
 
 export interface KpiTileProps {
   label: ReactNode;
-  /** Money (symbol rendered at 0.7×) or a plain number. */
+  /** Money (symbol at full size) or a plain number. */
   value: Money | number | null;
   /** Format for numeric values. */
   format?: (n: number) => string;
@@ -22,13 +22,13 @@ export interface KpiTileProps {
   spark?: readonly number[];
   /** Sparkline colour: "ink" (default, §5.6 single-series trend lines are ink), "trend", "accent" or any CSS colour. */
   sparkColor?: "ink" | "trend" | "accent" | string;
-  /** Count up only once per session for this key (hero numbers). */
+  /** @deprecated count-up is retired; ignored. */
   countUpKey?: string;
   info?: ReactNode;
   stale?: boolean | string;
   loading?: boolean;
   size?: "md" | "xl";
-  /** Cached value to count up from on first mount. */
+  /** @deprecated count-up is retired; ignored. */
   from?: number;
   /** Treat as sensitive (default true for Money). */
   sensitive?: boolean;
@@ -38,16 +38,16 @@ export interface KpiTileProps {
 }
 
 /**
- * KPI tile (docs/DESIGN.md §6.3): a machined panel; when clickable it lifts, catches the pointer light (edge + specular)
- * and tilts ≤ 3°. Value is a RollingNumber (count-up once, then rolls); delta pill; 32px ink sparkline; stale →
- * secondary value + clock. Min 200×112 (128 with sparkline).
+ * KPI figure (docs/DESIGN.md §6.3): a labelled figure, not a tile — label 12/16 secondary in sentence case, value
+ * num-lg 20/26 w500 (xl = the one hero, 32/38 w600), the currency symbol at full size, a text delta, an optional ink
+ * sparkline. The value is in the DOM from the first frame (no count-up); stale → secondary value + clock.
  */
-export function KpiTile({ label, value, format, noCents, delta, spark, sparkColor = "ink", countUpKey, info, stale, loading, size = "md", from, sensitive, footer, onClick, className }: KpiTileProps) {
+export function KpiTile({ label, value, format, noCents, delta, spark, sparkColor = "ink", info, stale, loading, size = "md", sensitive, footer, onClick, className }: KpiTileProps) {
   const isMoney = value !== null && typeof value === "object";
   const sens = sensitive ?? isMoney;
   let body: ReactNode;
   if (loading || value === null) {
-    body = <Skeleton width="62%" height={size === "xl" ? 40 : 28} radius={6} />;
+    body = <Skeleton width="62%" height={size === "xl" ? 32 : 22} radius={4} />;
   } else if (isMoney) {
     const m = value as Money;
     const digits = noCents ? 0 : currencyDecimals(m.currency);
@@ -58,7 +58,7 @@ export function KpiTile({ label, value, format, noCents, delta, spark, sparkColo
       <>
         {parts.sign ? <span>{parts.sign}</span> : null}
         {parts.symbolPosition === "prefix" ? <span className="emp-kpi-sym">{parts.symbol}</span> : null}
-        <RollingNumber value={n} format={fmt} from={from} countUpKey={countUpKey} sensitive={sens} />
+        <RollingNumber value={n} format={fmt} sensitive={sens} />
         {parts.symbolPosition === "suffix" ? (
           <span className="emp-kpi-sym" data-pos="suffix">
             {parts.symbol.trim()}
@@ -67,7 +67,7 @@ export function KpiTile({ label, value, format, noCents, delta, spark, sparkColo
       </>
     );
   } else {
-    body = <RollingNumber value={value as number} format={format} from={from} countUpKey={countUpKey} sensitive={sens} />;
+    body = <RollingNumber value={value as number} format={format} sensitive={sens} />;
   }
 
   const staleText = typeof stale === "string" ? stale : "Showing cached data";
@@ -76,9 +76,6 @@ export function KpiTile({ label, value, format, noCents, delta, spark, sparkColo
       className={cn("emp-kpi", className)}
       data-spark={spark ? "" : undefined}
       interactive={!!onClick}
-      light={!!onClick}
-      specular={!!onClick}
-      tilt={!!onClick}
       onClick={onClick}
     >
       <div>
@@ -105,8 +102,15 @@ export function KpiTile({ label, value, format, noCents, delta, spark, sparkColo
       </div>
       {delta || footer ? (
         <div className="emp-kpi-foot">
-          {delta && !loading ? <DeltaPill value={delta.value} invert={delta.invert} label={delta.label ?? "vs last month"} format={delta.format} /> : null}
-          {loading && delta ? <Skeleton width={110} height={16} radius={9999} /> : null}
+          {delta && !loading ? (
+            <Delta
+              text={typeof delta.format === "function" ? delta.format(delta.value) : formatPercent(Math.abs(delta.value), { digits: 1 })}
+              dir={!Number.isFinite(delta.value) || Math.abs(delta.value) < 1e-12 ? "flat" : delta.value > 0 ? "up" : "down"}
+              invert={delta.invert}
+              label={delta.label ?? "vs last month"}
+            />
+          ) : null}
+          {loading && delta ? <Skeleton width={110} height={14} radius={4} /> : null}
           {footer}
         </div>
       ) : null}

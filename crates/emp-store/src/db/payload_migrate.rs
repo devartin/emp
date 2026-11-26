@@ -7,8 +7,8 @@
 //! resumable after a crash or lock, and a migration function must be idempotent (it may see a row twice if a batch
 //! is retried). Until a migration finishes, readers keep upcasting old payloads lazily ([`crate::codec::upcast`]).
 //!
-//! Schema v2 registers the emoji → Lucide icon rewrite ([`ICON_MIGRATIONS`]: workspace icons, page icons and
-//! database row-template icons). `versions` snapshots are never rewritten (they are historical and upcast on read).
+//! Schema v2 registers the emoji → Lucide icon rewrite ([`ICON_MIGRATIONS`]: workspace icons, page icons,
+//! database row-template icons, database row icons and the icons inside page documents, callouts included). `versions` snapshots are never rewritten (they are historical and upcast on read).
 
 use emp_crypto::TableTag;
 use rusqlite::params_from_iter;
@@ -70,8 +70,23 @@ fn icons_database(mut v: Value) -> Result<Option<Value>> {
     Ok(changed.then_some(v))
 }
 
+/// Database row payloads: `icon` (rows created from an emoji row template copied it).
+fn icons_row(v: Value) -> Result<Option<Value>> {
+    icons_workspace(v)
+}
+
+/// Page documents (`{v, format, doc}`): callout icons and other nodes' icon attributes ([`crate::icons::migrate_doc_icons`]).
+fn icons_doc(mut v: Value) -> Result<Option<Value>> {
+    let changed = v
+        .get_mut("doc")
+        .is_some_and(crate::icons::migrate_doc_icons);
+    Ok(changed.then_some(v))
+}
+
 /// Schema v2: emoji icons become Lucide icons through the canonical map (`src/ui/icons/emoji-map.json`); unmapped
-/// emoji lose their icon. Idempotent (a migrated payload has no `{t:'emoji'}` left).
+/// emoji lose their icon, except callouts, which fall back to `lightbulb` (legacy bare-string callout icons from the
+/// old importers included). Idempotent (a migrated payload has no emoji icon left). Mirrors the mock's
+/// `migrateIcons` (`src/backend/mock/persist.ts`).
 pub const ICON_MIGRATIONS: &[PayloadMigration] = &[
     PayloadMigration {
         id: "v2-icons-lucide-workspaces",
@@ -87,6 +102,16 @@ pub const ICON_MIGRATIONS: &[PayloadMigration] = &[
         id: "v2-icons-lucide-databases",
         table: TableTag::Databases,
         apply: icons_database,
+    },
+    PayloadMigration {
+        id: "v2-icons-lucide-rows",
+        table: TableTag::DbRows,
+        apply: icons_row,
+    },
+    PayloadMigration {
+        id: "v2-icons-lucide-docs",
+        table: TableTag::PageDocs,
+        apply: icons_doc,
     },
 ];
 
@@ -528,10 +553,116 @@ mod tests {
     }
 
     #[test]
+    fn v2_rewrites_row_icons_and_document_callouts() {
+        use crate::codec::RecordLoc;
+        use crate::model::TipTapDoc;
+        // Row payloads: `icon` as on pages.
+        let row = serde_json::json!({"values": {}, "icon": {"t": "emoji", "v": "\u{1F680}"}});
+        assert_eq!(
+            icons_row(row).unwrap().unwrap()["icon"],
+            serde_json::json!({"t": "lucide", "v": "rocket"})
+        );
+        assert!(
+            icons_row(serde_json::json!({"values": {}}))
+                .unwrap()
+                .is_none()
+        );
+
+        // A stored document with the old importers' bare-emoji callout icon.
+        let dir = tempfile::tempdir().unwrap();
+        let mut opts = StoreOptions::new(dir.path().join("device.key"));
+        opts.background_indexing = false;
+        let store = Store::create(
+            dir.path(),
+            CreateOptions {
+                password: Some("correct horse battery".to_owned().into()),
+                kdf: emp_crypto::KdfParams::INSECURE_TEST,
+                auto_lock: AutoLock::default(),
+                workspace_name: Some("W".into()),
+            },
+            opts,
+        )
+        .unwrap()
+        .store;
+        let ws = store.workspace_list().unwrap().remove(0).id;
+        let page = store
+            .page_create(PageCreate::new(&ws, None, PageKind::Doc, "Imported"))
+            .unwrap()
+            .meta
+            .id;
+        let legacy: TipTapDoc = serde_json::from_value(serde_json::json!({
+            "type": "doc", "attrs": {"schemaVersion": 1},
+            "content": [{"type": "blockGroup", "content": [{"type": "blockContainer", "attrs": {"id": "b1"},
+                "content": [{"type": "callout", "attrs": {"icon": "\u{1F4CB}", "color": "blue"},
+                    "content": [{"type": "text", "text": "Typed \u{1F600} stays"}]}]}]}]
+        }))
+        .unwrap();
+        let s = store.session().unwrap();
+        let rev = store.doc_get(&page).unwrap().map_or(0, |d| d.1) + 1;
+        let (pid, sess) = (page.clone(), std::sync::Arc::clone(&s));
+        store
+            .write(move |tx| {
+                crate::repo::docs::insert_or_replace_doc(
+                    tx,
+                    &sess.codec,
+                    &pid,
+                    "page",
+                    &legacy,
+                    rev,
+                    0,
+                )
+            })
+            .unwrap();
+        let raw = |store: &Store| -> Value {
+            let (pid, sess) = (page.clone(), std::sync::Arc::clone(&s));
+            store
+                .read(move |c| {
+                    let (rev, enc, payload): (i64, i64, Vec<u8>) = c.query_row(
+                        "SELECT rev, enc, payload FROM page_docs WHERE owner_id = ?1",
+                        [&pid],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )?;
+                    let loc =
+                        RecordLoc::row(TableTag::PageDocs, &pid, u64::try_from(rev).unwrap_or(0));
+                    sess.codec.decode_value(&loc, enc, &payload)
+                })
+                .unwrap()
+        };
+        let callout = |v: &Value| v["doc"]["content"][0]["content"][0]["content"][0].clone();
+        assert_eq!(
+            callout(&raw(&store))["attrs"]["icon"],
+            serde_json::json!("\u{1F4CB}")
+        );
+        // Reads upcast before the payload migration has run.
+        let (doc, _) = store.doc_get(&page).unwrap().unwrap();
+        let read = serde_json::to_value(doc).unwrap();
+        assert_eq!(
+            read["content"][0]["content"][0]["content"][0]["attrs"]["icon"],
+            serde_json::json!({"t": "lucide", "v": "clipboard-list"})
+        );
+        store
+            .write(|tx| schedule(tx, "v2-icons-lucide-docs"))
+            .unwrap();
+        assert_eq!(store.payload_migrations_run(&NoProgress).unwrap(), 1);
+        let after = callout(&raw(&store));
+        assert_eq!(
+            after["attrs"]["icon"],
+            serde_json::json!({"t": "lucide", "v": "clipboard-list"})
+        );
+        assert_eq!(after["attrs"]["color"], "blue");
+        assert_eq!(after["content"][0]["text"], "Typed \u{1F600} stays");
+        assert!(store.integrity_check(&NoProgress).unwrap().ok);
+    }
+
+    #[test]
     fn migration_0002_schedules_the_icon_rewrite() {
         let mut c = rusqlite::Connection::open_in_memory().unwrap();
         crate::db::migrate::migrate(&mut c, None, 0).unwrap();
-        let ids: Vec<String> = pending(&c).unwrap().iter().map(|p| p.id().to_owned()).collect();
+        let ids: Vec<String> = pending(&c)
+            .unwrap()
+            .iter()
+            .map(|p| p.id().to_owned())
+            .collect();
         assert_eq!(
             ids,
             ICON_MIGRATIONS.iter().map(|m| m.id).collect::<Vec<_>>()

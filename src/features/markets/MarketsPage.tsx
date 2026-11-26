@@ -14,7 +14,6 @@ import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
 import { DeltaPill } from "@/ui/DeltaPill";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from "@/ui/Menu";
-import { staggerItem, staggerList } from "@/ui/motion/presets";
 import { EdgeLight } from "@/ui/motion/EdgeLight";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { spring } from "@/ui/motion/tokens";
@@ -60,13 +59,13 @@ export default function MarketsPage({ symbol }: MarketsPageProps) {
         </footer>
       }
     >
-      <m.div className="mk-indices" variants={staggerList(0.04)} initial="hidden" animate="show">
+      <div className="mk-indices">
         {INDICES.map((s) => (
-          <m.div key={s} variants={staggerItem}>
+          <div key={s}>
             <QuoteTile symbol={s} onClick={() => select(s)} selected={s === selected} />
-          </m.div>
+          </div>
         ))}
-      </m.div>
+      </div>
       <div className="fh-grid">
         <div className="fh-span-4">
           <WatchlistPanel selected={selected} onSelect={select} />

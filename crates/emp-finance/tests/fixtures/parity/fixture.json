@@ -1,0 +1,814 @@
+{
+  "about": "Mock-desktop parity fixture (PROGRAMME-v3 K5). The same accounts, transactions, statement imports (OFX, CSV oldest-first, CSV newest-first, an inverted card CSV, QIF), tax inputs (every deduction mode) and Tax Organizer deduction rows run through the browser mock (src/backend/mock/parity.test.ts) and the desktop command path (src-tauri/src/commands/finance.rs, test parity_fixture_matches_the_mock); both must produce exactly `expect`. Spending follows N-MO3: uncategorised inflows are neither income nor spending, saving categories are never spending.",
+  "today": "2026-11-26",
+  "month": "2026-11",
+  "accounts": [
+    {
+      "name": "Everyday Checking 2333",
+      "type": "checking",
+      "opening": "1000.00"
+    },
+    {
+      "name": "Rewards Card",
+      "type": "credit_card",
+      "opening": "200.00"
+    },
+    {
+      "name": "High-Yield Savings",
+      "type": "savings",
+      "opening": "2500.00"
+    },
+    {
+      "name": "Joint Checking 7781",
+      "type": "checking",
+      "opening": "1047.98"
+    },
+    {
+      "name": "Travel Card",
+      "type": "credit_card",
+      "opening": "0.00"
+    }
+  ],
+  "transactions": [
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-09-01",
+      "amount": "3000.00",
+      "payee": "Acme Payroll",
+      "category": "Paycheck"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-10-01",
+      "amount": "3000.00",
+      "payee": "Acme Payroll",
+      "category": "Paycheck"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-11-01",
+      "amount": "3000.00",
+      "payee": "Acme Payroll",
+      "category": "Paycheck"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-09-05",
+      "amount": "-150.25",
+      "payee": "Fresh Grocer",
+      "category": "Groceries"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-10-06",
+      "amount": "-162.10",
+      "payee": "Fresh Grocer",
+      "category": "Groceries"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-11-04",
+      "amount": "-171.45",
+      "payee": "Fresh Grocer",
+      "category": "Groceries"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-09-10",
+      "amount": "-95.00",
+      "payee": "City Power",
+      "category": "Utilities"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-10-10",
+      "amount": "-95.00",
+      "payee": "City Power",
+      "category": "Utilities"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-11-10",
+      "amount": "-97.30",
+      "payee": "City Power",
+      "category": "Utilities"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-11-08",
+      "amount": "-48.60",
+      "payee": "Noodle Bar",
+      "category": "Dining out"
+    },
+    {
+      "account": "Everyday Checking 2333",
+      "date": "2026-11-02",
+      "amount": "-500.00",
+      "payee": "Emergency fund top-up",
+      "category": "Emergency fund"
+    },
+    {
+      "account": "Rewards Card",
+      "date": "2026-11-12",
+      "amount": "-64.30",
+      "payee": "Bistro 12",
+      "category": "Dining out"
+    },
+    {
+      "account": "Rewards Card",
+      "date": "2026-10-20",
+      "amount": "-29.99",
+      "payee": "Cinema City",
+      "category": "Entertainment"
+    }
+  ],
+  "imports": [
+    {
+      "file": "checking.ofx",
+      "account": "Everyday Checking 2333"
+    },
+    {
+      "file": "card.csv",
+      "account": "Rewards Card",
+      "mapping": {
+        "date": 0,
+        "payee": 1,
+        "amount": 2,
+        "balance": 3,
+        "dateFormat": "YYYY-MM-DD",
+        "invert": false,
+        "decimalComma": false
+      }
+    },
+    {
+      "file": "joint-newest-first.csv",
+      "account": "Joint Checking 7781",
+      "mapping": {
+        "date": 0,
+        "payee": 1,
+        "amount": 2,
+        "balance": 3,
+        "dateFormat": "YYYY-MM-DD",
+        "invert": false,
+        "decimalComma": false
+      },
+      "note": "newest first: the closing balance is the first row of the latest date"
+    },
+    {
+      "file": "travel-card-inverted.csv",
+      "account": "Travel Card",
+      "mapping": {
+        "date": 0,
+        "payee": 1,
+        "amount": 2,
+        "balance": 3,
+        "dateFormat": "YYYY-MM-DD",
+        "invert": true,
+        "decimalComma": false
+      },
+      "note": "positive charges and a positive owed balance: invert flips both"
+    },
+    {
+      "file": "savings.qif",
+      "account": "High-Yield Savings"
+    },
+    {
+      "file": "checking.ofx",
+      "account": "Everyday Checking 2333",
+      "note": "the same statement again: every row is an exact duplicate"
+    }
+  ],
+  "tax": [
+    {
+      "name": "single non-itemiser: floors, SALT cap and the $1,000 cash-gift deduction",
+      "input": {
+        "packId": "us-federal-2026",
+        "year": 2026,
+        "filingStatus": "single",
+        "dependents": 0,
+        "incomes": [
+          {
+            "kind": "wages",
+            "amount": "72000"
+          },
+          {
+            "kind": "interest",
+            "amount": "400"
+          }
+        ],
+        "adjustments": [],
+        "deductions": {
+          "itemized": [
+            {
+              "kind": "charity",
+              "amount": "1500"
+            },
+            {
+              "kind": "medical",
+              "amount": "6000"
+            },
+            {
+              "kind": "salt",
+              "amount": "5200"
+            },
+            {
+              "kind": "mortgage",
+              "amount": "4800"
+            }
+          ]
+        },
+        "credits": [],
+        "withheld": "7800",
+        "estimatedPaid": "0"
+      }
+    },
+    {
+      "name": "married itemisers with two children",
+      "input": {
+        "packId": "us-federal-2026",
+        "year": 2026,
+        "filingStatus": "mfj",
+        "dependents": 2,
+        "incomes": [
+          {
+            "kind": "wages",
+            "amount": "150000"
+          },
+          {
+            "kind": "qualified_dividends",
+            "amount": "1200"
+          },
+          {
+            "kind": "ordinary_dividends",
+            "amount": "300"
+          }
+        ],
+        "adjustments": [
+          {
+            "kind": "hsa",
+            "amount": "3000"
+          }
+        ],
+        "deductions": {
+          "itemized": [
+            {
+              "kind": "salt",
+              "amount": "12000"
+            },
+            {
+              "kind": "mortgage",
+              "amount": "22000"
+            },
+            {
+              "kind": "charity",
+              "amount": "4000"
+            }
+          ]
+        },
+        "credits": [],
+        "withheld": "14000",
+        "estimatedPaid": "1000"
+      }
+    },
+    {
+      "name": "self-employed with the standard deduction",
+      "input": {
+        "packId": "us-federal-2026",
+        "year": 2026,
+        "filingStatus": "single",
+        "dependents": 0,
+        "incomes": [
+          {
+            "kind": "self_employment",
+            "amount": "48000"
+          },
+          {
+            "kind": "ltcg",
+            "amount": "2500"
+          }
+        ],
+        "adjustments": [],
+        "deductions": "standard",
+        "credits": [],
+        "withheld": "0",
+        "estimatedPaid": "4000"
+      }
+    },
+    {
+      "name": "the same single filer, mode standard",
+      "input": {
+        "packId": "us-federal-2026",
+        "year": 2026,
+        "filingStatus": "single",
+        "dependents": 0,
+        "incomes": [
+          {
+            "kind": "wages",
+            "amount": "72000"
+          },
+          {
+            "kind": "interest",
+            "amount": "400"
+          }
+        ],
+        "adjustments": [],
+        "deductions": {
+          "itemized": [
+            {
+              "kind": "charity",
+              "amount": "1500"
+            },
+            {
+              "kind": "medical",
+              "amount": "6000"
+            },
+            {
+              "kind": "salt",
+              "amount": "5200"
+            },
+            {
+              "kind": "mortgage",
+              "amount": "4800"
+            }
+          ],
+          "mode": "standard"
+        },
+        "credits": [],
+        "withheld": "7800",
+        "estimatedPaid": "0"
+      }
+    },
+    {
+      "name": "the same single filer, mode itemized",
+      "input": {
+        "packId": "us-federal-2026",
+        "year": 2026,
+        "filingStatus": "single",
+        "dependents": 0,
+        "incomes": [
+          {
+            "kind": "wages",
+            "amount": "72000"
+          },
+          {
+            "kind": "interest",
+            "amount": "400"
+          }
+        ],
+        "adjustments": [],
+        "deductions": {
+          "itemized": [
+            {
+              "kind": "charity",
+              "amount": "1500"
+            },
+            {
+              "kind": "medical",
+              "amount": "6000"
+            },
+            {
+              "kind": "salt",
+              "amount": "5200"
+            },
+            {
+              "kind": "mortgage",
+              "amount": "4800"
+            }
+          ],
+          "mode": "itemized"
+        },
+        "credits": [],
+        "withheld": "7800",
+        "estimatedPaid": "0"
+      }
+    }
+  ],
+  "expect": {
+    "netWorth": "11925.71",
+    "assets": "12382.23",
+    "liabilities": "456.52",
+    "savingsRate3m": 0.8447477778,
+    "spent": "864.93",
+    "toReview": 17,
+    "imports": [
+      {
+        "file": "checking.ofx",
+        "inserted": 3,
+        "skipped": 0,
+        "newCount": 3,
+        "duplicates": 0,
+        "statement": {
+          "balance": "1234.56",
+          "asOf": "2026-11-24",
+          "currency": "USD",
+          "source": "ofx"
+        }
+      },
+      {
+        "file": "card.csv",
+        "inserted": 4,
+        "skipped": 0,
+        "newCount": 4,
+        "duplicates": 0,
+        "statement": {
+          "balance": "-275.98",
+          "asOf": "2026-11-19",
+          "source": "csv"
+        }
+      },
+      {
+        "file": "joint-newest-first.csv",
+        "inserted": 4,
+        "skipped": 0,
+        "newCount": 4,
+        "duplicates": 0,
+        "statement": {
+          "balance": "960.00",
+          "asOf": "2026-11-24",
+          "source": "csv"
+        }
+      },
+      {
+        "file": "travel-card-inverted.csv",
+        "inserted": 3,
+        "skipped": 0,
+        "newCount": 3,
+        "duplicates": 0,
+        "statement": {
+          "balance": "-80.00",
+          "asOf": "2026-11-22",
+          "source": "csv"
+        }
+      },
+      {
+        "file": "savings.qif",
+        "inserted": 3,
+        "skipped": 0,
+        "newCount": 3,
+        "duplicates": 0,
+        "statement": null
+      },
+      {
+        "file": "checking.ofx",
+        "inserted": 0,
+        "skipped": 3,
+        "newCount": 0,
+        "duplicates": 3,
+        "statement": {
+          "balance": "1234.56",
+          "asOf": "2026-11-24",
+          "currency": "USD",
+          "source": "ofx"
+        }
+      }
+    ],
+    "imported": [
+      {
+        "date": "2026-11-15",
+        "amount": "-60.00",
+        "cleared": "cleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-16",
+        "amount": "-12.50",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-17",
+        "amount": "-6.25",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-18",
+        "amount": "-23.99",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-19",
+        "amount": "-11.99",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-19",
+        "amount": "-40.00",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-20",
+        "amount": "-150.00",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-20",
+        "amount": "-42.17",
+        "cleared": "cleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-21",
+        "amount": "-18.40",
+        "cleared": "cleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-21",
+        "amount": "-30.00",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-22",
+        "amount": "-12.00",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-22",
+        "amount": "100.00",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-22",
+        "amount": "125.00",
+        "cleared": "cleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-23",
+        "amount": "-23.99",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-23",
+        "amount": "250.00",
+        "cleared": "cleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-24",
+        "amount": "-11.99",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      },
+      {
+        "date": "2026-11-24",
+        "amount": "-40.00",
+        "cleared": "uncleared",
+        "source": "import",
+        "reviewed": false
+      }
+    ],
+    "tax": [
+      {
+        "name": "single non-itemiser: floors, SALT cap and the $1,000 cash-gift deduction",
+        "agi": "72400.00",
+        "taxable": "55300.00",
+        "deduction": {
+          "kind": "standard",
+          "amount": "17100.00",
+          "standardWouldBe": "16100.00",
+          "itemizedWouldBe": "11708.00"
+        },
+        "totalTax": "6878.00",
+        "balance": "-922.00",
+        "effectiveRate": 0.095
+      },
+      {
+        "name": "married itemisers with two children",
+        "agi": "148500.00",
+        "taxable": "111242.00",
+        "deduction": {
+          "kind": "itemized",
+          "amount": "37258.00",
+          "standardWouldBe": "32200.00",
+          "itemizedWouldBe": "37258.00"
+        },
+        "totalTax": "9413.00",
+        "balance": "-5587.00",
+        "effectiveRate": 0.0633872054
+      },
+      {
+        "name": "self-employed with the standard deduction",
+        "agi": "47109.00",
+        "taxable": "31009.00",
+        "deduction": {
+          "kind": "standard",
+          "amount": "16100.00",
+          "standardWouldBe": "16100.00",
+          "itemizedWouldBe": null
+        },
+        "totalTax": "9955.00",
+        "balance": "5955.00",
+        "effectiveRate": 0.2113184317
+      },
+      {
+        "name": "the same single filer, mode standard",
+        "agi": "72400.00",
+        "taxable": "55300.00",
+        "deduction": {
+          "kind": "standard",
+          "amount": "17100.00",
+          "standardWouldBe": "16100.00",
+          "itemizedWouldBe": "11708.00"
+        },
+        "totalTax": "6878.00",
+        "balance": "-922.00",
+        "effectiveRate": 0.095
+      },
+      {
+        "name": "the same single filer, mode itemized",
+        "agi": "72400.00",
+        "taxable": "60692.00",
+        "deduction": {
+          "kind": "itemized",
+          "amount": "11708.00",
+          "standardWouldBe": "16100.00",
+          "itemizedWouldBe": "11708.00"
+        },
+        "totalTax": "8064.00",
+        "balance": "264.00",
+        "effectiveRate": 0.1113812155
+      }
+    ],
+    "deductionRows": {
+      "categories": [
+        "Charitable gifts",
+        "Medical & dental",
+        "State & local taxes",
+        "Mortgage interest",
+        "Home office",
+        "Business expense",
+        "Education",
+        "Childcare",
+        "HSA contribution",
+        "Traditional IRA contribution",
+        "Other"
+      ],
+      "itemized": [
+        {
+          "kind": "charity",
+          "amount": "1500.00"
+        },
+        {
+          "kind": "medical",
+          "amount": "6000.00"
+        },
+        {
+          "kind": "salt",
+          "amount": "5200.00"
+        },
+        {
+          "kind": "mortgage",
+          "amount": "4800.00"
+        }
+      ],
+      "deduction": {
+        "kind": "standard",
+        "amount": "17100.00",
+        "standardWouldBe": "16100.00",
+        "itemizedWouldBe": "11708.00"
+      },
+      "totalTax": "6878.00"
+    }
+  },
+  "deductionCategories": [
+    {
+      "key": "charity",
+      "name": "Charitable gifts",
+      "kind": "charity"
+    },
+    {
+      "key": "medical",
+      "name": "Medical & dental",
+      "kind": "medical"
+    },
+    {
+      "key": "salt",
+      "name": "State & local taxes",
+      "kind": "salt"
+    },
+    {
+      "key": "mortgage",
+      "name": "Mortgage interest",
+      "kind": "mortgage"
+    },
+    {
+      "key": "home_office",
+      "name": "Home office"
+    },
+    {
+      "key": "business",
+      "name": "Business expense"
+    },
+    {
+      "key": "education",
+      "name": "Education"
+    },
+    {
+      "key": "childcare",
+      "name": "Childcare"
+    },
+    {
+      "key": "hsa",
+      "name": "HSA contribution"
+    },
+    {
+      "key": "ira",
+      "name": "Traditional IRA contribution"
+    },
+    {
+      "key": "other",
+      "name": "Other"
+    }
+  ],
+  "deductionRows": {
+    "about": "Tax Organizer Deductions rows (category by option name, amount, pct as a fraction) → TaxInput.deductions.itemized (itemisable kinds only, amount × pct) → estimate.",
+    "rows": [
+      {
+        "desc": "Food bank gift",
+        "category": "Charitable gifts",
+        "amount": "1500.00",
+        "pct": 1
+      },
+      {
+        "desc": "Dental crown",
+        "category": "Medical & dental",
+        "amount": "6000.00",
+        "pct": 1
+      },
+      {
+        "desc": "Property tax",
+        "category": "State & local taxes",
+        "amount": "5200.00",
+        "pct": 1
+      },
+      {
+        "desc": "Mortgage interest (half is a rental)",
+        "category": "Mortgage interest",
+        "amount": "9600.00",
+        "pct": 0.5
+      },
+      {
+        "desc": "Laptop for client work",
+        "category": "Business expense",
+        "amount": "900.00",
+        "pct": 1
+      },
+      {
+        "desc": "Traditional IRA",
+        "category": "Traditional IRA contribution",
+        "amount": "3000.00",
+        "pct": 1
+      }
+    ],
+    "input": {
+      "packId": "us-federal-2026",
+      "year": 2026,
+      "filingStatus": "single",
+      "dependents": 0,
+      "incomes": [
+        {
+          "kind": "wages",
+          "amount": "72000"
+        },
+        {
+          "kind": "interest",
+          "amount": "400"
+        }
+      ],
+      "adjustments": [],
+      "deductions": {
+        "itemized": [],
+        "mode": "standard"
+      },
+      "credits": [],
+      "withheld": "7800",
+      "estimatedPaid": "0"
+    }
+  }
+}

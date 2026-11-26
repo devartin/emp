@@ -22,7 +22,8 @@ import { habitItems, installHabits, refreshHabitStats, sampleLog } from '@/featu
 import { installMoneyHq, installPortfolio, installTax } from '@/features/lifeapps/mock/finance';
 import { installSheets, addWorkbook } from '@/features/lifeapps/mock/sheets';
 import { insightsFor, metricsFor, rawMetrics } from '@/features/lifeapps/mock/metrics';
-import { cellDate, cellText, c, emoji } from '@/features/lifeapps/mock/env';
+import { cellDate, cellText, c } from '@/features/lifeapps/mock/env';
+import { iconOf } from '../lib/icons';
 import { nextOccurrence } from '@/features/lifeapps/engine/recurrence';
 import type { LifeAppHooks, Raw } from '@/features/lifeapps/mock/metrics';
 import type { MockCallCtx } from '../ctx';
@@ -325,7 +326,7 @@ async function applyTuneup(ctx: MockCtx, inst: InstanceRecord, answers: Record<s
         values[byName.Started.id] = c.date(today)!;
         const sched = optId('Schedule', h.schedule === 'x_per_week' ? 'X per week' : h.schedule === 'weekdays' ? 'Weekdays' : 'Daily');
         if (sched) values[byName.Schedule.id] = { t: 'select', v: sched };
-        changed.push(db.createRow(ctx, inst.keyMap.habits_db, { values, icon: emoji(h.icon) }).id);
+        changed.push(db.createRow(ctx, inst.keyMap.habits_db, { values, icon: iconOf(h.icon) }).id);
       }
     }
   }
@@ -640,7 +641,7 @@ export const handlers: MockHandlers = {
       if (log && habits) {
         const items = habitItems(inst.answers);
         const title = Object.values(habits.props).find((p) => p.type === 'title');
-        const rows = db.rows(ctx, habits.id).map((r) => ({ id: r.id, item: items.find((i) => i.name === cellText(r, title)) ?? { name: cellText(r, title), icon: '✨', type: 'yes_no', schedule: 'daily' } }));
+        const rows = db.rows(ctx, habits.id).map((r) => ({ id: r.id, item: items.find((i) => i.name === cellText(r, title)) ?? { name: cellText(r, title), icon: 'lucide:sparkle', type: 'yes_no', schedule: 'daily' } }));
         sampleLog(env, log, rows);
         refreshHabitStats(ctx, db, inst);
       }

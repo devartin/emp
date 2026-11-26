@@ -5,7 +5,7 @@
 import {
   AlertTriangle, ArrowLeftRight, Banknote, BellRing, Briefcase, Calculator, CandlestickChart, Car, CircleDollarSign, Clapperboard,
   CreditCard, Fuel, Gift, GraduationCap, HandCoins, HeartPulse, Home, Info, Landmark, Laptop, LifeBuoy, Lightbulb, LineChart as LineIcon, Palette,
-  Palmtree, PiggyBank, Plane, Percent, Receipt, ReceiptText, Repeat, Shield, ShoppingBag, ShoppingBasket, Sofa, Sparkle, Sparkles, Target,
+  Palmtree, PiggyBank, Plane, Percent, Receipt, ReceiptText, Repeat, Shield, ShoppingBag, ShoppingBasket, Sofa, Target, Coins, Droplet,
   TrainFront, TrendingUp, Umbrella, Utensils, Wallet, Wifi, Zap, ChevronRight, X,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -24,9 +24,9 @@ import "./finance.css";
 // ───────────────────────────────────────────────────────────────────────────── glyphs
 
 const GLYPHS: Record<string, IconComponent> = {
-  briefcase: Briefcase, sparkles: Sparkles, percent: Percent, home: Home, zap: Zap, wifi: Wifi, shield: Shield, repeat: Repeat,
+  briefcase: Briefcase, sparkles: Coins, percent: Percent, home: Home, zap: Zap, wifi: Wifi, shield: Shield, repeat: Repeat,
   "train-front": TrainFront, "shopping-basket": ShoppingBasket, utensils: Utensils, fuel: Fuel, sofa: Sofa, "heart-pulse": HeartPulse,
-  sparkle: Sparkle, clapperboard: Clapperboard, "shopping-bag": ShoppingBag, plane: Plane, gift: Gift, palette: Palette, "life-buoy": LifeBuoy,
+  sparkle: Droplet, clapperboard: Clapperboard, "shopping-bag": ShoppingBag, plane: Plane, gift: Gift, palette: Palette, "life-buoy": LifeBuoy,
   palmtree: Palmtree, car: Car, umbrella: Umbrella, "trending-up": TrendingUp, landmark: Landmark, laptop: Laptop, wallet: Wallet,
   "credit-card": CreditCard, "piggy-bank": PiggyBank, banknote: Banknote, "graduation-cap": GraduationCap, target: Target, receipt: Receipt,
   "receipt-text": ReceiptText, "candlestick-chart": CandlestickChart, "line-chart": LineIcon, "arrow-left-right": ArrowLeftRight,
@@ -137,7 +137,7 @@ export function Disclaimer({ children }: { children?: ReactNode }) {
   return (
     <footer className="fh-disclaimer">
       <Info size={13} aria-hidden />
-      <span>{children ?? "Figures are calculated on this device from your own records. They are estimates to help you plan — not financial advice."}</span>
+      <span>{children ?? "Figures are calculated on this device from your own records. They are estimates for planning, not financial advice."}</span>
     </footer>
   );
 }
@@ -149,7 +149,7 @@ const FRESH_LABEL: Record<Freshness, string> = { live: "Live", delayed: "15m del
 export function FreshnessBadge({ freshness, source, delayedMin, cached }: { freshness: Freshness; source: string; delayedMin?: number; cached?: boolean }) {
   const label = cached ? "Cached" : freshness === "delayed" && delayedMin ? `${delayedMin}m delayed` : FRESH_LABEL[freshness];
   return (
-    <Tooltip content={cached ? `Offline — last value from ${providerName(source)}` : `Source: ${providerName(source)}`}>
+    <Tooltip content={cached ? `Offline. Last value from ${providerName(source)}` : `Source: ${providerName(source)}`}>
       <span className="fh-fresh" data-fresh={cached ? "cached" : freshness} tabIndex={0}>
         <span className="fh-fresh-dot" aria-hidden />
         {label}

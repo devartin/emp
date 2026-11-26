@@ -6,10 +6,9 @@ import { cn } from "@/lib/cn";
 import { pauseFrameMonitor } from "@/lib/perf";
 import { IconButton } from "./IconButton";
 import { OverlayLayer } from "./layer";
-import { originTransform, resolveOrigin, type Origin } from "./motion/origin";
 import { presets } from "./motion/presets";
 import { ease, spring } from "./motion/tokens";
-import { isReducedEffects, isReducedMotion } from "./motion/useReducedEffects";
+import { isReducedMotion } from "./motion/useReducedEffects";
 
 export type DialogSize = "sm" | "md" | "lg" | "xl" | "full";
 
@@ -43,22 +42,24 @@ export interface DialogProps {
   originRef?: RefObject<Element | null>;
 }
 
-function rectVisible(r: DOMRect) {
-  return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
-}
 
 type PanelProps = HTMLAttributes<HTMLDivElement> & { originEl?: Element | null; kind: "dialog" | "sheet"; ref?: Ref<HTMLDivElement> };
 
+/** True when the last input was the keyboard (MotionProvider sets html[data-input]). */
+const keyboardInvoked = () => typeof document !== "undefined" && document.documentElement.getAttribute("data-input") === "keyboard";
+
 /**
- * The origin-aware panel (§5.4.1). Enter: translate+scale from the trigger centre → none on `settle`, opacity in the
- * first 120ms; content rows rise at 16ms after 80ms (CSS `[data-entering]`). Exit reverses into the trigger if it is
- * still connected and visible, else scale .97 + fade (150ms ease-in). No origin → `drop` (y 14, scale .955, blur 6).
+ * The dialog / sheet panel (docs/DESIGN.md §7, register.ts). Opened from the keyboard (⌘K, menu keys) it appears at
+ * once (C0). Opened with the pointer, a dialog fades in and settles from .98 in 160ms and a sheet slides in over
+ * 200ms (C2, ease-out, no overshoot, no blur). Exit: 100ms fade (sheets slide out in 140ms). Content never staggers.
+ * Reduced motion: a 120ms crossfade. `originEl` is accepted for API compatibility; panels no longer grow from it.
  */
-export function OriginPanel({ originEl, kind, className, children, ref, ...rest }: PanelProps) {
+export function OriginPanel({ originEl: _origin, kind, className, children, ref, ...rest }: PanelProps) {
+  void _origin;
   const [isPresent, safeToRemove] = usePresence();
   const node = useRef<HTMLDivElement | null>(null);
-  const origin = useRef<Origin | null>(null);
   const [entering, setEntering] = useState(true);
+  const instant = useRef(false);
 
   const setRef = (el: HTMLDivElement | null) => {
     node.current = el;
@@ -69,44 +70,19 @@ export function OriginPanel({ originEl, kind, className, children, ref, ...rest 
   useLayoutEffect(() => {
     const el = node.current;
     if (!el) return;
-    const t = window.setTimeout(() => setEntering(false), 700);
+    const t = window.setTimeout(() => setEntering(false), 250);
+    instant.current = keyboardInvoked();
+    if (instant.current) return () => window.clearTimeout(t);
     if (isReducedMotion()) {
-      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: "linear" });
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: "linear" });
       return () => window.clearTimeout(t);
     }
     if (kind === "sheet") {
       animate(el, { x: ["100%", "0%"] }, spring.settle);
       return () => window.clearTimeout(t);
     }
-    const o = resolveOrigin(originEl);
-    origin.current = o;
-    // Hold the start pose for the first (expensive) frame, then run the springs from the next frame so the growth is
-    // never swallowed by mount cost.
-    let raf = 0;
-    if (o) {
-      const tr = originTransform(o, el.getBoundingClientRect());
-      el.style.opacity = "0";
-      el.style.transform = `translate(${tr.x}px, ${tr.y}px) scale(${tr.scale})`;
-      raf = requestAnimationFrame(() => {
-        el.style.transform = "";
-        animate(el, { x: [tr.x, 0], y: [tr.y, 0], scale: [tr.scale, 1] }, spring.settle);
-        animate(el, { opacity: [0, 1] }, { duration: 0.12, ease: ease.out });
-      });
-    } else {
-      const blur = !isReducedEffects();
-      el.style.opacity = "0";
-      raf = requestAnimationFrame(() => {
-        animate(el, { y: [14, 0], scale: [0.955, 1] }, spring.settle);
-        animate(el, blur ? { opacity: [0, 1], filter: ["blur(6px)", "blur(0px)"] } : { opacity: [0, 1] }, { duration: 0.2, ease: ease.out });
-      });
-    }
-    return () => {
-      // StrictMode re-runs this effect: never leave the start pose behind (it would skew the next measurement).
-      window.clearTimeout(t);
-      cancelAnimationFrame(raf);
-      el.style.transform = "";
-      el.style.opacity = "";
-    };
+    animate(el, { opacity: [0, 1], scale: [0.98, 1] }, { duration: 0.16, ease: ease.out });
+    return () => window.clearTimeout(t);
     // mount-only
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -114,28 +90,17 @@ export function OriginPanel({ originEl, kind, className, children, ref, ...rest 
   useEffect(() => {
     if (isPresent) return;
     const el = node.current;
-    if (!el) {
+    if (!el || keyboardInvoked()) {
       safeToRemove?.();
       return;
     }
     let done: Promise<unknown>;
     if (isReducedMotion()) {
-      done = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "forwards" }).finished;
+      done = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: "forwards" }).finished;
     } else if (kind === "sheet") {
-      done = Promise.resolve(animate(el, { x: "100%" }, { duration: 0.18, ease: ease.in }));
+      done = Promise.resolve(animate(el, { x: "100%" }, { duration: 0.14, ease: ease.in }));
     } else {
-      const o = origin.current;
-      const live = o?.el && o.el.isConnected ? o.el.getBoundingClientRect() : null;
-      if (o && live && rectVisible(live)) {
-        el.style.filter = "none";
-        const tr = originTransform({ el: o.el, rect: live }, el.getBoundingClientRect());
-        done = Promise.all([
-          animate(el, { x: tr.x, y: tr.y, scale: tr.scale }, { duration: 0.2, ease: ease.in }),
-          animate(el, { opacity: 0 }, { duration: 0.12, delay: 0.08, ease: ease.in }),
-        ]);
-      } else {
-        done = Promise.resolve(animate(el, { opacity: 0, scale: 0.97 }, { duration: 0.15, ease: ease.in }));
-      }
+      done = Promise.resolve(animate(el, { opacity: 0, scale: 0.99 }, { duration: 0.1, ease: ease.in }));
     }
     done.catch(() => undefined).finally(() => safeToRemove?.());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,7 +154,7 @@ export function Dialog({
         {open ? (
           <RD.Portal forceMount key="dlg">
             <RD.Overlay asChild forceMount>
-              <m.div className="emp-scrim" {...presets.scrim} />
+              <m.div className="emp-scrim" {...presets.scrim} initial={keyboardInvoked() ? false : presets.scrim.initial} />
             </RD.Overlay>
             <div className="emp-dialog-pos" data-centered={alert ? "" : undefined}>
               <RD.Content

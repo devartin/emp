@@ -2,7 +2,7 @@
  * Breadcrumbs (§5.11): 28px ghost-sm items, "/" separators in tertiary. More than 4 levels collapse the middle into a
  * "…" menu. The current page's crumb opens an inline rename popover (title + icon live in the editor too).
  */
-import { CalendarDays, CandlestickChart, ChevronRight, Ellipsis, House, Settings, Sparkles, Trash2, Calendar } from "lucide-react";
+import { CalendarDays, CandlestickChart, ChevronRight, Ellipsis, House, LayoutGrid, Settings, Trash2, Calendar } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -103,7 +103,7 @@ function useCrumbs(): Crumb[] {
         ...(route.symbol ? [{ key: route.symbol, label: route.symbol.split(":")[0], icon: null }] : []),
       ];
     case "lifeapps":
-      return [{ key: "lifeapps", label: "Life apps", icon: ic(Sparkles), route: { t: "lifeapps" } }];
+      return [{ key: "lifeapps", label: "Life apps", icon: ic(LayoutGrid), route: { t: "lifeapps" } }];
     case "settings":
       return [
         { key: "settings", label: "Settings", icon: ic(Settings), route: { t: "settings", section: "general" } },
@@ -111,16 +111,11 @@ function useCrumbs(): Crumb[] {
       ];
     case "app": {
       const id = app ? lifeAppIdentity(app.appId) : null;
-      const Icon = id?.icon ?? Sparkles;
       return [
         {
           key: "app",
           label: appTitle || id?.name || "Life app",
-          icon: (
-            <span className="emp-app-tile" style={{ background: id?.color ?? "var(--text-tertiary)" }}>
-              <Icon aria-hidden strokeWidth={2.25} />
-            </span>
-          ),
+          icon: ic(id?.icon ?? LayoutGrid),
           route: { t: "app", instanceId: route.instanceId },
         },
         ...(route.tab ? [{ key: route.tab, label: tabLabel(route.tab), icon: null }] : []),

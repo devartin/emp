@@ -322,8 +322,8 @@ fn portfolio(r: &mut Rows, rng: &mut Rng, today: NaiveDate) {
 fn tax(r: &mut Rows, today: NaiveDate) {
     r.add("documents", "w2-late", json!({"name": "W-2 (second employer)", "issuer": "Former Employer LLC", "for": "self", "expected_by": day(today - Duration::days(30)), "status": "expected"}));
     r.add("documents", "1099int", json!({"name": "1099-INT", "issuer": "Sample Bank", "for": "self", "expected_by": day(today - Duration::days(40)), "status": "received", "amount_summary": "Interest $212"}));
-    r.add("deductions", "laptop", json!({"name": "Laptop for client work", "date": day(today - Duration::days(60)), "category": "business_expense", "amount": 1240, "pct": 100}));
-    r.add("deductions", "charity", json!({"name": "Food bank donation", "date": day(today - Duration::days(20)), "category": "charitable", "amount": 300, "pct": 100}));
+    r.add("deductions", "laptop", json!({"name": "Laptop for client work", "date": day(today - Duration::days(60)), "category": "business", "amount": 1240, "pct": 1}));
+    r.add("deductions", "charity", json!({"name": "Food bank donation", "date": day(today - Duration::days(20)), "category": "charity", "amount": 300, "pct": 1}));
     r.add("deadlines", "property", json!({"name": "Property tax installment", "date": day(today + Duration::days(10)), "kind": "local"}));
     r.add("deadlines", "hsa", json!({"name": "Send HSA receipts to preparer", "date": day(today + Duration::days(2)), "kind": "personal"}));
 }

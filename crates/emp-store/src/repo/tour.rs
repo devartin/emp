@@ -85,10 +85,10 @@ pub struct StarterTour {
 }
 
 const GUIDES: [(&str, &str, &str); 4] = [
-    ("Writing in Ultra Note", "✍️", WRITING),
-    ("Keyboard shortcuts", "⌨️", SHORTCUTS),
-    ("Privacy & encryption", "🔒", PRIVACY),
-    ("Money & life apps", "🧭", MONEY),
+    ("Writing in Ultra Note", "pen-line", WRITING),
+    ("Keyboard shortcuts", "keyboard", SHORTCUTS),
+    ("Privacy & encryption", "lock", PRIVACY),
+    ("Money & life apps", "compass", MONEY),
 ];
 
 const INTRO: &str = "Ultra Note keeps your notes, money, plans and life admin in **one private place on this device**. \
@@ -278,8 +278,12 @@ fn render(md: &str, links: &BTreeMap<String, String>) -> Result<TipTapDoc> {
     Ok(r.doc)
 }
 
-fn emoji(v: &str) -> Icon {
-    Icon::Emoji { v: v.to_owned() }
+/// A Lucide page icon (the tour carries no emoji).
+fn lucide(v: &str) -> Icon {
+    Icon::Lucide {
+        v: v.to_owned(),
+        color: None,
+    }
 }
 
 /// Sets `checked` on the to-do block `block_id`. Returns whether the document changed.
@@ -327,7 +331,7 @@ impl Store {
         let gs = self
             .page_create({
                 let mut r = PageCreate::new(workspace_id, None, PageKind::Doc, "Getting Started");
-                r.icon = Some(emoji("👋"));
+                r.icon = Some(lucide("hand"));
                 r
             })?
             .meta;
@@ -335,7 +339,7 @@ impl Store {
         let mut guide_ids = Vec::new();
         for (title, icon, _) in GUIDES {
             let mut r = PageCreate::new(workspace_id, Some(&gs.id), PageKind::Doc, title);
-            r.icon = Some(emoji(icon));
+            r.icon = Some(lucide(icon));
             let p = self.page_create(r)?.meta;
             links.insert(title.to_owned(), p.id.clone());
             guide_ids.push(p.id);

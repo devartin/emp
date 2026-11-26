@@ -412,11 +412,11 @@
       "optional": false,
       "spec": {
         "title": "Estimator",
-        "icon": "🧾",
+        "icon": "lucide:receipt",
         "blocks": [
           {
             "t": "callout",
-            "icon": "⚠️",
+            "icon": "lucide:triangle-alert",
             "color": "yellow",
             "md": "Every number here is an estimate. Figures pulled from Money HQ or Portfolio need your confirmation and show a source chip."
           },
@@ -460,7 +460,7 @@
       "optional": false,
       "spec": {
         "title": "Quarterly payments",
-        "icon": "📆",
+        "icon": "lucide:calendar-days",
         "blocks": [
           {
             "t": "md",
@@ -483,7 +483,7 @@
       "optional": true,
       "spec": {
         "title": "Preparer packet",
-        "icon": "📦",
+        "icon": "lucide:package",
         "blocks": [
           {
             "t": "md",
@@ -524,7 +524,7 @@
       "optional": false,
       "spec": {
         "title": "Year-end planning checklist",
-        "icon": "✅",
+        "icon": "lucide:circle-check",
         "blocks": [
           {
             "t": "md",
@@ -554,7 +554,7 @@
       "optional": false,
       "spec": {
         "title": "Record retention guide",
-        "icon": "🗄️",
+        "icon": "lucide:archive",
         "blocks": [
           {
             "t": "md",
@@ -572,33 +572,38 @@
       "optional": false,
       "spec": {
         "title": "Document checklist",
-        "icon": "📂",
+        "icon": "lucide:folder-open",
         "description": "Every form you expect, when it should arrive, and where it is.",
         "properties": [
           {
             "key": "name",
             "name": "Document",
-            "type": "title"
+            "type": "title",
+            "role": "taxdoc.name"
           },
           {
             "key": "issuer",
             "name": "Issuer",
-            "type": "text"
+            "type": "text",
+            "role": "taxdoc.issuer"
           },
           {
             "key": "for",
             "name": "For",
-            "type": "text"
+            "type": "text",
+            "role": "taxdoc.for"
           },
           {
             "key": "expected_by",
             "name": "Expected by",
-            "type": "date"
+            "type": "date",
+            "role": "taxdoc.expected"
           },
           {
             "key": "status",
             "name": "Status",
             "type": "status",
+            "role": "taxdoc.status",
             "options": [
               {
                 "key": "expected",
@@ -640,12 +645,14 @@
           {
             "key": "amount_summary",
             "name": "Amount summary",
-            "type": "text"
+            "type": "text",
+            "role": "taxdoc.summary"
           },
           {
             "key": "notes",
             "name": "Notes",
-            "type": "text"
+            "type": "text",
+            "role": "taxdoc.notes"
           },
           {
             "key": "keep_until",
@@ -840,41 +847,48 @@
       "optional": false,
       "spec": {
         "title": "Deductions & credits",
-        "icon": "🧮",
+        "icon": "lucide:calculator",
         "properties": [
           {
             "key": "name",
             "name": "Description",
-            "type": "title"
+            "type": "title",
+            "role": "taxded.desc"
           },
           {
             "key": "date",
             "name": "Date",
-            "type": "date"
+            "type": "date",
+            "role": "taxded.date"
           },
           {
             "key": "category",
             "name": "Category",
             "type": "select",
+            "role": "taxded.category",
             "options": [
               {
+                "key": "charity",
+                "name": "Charitable gifts"
+              },
+              {
                 "key": "medical",
-                "name": "Medical"
-              },
-              {
-                "key": "charitable",
-                "name": "Charitable"
-              },
-              {
-                "key": "mortgage_interest",
-                "name": "Mortgage interest"
+                "name": "Medical & dental"
               },
               {
                 "key": "salt",
                 "name": "State & local taxes"
               },
               {
-                "key": "business_expense",
+                "key": "mortgage",
+                "name": "Mortgage interest"
+              },
+              {
+                "key": "home_office",
+                "name": "Home office"
+              },
+              {
+                "key": "business",
                 "name": "Business expense"
               },
               {
@@ -886,16 +900,12 @@
                 "name": "Childcare"
               },
               {
-                "key": "retirement",
-                "name": "Retirement contribution"
-              },
-              {
                 "key": "hsa",
                 "name": "HSA contribution"
               },
               {
-                "key": "home_office",
-                "name": "Home office"
+                "key": "ira",
+                "name": "Traditional IRA contribution"
               },
               {
                 "key": "other",
@@ -906,28 +916,34 @@
           {
             "key": "amount",
             "name": "Amount",
-            "type": "money"
+            "type": "money",
+            "role": "taxded.amount"
           },
           {
             "key": "pct",
             "name": "Deductible %",
             "type": "number",
-            "description": "Share that is deductible, in percent."
+            "role": "taxded.pct",
+            "description": "Share that is deductible, as a fraction (1 = 100%).",
+            "format": "percent"
           },
           {
             "key": "receipt",
             "name": "Receipt",
-            "type": "files"
+            "type": "files",
+            "role": "taxded.receipt"
           },
           {
             "key": "payee",
             "name": "Payee",
-            "type": "text"
+            "type": "text",
+            "role": "taxded.payee"
           },
           {
             "key": "tax_year",
             "name": "Tax year",
-            "type": "number"
+            "type": "number",
+            "role": "taxded.year"
           }
         ],
         "views": [
@@ -970,7 +986,7 @@
             "default": true,
             "values": {
               "date": "@today",
-              "pct": 100,
+              "pct": 1,
               "tax_year": "${answers.jurisdiction.year}"
             }
           }
@@ -983,18 +999,20 @@
       "optional": false,
       "spec": {
         "title": "Estimated payments",
-        "icon": "🗓️",
+        "icon": "lucide:calendar",
         "description": "Quarterly estimated tax. Suggested amounts use the prior-year safe harbor as a starting estimate.",
         "properties": [
           {
             "key": "name",
             "name": "Period",
-            "type": "title"
+            "type": "title",
+            "role": "taxpay.period"
           },
           {
             "key": "due",
             "name": "Due date",
-            "type": "date"
+            "type": "date",
+            "role": "taxpay.due"
           },
           {
             "key": "suggested",
@@ -1004,17 +1022,20 @@
           {
             "key": "paid",
             "name": "Paid amount",
-            "type": "money"
+            "type": "money",
+            "role": "taxpay.amount"
           },
           {
             "key": "paid_date",
             "name": "Paid date",
-            "type": "date"
+            "type": "date",
+            "role": "taxpay.date"
           },
           {
             "key": "method",
             "name": "Method",
             "type": "select",
+            "role": "taxpay.method",
             "options": [
               {
                 "key": "online",
@@ -1115,7 +1136,7 @@
       "optional": false,
       "spec": {
         "title": "Deadlines",
-        "icon": "⏰",
+        "icon": "lucide:alarm-clock",
         "properties": [
           {
             "key": "name",
@@ -1218,7 +1239,7 @@
       "optional": false,
       "spec": {
         "title": "Mileage log",
-        "icon": "🚗",
+        "icon": "lucide:car",
         "properties": [
           {
             "key": "purpose",

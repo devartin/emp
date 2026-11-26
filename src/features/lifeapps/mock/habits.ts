@@ -9,7 +9,7 @@ import type { DbApi } from '@/backend/mock/commands/db';
 import { HABIT_LIBRARY } from '../engine/manifests';
 import { streakStats, type HabitDef, type HabitLogEntry } from '../engine/habitMath';
 import { md } from './content';
-import { c, DAY, emoji, F, isoDay, lucide, P, prng, sel, cellNum, cellOpt, cellText, cellBool, cellDate, cellRel, type DbHandle, type Env, type InstanceRecord } from './env';
+import { c, DAY, F, isoDay, lucide, P, prng, sel, cellNum, cellOpt, cellText, cellBool, cellDate, cellRel, type DbHandle, type Env, type InstanceRecord } from './env';
 
 interface PickItem {
   name?: string;
@@ -29,32 +29,32 @@ const TOD_LABEL: Record<string, string> = { morning: 'Morning', afternoon: 'Afte
 const TOD_TIME: Record<string, string> = { morning: '07:30', afternoon: '13:00', evening: '20:00', anytime: '12:00' };
 
 const LIB_DEFAULTS: Record<string, PickItem & { icon: string }> = {
-  sleep: { name: 'Sleep 7–9 h', type: 'duration', schedule: 'daily', target: 7.5, unit: 'h', twoMinute: 'Lights out by 11', cue: 'After brushing teeth', timeOfDay: 'evening', icon: '😴' },
-  walk: { name: 'Walk 8k steps', type: 'count', schedule: 'daily', target: 8000, unit: 'steps', twoMinute: 'Walk around the block', cue: 'After lunch', timeOfDay: 'afternoon', icon: '🚶' },
-  strength: { name: 'Strength train', type: 'yes_no', schedule: 'x_per_week', perWeek: 3, twoMinute: 'Ten push-ups', cue: 'After work', timeOfDay: 'evening', icon: '🏋️' },
-  water: { name: 'Water', type: 'quantity', schedule: 'daily', target: 8, unit: 'glasses', twoMinute: 'One glass with breakfast', cue: 'With every meal', timeOfDay: 'anytime', icon: '💧' },
-  read: { name: 'Read 20 min', type: 'duration', schedule: 'daily', target: 20, unit: 'min', twoMinute: 'Read one page', cue: 'After dinner', timeOfDay: 'evening', icon: '📖' },
-  meditate: { name: 'Meditate', type: 'duration', schedule: 'daily', target: 10, unit: 'min', twoMinute: 'Three slow breaths', cue: 'After morning coffee', timeOfDay: 'morning', icon: '🧘' },
-  journal: { name: 'Journal', type: 'yes_no', schedule: 'daily', twoMinute: 'One sentence', cue: 'Before bed', timeOfDay: 'evening', icon: '✍️' },
-  nophone: { name: 'No phone first hour', type: 'avoid', schedule: 'daily', twoMinute: 'Phone stays in the hall', cue: 'When I wake up', timeOfDay: 'morning', icon: '📵' },
-  inbox: { name: 'Inbox zero', type: 'yes_no', schedule: 'weekdays', twoMinute: 'Archive five emails', cue: 'At 4:30 PM', timeOfDay: 'afternoon', icon: '📥' },
-  language: { name: 'Language practice', type: 'duration', schedule: 'daily', target: 15, unit: 'min', twoMinute: 'One lesson', cue: 'On the commute', timeOfDay: 'morning', icon: '🗣️' },
-  floss: { name: 'Floss', type: 'yes_no', schedule: 'daily', twoMinute: 'One tooth', cue: 'After brushing', timeOfDay: 'evening', icon: '🦷' },
-  budget: { name: 'Budget check-in', type: 'yes_no', schedule: 'x_per_week', perWeek: 1, twoMinute: 'Open Money HQ', cue: 'Sunday coffee', timeOfDay: 'morning', icon: '💰' },
-  stretch: { name: 'Stretch', type: 'duration', schedule: 'daily', target: 5, unit: 'min', twoMinute: 'One stretch', cue: 'After standing up from work', timeOfDay: 'afternoon', icon: '🤸' },
+  sleep: { name: 'Sleep 7–9 h', type: 'duration', schedule: 'daily', target: 7.5, unit: 'h', twoMinute: 'Lights out by 11', cue: 'After brushing teeth', timeOfDay: 'evening', icon: 'moon' },
+  walk: { name: 'Walk 8k steps', type: 'count', schedule: 'daily', target: 8000, unit: 'steps', twoMinute: 'Walk around the block', cue: 'After lunch', timeOfDay: 'afternoon', icon: 'footprints' },
+  strength: { name: 'Strength train', type: 'yes_no', schedule: 'x_per_week', perWeek: 3, twoMinute: 'Ten push-ups', cue: 'After work', timeOfDay: 'evening', icon: 'dumbbell' },
+  water: { name: 'Water', type: 'quantity', schedule: 'daily', target: 8, unit: 'glasses', twoMinute: 'One glass with breakfast', cue: 'With every meal', timeOfDay: 'anytime', icon: 'droplet' },
+  read: { name: 'Read 20 min', type: 'duration', schedule: 'daily', target: 20, unit: 'min', twoMinute: 'Read one page', cue: 'After dinner', timeOfDay: 'evening', icon: 'book-open' },
+  meditate: { name: 'Meditate', type: 'duration', schedule: 'daily', target: 10, unit: 'min', twoMinute: 'Three slow breaths', cue: 'After morning coffee', timeOfDay: 'morning', icon: 'flower-2' },
+  journal: { name: 'Journal', type: 'yes_no', schedule: 'daily', twoMinute: 'One sentence', cue: 'Before bed', timeOfDay: 'evening', icon: 'pen-line' },
+  nophone: { name: 'No phone first hour', type: 'avoid', schedule: 'daily', twoMinute: 'Phone stays in the hall', cue: 'When I wake up', timeOfDay: 'morning', icon: 'phone-off' },
+  inbox: { name: 'Inbox zero', type: 'yes_no', schedule: 'weekdays', twoMinute: 'Archive five emails', cue: 'At 4:30 PM', timeOfDay: 'afternoon', icon: 'inbox' },
+  language: { name: 'Language practice', type: 'duration', schedule: 'daily', target: 15, unit: 'min', twoMinute: 'One lesson', cue: 'On the commute', timeOfDay: 'morning', icon: 'languages' },
+  floss: { name: 'Floss', type: 'yes_no', schedule: 'daily', twoMinute: 'One tooth', cue: 'After brushing', timeOfDay: 'evening', icon: 'smile' },
+  budget: { name: 'Budget check-in', type: 'yes_no', schedule: 'x_per_week', perWeek: 1, twoMinute: 'Open Money HQ', cue: 'Sunday coffee', timeOfDay: 'morning', icon: 'piggy-bank' },
+  stretch: { name: 'Stretch', type: 'duration', schedule: 'daily', target: 5, unit: 'min', twoMinute: 'One stretch', cue: 'After standing up from work', timeOfDay: 'afternoon', icon: 'activity' },
 };
 
 function iconFor(name: string): string {
   const lib = HABIT_LIBRARY.find((l) => l.label.toLowerCase() === name.toLowerCase());
   if (lib) return lib.icon;
   const n = name.toLowerCase();
-  if (/run|walk|step/.test(n)) return '🚶';
-  if (/read|book/.test(n)) return '📖';
-  if (/water|drink/.test(n)) return '💧';
-  if (/sleep|bed/.test(n)) return '😴';
-  if (/medit|breath/.test(n)) return '🧘';
-  if (/gym|lift|strength|push/.test(n)) return '🏋️';
-  return '✨';
+  if (/run|walk|step/.test(n)) return 'footprints';
+  if (/read|book/.test(n)) return 'book-open';
+  if (/water|drink/.test(n)) return 'droplet';
+  if (/sleep|bed/.test(n)) return 'moon';
+  if (/medit|breath/.test(n)) return 'flower-2';
+  if (/gym|lift|strength|push/.test(n)) return 'dumbbell';
+  return 'circle-dot';
 }
 
 export function habitItems(answers: Record<string, unknown>): (PickItem & { icon: string })[] {
@@ -86,7 +86,7 @@ export async function installHabits(env: Env): Promise<void> {
   await env.step('Creating the Habits database');
   const habits = env.database('habits_db', {
     title: 'Habits',
-    icon: emoji('🌱'),
+    icon: lucide('sprout'),
     props: [
       P.title('Name', 'habit.name'),
       P.select('Type', Object.values(TYPE_LABEL), 'habit.type'),
@@ -112,7 +112,7 @@ export async function installHabits(env: Env): Promise<void> {
   await env.step('Creating the Habit log');
   const log = env.database('log', {
     title: 'Habit log',
-    icon: emoji('🗒️'),
+    icon: lucide('notebook'),
     props: [
       P.title('Entry'),
       P.date('Date', 'log.date'),
@@ -146,7 +146,7 @@ export async function installHabits(env: Env): Promise<void> {
         Active: c.check(true),
         Started: c.date(env.sample ? isoDay(env.now - (150 - i * 18) * DAY) : started),
       },
-      { icon: emoji(it.icon), sample: false },
+      { icon: lucide(it.icon), sample: false },
     );
     habitIds.push({ id, item: it });
   });
@@ -155,7 +155,7 @@ export async function installHabits(env: Env): Promise<void> {
     await env.step('Writing the weekly reflection');
     env.page('weekly', {
       title: 'Weekly habit review',
-      icon: emoji('🪞'),
+      icon: lucide('scan-face'),
       blocks: md(`> [!tip] Five minutes every Sunday. Be curious, not critical.
 ${typeof answers.identity === 'string' && answers.identity.trim() ? `> I’m becoming someone who ${answers.identity.trim().replace(/^who\s+/i, '')}\n` : ''}
 ## What went well?

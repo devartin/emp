@@ -286,3 +286,150 @@ fn random_bytes_never_panic() {
         let _ = parse(&buf, None, None, &ImportOptions::default());
     }
 }
+
+/// `FinanceImportPreview.statement` (PROGRAMME-v3 K5): the closing balance the file itself reports.
+#[test]
+fn closing_balances_from_the_parity_statements() {
+    use emp_finance::import::{BalanceSource, qif_cleared};
+    let p = |name: &str| fixture(&format!("parity/{name}"));
+    let ofx = parse(
+        &p("checking.ofx"),
+        Some("checking.ofx"),
+        None,
+        &ImportOptions::default(),
+    )
+    .unwrap();
+    let b = ofx.closing_balance("Everyday Checking 2333").unwrap();
+    assert_eq!(b.balance, d("1234.56"));
+    assert_eq!(b.as_of.unwrap().to_string(), "2026-11-24");
+    assert_eq!(b.currency.as_deref(), Some("USD"));
+    assert_eq!(b.source, BalanceSource::Ofx);
+    // The only section with a balance is used even when the account name does not carry the last four digits.
+    assert!(ofx.closing_balance("Checking").is_some());
+
+    let csv_bytes = p("card.csv");
+    let mut m = ImportMapping {
+        date: Some(0),
+        payee: Some(1),
+        amount: Some(2),
+        balance: Some(3),
+        date_format: Some(DateFormat::Ymd),
+        ..ImportMapping::default()
+    };
+    let csv = parse(
+        &csv_bytes,
+        Some("card.csv"),
+        Some(&m),
+        &ImportOptions::default(),
+    )
+    .unwrap();
+    let b = csv.closing_balance("Rewards Card").unwrap();
+    // Latest date (2026-11-19): -235.98 - 40.00 = -275.98, so the PUMP row closes the day; the out-of-order last row
+    // is older.
+    assert_eq!(b.balance, d("-275.98"));
+    assert_eq!(b.as_of.unwrap().to_string(), "2026-11-19");
+    assert_eq!(b.source, BalanceSource::Csv);
+    m.balance = None;
+    let csv = parse(
+        &csv_bytes,
+        Some("card.csv"),
+        Some(&m),
+        &ImportOptions::default(),
+    )
+    .unwrap();
+    assert!(csv.closing_balance("Rewards Card").is_none());
+
+    let qif_bytes = p("savings.qif");
+    let guess = start(&qif_bytes, Some("savings.qif"), &ImportOptions::default())
+        .unwrap()
+        .mapping_guess;
+    let qif = parse(
+        &qif_bytes,
+        Some("savings.qif"),
+        Some(&guess),
+        &ImportOptions::default(),
+    )
+    .unwrap();
+    assert!(qif.closing_balance("High-Yield Savings").is_none());
+    let flags: Vec<bool> = qif
+        .transactions()
+        .map(|t| qif_cleared(t.cleared.as_deref()))
+        .collect();
+    assert_eq!(flags, vec![true, false, true]);
+}
+
+/// The CSV closing balance is the closing row of the latest date whatever the file's order, and follows `invert`.
+#[test]
+fn csv_closing_balance_handles_newest_first_and_inverted_files() {
+    let p = |name: &str| fixture(&format!("parity/{name}"));
+    let m = ImportMapping {
+        date: Some(0),
+        payee: Some(1),
+        amount: Some(2),
+        balance: Some(3),
+        date_format: Some(DateFormat::Ymd),
+        ..ImportMapping::default()
+    };
+    // Newest first: the two 2026-11-24 rows chain 1000.00 - 40.00 = 960.00, so 960.00 closes the day (the first
+    // row in file order), not 1000.00 (the last).
+    let csv = parse(
+        &p("joint-newest-first.csv"),
+        Some("joint-newest-first.csv"),
+        Some(&m),
+        &ImportOptions::default(),
+    )
+    .unwrap();
+    let b = csv.closing_balance("Joint Checking 7781").unwrap();
+    assert_eq!(b.balance, d("960.00"));
+    assert_eq!(b.as_of.unwrap().to_string(), "2026-11-24");
+
+    // A card export with positive charges and a positive owed balance: `invert` flips both, so the statement
+    // balance carries the ledger's sign (owed = negative) and matches the rows.
+    let inv = ImportMapping {
+        invert: true,
+        ..m.clone()
+    };
+    let csv = parse(
+        &p("travel-card-inverted.csv"),
+        Some("travel-card-inverted.csv"),
+        Some(&inv),
+        &ImportOptions::default(),
+    )
+    .unwrap();
+    let amounts: Vec<Decimal> = csv.transactions().map(|t| t.amount).collect();
+    assert_eq!(amounts, vec![d("-150.00"), d("-30.00"), d("100.00")]);
+    let b = csv.closing_balance("Travel Card").unwrap();
+    assert_eq!(b.balance, d("-80.00"));
+    assert_eq!(b.as_of.unwrap().to_string(), "2026-11-22");
+}
+
+/// Same-day rows that do not chain fall back to the file's direction.
+#[test]
+fn csv_closing_balance_falls_back_to_file_direction() {
+    use emp_finance::import::{StatementTxn, csv_closing};
+    let row = |i: usize, date: &str, amt: &str, bal: &str| {
+        let mut t = StatementTxn::new(i, date.parse().unwrap(), d(amt), format!("P{i}"));
+        t.balance = Some(d(bal));
+        t
+    };
+    // Balances that do not chain (e.g. the bank reports the end-of-day balance on every row of the day).
+    let asc = [
+        row(0, "2026-11-01", "-1.00", "99.00"),
+        row(1, "2026-11-02", "-2.00", "90.00"),
+        row(2, "2026-11-02", "-3.00", "89.00"),
+    ];
+    let refs: Vec<&StatementTxn> = asc.iter().collect();
+    assert_eq!(csv_closing(&refs).unwrap().1, d("89.00"));
+    let desc = [
+        row(0, "2026-11-02", "-2.00", "91.00"),
+        row(1, "2026-11-02", "-3.00", "92.00"),
+        row(2, "2026-11-01", "-1.00", "99.00"),
+    ];
+    let refs: Vec<&StatementTxn> = desc.iter().collect();
+    // Newest first: the first row of the day.
+    assert_eq!(csv_closing(&refs).unwrap().1, d("91.00"));
+    let refs: Vec<&StatementTxn> = desc.iter().rev().collect();
+    // The same rows oldest first: the last row of the day.
+    assert_eq!(csv_closing(&refs).unwrap().1, d("91.00"));
+    assert!(csv_closing(&[]).is_none());
+}

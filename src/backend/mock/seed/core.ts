@@ -19,7 +19,7 @@ import { localDay } from '../clock';
 export const order = 0;
 
 const DAY = 86_400_000;
-const emoji = (v: string): Icon => ({ t: 'emoji', v });
+const lucide = (v: string): Icon => ({ t: 'lucide', v });
 
 // ───────────────────────────────────────────────────────────────────────────── helpers
 
@@ -155,7 +155,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     parentId: null,
     kind: 'doc',
     title: 'Getting Started',
-    icon: emoji('👋'),
+    icon: lucide('hand'),
     cover: { t: 'gradient', v: 'aurora' },
     createdAt: created(opts.demo ? 58 : 0),
     updatedAt: created(opts.demo ? 0.2 : 0),
@@ -167,7 +167,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     parentId: gs.id,
     kind: 'doc',
     title: 'Writing in Ultra Note',
-    icon: emoji('✍️'),
+    icon: lucide('pen-line'),
     createdAt: created(opts.demo ? 58 : 0),
     updatedAt: created(opts.demo ? 3 : 0),
     silent: true,
@@ -177,7 +177,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     parentId: gs.id,
     kind: 'doc',
     title: 'Keyboard shortcuts',
-    icon: emoji('⌨️'),
+    icon: lucide('keyboard'),
     createdAt: created(opts.demo ? 58 : 0),
     updatedAt: created(opts.demo ? 12 : 0),
     silent: true,
@@ -187,7 +187,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     parentId: gs.id,
     kind: 'doc',
     title: 'Privacy & encryption',
-    icon: emoji('🔒'),
+    icon: lucide('lock'),
     createdAt: created(opts.demo ? 58 : 0),
     updatedAt: created(opts.demo ? 20 : 0),
     silent: true,
@@ -197,7 +197,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     parentId: gs.id,
     kind: 'doc',
     title: 'Money & life apps',
-    icon: emoji('🧭'),
+    icon: lucide('compass'),
     createdAt: created(opts.demo ? 58 : 0),
     updatedAt: created(opts.demo ? 9 : 0),
     silent: true,
@@ -224,7 +224,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
           t.bold('Your workspace lives on your computer.'),
           ' Ultra Note has no servers and no accounts, and we never receive your data. Nothing connects to the internet unless you turn on an integration.',
         ],
-        { icon: emoji('🛡️'), tone: 'gray' },
+        { icon: lucide('shield'), tone: 'gray' },
       ),
       b.toc(),
       b.h2('Your first ten minutes'),
@@ -314,8 +314,6 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
         t.mention(shortcuts.id),
         ', a date like ',
         t.date({ start: today, time: false }),
-        ', an emoji ',
-        t.emoji('🎉', 'tada'),
         ' or inline maths ',
         t.math('e^{i\\pi} + 1 = 0'),
         '.',
@@ -332,9 +330,9 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
         children: [b.p('Type > and a space to make one. Everything inside moves with it.')],
       }),
       b.h2('Callouts and quotes'),
-      b.callout('Callouts draw the eye. Change the icon and colour from the block menu.', { icon: emoji('💡'), tone: 'yellow' }),
-      b.callout([t.bold('Heads up: '), 'callouts come in every block colour.'], { icon: emoji('⚠️'), tone: 'orange' }),
-      b.callout('Use green for wins and good news.', { icon: emoji('✅'), tone: 'green' }),
+      b.callout('Callouts draw the eye. Change the icon and colour from the block menu.', { icon: lucide('lightbulb'), tone: 'yellow' }),
+      b.callout([t.bold('Heads up: '), 'callouts come in every block colour.'], { icon: lucide('triangle-alert'), tone: 'orange' }),
+      b.callout('Use green for wins and good news.', { icon: lucide('circle-check'), tone: 'green' }),
       b.quote('Simple can be harder than complex: you have to work hard to get your thinking clean to make it simple.'),
       b.h2('Code and maths'),
       b.code(
@@ -451,7 +449,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
         { colWidths: [180, 300] },
       ),
       b.callout(['Markdown works as you type: ', t.code('#'), ' headings, ', t.code('-'), ' bullets, ', t.code('[]'), ' to-dos, ', t.code('---'), ' dividers.'], {
-        icon: emoji('⚡'),
+        icon: lucide('zap'),
         tone: 'blue',
       }),
     ]),
@@ -464,7 +462,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     makeDoc([
       b.callout(
         'Your password never leaves this device, and we can’t reset it. Your recovery key is the only other way in, so keep it safe.',
-        { icon: emoji('🔑'), tone: 'yellow' },
+        { icon: lucide('key-round'), tone: 'yellow' },
       ),
       b.h2('How it works'),
       b.numbered([
@@ -519,14 +517,14 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       b.h2('The six apps'),
       b.columns([
         [
-          b.callout([t.bold('Money HQ'), ' — budget, spending, bills and net worth.'], { icon: emoji('💳'), tone: 'green' }),
-          b.callout([t.bold('Portfolio'), ' — holdings, performance, allocation and rebalancing.'], { icon: emoji('📈'), tone: 'blue' }),
-          b.callout([t.bold('Tax Organizer'), ' — documents, deductions and quarterly estimates.'], { icon: emoji('🧾'), tone: 'yellow' }),
+          b.callout([t.bold('Money HQ'), ' — budget, spending, bills and net worth.'], { icon: lucide('credit-card'), tone: 'green' }),
+          b.callout([t.bold('Portfolio'), ' — holdings, performance, allocation and rebalancing.'], { icon: lucide('trending-up'), tone: 'blue' }),
+          b.callout([t.bold('Tax Organizer'), ' — documents, deductions and quarterly estimates.'], { icon: lucide('receipt'), tone: 'yellow' }),
         ],
         [
-          b.callout([t.bold('Spreadsheet Studio'), ' — calculators and models with real formulas.'], { icon: emoji('🧮'), tone: 'purple' }),
-          b.callout([t.bold('Life OS'), ' — goals, projects and tasks in one system.'], { icon: emoji('🗂️'), tone: 'gray' }),
-          b.callout([t.bold('Habits'), ' — streaks and gentle check-ins.'], { icon: emoji('🌱'), tone: 'red' }),
+          b.callout([t.bold('Spreadsheet Studio'), ' — calculators and models with real formulas.'], { icon: lucide('calculator'), tone: 'purple' }),
+          b.callout([t.bold('Life OS'), ' — goals, projects and tasks in one system.'], { icon: lucide('folder-kanban'), tone: 'gray' }),
+          b.callout([t.bold('Habits'), ' — streaks and gentle check-ins.'], { icon: lucide('sprout'), tone: 'red' }),
         ],
       ]),
       b.h2('How the advice works'),
@@ -534,7 +532,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       b.bullet('Suggestions use common guidelines, never a sales pitch. Nothing is ever bought, filed or paid for you.'),
       b.callout(
         'Estimates for planning only. Not financial or tax advice. Verify with official sources or a qualified professional.',
-        { icon: emoji('ℹ️'), tone: 'gray' },
+        { icon: lucide('info'), tone: 'gray' },
       ),
     ]),
   );
@@ -563,7 +561,7 @@ function createJournal(ctx: MockCtx, workspaceId: string): string {
     parentId: null,
     kind: 'doc',
     title: 'Journal',
-    icon: emoji('📓'),
+    icon: lucide('notebook'),
     templateKey: 'daily:root',
     createdAt: now - 45 * DAY,
     updatedAt: now - 0.1 * DAY,
@@ -626,7 +624,7 @@ function createJournal(ctx: MockCtx, workspaceId: string): string {
       parentId: journal.id,
       kind: 'doc',
       title: dailyTitle(date),
-      icon: emoji(e.daysAgo === 0 ? '☀️' : '🗓️'),
+      icon: lucide(e.daysAgo === 0 ? 'sun' : 'calendar'),
       templateKey: `daily:${date}`,
       createdAt: ts - 3 * 3600_000,
       updatedAt: ts - (e.daysAgo === 0 ? 0.05 * DAY : 0.2 * DAY),
@@ -648,7 +646,7 @@ function createProjects(ctx: MockCtx, workspaceId: string, journalId: string): {
     parentId: null,
     kind: 'doc',
     title: 'Projects',
-    icon: emoji('🎯'),
+    icon: lucide('target'),
     createdAt: now - 40 * DAY,
     updatedAt: now - 2 * DAY,
     silent: true,
@@ -658,7 +656,7 @@ function createProjects(ctx: MockCtx, workspaceId: string, journalId: string): {
     parentId: projects.id,
     kind: 'doc',
     title: 'Website relaunch',
-    icon: emoji('🚀'),
+    icon: lucide('rocket'),
     cover: { t: 'gradient', v: 'dusk' },
     createdAt: now - 38 * DAY,
     updatedAt: now - 0.3 * DAY,
@@ -669,7 +667,7 @@ function createProjects(ctx: MockCtx, workspaceId: string, journalId: string): {
     parentId: relaunch.id,
     kind: 'doc',
     title: 'Launch checklist',
-    icon: emoji('✅'),
+    icon: lucide('circle-check'),
     createdAt: now - 20 * DAY,
     updatedAt: now - 1 * DAY,
     silent: true,
@@ -679,7 +677,7 @@ function createProjects(ctx: MockCtx, workspaceId: string, journalId: string): {
     parentId: projects.id,
     kind: 'doc',
     title: 'Kitchen renovation',
-    icon: emoji('🏡'),
+    icon: lucide('house'),
     createdAt: now - 30 * DAY,
     updatedAt: now - 2 * DAY,
     silent: true,
@@ -698,7 +696,7 @@ function createProjects(ctx: MockCtx, workspaceId: string, journalId: string): {
     makeDoc([
       b.callout(
         [t.bold('One sentence: '), 'a faster, clearer site that turns visitors into trial sign-ups — live by ', t.date({ start: launchDay, time: false }), '.'],
-        { icon: emoji('💡'), tone: 'yellow' },
+        { icon: lucide('lightbulb'), tone: 'yellow' },
       ),
       b.h2('Goals'),
       b.bullet(['Lift trial sign-ups from ', t.bold('2.1%'), ' to ', t.bold('3%'), ' of visitors']),
@@ -780,7 +778,7 @@ function createProjects(ctx: MockCtx, workspaceId: string, journalId: string): {
           b.bullet('Only $400 more once the permit is counted'),
         ],
       }),
-      b.callout('Ask both for a written schedule before signing.', { icon: emoji('📌'), tone: 'red' }),
+      b.callout('Ask both for a written schedule before signing.', { icon: lucide('pin'), tone: 'red' }),
     ]),
   );
 
@@ -795,7 +793,7 @@ function createReading(ctx: MockCtx, workspaceId: string): string {
     parentId: null,
     kind: 'doc',
     title: 'Reading notes',
-    icon: emoji('📚'),
+    icon: lucide('library'),
     createdAt: now - 50 * DAY,
     updatedAt: now - 6 * DAY,
     silent: true,
@@ -805,7 +803,7 @@ function createReading(ctx: MockCtx, workspaceId: string): string {
     parentId: reading.id,
     kind: 'doc',
     title: 'The Psychology of Money',
-    icon: emoji('💭'),
+    icon: lucide('message-square'),
     createdAt: now - 49 * DAY,
     updatedAt: now - 6 * DAY,
     silent: true,
@@ -815,7 +813,7 @@ function createReading(ctx: MockCtx, workspaceId: string): string {
     parentId: reading.id,
     kind: 'doc',
     title: 'Atomic Habits',
-    icon: emoji('⚛️'),
+    icon: lucide('atom'),
     createdAt: now - 33 * DAY,
     updatedAt: now - 14 * DAY,
     silent: true,
@@ -859,7 +857,7 @@ function createReading(ctx: MockCtx, workspaceId: string): string {
       b.numbered([t.bold('Make it easy'), ' — response'], { children: [b.bullet('The two-minute rule: scale it down until it takes two minutes.')] }),
       b.numbered([t.bold('Make it satisfying'), ' — reward'], { children: [b.bullet('Never miss twice.')] }),
       b.quote('You do not rise to the level of your goals. You fall to the level of your systems.'),
-      b.callout('Track these in the Habits app — it keeps streaks honest and forgiving.', { icon: emoji('🌱'), tone: 'green' }),
+      b.callout('Track these in the Habits app — it keeps streaks honest and forgiving.', { icon: lucide('sprout'), tone: 'green' }),
     ]),
   );
   return reading.id;
@@ -883,7 +881,7 @@ function createTrip(ctx: MockCtx, workspaceId: string): string {
     parentId: null,
     kind: 'doc',
     title: 'Lisbon in March',
-    icon: emoji('✈️'),
+    icon: lucide('plane'),
     cover: { t: 'asset', assetId: tiles.id, posY: 0.5 },
     createdAt: now - 12 * DAY,
     updatedAt: now - 1.2 * DAY,
@@ -925,13 +923,13 @@ function createUserTemplate(ctx: MockCtx, workspaceId: string): string {
     parentId: null,
     kind: 'doc',
     title: 'Weekly 1:1',
-    icon: emoji('🤝'),
+    icon: lucide('handshake'),
     flags: { template: true },
     createdAt: now - 25 * DAY,
     updatedAt: now - 25 * DAY,
     silent: true,
     doc: makeDoc([
-      b.callout('Their agenda first. Keep a running page per person and add to the top each week.', { icon: emoji('🗣️'), tone: 'blue' }),
+      b.callout('Their agenda first. Keep a running page per person and add to the top each week.', { icon: lucide('speech'), tone: 'blue' }),
       b.h2('Wins since last time'),
       b.bullet(''),
       b.h2('Blockers'),
@@ -1013,7 +1011,7 @@ function seedDemo(ctx: MockCtx) {
     parentId: null,
     kind: 'doc',
     title: 'Old gym routine',
-    icon: emoji('🏋️'),
+    icon: lucide('dumbbell'),
     createdAt: ctx.clock.now() - 70 * DAY,
     updatedAt: ctx.clock.now() - 20 * DAY,
     silent: true,
@@ -1058,7 +1056,7 @@ function seedPerf(ctx: MockCtx) {
       kind: 'doc',
       sortKey: areaKeys[a],
       title: `Area ${a + 1} — ${title()}`,
-      icon: emoji(ctx.rng.pick(['📁', '🗂️', '📦', '🧩', '🗃️'])),
+      icon: lucide(ctx.rng.pick(['folder', 'folder-open', 'package', 'puzzle', 'archive'])),
       createdAt: now - ctx.rng.int(30, 400) * DAY,
       updatedAt: now - ctx.rng.int(0, 30) * DAY,
       rev: 1,
@@ -1093,7 +1091,7 @@ function seedPerf(ctx: MockCtx) {
   }
 
   // ~2 MB document.
-  const big = ctx.pages.create({ workspaceId: ws, parentId: null, kind: 'doc', title: 'Large document (2 MB)', icon: emoji('🐘'), silent: true });
+  const big = ctx.pages.create({ workspaceId: ws, parentId: null, kind: 'doc', title: 'Large document (2 MB)', icon: lucide('database'), silent: true });
   const blocks: TipTapNode[] = [];
   const sentence =
     'The quick brown fox jumps over the lazy dog while the budget review waits patiently for the quarterly numbers to arrive. ';

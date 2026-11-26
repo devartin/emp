@@ -1,5 +1,5 @@
 /** Identity of the v1 life apps (§16): name, accent colour and lucide icon, used for the 18px sidebar tiles. */
-import { CandlestickChart, HeartPulse, Kanban, ReceiptText, Sheet, Sparkles, Wallet, type LucideIcon } from "lucide-react";
+import { CandlestickChart, HeartPulse, Kanban, ReceiptText, LayoutGrid, Sheet, Wallet, type LucideIcon } from "lucide-react";
 
 export interface LifeAppIdentity {
   name: string;
@@ -18,5 +18,5 @@ const IDS: Record<string, LifeAppIdentity> = {
 };
 
 export function lifeAppIdentity(appId: string): LifeAppIdentity {
-  return IDS[appId] ?? { name: appId.replace(/(^|-)(\w)/g, (_m, s: string, c: string) => (s ? " " : "") + c.toUpperCase()), color: "#52525B", icon: Sparkles };
+  return IDS[appId] ?? { name: appId.replace(/(^|-)(\w)/g, (_m, s: string, c: string) => (s ? " " : "") + c.toUpperCase()), color: "#52525B", icon: LayoutGrid };
 }

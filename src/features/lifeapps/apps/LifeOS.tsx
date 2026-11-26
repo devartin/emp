@@ -1,15 +1,15 @@
 /**
- * Life OS hub (§16.6): Today (quick add with natural-language chips, Top 3, due & overdue, agenda timeline with
- * Google events and scheduled task blocks, habit strip, insights from every app), Tasks, Projects and Review.
- * Completing a task (S13): the round well fills into a lit dome on the `pop` spring, 8 ink rays burst, a strike line
- * draws from the left over 220ms and the text fades to tertiary; recurring tasks spawn their next occurrence in the
- * backend. Quick add is a well whose parsed tokens rise in as printed chips; projects are raised panels.
+ * Life OS hub (§16.6): Tasks · Projects · Review. It lands on Tasks with focus in the quick-add field; the day itself
+ * (due and overdue tasks, today's agenda, habits) lives on Home (PROGRAMME-v3 K4: Home is the only "Today").
+ * Completing a task ticks the check and strikes the title (C1); recurring tasks spawn their next occurrence in the
+ * backend. Quick add previews its parse as plain chips before Enter. No KPI row: the subtitle states the counts once
+ * the tasks have loaded (never "0 open" while they load).
  */
-import { ArrowRight, CalendarDays, Check, CircleDashed, FolderKanban, Inbox, Plus, RotateCcw, Star, Sun, Target } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, FolderKanban, Inbox, Plus, RotateCcw, Target } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { api } from "@/backend";
-import type { CalendarEvent, Id, LifeAppInstance, RowDTO } from "@/backend/types";
+import type { Id, LifeAppInstance, RowDTO } from "@/backend/types";
 import { navigate } from "@/app/router";
 import { BarChart } from "@/charts/Bar";
 import { cn } from "@/lib/cn";
@@ -21,25 +21,19 @@ import { useWorkspace } from "@/stores/workspace";
 import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { EmptyState } from "@/ui/EmptyState";
-import { KpiTile } from "@/ui/KpiTile";
 import { Progress } from "@/ui/Progress";
 import { Segmented } from "@/ui/Segmented";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tag } from "@/ui/Tag";
-import { burst } from "@/ui/motion/Celebrate";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { AppHeader } from "../AppHeader";
 import { localDay, optionId, read, write } from "../cells";
 import { useAppDatabases, useMetrics, useRows, useStableNow, type AppDb } from "../data";
-import { AppTile } from "../AppTile";
-import { appVars, identity } from "../identity";
-import { EdgeLight } from "@/ui/motion/EdgeLight";
-import { RollingNumber } from "@/ui/motion/RollingNumber";
-import { InsightsFeed } from "../Insights";
-import { StartHere } from "../StartHere";
+import { appVars } from "../identity";
+import { PageIcon } from "@/features/shell/PageIcon";
 
-type Tab = "today" | "tasks" | "projects" | "review";
+type Tab = "tasks" | "projects" | "review";
 
 const addDays = (day: string, n: number) => {
   const d = new Date(`${day}T12:00:00`);
@@ -113,13 +107,12 @@ function TaskRow({ row, db, today, projectName, onToggle, showStatus, ref }: { r
 }
 
 function useToggleTask(db: AppDb | undefined, setRows: (fn: (r: RowDTO[]) => RowDTO[]) => void) {
-  return async (row: RowDTO, el: HTMLElement) => {
+  return async (row: RowDTO, _el: HTMLElement) => {
     if (!db) return;
     const status = db.p("task.status");
     const done = read.opt(row, status)?.name === "Done";
     const next = optionId(status, done ? "Next" : "Done");
     if (!status || !next) return;
-    if (!done) burst(el, { radius: 12 });
     setRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, values: { ...r.values, [status.id]: write.status(next) } } : r)));
     try {
       const values: Record<Id, ReturnType<typeof write.status> | null> = { [status.id]: write.status(next) };
@@ -135,8 +128,14 @@ function useToggleTask(db: AppDb | undefined, setRows: (fn: (r: RowDTO[]) => Row
 
 // ───────────────────────────────────────────────────────────────────────────── quick add
 
-function QuickAdd({ db }: { db: AppDb | undefined }) {
+function QuickAdd({ db, autoFocus, onAdded }: { db: AppDb | undefined; autoFocus?: boolean; onAdded?: (list: "Inbox" | "Next") => void }) {
   const [text, setText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Life OS lands with focus in this field once the tasks database is ready (the field is disabled until then).
+  const ready = !!db;
+  useEffect(() => {
+    if (autoFocus && ready) inputRef.current?.focus({ preventScroll: true });
+  }, [autoFocus, ready]);
   const [busy, setBusy] = useState(false);
   const parsed = useMemo(() => (text.trim() ? parseNatural(text) : null), [text]);
   const submit = async () => {
@@ -162,7 +161,9 @@ function QuickAdd({ db }: { db: AppDb | undefined }) {
       if (est && parsed.durationMinutes) values[est.id] = write.num(parsed.durationMinutes);
       await api.db.rowCreate({ databaseId: db.id, values });
       setText("");
-      notify.success(parsed.start ? "Task added" : "Added to Inbox");
+      // The new task stays in view: the list switches to the one it landed in.
+      onAdded?.(parsed.start ? "Next" : "Inbox");
+      notify.success(parsed.start ? "Added to Next" : "Added to Inbox");
     } catch (e) {
       notify.fromError(e, "Couldn’t add the task");
     } finally {
@@ -186,17 +187,12 @@ function QuickAdd({ db }: { db: AppDb | undefined }) {
             void submit();
           }
         }}
-        placeholder="Add a task — try “Call the bank tomorrow 3pm !high”"
-        aria-label="Quick add a task"
+        placeholder="Add a task, e.g. call the bank tomorrow 3pm !high"
+        aria-label="Add a task"
         disabled={!db || busy}
+        ref={inputRef}
       />
-      <AnimatePresence initial={false}>
-        {chips.map((c, i) => (
-          <m.span key={i} initial={{ opacity: 0, y: 6, scale: 0.92 }} animate={{ opacity: 1, y: 0, scale: 1, transition: spring.release }} exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.1 } }}>
-            {c}
-          </m.span>
-        ))}
-      </AnimatePresence>
+      {chips}
       <Button size="sm" variant="primary" disabled={!parsed?.title.trim() || busy} onClick={submit} kbd="↵">
         Add
       </Button>
@@ -204,136 +200,10 @@ function QuickAdd({ db }: { db: AppDb | undefined }) {
   );
 }
 
-// ───────────────────────────────────────────────────────────────────────────── agenda
-
-const START_H = 7;
-const END_H = 21;
-const HOUR_PX = 44;
-
-/** Side-by-side lanes for overlapping events (greedy column packing per overlap cluster). */
-function layoutLanes(list: CalendarEvent[]): { e: CalendarEvent; lane: number; lanes: number }[] {
-  const sorted = [...list].sort((a, b) => Date.parse(a.start) - Date.parse(b.start) || Date.parse(b.end) - Date.parse(a.end));
-  const out: { e: CalendarEvent; lane: number; lanes: number }[] = [];
-  let cluster: { e: CalendarEvent; lane: number; lanes: number }[] = [];
-  let laneEnds: number[] = [];
-  let clusterEnd = -Infinity;
-  const flush = () => {
-    const n = Math.max(1, laneEnds.length);
-    for (const c of cluster) c.lanes = n;
-    out.push(...cluster);
-    cluster = [];
-    laneEnds = [];
-  };
-  for (const e of sorted) {
-    const s = Date.parse(e.start);
-    const en = Math.max(Date.parse(e.end), s + 20 * 60_000);
-    if (s >= clusterEnd) flush();
-    let lane = laneEnds.findIndex((end) => end <= s);
-    if (lane < 0) {
-      lane = laneEnds.length;
-      laneEnds.push(en);
-    } else laneEnds[lane] = en;
-    cluster.push({ e, lane, lanes: 1 });
-    clusterEnd = Math.max(clusterEnd === -Infinity ? en : clusterEnd, en);
-  }
-  flush();
-  return out;
-}
-
-function Agenda({ events, now }: { events: CalendarEvent[] | null; now: Date }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const timed = useMemo(() => layoutLanes((events ?? []).filter((e) => !e.allDay)), [events]);
-  // Due tasks already have their own list; the agenda shows calendars and time blocks.
-  const allDay = (events ?? []).filter((e) => e.allDay && e.source !== "db");
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = Math.max(0, (now.getHours() - START_H - 1) * HOUR_PX);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events === null]);
-  const pos = (iso: string) => {
-    const d = new Date(iso);
-    return ((d.getHours() + d.getMinutes() / 60 - START_H) * HOUR_PX);
-  };
-  const nowTop = (now.getHours() + now.getMinutes() / 60 - START_H) * HOUR_PX;
-  return (
-    <Card title="Agenda" subtitle={now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} actions={<Button size="xs" variant="ghost" iconRight={ArrowRight} onClick={() => navigate({ t: "calendar" } as never)}>Calendar</Button>}>
-      {allDay.length ? (
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {allDay.map((e) => (
-            <span key={e.id} className="inline-flex h-6 items-center rounded-md px-2 text-caption font-semibold" style={{ background: `var(--block-${e.color}-bg, var(--bg-surface-2))`, color: `var(--block-${e.color}-text, var(--text-primary))` }}>
-              {e.title}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      {!events ? (
-        <Skeleton height={300} radius={10} />
-      ) : (
-        <div ref={scrollRef} className="relative max-h-[420px] overflow-y-auto pr-1">
-          <div className="lo-timeline">
-            {Array.from({ length: END_H - START_H + 1 }, (_, i) => (
-              <div key={i} className="lo-hour" style={{ gridRow: i + 1 }}>
-                {new Date(2026, 0, 1, START_H + i).toLocaleTimeString(undefined, { hour: "numeric" })}
-              </div>
-            ))}
-            <div className="lo-lines" style={{ gridRow: `1 / span ${END_H - START_H + 1}` }}>
-              {Array.from({ length: END_H - START_H + 1 }, (_, i) => (
-                <div key={i} className="lo-line" />
-              ))}
-              {timed.map(({ e, lane, lanes }, i) => {
-                const top = Math.max(0, pos(e.start));
-                const h = Math.max(22, pos(e.end) - pos(e.start) - 2);
-                if (top > (END_H - START_H + 1) * HOUR_PX) return null;
-                return (
-                  <m.button
-                    type="button"
-                    key={e.id}
-                    className="lo-block text-left"
-                    style={{ top, height: h, left: `calc(${(lane / lanes) * 100}% + 4px)`, width: `calc(${100 / lanes}% - 6px)`, right: "auto", ["--blk" as string]: `var(--block-${e.color}-text, var(--accent-solid))` }}
-                    initial={{ opacity: 0, x: 6 }}
-                    animate={{ opacity: 1, x: 0, transition: { ...spring.gentle, delay: i * 0.03 } }}
-                    onClick={() => (e.link ? useUi.getState().openPeek(e.link) : navigate({ t: "calendar" } as never))}
-                  >
-                    <span className="font-semibold">{e.title}</span>
-                    {h > 38 ? <small className="tabular">{formatTime(e.start)} – {formatTime(e.end)}{e.location ? ` · ${e.location}` : ""}</small> : null}
-                  </m.button>
-                );
-              })}
-              {nowTop >= 0 && nowTop <= (END_H - START_H + 1) * HOUR_PX ? <div className="lo-now" style={{ top: nowTop }} aria-label={`Now, ${formatTime(now)}`} /> : null}
-            </div>
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function HabitStrip() {
-  const habits = useWorkspace((s) => s.lifeapps.find((i) => i.appId === "habits" && !i.detached));
-  const { metrics } = useMetrics(habits?.id, ["today_done_pct", "active_count"]);
-  if (!habits) return null;
-  const pct = Number(metrics?.today_done_pct?.value ?? 0);
-  const n = Number(metrics?.active_count?.value ?? 0);
-  const id = identity("habits");
-  return (
-    <button type="button" className="lo-strip panel" data-raise="" data-light="" onClick={() => navigate({ t: "app", instanceId: habits.id })}>
-      <EdgeLight />
-      <AppTile appId="habits" size="sm" />
-      <span className="flex-1 text-body-sm">
-        <span className="font-semibold text-primary">Habits</span>
-        <span className="text-secondary"> · {Math.round(pct * n)} of {n} done today</span>
-      </span>
-      <div className="w-24">
-        <Progress value={pct} size={4} color={id.color} aria-label="Habits done today" />
-      </div>
-    </button>
-  );
-}
-
 // ───────────────────────────────────────────────────────────────────────────── page
 
 export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppInstance; tab?: string }) {
-  const tab = (["today", "tasks", "projects", "review"].includes(tabProp ?? "") ? tabProp : "today") as Tab;
+  const tab = (["tasks", "projects", "review"].includes(tabProp ?? "") ? tabProp : "tasks") as Tab;
   const { byRole, dbs } = useAppDatabases(instance.id);
   const tasksDb = byRole("task.status");
   const projectsDb = byRole("project.status");
@@ -344,19 +214,7 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
   const { metrics } = useMetrics(instance.id);
   const now = useStableNow();
   const today = localDay(now);
-  const [events, setEvents] = useState<CalendarEvent[] | null>(null);
   const toggle = useToggleTask(tasksDb, setRows);
-
-  useEffect(() => {
-    let live = true;
-    const load = () => api.calendar.events({ from: today, to: today }).then((e) => live && setEvents(e)).catch(() => live && setEvents([]));
-    void load();
-    const h = setInterval(load, 60_000);
-    return () => {
-      live = false;
-      clearInterval(h);
-    };
-  }, [today, tasks]);
 
   const projectName = useMemo(() => {
     const map = new Map<Id, string>();
@@ -366,74 +224,31 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
 
   const status = (r: RowDTO) => read.opt(r, tasksDb?.p("task.status"))?.name;
   const open = (tasks ?? []).filter((r) => status(r) !== "Done");
-  const dueSoon = open
-    .filter((r) => {
-      const d = read.date(r, tasksDb?.p("task.due"))?.start?.slice(0, 10);
-      return !!d && d <= today;
-    })
-    .sort((a, b) => (read.date(a, tasksDb?.p("task.due"))?.start ?? "").localeCompare(read.date(b, tasksDb?.p("task.due"))?.start ?? ""));
-  const top3 = open.filter((r) => read.bool(r, tasksDb?.p("task.top3"))).slice(0, 3);
-  const recentlyDone = (tasks ?? []).filter((r) => status(r) === "Done" && read.date(r, tasksDb?.p("task.completed"))?.start?.slice(0, 10) === today);
-
-  // KPI anatomy: every tile gets a caption and a 14-day ink sparkline derived from the tasks themselves.
-  const trend = useMemo(() => {
-    const days = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13));
-    const all = tasks ?? [];
-    const dueOf = (r: RowDTO) => read.date(r, tasksDb?.p("task.due"))?.start?.slice(0, 10);
-    const st = (r: RowDTO) => read.opt(r, tasksDb?.p("task.status"))?.name;
-    const doneOn = (r: RowDTO) => (st(r) === "Done" ? read.date(r, tasksDb?.p("task.completed"))?.start?.slice(0, 10) ?? "" : null);
-    const created = (r: RowDTO) => localDay(new Date(r.createdAt));
-    const inbox = all.filter((r) => st(r) === "Inbox");
-    const overdueOpen = all.filter((r) => st(r) !== "Done" && (dueOf(r) ?? "9999") < today);
-    const oldest = overdueOpen.reduce((m, r) => Math.max(m, Math.round((Date.parse(`${today}T12:00:00`) - Date.parse(`${dueOf(r)}T12:00:00`)) / 86_400_000)), 0);
-    const weekAgo = addDays(today, -6);
-    const twoWeeksAgo = addDays(today, -13);
-    return {
-      due: days.map((d) => all.filter((r) => dueOf(r) === d).length),
-      overdue: days.map(
-        (d) =>
-          all.filter((r) => {
-            const x = dueOf(r);
-            if (!x || x >= d) return false;
-            const c = doneOn(r);
-            return c === null || (c !== "" && c > d);
-          }).length,
-      ),
-      inbox: days.map((d) => inbox.filter((r) => created(r) <= d).length),
-      done: days.map((d) => all.filter((r) => doneOn(r) === d).length),
-      tomorrow: all.filter((r) => st(r) !== "Done" && dueOf(r) === addDays(today, 1)).length,
-      oldest,
-      inboxNew: inbox.filter((r) => created(r) >= weekAgo).length,
-      lastWeek: all.filter((r) => {
-        const c = doneOn(r);
-        return !!c && c >= twoWeeksAgo && c < weekAgo;
-      }).length,
-    };
-  }, [tasks, tasksDb, today]);
-  const ready = !!metrics && !!tasks;
-
-  const kpis = (
-    <>
-      <KpiTile label="Due today" value={Number(metrics?.due_today?.value ?? 0)} loading={!ready} format={(n) => String(Math.round(n))} spark={trend.due} countUpKey={`lo-due-${instance.id}`} onClick={() => setTab("tasks")} footer={<span className="tabular">{trend.tomorrow ? `${trend.tomorrow} more due tomorrow` : "Nothing due tomorrow"}</span>} />
-      <KpiTile label="Overdue" value={Number(metrics?.overdue_count?.value ?? 0)} loading={!ready} format={(n) => String(Math.round(n))} spark={trend.overdue} info="Open tasks with a due date before today." countUpKey={`lo-over-${instance.id}`} onClick={() => setTab("tasks")} footer={<span className="tabular">{trend.oldest ? `Oldest ${trend.oldest} ${trend.oldest === 1 ? "day" : "days"} late` : "All caught up"}</span>} />
-      <KpiTile label="Inbox" value={Number(metrics?.inbox_count?.value ?? 0)} loading={!ready} format={(n) => String(Math.round(n))} spark={trend.inbox} countUpKey={`lo-inbox-${instance.id}`} onClick={() => setTab("tasks")} footer={<span className="tabular">{trend.inboxNew ? `${trend.inboxNew} added this week` : "Nothing new this week"}</span>} />
-      <KpiTile label="Done this week" value={Number(metrics?.done_7d?.value ?? 0)} loading={!ready} format={(n) => String(Math.round(n))} spark={trend.done} countUpKey={`lo-done-${instance.id}`} onClick={() => setTab("review")} footer={<span className="tabular">vs {trend.lastWeek} last week</span>} />
-    </>
-  );
 
   const setTab = (t: Tab) => navigate({ t: "app", instanceId: instance.id, tab: t });
-  const greetingSub = `${now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} · ${open.length} open tasks`;
+  // Truth: the counts appear once the tasks have loaded; never "0 open" while they load.
+  const subtitle = useMemo(() => {
+    if (!tasks) return undefined;
+    const due = (r: RowDTO) => read.date(r, tasksDb?.p("task.due"))?.start?.slice(0, 10);
+    const today_ = open.filter((r) => due(r) === today).length;
+    const late = open.filter((r) => (due(r) ?? "9999") < today).length;
+    const inbox = open.filter((r) => status(r) === "Inbox").length;
+    const parts = [`${open.length} open`];
+    if (today_) parts.push(`${today_} due today`);
+    if (late) parts.push(`${late} overdue`);
+    if (inbox) parts.push(`${inbox} in Inbox`);
+    return parts.join(" · ");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, tasksDb, today]);
 
   return (
     <div className="la-hub" style={appVars("life-os")}>
       <AppHeader<Tab>
         instance={instance}
         title="Life OS"
-        subtitle={greetingSub}
-        kpis={kpis}
+        subtitle={subtitle}
         tabs={[
-          { value: "today", label: "Today", icon: Sun },
-          { value: "tasks", label: "Tasks", icon: Inbox, count: open.length || undefined },
+          { value: "tasks", label: "Tasks", icon: Inbox },
           { value: "projects", label: "Projects", icon: FolderKanban },
           { value: "review", label: "Review", icon: RotateCcw },
         ]}
@@ -443,55 +258,6 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
       <div className="la-hub-body">
         {dbs && !tasksDb ? (
           <EmptyState icon={Target} title="Tasks database not found" body="It may have been deleted or detached. Tune up Life OS to recreate it." />
-        ) : tab === "today" ? (
-          <div className="lo-grid">
-            <div className="flex min-w-0 flex-col gap-5">
-              <QuickAdd db={tasksDb} />
-              <Card title={<span className="flex items-center gap-2"><Star size={14} className="text-warning" aria-hidden />Top 3</span>} subtitle="What would make today a win?">
-                {!tasks ? (
-                  <Skeleton height={96} radius={10} />
-                ) : (
-                  <div className="relative flex flex-col">
-                    <AnimatePresence initial={false} mode="popLayout">
-                      {top3.map((r) => (
-                        <TaskRow key={r.id} row={r} db={tasksDb!} today={today} projectName={projectName.get(read.rel(r, tasksDb?.p("task.project"))[0] ?? "")} onToggle={toggle} />
-                      ))}
-                    </AnimatePresence>
-                    {Array.from({ length: Math.max(0, 3 - top3.length) }, (_, i) => (
-                      <m.div key={`slot-${i}`} layout="position" transition={spring.glide} className="lo-task text-tertiary">
-                        <CircleDashed size={18} className="flex-none opacity-50" aria-hidden />
-                        <span className="text-body-sm">Star a task to add it here</span>
-                      </m.div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-              <Card title="Due & overdue" subtitle={dueSoon.length ? `${dueSoon.length} to do` : "You’re clear"}>
-                {!tasks ? (
-                  <Skeleton height={120} radius={10} />
-                ) : dueSoon.length || recentlyDone.length ? (
-                  <div className="relative flex flex-col">
-                    <AnimatePresence initial={false} mode="popLayout">
-                      {[...dueSoon, ...recentlyDone].map((r) => (
-                        <TaskRow key={r.id} row={r} db={tasksDb!} today={today} projectName={projectName.get(read.rel(r, tasksDb?.p("task.project"))[0] ?? "")} onToggle={toggle} />
-                      ))}
-                    </AnimatePresence>
-                  </div>
-                ) : (
-                  <p className="py-4 text-center text-body-sm text-tertiary">Nothing due. Pick something from Next, or enjoy the space.</p>
-                )}
-              </Card>
-              <StartHere instance={instance} />
-            </div>
-            <div className="flex min-w-0 flex-col gap-5">
-              <Agenda events={events} now={now} />
-              <HabitStrip />
-              <section>
-                <h2 className="la-section-title">Insights <span className="la-dim">from all your apps</span></h2>
-                <InsightsFeed limit={4} />
-              </section>
-            </div>
-          </div>
         ) : tab === "tasks" ? (
           <TasksTab db={tasksDb} rows={tasks} today={today} projectName={projectName} onToggle={toggle} />
         ) : tab === "projects" ? (
@@ -510,22 +276,21 @@ const LISTS = ["Inbox", "Next", "Scheduled", "Waiting", "Someday", "Done"] as co
 
 function TasksTab({ db, rows, today, projectName, onToggle }: { db: AppDb | undefined; rows: RowDTO[] | null; today: string; projectName: Map<Id, string>; onToggle: (r: RowDTO, el: HTMLElement) => void }) {
   const [list, setList] = useState<(typeof LISTS)[number]>("Inbox");
-  const counts = Object.fromEntries(LISTS.map((l) => [l, (rows ?? []).filter((r) => read.opt(r, db?.p("task.status"))?.name === l).length]));
   const shown = (rows ?? [])
     .filter((r) => read.opt(r, db?.p("task.status"))?.name === list)
     .sort((a, b) => (read.date(a, db?.p("task.due"))?.start ?? "9999").localeCompare(read.date(b, db?.p("task.due"))?.start ?? "9999"));
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Segmented value={list} onValueChange={setList} options={LISTS.map((l) => ({ value: l, label: `${l} ${counts[l] ? `· ${counts[l]}` : ""}`.trim() }))} aria-label="List" />
+        <Segmented value={list} onValueChange={setList} options={LISTS.map((l) => ({ value: l, label: l }))} aria-label="List" />
         <span className="flex-1" />
         {db ? (
-          <Button size="sm" variant="ghost" iconRight={ArrowRight} onClick={() => navigate({ t: "db", id: db.id })}>
+          <Button size="sm" variant="ghost" onClick={() => navigate({ t: "db", id: db.id })}>
             Open database
           </Button>
         ) : null}
       </div>
-      <QuickAdd db={db} />
+      <QuickAdd db={db} autoFocus onAdded={setList} />
       <Card pad="md">
         {!rows || !db ? (
           <Skeleton height={200} radius={10} />
@@ -538,7 +303,7 @@ function TasksTab({ db, rows, today, projectName, onToggle }: { db: AppDb | unde
             </AnimatePresence>
           </div>
         ) : (
-          <p className="py-8 text-center text-body-sm text-tertiary">{list === "Inbox" ? "Inbox zero. Nicely done." : `Nothing in ${list}.`}</p>
+          <p className="py-8 text-center text-body-sm text-tertiary">{list === "Inbox" ? "Inbox is empty." : `Nothing in ${list}.`}</p>
         )}
       </Card>
     </div>
@@ -546,12 +311,12 @@ function TasksTab({ db, rows, today, projectName, onToggle }: { db: AppDb | unde
 }
 
 function ProjectsTab({ db, rows, tasksDb, tasks, areas, areasDb, today }: { db: AppDb | undefined; rows: RowDTO[] | null; tasksDb: AppDb | undefined; tasks: RowDTO[] | null; areas: RowDTO[] | null; areasDb: AppDb | undefined; today: string }) {
-  const areaName = new Map((areas ?? []).map((a) => [a.id, { name: read.text(a, areasDb?.p("area.name")), icon: a.icon?.t === "emoji" ? a.icon.v : "" }] as const));
+  const areaName = new Map((areas ?? []).map((a) => [a.id, { name: read.text(a, areasDb?.p("area.name")) }] as const));
   if (!rows || !db) return <Skeleton height={240} radius={14} />;
   if (!rows.length) return <EmptyState icon={FolderKanban} title="No projects yet" body="Projects group tasks toward an outcome. Add one from the Projects database." actions={<Button variant="primary" onClick={() => navigate({ t: "db", id: db.id })}>Open Projects</Button>} />;
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-      {rows.map((p, i) => {
+      {rows.map((p) => {
         const ts = (tasks ?? []).filter((t) => read.rel(t, tasksDb?.p("task.project")).includes(p.id));
         const done = ts.filter((t) => read.opt(t, tasksDb?.p("task.status"))?.name === "Done").length;
         const next = ts.find((t) => ["Next", "Scheduled"].includes(read.opt(t, tasksDb?.p("task.status"))?.name ?? ""));
@@ -561,10 +326,9 @@ function ProjectsTab({ db, rows, tasksDb, tasks, areas, areasDb, today }: { db: 
         const days = deadline ? Math.round((new Date(`${deadline}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86_400_000) : null;
         const pct = ts.length ? done / ts.length : 0;
         return (
-          <m.button key={p.id} type="button" className="lo-project panel" data-raise="" data-light="" onClick={() => useUi.getState().openPeek({ t: "row", id: p.id })} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { ...spring.settle, delay: Math.min(i, 7) * 0.04 } }}>
-            <EdgeLight />
+          <button key={p.id} type="button" className="lo-project panel" onClick={() => useUi.getState().openPeek({ t: "row", id: p.id })}>
             <div className="flex items-center gap-2">
-              <span className="text-[20px] leading-none">{p.icon?.t === "emoji" ? p.icon.v : "📁"}</span>
+              <PageIcon icon={p.icon} kind="doc" size={18} />
               <span className="min-w-0 flex-1 truncate text-body font-semibold text-primary">{read.text(p, db.p("project.name"))}</span>
               {st ? <Tag color={(st.color as never) ?? "gray"}>{st.name}</Tag> : null}
             </div>
@@ -574,7 +338,7 @@ function ProjectsTab({ db, rows, tasksDb, tasks, areas, areasDb, today }: { db: 
               <span className="text-caption tabular text-tertiary">{done}/{ts.length}</span>
             </div>
             <div className="flex items-center gap-2 text-caption text-tertiary">
-              {area ? <span>{area.icon} {area.name}</span> : null}
+              {area ? <span>{area.name}</span> : null}
               <span className="flex-1" />
               {days !== null ? <span className={cn("tabular", days < 7 && "text-warning-text font-semibold")}>{days >= 0 ? `${days} days left` : `${-days} days late`}</span> : null}
             </div>
@@ -582,7 +346,7 @@ function ProjectsTab({ db, rows, tasksDb, tasks, areas, areasDb, today }: { db: 
               <ArrowRight size={12} className={next ? "text-accent-text" : "text-warning-text"} aria-hidden />
               <span className={cn("truncate", next ? "text-primary" : "text-warning-text")}>{next ? read.text(next, tasksDb?.p("task.title")) : "No next action"}</span>
             </div>
-          </m.button>
+          </button>
         );
       })}
     </div>
@@ -608,7 +372,7 @@ function ReviewTab({ instance, metrics, tasksDb, tasks, areas, areasDb, today }:
     try {
       await api.lifeapp.checklistTick({ instanceId: instance.id, itemId: "review" });
       await useWorkspace.getState().refreshLifeapps();
-      notify.success("Weekly review logged", { description: "See you next week." });
+      notify.success("Weekly review logged");
     } catch (e) {
       notify.fromError(e, "Couldn’t log the review");
     }
@@ -618,12 +382,12 @@ function ReviewTab({ instance, metrics, tasksDb, tasks, areas, areasDb, today }:
       <Card title="Weekly review" subtitle={`Last done: ${last}`}>
         <div className="flex items-center gap-4">
           <div className={cn("lo-days well", days > 7 ? "is-late" : "is-ok")} data-static="">
-            <RollingNumber value={days} format={(n) => String(Math.round(n))} />
+            {days}
           </div>
-          <p className="text-body-sm text-secondary">{days > 7 ? "days since your last review. Thirty calm minutes now makes next week lighter." : "days since your last review. You’re on rhythm."}</p>
+          <p className="text-body-sm text-secondary">days since your last review</p>
         </div>
         <ol className="mt-4 flex flex-col gap-2 text-body-sm">
-          {["Get clear — inbox to zero", "Get current — calendar, projects, waiting", "Get creative — someday list", "Choose next week’s Top 3"].map((s, i) => (
+          {["Clear the inbox", "Check calendar, projects and waiting", "Read the someday list", "Pick next week’s top 3"].map((s, i) => (
             <li key={s} className="flex items-center gap-3">
               <span className="lo-stepnum well" data-static="">{i + 1}</span>
               {s}
@@ -632,7 +396,7 @@ function ReviewTab({ instance, metrics, tasksDb, tasks, areas, areasDb, today }:
         </ol>
         <div className="mt-5 flex gap-2">
           <Button variant="primary" icon={Check} onClick={markDone}>
-            I did my review
+            Log review
           </Button>
         </div>
       </Card>

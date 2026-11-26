@@ -1,6 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  Area, CartesianGrid, ComposedChart, Line, ReferenceLine, Tooltip, XAxis, YAxis, useActiveTooltipDataPoints, useIsTooltipActive,
+  Area, ComposedChart, Line, ReferenceLine, Tooltip, XAxis, YAxis, useActiveTooltipDataPoints, useIsTooltipActive,
 } from "recharts";
 import { lttb } from "@/lib/lttb";
 import { summarizeSeries } from "./a11y";
@@ -40,14 +40,14 @@ export interface LineChartProps<T extends Datum> {
   area?: boolean;
   /**
    * Colour a single series by the sign of last − first. Default: single-series trend lines are ink (--chart-line,
-   * §5.6) and direction lives in the DeltaPill and the end-dot halo; pass `true` to colour the line itself.
+   * §5.6) and direction lives in the Delta text above the chart; pass `true` to colour the line itself.
    */
   colorBySign?: boolean;
   /** Hero treatment (S5): pen draw-in, end-dot keycap pulses. Set by HeroAreaChart. */
   hero?: boolean;
   /** Dashed reference at the first value (default with colorBySign). */
   startReference?: boolean;
-  /** Pulsing halo on the last point. */
+  /** @deprecated live halos are retired (charts are still at rest); accepted and ignored. */
   live?: boolean;
   includeZero?: boolean;
   tooltip?: boolean;
@@ -89,38 +89,18 @@ function ScrubReporter<T>({ data, onScrub }: { data: readonly T[]; onScrub: (i: 
   return null;
 }
 
-/** Scrub dot (§5.6): a 6px keycap dot with a soft glow, on the series. */
+/** Scrub dot: a 4px dot in the series colour with a 2px paper ring. No glow. */
 function ActiveDot({ cx, cy, color, t }: { cx?: number; cy?: number; color: string; t: ChartTheme }) {
   if (cx === undefined || cy === undefined) return null;
-  return (
-    <g>
-      <circle cx={cx} cy={cy} r={10} fill={color} fillOpacity={0.12} />
-      <circle cx={cx} cy={cy + 1} r={4.5} fill="#000" fillOpacity={0.25} />
-      <circle cx={cx} cy={cy} r={4.5} fill={color} stroke={t.canvas} strokeWidth={2} />
-    </g>
-  );
+  return <circle cx={cx} cy={cy} r={4} fill={color} stroke={t.canvas} strokeWidth={2} />;
 }
 
-/**
- * End-dot keycap (§5.6, S5): an 8px face on a 1px side, tinted halo pulses (3×, 900ms, 300ms apart) after the pen
- * finishes on hero charts; `live` keeps a slow ping (Markets, S16).
- */
-function LastDot({ cx, cy, color, live, halo, hero }: { cx?: number; cy?: number; color: string; live?: boolean; halo: string; hero?: boolean }) {
+/** End dot: a quiet 3px dot at the last value. No halo, no pulse (v3 charts are still at rest). */
+function LastDot({ cx, cy, color }: { cx?: number; cy?: number; color: string }) {
   if (cx === undefined || cy === undefined) return null;
-  const delay = hero ? 1150 : 300;
   return (
     <g className="emp-end-dot">
-      {live ? <circle className="emp-live-halo" cx={cx} cy={cy} r={4} fill={halo} /> : null}
-      {hero ? (
-        <>
-          <circle className="emp-end-pulse" cx={cx} cy={cy} r={4} fill={halo} style={{ animationDelay: `${delay}ms` }} />
-          <circle className="emp-end-pulse" cx={cx} cy={cy} r={4} fill={halo} style={{ animationDelay: `${delay + 300}ms` }} />
-          <circle className="emp-end-pulse" cx={cx} cy={cy} r={4} fill={halo} style={{ animationDelay: `${delay + 600}ms` }} />
-        </>
-      ) : null}
-      <circle cx={cx} cy={cy + 1} r={4} fill="#000" fillOpacity={0.3} />
-      <circle cx={cx} cy={cy} r={4} fill={color} />
-      <circle cx={cx} cy={cy - 1.2} r={1.6} fill="#fff" fillOpacity={0.35} />
+      <circle cx={cx} cy={cy} r={3} fill={color} />
     </g>
   );
 }
@@ -132,8 +112,10 @@ function axisWidth(labels: string[]): number {
 }
 
 /**
- * Time-series line/area chart (§13.5). Horizontal gridlines only, 4–5 nice ticks, compact labels, dashed crosshair,
- * 8px active dot with a 16px halo, 6px last dot (pulsing when live), clip-path draw-in, 400ms morph on data change.
+ * Time-series line chart (docs/DESIGN.md §6.5). One ink line on nothing: a single series is a 1.75px ink line, no
+ * gridlines, no gradient fill, quiet tertiary axis on the right (3–5 ticks), a dotted 1px reference line at the start
+ * value, a 1px crosshair and a plain dot. Colour only for multi-series (muted categorical hues, 1.5px). Lines draw in
+ * on the first data load only (≤ 220ms, CSS); a data change morphs for 200ms. `onScrub` feeds the header figure.
  */
 export function LineChart<T extends Datum>({
   data,
@@ -165,10 +147,9 @@ export function LineChart<T extends Datum>({
   extraDomainValues,
 }: LineChartProps<T>) {
   const t = useChartTheme();
-  const gid = useId().replace(/:/g, "");
   const [animate, setAnimate] = useState(false);
   useEffect(() => {
-    const id = window.setTimeout(() => setAnimate(true), 1100);
+    const id = window.setTimeout(() => setAnimate(true), 300);
     return () => window.clearTimeout(id);
   }, []);
 
@@ -194,7 +175,7 @@ export function LineChart<T extends Datum>({
   const morphUntil = useRef(0);
   if (prevData.current !== data) {
     const p = prevData.current;
-    if (p.length !== data.length || p.some((d, i) => d !== data[i])) morphUntil.current = performance.now() + 700;
+    if (p.length !== data.length || p.some((d, i) => d !== data[i])) morphUntil.current = performance.now() + 300;
     prevData.current = data;
   }
   const dataMorph = performance.now() < morphUntil.current;
@@ -245,22 +226,13 @@ export function LineChart<T extends Datum>({
     const { plotted, domain, ticks, yWidth, xTicks } = lay;
     const lastIndex = plotted.length - 1;
     const morph = animate && dataMorph && plotted.length <= 500 && !t.reducedMotion;
-    const strokeW = visible.length > 2 ? 1.5 : 2;
-    const cacheKey = [lay, size.height, t, morph, seriesSig, live, hero, tooltip, !!onScrub, children, startReference, curve, area, yAxis, colorBySign, gid];
+    const strokeW = visible.length > 1 ? 1.5 : 1.75;
+    const cacheKey = [lay, size.height, t, morph, seriesSig, live, hero, tooltip, !!onScrub, children, startReference, curve, area, yAxis, colorBySign];
     const hit = chartCache.current;
     if (hit && hit.key.length === cacheKey.length && hit.key.every((k, i) => k === cacheKey[i])) return hit.el;
 
     const el = (
       <ComposedChart width={size.width} height={size.height} data={plotted} margin={MARGIN} accessibilityLayer>
-        <defs>
-          {visible.map((s, i) => (
-            <linearGradient key={s.key} id={`${gid}-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={colorOf(s, i)} stopOpacity={colorOf(s, i) === t.chartLine ? (t.dark ? 0.16 : 0.13) : t.areaTop} />
-              <stop offset="100%" stopColor={colorOf(s, i)} stopOpacity={0} />
-            </linearGradient>
-          ))}
-        </defs>
-        <CartesianGrid vertical={false} stroke={t.grid} />
         <XAxis
           dataKey={x as string as never}
           tickLine={false}
@@ -287,18 +259,19 @@ export function LineChart<T extends Datum>({
           tickMargin={6}
           allowDataOverflow
         />
-        {(startReference ?? bySign) && Number.isFinite(first) ? <ReferenceLine y={first} stroke={t.textTertiary} strokeOpacity={0.5} strokeDasharray="3 3" ifOverflow="hidden" /> : null}
+        {(startReference ?? bySign) && Number.isFinite(first) ? <ReferenceLine y={first} stroke={t.textTertiary} strokeOpacity={0.7} strokeWidth={1} strokeDasharray="1 3" ifOverflow="hidden" /> : null}
         {children}
-        {visible.map((s) =>
-          s.area ?? area ? (
+        {visible.map((s, i) =>
+          (s.area ?? area) && colorOf(s, i) !== t.chartLine ? (
             <Area
               key={`a-${s.key}`}
               type={curve}
               dataKey={s.key}
               stroke="none"
-              fill={`url(#${gid}-${s.key})`}
+              fill={colorOf(s, i)}
+              fillOpacity={0.08}
               isAnimationActive={morph}
-              animationDuration={620}
+              animationDuration={200}
               animationEasing="ease-out"
               activeDot={false}
               tooltipType="none"
@@ -319,10 +292,10 @@ export function LineChart<T extends Datum>({
               strokeLinejoin="round"
               strokeDasharray={s.dashed ? "4 4" : undefined}
               isAnimationActive={morph}
-              animationDuration={620}
+              animationDuration={200}
               animationEasing="ease-out"
               dot={(p: { cx?: number; cy?: number; index?: number }) =>
-                p.index === lastIndex && i === 0 ? <LastDot key="last" cx={p.cx} cy={p.cy} color={c} live={live} hero={hero} halo={c === t.chartLine ? signColor : c} /> : <g key={`d${p.index}`} />
+                p.index === lastIndex && i === 0 ? <LastDot key="last" cx={p.cx} cy={p.cy} color={c} /> : <g key={`d${p.index}`} />
               }
               activeDot={(p: { cx?: number; cy?: number }) => <ActiveDot cx={p.cx} cy={p.cy} color={c} t={t} />}
             />
@@ -330,7 +303,7 @@ export function LineChart<T extends Datum>({
         })}
         {tooltip ? (
           <Tooltip
-            cursor={{ stroke: t.text, strokeOpacity: 0.35, strokeWidth: 1 }}
+            cursor={{ stroke: t.textTertiary, strokeWidth: 1 }}
             isAnimationActive={false}
             offset={14}
             content={(p) => {
@@ -349,7 +322,7 @@ export function LineChart<T extends Datum>({
             }}
           />
         ) : (
-          <Tooltip cursor={{ stroke: t.text, strokeOpacity: 0.35, strokeWidth: 1 }} content={() => null} isAnimationActive={false} />
+          <Tooltip cursor={{ stroke: t.textTertiary, strokeWidth: 1 }} content={() => null} isAnimationActive={false} />
         )}
         {onScrub ? <ScrubReporter data={plotted} onScrub={(i) => onScrubRef.current?.(i === null ? null : data.indexOf(plotted[i]))} /> : null}
       </ComposedChart>

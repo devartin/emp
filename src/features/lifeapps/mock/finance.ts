@@ -7,7 +7,7 @@ import type { Id } from '@/backend/types';
 import { createReminder } from '@/backend/mock/commands/reminder';
 import { FINANCE_DISCLAIMER } from '../engine/manifests';
 import { md } from './content';
-import { c, DAY, emoji, F, isoDay, lucide, P, prng, sel, type DbHandle, type Env } from './env';
+import { c, DAY, F, isoDay, lucide, P, prng, sel, type DbHandle, type Env } from './env';
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const listOf = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter(isObj) : isObj(v) && Array.isArray(v.items) ? (v.items as unknown[]).filter(isObj) : []);
@@ -43,24 +43,24 @@ const ACCOUNT_TYPES = ['Checking', 'Savings', 'Credit card', 'Student loan', 'Au
 const TYPE_KEY: Record<string, string> = { checking: 'Checking', savings: 'Savings', credit_card: 'Credit card', student_loan: 'Student loan', auto_loan: 'Auto loan', mortgage: 'Mortgage', personal_loan: 'Personal loan', investment: 'Investment', cash: 'Cash', other_asset: 'Other asset', other_liability: 'Other liability' };
 
 const CATEGORIES: { name: string; group: string; fifty: string; essential?: boolean; rollover?: boolean; target?: number; icon: string }[] = [
-  { name: 'Salary', group: 'Income', fifty: 'Income', icon: '💼' },
-  { name: 'Freelance', group: 'Income', fifty: 'Income', icon: '🧑‍💻' },
-  { name: 'Interest', group: 'Income', fifty: 'Income', icon: '🏦' },
-  { name: 'Rent', group: 'Bills', fifty: 'Needs', essential: true, target: 2150, icon: '🏠' },
-  { name: 'Utilities', group: 'Bills', fifty: 'Needs', essential: true, target: 210, icon: '💡' },
-  { name: 'Insurance', group: 'Bills', fifty: 'Needs', essential: true, target: 185, icon: '🛡️' },
-  { name: 'Phone & internet', group: 'Bills', fifty: 'Needs', essential: true, target: 110, icon: '📶' },
-  { name: 'Groceries', group: 'Everyday', fifty: 'Needs', essential: true, target: 680, icon: '🛒' },
-  { name: 'Transport', group: 'Everyday', fifty: 'Needs', essential: true, target: 240, icon: '🚇' },
-  { name: 'Health', group: 'Everyday', fifty: 'Needs', essential: true, target: 120, icon: '🩺' },
-  { name: 'Dining out', group: 'Fun', fifty: 'Wants', target: 320, icon: '🍜' },
-  { name: 'Shopping', group: 'Fun', fifty: 'Wants', target: 300, icon: '🛍️' },
-  { name: 'Subscriptions', group: 'Fun', fifty: 'Wants', target: 70, icon: '📺' },
-  { name: 'Travel', group: 'Fun', fifty: 'Wants', rollover: true, target: 400, icon: '✈️' },
-  { name: 'Gifts & giving', group: 'Fun', fifty: 'Wants', rollover: true, target: 90, icon: '🎁' },
-  { name: 'Emergency fund', group: 'Savings & Debt', fifty: 'Savings & Debt', rollover: true, target: 500, icon: '🛟' },
-  { name: 'Investing', group: 'Savings & Debt', fifty: 'Savings & Debt', target: 700, icon: '📈' },
-  { name: 'Debt payments', group: 'Savings & Debt', fifty: 'Savings & Debt', target: 250, icon: '💳' },
+  { name: 'Salary', group: 'Income', fifty: 'Income', icon: 'briefcase' },
+  { name: 'Freelance', group: 'Income', fifty: 'Income', icon: 'laptop' },
+  { name: 'Interest', group: 'Income', fifty: 'Income', icon: 'landmark' },
+  { name: 'Rent', group: 'Bills', fifty: 'Needs', essential: true, target: 2150, icon: 'house' },
+  { name: 'Utilities', group: 'Bills', fifty: 'Needs', essential: true, target: 210, icon: 'lightbulb' },
+  { name: 'Insurance', group: 'Bills', fifty: 'Needs', essential: true, target: 185, icon: 'shield' },
+  { name: 'Phone & internet', group: 'Bills', fifty: 'Needs', essential: true, target: 110, icon: 'wifi' },
+  { name: 'Groceries', group: 'Everyday', fifty: 'Needs', essential: true, target: 680, icon: 'shopping-cart' },
+  { name: 'Transport', group: 'Everyday', fifty: 'Needs', essential: true, target: 240, icon: 'train-front' },
+  { name: 'Health', group: 'Everyday', fifty: 'Needs', essential: true, target: 120, icon: 'stethoscope' },
+  { name: 'Dining out', group: 'Fun', fifty: 'Wants', target: 320, icon: 'soup' },
+  { name: 'Shopping', group: 'Fun', fifty: 'Wants', target: 300, icon: 'shopping-bag' },
+  { name: 'Subscriptions', group: 'Fun', fifty: 'Wants', target: 70, icon: 'tv' },
+  { name: 'Travel', group: 'Fun', fifty: 'Wants', rollover: true, target: 400, icon: 'plane' },
+  { name: 'Gifts & giving', group: 'Fun', fifty: 'Wants', rollover: true, target: 90, icon: 'gift' },
+  { name: 'Emergency fund', group: 'Savings & Debt', fifty: 'Savings & Debt', rollover: true, target: 500, icon: 'life-buoy' },
+  { name: 'Investing', group: 'Savings & Debt', fifty: 'Savings & Debt', target: 700, icon: 'trending-up' },
+  { name: 'Debt payments', group: 'Savings & Debt', fifty: 'Savings & Debt', target: 250, icon: 'credit-card' },
 ];
 
 export async function installMoneyHq(env: Env): Promise<void> {
@@ -74,10 +74,10 @@ export async function installMoneyHq(env: Env): Promise<void> {
   await env.step('Writing “How your budget works”');
   env.page('how', {
     title: 'How your budget works',
-    icon: emoji('📘'),
+    icon: lucide('book-open'),
     blocks: md(`> [!info] Method: **${methodLabel[method] ?? method}**. You can change it any time with a tune-up.
 ## The idea
-${fifty ? 'Split take-home pay into three buckets: about **50% for needs**, **30% for wants** and **20% for savings and debt**. It is a common guideline because it is simple enough to keep.' : method === 'zero_based' ? 'Give every dollar a job before the month starts. Income minus everything you assign should equal **zero** — not because you spend it all, but because savings and debt payments get jobs too.' : method === 'pay_yourself_first' ? 'Move savings out on payday, then spend the rest freely. The savings transfer is the budget.' : method === 'envelopes' ? 'Each category is an envelope with a fixed amount. When it is empty, it is empty — or you move money from another envelope.' : 'No targets — just a clear picture of where money goes. Most people start here.'}
+${fifty ? 'Split take-home pay into three buckets: about **50% for needs**, **30% for wants** and **20% for savings and debt**. It is simple enough to keep.' : method === 'zero_based' ? 'Give every dollar a job before the month starts. Income minus everything you assign should equal **zero** — not because you spend it all, but because savings and debt payments get jobs too.' : method === 'pay_yourself_first' ? 'Move savings out on payday, then spend the rest freely. The savings transfer is the budget.' : method === 'envelopes' ? 'Each category is an envelope with a fixed amount. When it is empty, it is empty — or you move money from another envelope.' : 'No targets — just a clear picture of where money goes. Most people start here.'}
 ## How to use it
 - Each category belongs to one group (see **Categories**).
 - The Budget tab compares what you assigned with what you spent.
@@ -86,8 +86,8 @@ ${disclaimer}`),
   });
   env.page('order', {
     title: 'Financial order of operations',
-    icon: emoji('🪜'),
-    blocks: md(`A common guideline for where the next dollar goes. Tick steps as you reach them.
+    icon: lucide('list-ordered'),
+    blocks: md(`Where the next dollar goes. Tick steps as you reach them.
 - [ ] 1. Budget plus a starter emergency fund (about one month of essentials)
 - [ ] 2. Capture any employer retirement match
 - [ ] 3. Pay down high-interest debt (above ~10% APR)
@@ -97,8 +97,8 @@ ${disclaimer}`),
 - [ ] 7. Taxable investing
 ${disclaimer}`),
   });
-  if (env.on('weekly')) env.page('weekly', { title: 'Weekly check-in', icon: emoji('🗓️'), blocks: md('- [ ] Categorise new transactions\n- [ ] Check categories close to their limit\n- [ ] Look at bills due in the next 7 days\n- [ ] Move money if something ran over') });
-  if (env.on('monthly')) env.page('monthly', { title: 'Monthly review', icon: emoji('📅'), blocks: md('## Last month\n- [ ] Reconcile every account\n- [ ] Compare budget vs actual by group\n- [ ] Snapshot net worth\n## Next month\n- [ ] Assign income to categories\n- [ ] Adjust sinking-fund targets') });
+  if (env.on('weekly')) env.page('weekly', { title: 'Weekly check-in', icon: lucide('calendar'), blocks: md('- [ ] Categorise new transactions\n- [ ] Check categories close to their limit\n- [ ] Look at bills due in the next 7 days\n- [ ] Move money if something ran over') });
+  if (env.on('monthly')) env.page('monthly', { title: 'Monthly review', icon: lucide('calendar'), blocks: md('## Last month\n- [ ] Reconcile every account\n- [ ] Compare budget vs actual by group\n- [ ] Snapshot net worth\n## Next month\n- [ ] Assign income to categories\n- [ ] Adjust sinking-fund targets') });
 
   if (provisioned(env, 'finance.provision', { accounts: 'accounts', categories: 'categories', txns: 'transactions', recurring: 'recurring', goals: 'goals' })) {
     await env.step('Setting up accounts, categories and transactions');
@@ -106,7 +106,7 @@ ${disclaimer}`),
     if (env.on('subscriptions')) {
       const subs = env.database('subscriptions', {
         title: 'Subscriptions',
-        icon: emoji('📺'),
+        icon: lucide('tv'),
         props: [P.title('Service'), P.money('Amount', 'sub.amount', currency), P.select('Cycle', ['Monthly', 'Yearly', 'Weekly'], 'sub.cycle'), P.date('Next charge', 'sub.next'), P.select('Status', [{ name: 'Active', color: 'green' }, { name: 'Trial', color: 'blue' }, { name: 'Cancelled', color: 'gray' }]), P.rating('Value'), P.url('Cancel URL')],
         firstView: { name: 'Active', layout: 'table' },
       });
@@ -122,7 +122,7 @@ ${disclaimer}`),
   await env.step('Creating Accounts');
   const accounts = env.database('accounts', {
     title: 'Accounts',
-    icon: emoji('🏦'),
+    icon: lucide('landmark'),
     props: [
       P.title('Name'),
       P.select('Type', ACCOUNT_TYPES, 'acct.type'),
@@ -143,7 +143,7 @@ ${disclaimer}`),
   await env.step('Creating Categories');
   const categories = env.database('categories', {
     title: 'Categories',
-    icon: emoji('🏷️'),
+    icon: lucide('tag'),
     props: [
       P.title('Name'),
       P.select('Group', fifty ? ['Needs', 'Wants', 'Savings & Debt', 'Income'] : ['Bills', 'Everyday', 'Savings & Debt', 'Fun', 'Income'], 'cat.group'),
@@ -155,13 +155,13 @@ ${disclaimer}`),
     firstView: { name: 'By group', layout: 'table' },
   });
   const catIds: Record<string, Id> = {};
-  for (const cat of CATEGORIES) catIds[cat.name] = env.row(categories, { Name: c.text(cat.name), Group: sel(fifty ? cat.fifty : cat.group), Essential: c.check(!!cat.essential), Rollover: c.check(!!cat.rollover), 'Target type': cat.target ? sel('Monthly') : null, Target: c.money(cat.target ?? null, currency) }, { icon: emoji(cat.icon), sample: false });
-  const payees = env.database('payees', { title: 'Payees', icon: emoji('🏪'), props: [P.title('Name'), P.text('Aliases'), P.rel('Default category', categories.id, undefined, 'one')], firstView: { name: 'All payees', layout: 'table' } });
+  for (const cat of CATEGORIES) catIds[cat.name] = env.row(categories, { Name: c.text(cat.name), Group: sel(fifty ? cat.fifty : cat.group), Essential: c.check(!!cat.essential), Rollover: c.check(!!cat.rollover), 'Target type': cat.target ? sel('Monthly') : null, Target: c.money(cat.target ?? null, currency) }, { icon: lucide(cat.icon), sample: false });
+  const payees = env.database('payees', { title: 'Payees', icon: lucide('store'), props: [P.title('Name'), P.text('Aliases'), P.rel('Default category', categories.id, undefined, 'one')], firstView: { name: 'All payees', layout: 'table' } });
 
   await env.step('Creating Transactions');
   const txns = env.database('transactions', {
     title: 'Transactions',
-    icon: emoji('💳'),
+    icon: lucide('credit-card'),
     props: [
       P.title('Description', 'txn.raw'),
       P.date('Date', 'txn.date'),
@@ -186,7 +186,7 @@ ${disclaimer}`),
     await env.step('Setting up Budgets');
     budgets = env.database('budgets', {
       title: 'Budgets',
-      icon: emoji('🎯'),
+      icon: lucide('target'),
       props: [P.title('Line'), P.date('Month', 'budget.month'), P.rel('Category', categories.id, 'budget.category', 'one'), P.money('Assigned', 'budget.assigned', currency)],
       firstView: { name: 'This month', layout: 'table' },
     });
@@ -194,7 +194,7 @@ ${disclaimer}`),
   await env.step('Adding Recurring bills');
   const recurring = env.database('recurring', {
     title: 'Recurring',
-    icon: emoji('🔁'),
+    icon: lucide('repeat'),
     props: [
       P.title('Name'),
       P.money('Amount', 'rec.amount', currency),
@@ -211,7 +211,7 @@ ${disclaimer}`),
   });
   const goals = env.database('goals', {
     title: 'Goals',
-    icon: emoji('🏁'),
+    icon: lucide('flag'),
     props: [
       P.title('Name'),
       P.select('Kind', [{ name: 'Emergency', color: 'red' }, { name: 'Sinking', color: 'blue' }, { name: 'Savings', color: 'green' }], 'goal.kind'),
@@ -225,7 +225,7 @@ ${disclaimer}`),
   });
   const networth = env.database('networth', {
     title: 'Net worth snapshots',
-    icon: emoji('📈'),
+    icon: lucide('trending-up'),
     props: [P.title('Month'), P.date('Date', 'nw.date'), P.money('Assets', 'nw.assets', currency), P.money('Liabilities', 'nw.liabilities', currency), P.money('Net worth', 'nw.net', currency), P.select('Source', ['Auto', 'Manual'])],
     firstView: { name: 'History', layout: 'table' },
   });
@@ -234,7 +234,7 @@ ${disclaimer}`),
   if (env.on('subscriptions')) {
     subs = env.database('subscriptions', {
       title: 'Subscriptions',
-      icon: emoji('📺'),
+      icon: lucide('tv'),
       props: [P.title('Service'), P.money('Amount', 'sub.amount', currency), P.select('Cycle', ['Monthly', 'Yearly', 'Weekly'], 'sub.cycle'), P.date('Next charge', 'sub.next'), P.select('Status', [{ name: 'Active', color: 'green' }, { name: 'Trial', color: 'blue' }, { name: 'Cancelled', color: 'gray' }]), P.rating('Value'), P.url('Cancel URL')],
       firstView: { name: 'Active', layout: 'table' },
     });
@@ -303,7 +303,7 @@ ${disclaimer}`),
 
   const em = isObj(answers.emergency) ? answers.emergency : {};
   if (env.on('ef_goal') || env.sample) {
-    env.row(goals, { Name: c.text('Emergency fund'), Kind: sel('Emergency'), Target: c.money(Number(em.months ?? 6) * 3200, currency), Saved: c.money(env.sample ? 14800 : Number(em.current ?? 0), currency), Priority: sel('High'), Progress: c.progress(env.sample ? 14800 / (Number(em.months ?? 6) * 3200) : 0) }, { icon: emoji('🛟'), sample: false });
+    env.row(goals, { Name: c.text('Emergency fund'), Kind: sel('Emergency'), Target: c.money(Number(em.months ?? 6) * 3200, currency), Saved: c.money(env.sample ? 14800 : Number(em.current ?? 0), currency), Priority: sel('High'), Progress: c.progress(env.sample ? 14800 / (Number(em.months ?? 6) * 3200) : 0) }, { icon: lucide('life-buoy'), sample: false });
   }
   const userGoals = listOf(answers.goals);
   const goalSource = env.sample && !userGoals.length ? [{ name: 'Lisbon trip', target: 3200, saved: 2100, date: 120 }, { name: 'Car replacement', target: 12000, saved: 3400, date: 700 }, { name: 'Holidays & gifts', target: 900, saved: 640, date: 28 }] : userGoals.map((g) => ({ name: String(g.name ?? 'Goal'), target: Number(g.target ?? 0), saved: 0, date: 365 }));
@@ -412,7 +412,7 @@ export async function installPortfolio(env: Env): Promise<void> {
   const rebalance = String(answers.rebalance ?? 'hybrid');
   env.page('ips', {
     title: 'Investment Policy Statement',
-    icon: emoji('📜'),
+    icon: lucide('scroll-text'),
     blocks: md(`> [!note] Written by you, for you. ${FINANCE_DISCLAIMER}
 ## Purpose
 Long-term growth for retirement and big goals, with risk I can live with.
@@ -429,8 +429,8 @@ ${rebalance === 'calendar' ? 'Check once a quarter and rebalance back to targets
 ## Signature
 Signed ____________________  Date ____________`),
   });
-  env.page('rebalance', { title: 'Rebalance planner', icon: emoji('⚖️'), blocks: md('Compare current weights with targets. Cash-flow first: direct contributions to underweight classes before selling anything.\n- [ ] Check drift\n- [ ] Plan contributions\n- [ ] Only then consider trades (minimum trade: $50)') });
-  if (env.on('annual')) env.page('annual', { title: 'Annual investing review', icon: emoji('🗓️'), blocks: md('- [ ] Re-read the IPS\n- [ ] Update targets for age and goals\n- [ ] Review fees and expense ratios\n- [ ] Check beneficiaries\n- [ ] Tax-loss harvesting review (December)') });
+  env.page('rebalance', { title: 'Rebalance planner', icon: lucide('scale'), blocks: md('Compare current weights with targets. Cash-flow first: direct contributions to underweight classes before selling anything.\n- [ ] Check drift\n- [ ] Plan contributions\n- [ ] Only then consider trades (minimum trade: $50)') });
+  if (env.on('annual')) env.page('annual', { title: 'Annual investing review', icon: lucide('calendar'), blocks: md('- [ ] Re-read the IPS\n- [ ] Update targets for age and goals\n- [ ] Review fees and expense ratios\n- [ ] Check beneficiaries\n- [ ] Tax-loss harvesting review (December)') });
 
   if (provisioned(env, 'portfolio.provision', { accounts: 'inv_accounts', securities: 'securities', txns: 'inv_txns', targets: 'targets_db' })) {
     await env.step('Setting up accounts, securities and targets');
@@ -447,7 +447,7 @@ Signed ____________________  Date ____________`),
   await env.step('Creating Investment accounts');
   const accts = env.database('inv_accounts', {
     title: 'Investment accounts',
-    icon: emoji('🏦'),
+    icon: lucide('landmark'),
     props: [P.title('Name'), P.text('Broker'), P.select('Type', ['401k', '403b', 'IRA', 'Roth IRA', 'HSA', 'Taxable', '529', 'Crypto'], 'acct.type'), P.select('Tax treatment', ['Taxable', 'Tax-deferred', 'Tax-free']), P.select('Currency', ['USD'], 'acct.currency')],
     firstView: { name: 'Accounts', layout: 'table' },
   });
@@ -461,25 +461,25 @@ Signed ____________________  Date ____________`),
   await env.step('Creating Securities and transactions');
   const secs = env.database('securities', {
     title: 'Securities',
-    icon: emoji('🔖'),
+    icon: lucide('bookmark'),
     props: [P.title('Name'), P.ticker('Ticker', 'sec.ticker'), P.select('Asset class', ['US equity', 'Intl developed', 'Emerging', 'Bonds', 'Inflation-linked', 'REIT', 'Cash', 'Crypto', 'Other'], 'sec.class'), P.text('Region'), P.select('Type', ['Stock', 'ETF', 'Fund', 'Crypto', 'Bond']), P.num('Expense ratio', 'sec.expense_ratio', 'percent'), P.money('Last price', 'sec.price'), P.date('Price as-of')],
     firstView: { name: 'All securities', layout: 'table' },
   });
   const tx = env.database('inv_txns', {
     title: 'Investment transactions',
-    icon: emoji('🔁'),
+    icon: lucide('repeat'),
     props: [P.title('Memo'), P.date('Date', 'inv.date'), P.select('Type', [{ name: 'Buy', color: 'green' }, { name: 'Sell', color: 'red' }, { name: 'Dividend', color: 'blue' }, { name: 'Contribution', color: 'purple' }, { name: 'Fee', color: 'gray' }], 'inv.type'), P.rel('Security', secs.id, 'inv.security', 'one'), P.rel('Account', accts.id, 'inv.account', 'one'), P.num('Quantity', 'inv.qty'), P.money('Price', 'inv.price'), P.money('Amount', 'inv.amount'), P.money('Fees', 'inv.fees')],
     firstView: { name: 'All transactions', layout: 'table' },
   });
   const targets = env.database('targets_db', {
     title: 'Target allocation',
-    icon: emoji('🎯'),
+    icon: lucide('target'),
     props: [P.title('Asset class', 'alloc.class'), P.num('Target', 'alloc.target', 'percent'), P.num('Band (abs)', 'alloc.band_abs', 'percent'), P.num('Band (rel)', 'alloc.band_rel', 'percent'), P.num('Current', 'alloc.current', 'percent'), P.num('Drift', 'alloc.drift', 'percent'), P.select('Status', [{ name: 'In band', color: 'green' }, { name: 'Outside band', color: 'orange' }])],
     firstView: { name: 'Targets', layout: 'table' },
   });
   const divs = env.database('dividends', {
     title: 'Dividends',
-    icon: emoji('💧'),
+    icon: lucide('droplet'),
     props: [P.title('Memo'), P.date('Date', 'div.date'), P.rel('Security', secs.id, 'div.security', 'one'), P.money('Amount', 'div.amount'), P.rel('Account', accts.id, undefined, 'one')],
     firstView: { name: 'All dividends', layout: 'table' },
   });
@@ -549,14 +549,14 @@ export async function installTax(env: Env): Promise<void> {
   const income = Array.isArray(answers.income) ? (answers.income as string[]) : ['employment'];
   const se = income.includes('self_employment');
   const remindDays = Number(answers.reminders ?? 14);
-  const disclaimer = '> [!note] Ultra Note provides estimates for planning, not tax advice or a filed return. Check figures with the IRS or a qualified tax professional.';
+  const disclaimer = '> [!note] Estimates for planning. This is not a filed return; check figures with the IRS or a tax professional.';
 
   await env.step('Creating the estimator');
-  env.page('estimator', { title: 'Estimator', icon: emoji('🧮'), blocks: md(`Pulls figures from Money HQ and Portfolio when installed; each pulled figure needs your confirmation.\n## Show math\nEvery line of the estimate is listed with its source.\n## Scenarios\n- +$5,000 self-employment income\n- +$X retirement contribution\n${disclaimer}`) });
-  if (env.on('quarterly')) env.page('quarterly', { title: 'Quarterly payments', icon: emoji('🗓️'), blocks: md(`Estimated payments for tax year ${year}: April 15 · June 15 · September 15 · January 15.\n- [ ] Q1 paid\n- [ ] Q2 paid\n- [ ] Q3 paid\n- [ ] Q4 paid\n${disclaimer}`) });
-  if (env.on('packet')) env.page('packet', { title: 'Preparer packet', icon: emoji('📦'), blocks: md('Everything your preparer needs, in one place. Export to PDF from the page menu.\n## Documents received\n## Income summary\n## Deductions & credits\n## Estimated payments\n## Questions for my preparer') });
-  env.page('yearend', { title: 'Year-end planning checklist', icon: emoji('✅'), blocks: md(`- [ ] Max out retirement contributions you planned\n- [ ] Use HSA / FSA balances\n- [ ] Bunch charitable gifts if close to itemizing\n- [ ] Review unrealized losses (December)\n- [ ] Confirm Q4 estimated payment\n${disclaimer}`) });
-  if (env.on('retention')) env.page('retention', { title: 'Record retention guide', icon: emoji('🗄️'), blocks: md('| Record | Keep for |\n|---|---|\n| Returns and supporting documents | 3 years after filing (common guideline) |\n| Records for unreported income > 25% | 6 years |\n| Property and investment basis records | Until 3 years after you sell |\n| Employment tax records | 4 years |') });
+  env.page('estimator', { title: 'Estimator', icon: lucide('calculator'), blocks: md(`Pulls figures from Money HQ and Portfolio when installed; each pulled figure needs your confirmation.\n## How it is calculated\nEvery line of the estimate is listed with its source.\n## Scenarios\n- +$5,000 self-employment income\n- +$X retirement contribution\n${disclaimer}`) });
+  if (env.on('quarterly')) env.page('quarterly', { title: 'Quarterly payments', icon: lucide('calendar'), blocks: md(`Estimated payments for tax year ${year}: April 15 · June 15 · September 15 · January 15.\n- [ ] Q1 paid\n- [ ] Q2 paid\n- [ ] Q3 paid\n- [ ] Q4 paid\n${disclaimer}`) });
+  if (env.on('packet')) env.page('packet', { title: 'Preparer packet', icon: lucide('package'), blocks: md('Everything your preparer needs, in one place. Export to PDF from the page menu.\n## Documents received\n## Income summary\n## Deductions & credits\n## Estimated payments\n## Questions for my preparer') });
+  env.page('yearend', { title: 'Year-end planning checklist', icon: lucide('circle-check'), blocks: md(`- [ ] Max out retirement contributions you planned\n- [ ] Use HSA / FSA balances\n- [ ] Bunch charitable gifts if close to itemizing\n- [ ] Review unrealized losses (December)\n- [ ] Confirm Q4 estimated payment\n${disclaimer}`) });
+  if (env.on('retention')) env.page('retention', { title: 'Record retention guide', icon: lucide('archive'), blocks: md('| Record | Keep for |\n|---|---|\n| Returns and supporting documents | 3 years after filing (common guideline) |\n| Records for unreported income > 25% | 6 years |\n| Property and investment basis records | Until 3 years after you sell |\n| Employment tax records | 4 years |') });
 
   const delegated = provisioned(env, 'tax.provision', { documents: 'documents_db', deductions: 'deductions_db', payments: 'estimates_db' });
   if (delegated) {
@@ -564,7 +564,7 @@ export async function installTax(env: Env): Promise<void> {
     await env.step('Setting up deductions and estimated payments');
     taxDeadlines(env, year, remindDays);
     if (env.on('mileage_db')) {
-      const mileage = env.database('mileage_db', { title: 'Mileage log', icon: emoji('🚗'), props: [P.title('Trip'), P.date('Date'), P.num('Miles'), P.text('Purpose')], firstView: { name: 'Trips', layout: 'table' } });
+      const mileage = env.database('mileage_db', { title: 'Mileage log', icon: lucide('car'), props: [P.title('Trip'), P.date('Date'), P.num('Miles'), P.text('Purpose')], firstView: { name: 'Trips', layout: 'table' } });
       if (env.sample) for (let i = 0; i < 5; i++) env.row(mileage, { Trip: c.text(['Client meeting — Acme', 'Supplier pickup', 'Workshop venue', 'Client meeting — Northside', 'Post office'][i]), Date: c.date(isoDay(env.now - (6 + i * 9) * DAY)), Miles: c.num([18.4, 7.2, 22, 12.5, 3.1][i]), Purpose: c.text('Business') });
     }
     return;
@@ -573,7 +573,7 @@ export async function installTax(env: Env): Promise<void> {
   await env.step('Building your document checklist');
   const docs = env.database('documents_db', {
     title: 'Document checklist',
-    icon: emoji('📄'),
+    icon: lucide('file-text'),
     props: [P.title('Document'), P.text('Issuer'), P.text('For'), P.date('Expected by', 'doc.expected'), P.status('Status', [{ name: 'Expected', color: 'gray', group: 'todo' }, { name: 'Received', color: 'blue', group: 'in_progress' }, { name: 'Reviewed', color: 'purple', group: 'in_progress' }, { name: 'Sent to preparer', color: 'green', group: 'complete' }, { name: 'N/A', color: 'brown', group: 'complete' }], 'doc.status'), P.files('File'), P.money('Amount summary'), P.text('Notes'), P.date('Keep until')],
     firstView: { name: 'Checklist', layout: 'table' },
   });
@@ -586,13 +586,13 @@ export async function installTax(env: Env): Promise<void> {
 
   const deductions = env.database('deductions_db', {
     title: 'Deductions & credits',
-    icon: emoji('🧾'),
+    icon: lucide('receipt'),
     props: [P.title('Description'), P.date('Date'), P.select('Category', ['Charitable', 'Medical', 'State & local tax', 'Mortgage interest', 'Education', 'Home office', 'Business expense', 'Retirement contribution']), P.money('Amount', 'ded.amount'), P.num('Deductible %', undefined, 'percent'), P.files('Receipt'), P.text('Payee'), P.num('Tax year')],
     firstView: { name: 'All deductions', layout: 'table' },
   });
   const estimates = env.database('estimates_db', {
     title: 'Estimated payments',
-    icon: emoji('💸'),
+    icon: lucide('hand-coins'),
     props: [P.title('Period'), P.date('Due date', 'est.due'), P.money('Suggested', 'est.suggested'), P.money('Paid amount', 'est.paid'), P.date('Paid date'), P.select('Method', ['IRS Direct Pay', 'EFTPS', 'Check', 'Card']), P.select('Status', [{ name: 'Upcoming', color: 'gray' }, { name: 'Due soon', color: 'orange' }, { name: 'Paid', color: 'green' }, { name: 'Late', color: 'red' }])],
     firstView: { name: 'Schedule', layout: 'table' },
   });
@@ -605,7 +605,7 @@ export async function installTax(env: Env): Promise<void> {
     });
   let mileage: DbHandle | null = null;
   if (env.on('mileage_db')) {
-    mileage = env.database('mileage_db', { title: 'Mileage log', icon: emoji('🚗'), props: [P.title('Trip'), P.date('Date'), P.num('Miles'), P.text('Purpose')], firstView: { name: 'Trips', layout: 'table' } });
+    mileage = env.database('mileage_db', { title: 'Mileage log', icon: lucide('car'), props: [P.title('Trip'), P.date('Date'), P.num('Miles'), P.text('Purpose')], firstView: { name: 'Trips', layout: 'table' } });
   }
   if (env.sample) {
     await env.step('Adding sample deductions');
@@ -620,7 +620,7 @@ function taxDeadlines(env: Env, year: number, remindDays: number): DbHandle {
   const { ctx } = env;
   const deadlines = env.database('deadlines_db', {
     title: 'Deadlines',
-    icon: emoji('⏰'),
+    icon: lucide('alarm-clock'),
     props: [P.title('Deadline'), P.date('Date', 'deadline.date'), P.select('Kind', ['Filing', 'Estimated payment', 'Document', 'Contribution']), P.check('Done')],
     firstView: { name: 'Upcoming', layout: 'table' },
   });

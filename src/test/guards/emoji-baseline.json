@@ -4,75 +4,9 @@
     "emoji": "emoji cluster (\\p{Extended_Pictographic}, flags, keycaps; ©®™ allowed)"
   },
   "totals": {
-    "emoji": 1531
+    "emoji": 12
   },
   "files": {
-    "crates/emp-sheets/src/functions/text.rs": {
-      "emoji": 1
-    },
-    "crates/emp-store/lifeapps/habits.json": {
-      "emoji": 5
-    },
-    "crates/emp-store/lifeapps/life-os.json": {
-      "emoji": 27
-    },
-    "crates/emp-store/lifeapps/money-hq.json": {
-      "emoji": 36
-    },
-    "crates/emp-store/lifeapps/portfolio.json": {
-      "emoji": 12
-    },
-    "crates/emp-store/lifeapps/tax-organizer.json": {
-      "emoji": 11
-    },
-    "crates/emp-store/src/import/html.rs": {
-      "emoji": 3
-    },
-    "crates/emp-store/src/import/markdown.rs": {
-      "emoji": 6
-    },
-    "crates/emp-store/src/lifeapps/content.rs": {
-      "emoji": 2
-    },
-    "crates/emp-store/src/repo/tour.rs": {
-      "emoji": 5
-    },
-    "src/backend/mock/commands/daily.ts": {
-      "emoji": 3
-    },
-    "src/backend/mock/commands/db.ts": {
-      "emoji": 1
-    },
-    "src/backend/mock/commands/gdocs.ts": {
-      "emoji": 1
-    },
-    "src/backend/mock/commands/gsheets.ts": {
-      "emoji": 2
-    },
-    "src/backend/mock/commands/import.ts": {
-      "emoji": 23
-    },
-    "src/backend/mock/commands/lifeapp.ts": {
-      "emoji": 1
-    },
-    "src/backend/mock/lib/doc.ts": {
-      "emoji": 1
-    },
-    "src/backend/mock/lib/templates.ts": {
-      "emoji": 11
-    },
-    "src/backend/mock/seed/core.ts": {
-      "emoji": 42
-    },
-    "src/backend/mock/seed/databases.ts": {
-      "emoji": 23
-    },
-    "src/backend/mock/seed/sheets.ts": {
-      "emoji": 3
-    },
-    "src/backend/mock/seed/shell.ts": {
-      "emoji": 3
-    },
     "src/features/databases/FormulaEditor.tsx": {
       "emoji": 2
     },
@@ -94,53 +28,14 @@
     "src/features/editor/page/Backlinks.tsx": {
       "emoji": 1
     },
-    "src/features/editor/page/PageHeader.tsx": {
-      "emoji": 12
-    },
     "src/features/editor/schema.ts": {
-      "emoji": 1
-    },
-    "src/features/home/widgets/Today.tsx": {
       "emoji": 1
     },
     "src/features/integrations/mock/sampleCalendar.ts": {
       "emoji": 2
     },
-    "src/features/lifeapps/apps/Habits.tsx": {
-      "emoji": 1
-    },
-    "src/features/lifeapps/apps/LifeOS.tsx": {
-      "emoji": 1
-    },
-    "src/features/lifeapps/engine/manifests.ts": {
-      "emoji": 52
-    },
-    "src/features/lifeapps/mock/content.ts": {
-      "emoji": 3
-    },
-    "src/features/lifeapps/mock/finance.ts": {
-      "emoji": 52
-    },
-    "src/features/lifeapps/mock/habits.ts": {
-      "emoji": 23
-    },
-    "src/features/lifeapps/mock/lifeos.ts": {
-      "emoji": 25
-    },
-    "src/features/lifeapps/mock/sheets.ts": {
-      "emoji": 11
-    },
     "src/features/sheets/engine/functions.ts": {
       "emoji": 1
-    },
-    "src/features/vault/Onboarding/model.ts": {
-      "emoji": 4
-    },
-    "src/ui/Gallery.tsx": {
-      "emoji": 2
-    },
-    "src/ui/emoji-data.ts": {
-      "emoji": 1110
     }
   }
 }

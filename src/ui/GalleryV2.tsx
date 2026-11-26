@@ -1,30 +1,30 @@
-/* Dev-only gallery sections for Design Language v2 "Slab": materials, the state matrix, motion lab. */
-import { ArrowRight, Bell, Bold, Download, Filter, Italic, List, Pencil, Plus, RefreshCw, Search, Settings, Sparkles, Trash2, Underline, Upload, Wallet } from "lucide-react";
-import { AnimatePresence, LayoutGroup, m } from "motion/react";
+/* Dev-only gallery sections for Design Language v3 "Paper, ink and keys": tokens, type, keys, money, icons, motion. */
+import { Filter, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { formatCurrency } from "@/lib/format";
+import { money } from "@/lib/money";
+import { Amount } from "./Amount";
 import { Button, type ButtonVariant } from "./Button";
-import { Card } from "./Card";
-import { Checkbox } from "./Checkbox";
-import { DeltaPill } from "./DeltaPill";
+import { Delta } from "./Delta";
 import { IconButton } from "./IconButton";
+import { IconPickerPanel } from "./IconPickerPanel";
+import EMOJI_MAP from "./icons/emoji-map.json";
+import { Glyph, PageGlyph } from "./icons/Icon";
+import { PAGE_ICON_GROUPS } from "./icons/pageIcons";
 import { Kbd } from "./Kbd";
-import { KpiTile } from "./KpiTile";
-import { burst, celebrate } from "./motion/Celebrate";
-import { Magnetic, Morph, Reveal, Specular, Stagger, Tilt } from "./motion/primitives";
+import { CLASSES, REGISTER } from "./motion/register";
 import { RollingNumber } from "./motion/RollingNumber";
-import { spring } from "./motion/tokens";
-import { Ring } from "./Ring";
-import { SlabGlyph } from "./SlabGlyph";
-import { FilterChip } from "./Tag";
-import { toast } from "./Toast";
+import { Text } from "./Text";
 
 function GSection({ id, title, lead, children }: { id: string; title: string; lead?: string; children: ReactNode }) {
   return (
     <section id={id} className="flex flex-col gap-5 scroll-mt-20">
       <div className="flex flex-col gap-1">
-        <h2 className="text-h3">{title}</h2>
-        {lead ? <p className="text-body text-secondary max-w-[680px]">{lead}</p> : null}
+        <Text v="h2">{title}</Text>
+        {lead ? (
+          <Text v="body" tone="secondary" className="max-w-[680px]">
+            {lead}
+          </Text>
+        ) : null}
       </div>
       {children}
     </section>
@@ -32,76 +32,105 @@ function GSection({ id, title, lead, children }: { id: string; title: string; le
 }
 
 function Label({ children }: { children: ReactNode }) {
-  return <span className="text-micro text-tertiary uppercase">{children}</span>;
+  return (
+    <Text v="small" tone="tertiary">
+      {children}
+    </Text>
+  );
 }
 
-/* ─────────────── Materials ─────────────── */
+/* ─────────────── Paper, ink and keys ─────────────── */
+const SWATCHES: [string, string][] = [
+  ["--bg-window", "Window, sidebar"],
+  ["--bg-canvas", "Canvas (paper)"],
+  ["--bg-surface-2", "Surface 2"],
+  ["--bg-surface-3", "Surface 3"],
+  ["--text-primary", "Ink"],
+  ["--text-secondary", "Secondary"],
+  ["--text-tertiary", "Tertiary"],
+  ["--gain-text", "Gain (deltas only)"],
+  ["--loss-text", "Loss (deltas only)"],
+];
+
 export function MaterialsSection() {
   return (
     <GSection
       id="materials"
-      title="Materials"
-      lead="Everything is a slab: raised keycaps, recessed wells, machined plates. One key light from above-front; glass is reserved for floating layers. Hover the panels — the rim catches the light."
+      title="Paper, ink and keys"
+      lead="Surfaces are flat, warm paper. Everything you read is ink, and ink is the only accent: links, focus, selection, checked fills and the chart line. The only raised objects are keys; the only things that float are things you summoned."
     >
-      <div className="grid grid-cols-3 gap-4">
-        <Card title="Slab · .slab" subtitle="face ::after · side ::before · 1–3px edge">
-          <div className="flex flex-wrap items-center gap-3 pb-1">
-            <span className="slab slab-primary inline-flex h-10 px-5 items-center rounded-[11px] font-semibold" style={{ ["--edge" as string]: "3px" }}>
-              Primary
-            </span>
-            <span className="slab inline-flex h-10 px-5 items-center rounded-[11px] font-semibold" style={{ ["--edge" as string]: "3px" }}>
-              Secondary
-            </span>
-            <span className="slab slab-latched inline-flex h-10 px-4 items-center rounded-[11px] font-semibold" style={{ ["--edge" as string]: "3px" }}>
-              Latched
-            </span>
+      <div className="grid grid-cols-9 gap-3">
+        {SWATCHES.map(([v, l]) => (
+          <div key={v} className="flex flex-col gap-1.5">
+            <span className="block h-12 rounded-md border border-default" style={{ background: `var(${v})` }} />
+            <Text v="small">{l}</Text>
+            <Text v="micro" tone="tertiary">
+              {v}
+            </Text>
           </div>
-        </Card>
-        <Card title="Well · .well" subtitle="inset shadow · rim · 1px lip">
-          <div className="flex flex-col gap-3">
-            <div className="well h-9 rounded-[9px] flex items-center px-3 text-tertiary">Recessed bed</div>
-            <div className="well-groove h-1.5 rounded-full" />
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-8">
+        <div className="flex flex-col gap-3">
+          <Text v="section">Hairlines, not boxes</Text>
+          <Text v="ui" tone="secondary">
+            1px at 7–11% ink between rows and under section heads. One container level at most: a frame inside a frame loses its border.
+          </Text>
+        </div>
+        <div className="flex flex-col gap-3">
+          <Text v="section">Floating layers</Text>
+          <div className="emp-popover">
+            <Text v="ui">A menu or popover: opaque paper, a 1px warm ring and a soft layer (E2). Dialogs use E3.</Text>
           </div>
-        </Card>
-        <Card title="Glass · .glass-1/2" subtitle="overlays only · ≤ 2 layers">
-          <div className="relative h-[84px] rounded-xl overflow-hidden canvas-halo" style={{ boxShadow: "inset 0 0 0 1px var(--panel-rim)" }}>
-            <div className="absolute inset-0 flex items-center gap-6 pl-5">
-              <SlabGlyph size={48} />
-              <SlabGlyph size={34} />
-              <SlabGlyph size={24} />
-            </div>
-            <div className="glass-1 absolute left-[38%] right-3 top-3 bottom-3 rounded-[10px] flex items-center px-3 text-body-sm">Frosted surface</div>
+        </div>
+        <div className="flex flex-col gap-3">
+          <Text v="section">Radii</Text>
+          <div className="flex items-end gap-3">
+            {[4, 6, 10, 12].map((r) => (
+              <div key={r} className="flex flex-col items-center gap-1">
+                <span className="block w-10 h-10 border border-strong" style={{ borderRadius: r }} />
+                <Text v="micro" tone="tertiary">
+                  {r}
+                </Text>
+              </div>
+            ))}
           </div>
-        </Card>
-        <Specular as="div" wash className="panel col-span-2 p-6 flex items-center gap-8 rounded-[14px]">
-          <SlabGlyph size={88} animate />
-          <div className="flex flex-col gap-2">
-            <span className="text-micro text-tertiary uppercase">Panel · data-light data-specular</span>
-            <span className="text-h2">Machined plate</span>
-            <span className="text-body text-secondary max-w-[420px]">
-              Top-lit gradient, inner highlight and rim, 180px film grain, a contact shadow — and a pointer-tracked edge light from one
-              global listener.
-            </span>
-          </div>
-        </Specular>
-        <Card title="Groove · dome">
-          <div className="flex flex-col gap-4">
-            <div className="groove-h" />
-            <div className="flex items-center gap-4">
-              <span className="dome w-5 h-5 rounded-full" />
-              <span className="dome-lit w-5 h-5 rounded-full" />
-              <span className="dome w-10 h-4 rounded-full" />
-              <div className="groove-v h-8" />
-              <Kbd keys="mod+k" />
-            </div>
-          </div>
-        </Card>
+        </div>
       </div>
     </GSection>
   );
 }
 
-/* ─────────────── State matrix (ref-01) ─────────────── */
+/* ─────────────── Type ─────────────── */
+export function TypeSection() {
+  const rows: [Parameters<typeof Text>[0]["v"], string][] = [
+    ["title", "title 30/39 600"],
+    ["h1", "h1 24/31 600"],
+    ["h2", "h2 20/26 600"],
+    ["h3", "h3 16/24 600"],
+    ["section", "section 14/20 600, ruled"],
+    ["body", "body 14/20 400"],
+    ["doc", "doc 16/24 400"],
+    ["ui", "ui 13/18 400"],
+    ["small", "small 12/16 400"],
+    ["micro", "micro 11/14 500"],
+    ["mono", "mono 13/20"],
+  ];
+  return (
+    <GSection id="type" title="Type" lead="IBM Plex Sans in four weights (400, 500, 600, 700). Figures are tabular by default and the minus is as wide as the plus. Tracking is 0 below 20px. No uppercase eyebrows.">
+      <div className="flex flex-col">
+        {rows.map(([v, spec]) => (
+          <div key={v} className="grid grid-cols-[200px_1fr] items-baseline gap-4 py-2 border-b border-default">
+            <Label>{spec}</Label>
+            <Text v={v}>Pay the quarterly estimate by Jan 15</Text>
+          </div>
+        ))}
+      </div>
+    </GSection>
+  );
+}
+
+/* ─────────────── Keys ─────────────── */
 const STATES = [
   ["Rest", undefined],
   ["Hover", "hover"],
@@ -112,295 +141,247 @@ const STATES = [
 
 export function StateMatrix() {
   const rows: [string, ButtonVariant, ReactNode, typeof Plus | undefined][] = [
-    ["Primary", "primary", "New entry", Plus],
-    ["Secondary", "secondary", "Import", Upload],
+    ["Primary (ink key)", "primary", "New entry", Plus],
+    ["Secondary (paper key)", "secondary", "Import", Upload],
     ["Ghost", "ghost", "Rules", Filter],
-    ["Soft", "soft", "Suggest", Sparkles],
     ["Destructive", "destructive", "Delete", Trash2],
   ];
   const force = (s: (typeof STATES)[number][1]) =>
     s === "hover" ? { "data-force": "hover" } : s === "press" ? { "data-pressing": "" } : s === "focus" ? { "data-force": "focus" } : {};
   return (
-    <Card>
-      <div className="grid items-center gap-y-5 gap-x-2" style={{ gridTemplateColumns: "110px repeat(5, 1fr)" }}>
-        <span />
-        {STATES.map(([l]) => (
-          <Label key={l}>{l}</Label>
-        ))}
-        {rows.map(([label, v, text, Icon]) => (
-          <Row4 key={label} label={label}>
-            {STATES.map(([l, s]) => (
-              <div key={l}>
-                <Button variant={v} icon={Icon} disabled={s === "disabled"} {...(force(s) as object)}>
-                  {text}
-                </Button>
-              </div>
-            ))}
-          </Row4>
-        ))}
-        <Row4 label="Icon">
+    <div className="grid grid-cols-[170px_repeat(5,1fr)] items-center gap-y-4 gap-x-2">
+      <span />
+      {STATES.map(([l]) => (
+        <Label key={l}>{l}</Label>
+      ))}
+      {rows.map(([label, v, text, Icon]) => (
+        <Row4 key={label} label={label}>
           {STATES.map(([l, s]) => (
-            <div key={l} className="flex gap-2">
-              <IconButton variant="secondary" icon={Pencil} label="Edit" noTooltip disabled={s === "disabled"} {...(force(s) as object)} />
-              <IconButton variant="primary" icon={Plus} label="Add" noTooltip disabled={s === "disabled"} {...(force(s) as object)} />
+            <div key={l}>
+              <Button variant={v} icon={Icon} disabled={s === "disabled"} {...(force(s) as object)}>
+                {text}
+              </Button>
             </div>
           ))}
         </Row4>
-      </div>
-    </Card>
+      ))}
+      <Row4 label="Icon">
+        {STATES.map(([l, s]) => (
+          <div key={l} className="flex gap-2">
+            <IconButton variant="secondary" icon={Pencil} label="Edit" noTooltip disabled={s === "disabled"} {...(force(s) as object)} />
+            <IconButton variant="ghost" icon={Plus} label="Add" noTooltip disabled={s === "disabled"} {...(force(s) as object)} />
+          </div>
+        ))}
+      </Row4>
+    </div>
   );
 }
 
 function Row4({ label, children }: { label: string; children: ReactNode }) {
   return (
     <>
-      <span className="text-body-sm text-secondary font-medium">{label}</span>
+      <Text v="ui" tone="secondary">
+        {label}
+      </Text>
       {children}
     </>
   );
 }
 
-/* ─────────────── Toolbar, chips, micro-motions ─────────────── */
 export function KeycapExtras() {
-  const [marks, setMarks] = useState<Record<string, boolean>>({ bold: true, italic: false, underline: false, list: false });
-  const [chips, setChips] = useState<Record<string, boolean>>({ month: true, uncat: false, over: true, recurring: false });
   return (
-    <div className="grid grid-cols-2 gap-4">
-      <Card title="Latched keys" subtitle="aria-pressed / active — the key stays half-down">
-        <div className="flex items-center gap-2 pb-1">
-          {(
-            [
-              ["bold", Bold],
-              ["italic", Italic],
-              ["underline", Underline],
-              ["list", List],
-            ] as const
-          ).map(([k, I]) => (
-            <IconButton key={k} variant="secondary" size="sm" icon={I} label={k} active={marks[k]} aria-pressed={marks[k]} onClick={() => setMarks((s) => ({ ...s, [k]: !s[k] }))} />
-          ))}
-          <span className="text-body-sm text-tertiary ml-2">Formatting toolbar</span>
-        </div>
-        <Label>Filter chips · tag-shaped keycaps</Label>
-        <div className="flex flex-wrap gap-2 pb-1">
-          {(
-            [
-              ["month", "This month", undefined],
-              ["uncat", "Uncategorised", 12],
-              ["over", "Over $100", undefined],
-              ["recurring", "Recurring", 8],
-            ] as const
-          ).map(([k, l, c]) => (
-            <FilterChip key={k} active={chips[k]} count={c} onClick={() => setChips((s) => ({ ...s, [k]: !s[k] }))}>
-              {l}
-            </FilterChip>
-          ))}
-        </div>
-      </Card>
-      <Card title="Icon micro-motions" subtitle="hover the button — transform only, on the release spring">
-        <div className="flex flex-wrap gap-2 pb-1">
-          <Button variant="secondary" size="sm" icon={Plus} iconMotion="plus">
-            New
-          </Button>
-          <Button variant="secondary" size="sm" iconRight={ArrowRight} iconMotion="arrow">
-            Next
-          </Button>
-          <Button variant="secondary" size="sm" icon={Trash2} iconMotion="trash">
-            Delete
-          </Button>
-          <Button variant="secondary" size="sm" icon={Bell} iconMotion="bell">
-            Notify
-          </Button>
-          <Button variant="secondary" size="sm" icon={Download} iconMotion="download">
-            Export
-          </Button>
-          <Button variant="secondary" size="sm" icon={Settings} iconMotion="settings">
-            Settings
-          </Button>
-          <Button variant="secondary" size="sm" icon={RefreshCw} iconMotion="refresh">
-            Sync
-          </Button>
-          <Button variant="secondary" size="sm" icon={Search} iconMotion="search">
-            Search
-          </Button>
-          <Button variant="primary" size="lg" icon={Sparkles} iconMotion="sparkle">
-            Sheen on lg
+    <div className="grid grid-cols-2 gap-8">
+      <div className="flex flex-col gap-3">
+        <Text v="section">Kbd chips</Text>
+        <Text v="ui" tone="secondary">
+          Flat outlined chips, 18px, radius 4, with a darker bottom edge. A chip goes down for 120ms only when its exact shortcut fires outside a text field: press Ctrl K here. Typing never moves one.
+        </Text>
+        <div className="flex items-center gap-4">
+          <Kbd keys="mod+k" />
+          <Kbd keys="mod+shift+l" />
+          <Kbd keys="esc" />
+          <Button variant="primary" kbd="mod+enter">
+            Save
           </Button>
         </div>
-      </Card>
+      </div>
+      <div className="flex flex-col gap-3">
+        <Text v="section">Depth budget</Text>
+        <Text v="ui" tone="secondary">
+          One ink key per view. Paper keys for secondary actions, a 5% ink wash for ghosts. Press travels 0.5px and the bottom edge collapses in 60ms; release is 100ms with no overshoot. Nothing lifts, glows or tilts on hover.
+        </Text>
+      </div>
     </div>
   );
 }
 
-/* ─────────────── Motion lab ─────────────── */
+/* ─────────────── Money ─────────────── */
+export function MoneySection() {
+  const [n, setN] = useState(1342);
+  return (
+    <GSection
+      id="money"
+      title="Money, set like a statement"
+      lead="Tabular Plex figures, the currency symbol at full size, a true minus before the symbol, no parentheses. One hero per view. Deltas are written as text; colour appears only on deltas and over-budget amounts."
+    >
+      <div className="grid grid-cols-3 gap-8">
+        <div className="flex flex-col gap-1">
+          <Text v="ui" tone="secondary">
+            Net worth
+          </Text>
+          <Amount role="hero" value={money("243279.18")} />
+          <Text v="ui" className="flex gap-2">
+            <Delta money={money("65905")} percent={0.372} />
+            <span className="text-secondary">past year</span>
+          </Text>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Text v="ui" tone="secondary">
+            Checking, exact balance
+          </Text>
+          <Amount role="hero" exact value={money("4218.37")} />
+          <Text v="ui" tone="secondary">
+            Superscript cents at 0.55em in secondary ink
+          </Text>
+        </div>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-0.5">
+            <Text v="small" tone="secondary">
+              Left to assign
+            </Text>
+            <Amount role="lg" value={money("1342")} />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <Text v="small" tone="secondary">
+              Effective tax rate
+            </Text>
+            <Text v="h2" tabular>
+              16%
+            </Text>
+            <Text v="small">
+              <Delta points={1.2} digits={1} invert label="vs 2025" />
+            </Text>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col">
+        {[
+          ["Whole Foods", "-84.17", "Groceries"],
+          ["Payroll", "4210.00", "Income"],
+          ["Rent", "-2150.00", "Housing"],
+          ["Total", "1975.83", ""],
+        ].map(([who, amt, cat]) => (
+          <div key={who} className="grid grid-cols-[1fr_160px_120px] items-center h-9 border-b border-default">
+            <Text v="body">{who}</Text>
+            <Text v="small" tone="secondary">
+              {cat}
+            </Text>
+            <Amount role="row" total={who === "Total"} align="end" className="text-right" value={money(amt)} />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-6">
+        <Text v="ui" tone="secondary">
+          A number rolls only after your own edit:
+        </Text>
+        <Button variant="secondary" onClick={() => setN((v) => v + 125)}>
+          Add 125
+        </Button>
+        <Text v="h2" tabular>
+          <RollingNumber value={n} format={(x) => x.toLocaleString("en-US")} />
+        </Text>
+      </div>
+    </GSection>
+  );
+}
+
+/* ─────────────── Icons ─────────────── */
+/** A legacy emoji icon from stored data (read from the map so no emoji literal lives in UI source). */
+const LEGACY_ROCKET = Object.keys(EMOJI_MAP).find((k) => (EMOJI_MAP as Record<string, string>)[k] === "rocket") ?? "";
+
+export function IconsSection() {
+  const [pick, setPick] = useState<string>("plane");
+  return (
+    <GSection
+      id="icons"
+      title="One monochrome glyph language"
+      lead="Curated Lucide only, always absoluteStrokeWidth: 16px at 1.25 in rows and the sidebar, 14px inline, 40px at 1.75 in the page header. Secondary ink in chrome, ink in the header. No emoji anywhere: legacy emoji icons render through the emoji map; unmapped ones show nothing in a header and a neutral file glyph in lists."
+    >
+      <div className="grid grid-cols-[1fr_340px] gap-8 items-start">
+        <div className="flex flex-col gap-6">
+          <div className="flex items-end gap-8">
+            <div className="flex flex-col gap-2 items-start">
+              <PageGlyph icon={{ t: "lucide", v: pick }} context="header" />
+              <Label>header 40 @ 1.75</Label>
+            </div>
+            <div className="flex flex-col gap-2 items-start">
+              <span className="flex items-center gap-2 h-7">
+                <PageGlyph icon={{ t: "lucide", v: pick }} context="row" />
+                <Text v="body">Lisbon in March</Text>
+              </span>
+              <Label>row 16 @ 1.25</Label>
+            </div>
+            <div className="flex flex-col gap-2 items-start">
+              <span className="flex items-center gap-2 h-7">
+                <PageGlyph icon={{ t: "emoji", v: LEGACY_ROCKET }} context="row" />
+                <Text v="body">Legacy emoji, mapped</Text>
+              </span>
+              <span className="flex items-center gap-2 h-7">
+                <PageGlyph icon={null} context="row" />
+                <Text v="body">No icon</Text>
+              </span>
+            </div>
+          </div>
+          {PAGE_ICON_GROUPS.slice(0, 3).map((g) => (
+            <div key={g.id} className="flex flex-col gap-2">
+              <Label>{g.label}</Label>
+              <div className="flex flex-wrap gap-3 text-secondary">
+                {g.icons.map((i) => (
+                  <Glyph key={i.name} name={i.name} context="row" size={18} aria-label={i.name} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="emp-popover">
+          <IconPickerPanel value={pick} onSelect={setPick} />
+        </div>
+      </div>
+    </GSection>
+  );
+}
+
+/* ─────────────── Motion register ─────────────── */
 export function MotionLab() {
-  const [replay, setReplay] = useState(0);
-  const [value, setValue] = useState(48_210.37);
-  const [scrub, setScrub] = useState<number | null>(null);
-  const [goal, setGoal] = useState(0.72);
-  const [open, setOpen] = useState(false);
-  const [tasks, setTasks] = useState([
-    { id: "a", label: "Pay the electricity bill", done: true },
-    { id: "b", label: "Move $400 to Emergency fund", done: false },
-    { id: "c", label: "Review subscriptions", done: false },
-  ]);
   return (
     <GSection
       id="motion"
-      title="Motion lab"
-      lead="One spring table for CSS and JS. Things come from somewhere: overlays grow from their trigger, numbers roll, charts are drawn, success is celebrated with the icon's own slabs. Everything degrades under reduced motion and reduced effects."
+      title="Motion register"
+      lead="Motion is earned. The more often something happens, the less it moves. Every animation belongs to one class; the register test fails when an entry leaves its budget. Only three moments get a scene."
     >
-      <div className="grid grid-cols-3 gap-4">
-        <Card title="Reveal · Stagger" subtitle="rise · rise-blur · cards 40ms (cap 8)" actions={<Button size="xs" variant="ghost" icon={RefreshCw} iconMotion="refresh" onClick={() => setReplay((n) => n + 1)}>Replay</Button>}>
-          <Stagger key={replay} className="grid grid-cols-4 gap-2" variant="rise-blur">
-            {Array.from({ length: 8 }, (_, i) => (
-              <div key={i} className="panel h-11 rounded-[10px]" />
-            ))}
-          </Stagger>
-          <Reveal key={`r${replay}`} delay={0.3} className="text-body-sm text-secondary">
-            Entrances never block input; ≤ 12 animated elements.
-          </Reveal>
-        </Card>
-        <Card title="Odometer" subtitle="only changed digits roll · up for increases">
-          <span className="text-kpi">
-            <RollingNumber value={scrub ?? value} format={(n) => formatCurrency(n, "USD")} scrubbing={scrub !== null} countUpKey="gallery-odometer" />
-          </span>
-          <div className="flex gap-2 pb-1">
-            <Button size="sm" variant="secondary" onClick={() => setValue((v) => +(v + 1234.56).toFixed(2))}>
-              + $1,234.56
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => setValue((v) => +(v - 987.65).toFixed(2))}>
-              − $987.65
-            </Button>
-          </div>
-          <div
-            className="well h-8 rounded-[8px] flex items-center justify-center text-caption text-tertiary select-none"
-            onPointerMove={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setScrub(+(value * (0.6 + 0.4 * ((e.clientX - r.left) / r.width))).toFixed(2));
-            }}
-            onPointerLeave={() => setScrub(null)}
-          >
-            Scrub me (90ms, no stagger)
-          </div>
-        </Card>
-        <Card title="Celebrations" subtitle="S8 goal · S13 task completion">
-          <div className="flex items-center gap-4">
-            <Ring size={64} value={goal} aria-label="Goal">
-              {goal < 1 ? <span className="text-body-sm font-semibold tabular">{Math.round(goal * 100)}%</span> : undefined}
-            </Ring>
-            <div className="flex flex-col gap-2">
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={(e) => {
-                  const el = e.currentTarget;
-                  const next = Math.min(1, +(goal + 0.14).toFixed(2));
-                  setGoal(next);
-                  if (next >= 1) {
-                    celebrate(el);
-                    window.setTimeout(() => toast.success("Emergency fund goal reached", { description: "6.0 months of essentials covered." }), 400);
-                  }
-                }}
-              >
-                Add to goal
-              </Button>
-              <Button size="xs" variant="ghost" onClick={() => setGoal(0.72)}>
-                Reset
-              </Button>
+      <div className="grid grid-cols-4 gap-6">
+        {(Object.keys(CLASSES) as (keyof typeof CLASSES)[]).map((c) => (
+          <div key={c} className="flex flex-col gap-2">
+            <Text v="section">
+              {c} {CLASSES[c].label}
+            </Text>
+            <Text v="small" tone="secondary">
+              in ≤ {CLASSES[c].maxIn}ms, out ≤ {CLASSES[c].maxOut}ms
+            </Text>
+            <div className="flex flex-col">
+              {Object.entries(REGISTER)
+                .filter(([, e]) => e.cls === c)
+                .map(([k, e]) => (
+                  <div key={k} className="flex justify-between gap-2 py-1 border-b border-default">
+                    <Text v="ui">{k}</Text>
+                    <Text v="ui" tone="tertiary" tabular>
+                      {e.in}ms
+                    </Text>
+                  </div>
+                ))}
             </div>
           </div>
-          <div className="flex flex-col gap-2">
-            {tasks.map((t) => (
-              <Checkbox key={t.id} celebrate checked={t.done} label={t.label} onCheckedChange={(v) => setTasks((s) => s.map((x) => (x.id === t.id ? { ...x, done: v } : x)))} />
-            ))}
-          </div>
-        </Card>
-        <Card title="Magnetic CTA · Tilt" subtitle="cinematic screens only · ≤ 3px / ≤ 3°">
-          <div className="flex items-center gap-5">
-            <Magnetic>
-              <Button variant="primary" size="lg" iconRight={ArrowRight} iconMotion="arrow">
-                Create vault
-              </Button>
-            </Magnetic>
-            <Tilt className="panel w-[120px] h-[88px] rounded-[12px] flex items-center justify-center" max={3}>
-              <SlabGlyph size={40} />
-            </Tilt>
-          </div>
-        </Card>
-        <Card title="KPI → detail (S10)" subtitle="layoutId on the morph spring">
-          <LayoutGroup id="kpi-morph">
-            <div className="relative h-[124px]">
-              <AnimatePresence initial={false}>
-                {open ? (
-                  <Morph
-                    id="kpi-card"
-                    key="detail"
-                    className="panel absolute inset-0 rounded-[14px] p-4 flex flex-col gap-2 cursor-default"
-                    onClick={() => setOpen(false)}
-                  >
-                    <m.span layoutId="kpi-label" transition={spring.morph} className="text-caption text-secondary w-fit">
-                      Spent this month
-                    </m.span>
-                    <m.span layoutId="kpi-value" transition={spring.morph} className="text-h2 tabular w-fit">
-                      $3,412
-                    </m.span>
-                    <div className="flex items-end gap-1.5 h-10">
-                      {[0.4, 0.7, 0.55, 0.9, 0.65, 0.8, 0.5].map((h, i) => (
-                        <m.span
-                          key={i}
-                          className="flex-1 rounded-t-[3px]"
-                          style={{ height: `${h * 100}%`, background: "linear-gradient(180deg, var(--lit-b), var(--lit-a))", transformOrigin: "bottom" }}
-                          initial={{ scaleY: 0 }}
-                          animate={{ scaleY: 1, transition: { ...spring.settle, delay: 0.12 + i * 0.024 } }}
-                        />
-                      ))}
-                    </div>
-                  </Morph>
-                ) : (
-                  <Morph id="kpi-card" key="tile" className="panel absolute left-0 top-0 w-[180px] rounded-[14px] p-4 flex flex-col gap-1" data-raise="" onClick={() => setOpen(true)}>
-                    <m.span layoutId="kpi-label" transition={spring.morph} className="text-caption text-secondary w-fit">
-                      Spent this month
-                    </m.span>
-                    <m.span layoutId="kpi-value" transition={spring.morph} className="text-title tabular w-fit">
-                      $3,412
-                    </m.span>
-                    <span className="w-fit">
-                      <DeltaPill value={-0.195} invert />
-                    </span>
-                  </Morph>
-                )}
-              </AnimatePresence>
-            </div>
-          </LayoutGroup>
-        </Card>
-        <Card title="Living keycaps (S1)" subtitle="press these keys on your keyboard">
-          <div className="flex flex-wrap items-center gap-3 pb-1">
-            <Kbd keys="mod+k" />
-            <Kbd keys="shift+enter" />
-            <Kbd keys="arrowup" />
-            <Kbd keys="arrowdown" />
-            <Kbd keys="esc" />
-            <Kbd keys="space" />
-          </div>
-          <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={(e) => burst(e.currentTarget)}
-            >
-              Ray burst
-            </Button>
-            <Button size="sm" variant="secondary" icon={Wallet} onClick={(e) => celebrate(e.currentTarget, { badge: false })}>
-              Slab confetti
-            </Button>
-          </div>
-        </Card>
-      </div>
-      <div className="grid grid-cols-4 gap-4">
-        <KpiTile label="Net worth" value={{ amount: "243837.00", currency: "USD" }} noCents delta={{ value: 0.375, label: "past year" }} spark={[12, 14, 13, 15, 17, 16, 18, 21, 20, 23, 22, 25, 27, 26, 29]} onClick={() => toast("Opening net worth")} />
-        <KpiTile label="To be assigned" value={{ amount: "307.42", currency: "USD" }} onClick={() => toast("Assign")} footer={<span>Give every dollar a job</span>} />
-        <KpiTile label="Savings rate" value={34.4} format={(n) => `${n.toFixed(1)}%`} delta={{ value: 0.021, label: "3 months" }} onClick={() => toast("Savings rate")} />
-        <KpiTile label="Spent this month" value={{ amount: "4138.00", currency: "USD" }} noCents delta={{ value: -0.195, invert: true }} spark={[30, 28, 29, 27, 26, 27, 24, 25, 23, 21, 22, 19]} onClick={() => toast("Spending")} />
+        ))}
       </div>
     </GSection>
   );

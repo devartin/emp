@@ -71,7 +71,7 @@ function read(): ChartTheme {
     areaTop: parseFloat(v("--chart-area-top")) || 0.22,
     chartLine: v("--chart-line") || v("--text-primary"),
     chartFillTop: v("--chart-fill-top") || "rgba(16,16,24,.13)",
-    fontFamily: v("--font-ui") || "Inter Variable, sans-serif",
+    fontFamily: v("--font-ui") || "IBM Plex Sans Variable, ui-sans-serif, system-ui, sans-serif",
     privacy: root.getAttribute("data-privacy") === "on",
     reducedMotion: root.getAttribute("data-motion") === "reduced",
   };
