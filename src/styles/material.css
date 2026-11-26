@@ -237,6 +237,48 @@
   --edge: 1.5px;
   background: linear-gradient(180deg, var(--fa), var(--fb));
 }
+/* split key: a primary action plus its menu chevron are ONE ink key — one face, one bottom edge, one contact shadow,
+   a hairline between the halves. Opt in with `.slab-split` on the wrapper; two abutting primary keys in one parent
+   are treated the same way, so a pair never renders as two raised ink keys. The halves are flat (no face, no
+   shadow); hovering a half washes it, pressing either half (or opening its menu) presses the whole key. */
+:is(.slab-split, :has(> .slab[data-variant="primary"] + .slab[data-variant="primary"])) {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--slab-p-face-a), var(--slab-p-face-b));
+  box-shadow: inset 0 -1.5px 0 var(--slab-p-lo), 0 1px 1px var(--slab-p-contact);
+  transform: translateY(0);
+  transition:
+    transform 100ms var(--ease-out),
+    box-shadow 100ms var(--ease-out);
+}
+:is(.slab-split, :has(> .slab[data-variant="primary"] + .slab[data-variant="primary"])):has(> .slab:not(:disabled):active, > .slab[data-pressing], > .slab[data-state="open"]) {
+  transform: translateY(0.5px);
+  box-shadow: inset 0 0 0 0 transparent, 0 0 0 0 transparent;
+  transition-duration: 60ms;
+  transition-timing-function: var(--ease-press);
+}
+:is(.slab-split, :has(> .slab[data-variant="primary"] + .slab[data-variant="primary"])) > .slab {
+  --fg: var(--slab-p-fg);
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+:is(.slab-split, :has(> .slab[data-variant="primary"] + .slab[data-variant="primary"])) > .slab:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+:is(.slab-split, :has(> .slab[data-variant="primary"] + .slab[data-variant="primary"])) > .slab + .slab {
+  margin-left: 0;
+  border-left: 1px solid color-mix(in oklab, var(--slab-p-fg) 22%, transparent);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+:is(.slab-split, :has(> .slab[data-variant="primary"] + .slab[data-variant="primary"])) > .slab:is(:not(:disabled):hover, [data-force="hover"], [data-state="open"]) {
+  background: color-mix(in oklab, var(--slab-p-fg) 8%, transparent);
+  box-shadow: none;
+  transform: none;
+}
 .slab:is(.slab-danger, [data-variant="destructive"]) {
   --fa: var(--slab-d-face-a);
   --rim: transparent;
