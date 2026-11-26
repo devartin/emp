@@ -25,6 +25,7 @@ import {
   type ProvisionOpts,
 } from '../seed/finance';
 import { createRng } from '../rng';
+import { debtMinimum } from '../../figures';
 
 const DAY = 86_400_000;
 
@@ -395,29 +396,38 @@ export function netWorthAt(ctx: MockCtx, l: Ledger, day: string, bal = balances(
   return { assets, liabilities, investments: inv };
 }
 
-function ledgerStart(l: Ledger): string {
-  return l.txns[0]?.date ?? iso(Date.now());
+/** Date of Portfolio's first transaction (provided by commands/portfolio.ts), or null without Portfolio. */
+function portfolioFirstDate(ctx: MockCtx): string | null {
+  const fn = ctx.services.get<(c: MockCtx) => string | null>('portfolio.firstDate');
+  try {
+    return fn ? fn(ctx) : null;
+  } catch {
+    return null;
+  }
 }
 
-/** Backfill before the ledger starts: cash grows into the start balance, debts were higher (§15.5 backfill).
- * Same sides and account set as {@link netWorthAt}. */
-function backfilledNetWorth(ctx: MockCtx, l: Ledger, day: string, base = 'USD'): NetWorthPoint {
-  const start = ledgerStart(l);
-  const atStart = balances(l, addDays(start, -1));
-  const months = Math.max(0, dayDiff(day, start) / 30.44);
-  let cash = 0;
-  let debt = 0;
-  const inv = investmentValue(ctx, day);
-  for (const a of l.accounts) {
-    if (a.closed || (a.currency && a.currency !== base)) continue;
-    if (a.type === 'investment' && inv !== null) continue;
-    const b = atStart.get(a.id) ?? 0;
-    if (b >= 0) cash += b;
-    else debt -= b;
+/**
+ * Net worth snapshot rows the user entered, by month (Rust `networth_series` / `snapshot_month`): rows of the
+ * instance's Net worth database whose Source is not Auto/Automatic; the month is the title (`YYYY-MM`), else the
+ * Date column's month.
+ */
+function manualSnapshots(ctx: MockCtx, set: FinSet): Map<string, NetWorthPoint> {
+  const out = new Map<string, NetWorthPoint>();
+  if (!set.instanceId) return out;
+  const db = dbs(ctx).find((d) => d.appInstanceId === set.instanceId && !!d.roles['nw.assets'] && !ctx.pages.get(d.id)?.deletedAt);
+  if (!db) return out;
+  const src = findProp(ctx, db.id, 'Source');
+  for (const r of liveRows(ctx, db.id)) {
+    const source = optionName(ctx, src, selOf(r.values[src])).toLowerCase();
+    if (source === 'auto' || source === 'automatic') continue;
+    const title = text(r.values[db.primaryPropId]).trim();
+    const month = /^\d{4}-\d{2}$/.test(title) ? title : dateOf(r.values[db.roles['nw.date']])?.slice(0, 7);
+    if (!month) continue;
+    const assets = moneyOf(r.values[db.roles['nw.assets']]) ?? 0;
+    const liabilities = Math.abs(moneyOf(r.values[db.roles['nw.liabilities']]) ?? 0);
+    out.set(month, { assets, liabilities, investments: null });
   }
-  const debtPay = l.accounts.filter((a) => DEBT_TYPES.has(a.type) && a.type !== 'credit_card').reduce((s, a) => s + a.minPayment * 0.62, 0);
-  const assetsCash = Math.max(cash * 0.2, cash - months * 410_00 + Math.sin(months / 3) * 260_00);
-  return { assets: Math.round(assetsCash + (inv ?? 0)), liabilities: Math.round(debt + months * debtPay), investments: inv };
+  return out;
 }
 
 // ── budget
@@ -533,9 +543,14 @@ function addMonthsToDay(day: string, n: number): string {
   return `${m}-${String(Math.min(Number(day.slice(8, 10)), daysInMonth(m))).padStart(2, '0')}`;
 }
 
+/** The window of {@link savingsRate3m}: the trailing 3 calendar months ending `today` (Rust `metrics::savings_window`). */
+export function savingsWindow(today: string): [string, string] {
+  return [addDays(addMonthsToDay(today, -3), 1), today];
+}
+
 /** Savings rate over the trailing 3 months ending `today` (Rust `metrics::savings_rate_3m`); 0 without income. */
 export function savingsRate3m(l: Ledger, today: string): number {
-  const fl = flows(l, addDays(addMonthsToDay(today, -3), 1), today);
+  const fl = flows(l, ...savingsWindow(today));
   return fl.income > 0 ? (fl.income - fl.spending) / fl.income : 0;
 }
 
@@ -671,9 +686,8 @@ function simulate(debts: DebtIn[], strategy: string, extra: number, startMonth: 
     for (const d of debts) {
       const b = bal.get(d.name) ?? 0;
       if (b <= 0) continue;
-      // Lenders never accept less than the month's interest plus 1% of the balance (typical card minimum).
-      const floor = Math.round((b * (d.apr / 100)) / 12 + b * 0.01);
-      const p = Math.min(b, Math.max(d.min, Math.min(floor, b)));
+      // The minimum, as Rust `debt::simulate` pays it (a minimum below the interest never clears the debt).
+      const p = Math.min(b, d.min);
       bal.set(d.name, b - p);
       payments[d.name] = p;
       if (p < d.min && !minimumsOnly) pool += d.min - p;
@@ -724,10 +738,17 @@ export function debtPlan(input: { debts: { name: string; balance: string; aprPct
   };
 }
 
-function debtsOf(l: Ledger, today: string): DebtIn[] {
+/**
+ * The debts Money HQ plans with (Rust `ledger_debts`, the Debt tab's `debtInputs`): open liability accounts owing
+ * money today, at their minimum payment, or `max($25, 2% of the balance)` without one ({@link debtMinimum}).
+ */
+export function debtsOf(l: Ledger, today: string): DebtIn[] {
   return l.accounts
     .filter((a) => DEBT_TYPES.has(a.type) && !a.closed)
-    .map((a) => ({ name: a.name, balance: Math.max(0, -balanceAt(l, a.id, today)), apr: a.apr ?? 0, min: a.minPayment || Math.max(25_00, Math.round(Math.max(0, -balanceAt(l, a.id, today)) * 0.02)) }))
+    .map((a) => {
+      const owed = Math.max(0, -balanceAt(l, a.id, today));
+      return { name: a.name, balance: owed, apr: a.apr ?? 0, min: Math.round(debtMinimum(a.minPayment / 100, owed / 100) * 100) };
+    })
     .filter((d) => d.balance > 0);
 }
 
@@ -1185,8 +1206,11 @@ export const handlers: MockHandlers = {
       });
     const ess = essentialMonthly(l, today);
     const ef = emergencyBalance(l, today);
+    // `debtFreeDate` (Rust `debt_free_date`): minimums only, starting next month (this month's payments are in the
+    // ledger) — the Overview tile, the `debt_free_date` metric and its KPI tile all show this one date.
     const debts = debtsOf(l, today);
-    const plan = debts.length ? simulate(debts, 'avalanche', 0, today.slice(0, 7)) : null;
+    const debtStart = addMonths(today.slice(0, 7), 1);
+    const plan = debts.length ? simulate(debts, 'avalanche', 0, debtStart, undefined, true) : null;
     const upcoming: { rowId: Id; name: string; due: string; amount: { amount: string; currency: string }; autopay: boolean }[] = [];
     for (const r of l.recurring) {
       if (r.kind === 'income') continue;
@@ -1208,7 +1232,7 @@ export const handlers: MockHandlers = {
       leftToSpend: set.method === 'zero_based' || set.method === 'envelopes' ? undefined : money(spendable, cur),
       savingsRate3m: savingsRate3m(l, today),
       efMonths: ess > 0 ? ef / ess : 0,
-      debtFreeDate: plan && plan.months < 600 ? addMonths(today.slice(0, 7), plan.months - 1) : undefined,
+      debtFreeDate: plan && plan.months < 600 ? addMonths(debtStart, plan.months - 1) : undefined,
       budget: lines,
       upcoming: upcoming.slice(0, 12),
       uncategorized: spendRows(l).filter((t) => !t.categoryId && !isTransfer(l, t)).length,
@@ -1216,30 +1240,38 @@ export const handlers: MockHandlers = {
     };
   },
 
+  /**
+   * Rust `networth_series`, rule for rule: one {@link netWorthAt} point per month (`YYYY-MM`) — month ends, the
+   * current month as of today, so the last point is the overview's net worth — from the first ledger or Portfolio
+   * transaction (before the ledger starts, accounts sit at their opening balance); Net worth snapshot rows the user
+   * entered (any source but Auto/Automatic) override past months; the current month is always live.
+   */
   finance_networth_series: (req, ctx) => {
     const set = resolveSet(ctx, req.instanceId);
     const l = readLedger(ctx, set);
     const today = ctx.clock.today();
-    const span: Record<string, number> = { '6m': 6, '1y': 12, '3y': 36, '5y': 60, all: 84 };
-    const months = span[req.range] ?? 12;
-    const start = ledgerStart(l);
-    const from = (() => {
-      const d = new Date(`${today}T12:00:00`);
-      d.setMonth(d.getMonth() - months);
-      return iso(d.getTime());
-    })();
-    const step = months <= 12 ? 7 : months <= 36 ? 14 : 30;
-    const days: string[] = [];
-    for (let d = today; d >= from; d = addDays(d, -step)) days.unshift(d);
-    const out = { t: [] as string[], assets: [] as number[], liabilities: [] as number[], net: [] as number[], currency: set.baseCurrency };
-    for (const d of days) {
-      const p = d < start ? backfilledNetWorth(ctx, l, d, set.baseCurrency) : netWorthAt(ctx, l, d, undefined, set.baseCurrency);
-      out.t.push(d);
-      out.assets.push(p.assets / 100);
-      out.liabilities.push(p.liabilities / 100);
-      out.net.push((p.assets - p.liabilities) / 100);
+    const cur = set.baseCurrency;
+    const span: Record<string, number> = { '6m': 6, '1y': 12, '3y': 36, '5y': 60 };
+    const n = span[req.range];
+    if (n === undefined && req.range !== 'all') ctx.fail('INVALID', 'Range must be 6m, 1y, 3y, 5y or all', { field: 'range' });
+    const to = today.slice(0, 7);
+    const firsts = [l.txns.reduce<string | null>((m, t) => (m === null || t.date < m ? t.date : m), null), portfolioFirstDate(ctx)].filter((d): d is string => !!d);
+    const earliest = firsts.length ? firsts.reduce((a, b2) => (a < b2 ? a : b2)).slice(0, 7) : to;
+    const from = n !== undefined ? addMonths(to, -(n - 1)) : earliest;
+    const points = new Map<string, NetWorthPoint>();
+    for (let m = from > earliest ? from : earliest; m <= to; m = addMonths(m, 1)) {
+      points.set(m, netWorthAt(ctx, l, m === to ? today : `${m}-${String(daysInMonth(m)).padStart(2, '0')}`, undefined, cur));
     }
-    return out;
+    for (const [m, p] of manualSnapshots(ctx, set)) if (m >= from && m < to) points.set(m, p);
+    const months = [...points.keys()].sort();
+    const at = (m: string) => points.get(m)!;
+    return {
+      t: months,
+      assets: months.map((m) => at(m).assets / 100),
+      liabilities: months.map((m) => at(m).liabilities / 100),
+      net: months.map((m) => (at(m).assets - at(m).liabilities) / 100),
+      currency: cur,
+    };
   },
 
   finance_spending_breakdown: (req, ctx) => {

@@ -48,6 +48,8 @@ pub fn ensure_packs(store: &emp_store::Store) {
 fn session(app: &AppHandle) -> ApiResult<emp_store::Store> {
     let store = app.state::<AppState>().session()?;
     ensure_packs(&store);
+    // Money HQ's headline metrics come from `finance_overview` (one definition per figure).
+    super::finance::ensure_metric_provider(app, &store);
     Ok(store)
 }
 
@@ -361,6 +363,7 @@ pub async fn lifeapp_insights(app: AppHandle, req: InsightsReq) -> ApiResult<Vec
         let state = app.state::<AppState>();
         let store = state.session()?;
         ensure_packs(&store);
+        super::finance::ensure_metric_provider(&app, &store);
         let list = crate::jobs::catch_panics(|| store.lifeapp_insights(req.instance_id.as_deref()))
             .map_err(|_| ApiError::internal("advisor panicked"))??;
         for i in unseen(&list) {

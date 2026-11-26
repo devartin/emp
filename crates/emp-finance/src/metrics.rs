@@ -64,14 +64,16 @@ pub fn savings_rate(
     (s.income > Decimal::ZERO).then(|| to_f64((s.income - s.spending) / s.income))
 }
 
-/// Savings rate over the trailing 3 months ending `today`.
+/// The window of [`savings_rate_3m`]: the trailing 3 calendar months ending `today`, inclusive.
+#[must_use]
+pub fn savings_window(today: NaiveDate) -> (NaiveDate, NaiveDate) {
+    (add_months(today, -3) + Duration::days(1), today)
+}
+
+/// Savings rate over the trailing 3 months ending `today` ([`savings_window`]).
 pub fn savings_rate_3m(txns: &[Txn], categories: &[Category], today: NaiveDate) -> Option<f64> {
-    savings_rate(
-        txns,
-        categories,
-        add_months(today, -3) + Duration::days(1),
-        today,
-    )
+    let (from, to) = savings_window(today);
+    savings_rate(txns, categories, from, to)
 }
 
 /// Savings rate per calendar month for the `n` months ending with `today`'s month (oldest first).

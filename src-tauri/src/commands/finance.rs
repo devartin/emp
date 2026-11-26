@@ -28,7 +28,7 @@ use emp_finance::money::Currency;
 use emp_finance::period::{YearMonth, budget_period};
 use emp_finance::rules::{CategoryLearner, Rule, RuleSet, RuleTxn};
 use emp_finance::{Decimal, FinanceError};
-use emp_store::Store;
+use emp_store::{MetricValue, Store};
 use emp_store::dbmodel::{
     CellValue, DbSchema, Property, RecurrenceMode, RecurrenceValue, RowDto, RowUpdate, rich,
     rich_plain,
@@ -1002,6 +1002,12 @@ impl PortfolioMarks {
         }
     }
 
+    /// Date of Portfolio's first transaction.
+    #[must_use]
+    pub fn first_date(&self) -> Option<NaiveDate> {
+        self.txns.iter().map(|t| t.date).min()
+    }
+
     /// Portfolio's value at the end of `d` (today and later: the live valuation).
     #[must_use]
     pub fn value_at(&self, d: NaiveDate) -> Decimal {
@@ -1262,12 +1268,23 @@ pub fn overview(
     marks: Option<&PortfolioMarks>,
 ) -> ApiResult<Overview> {
     let l = Ledger::load(store, instance_id)?;
+    overview_of(store, instance_id, &l, m, marks)
+}
+
+/// [`overview`] over an already loaded ledger.
+fn overview_of(
+    store: &Store,
+    instance_id: &str,
+    l: &Ledger,
+    m: YearMonth,
+    marks: Option<&PortfolioMarks>,
+) -> ApiResult<Overview> {
     let today = local_today(store);
     let cur = l.currency.clone();
     let day30 = today - chrono::Duration::days(30);
     let nw = l.net_worth_point(today, marks.map(|k| k.value_at(today)))?;
     let nw30 = l.net_worth_point(day30, marks.map(|k| k.value_at(day30)))?;
-    let bm = budget_month(store, instance_id, &l, m)?;
+    let bm = budget_month(store, instance_id, l, m)?;
     let period = budget_period(m, budget_config(store, instance_id).month_start_day);
     let pace = budget::pace(&period, today);
     let names: HashMap<&str, &Category> = l.categories.iter().map(|c| (c.id.as_str(), c)).collect();
@@ -1331,7 +1348,7 @@ pub fn overview(
         savings_rate3m: emp_finance::metrics::savings_rate_3m(&l.txns, &l.categories, today)
             .unwrap_or(0.0),
         ef_months: emp_finance::metrics::ef_months(ef_balance, essential).unwrap_or(0.0),
-        debt_free_date: debt_free_date(&l, today),
+        debt_free_date: debt_free_date(l, today),
         budget: budget_rows,
         upcoming,
         uncategorized: l
@@ -1341,6 +1358,195 @@ pub fn overview(
             .count(),
         as_of: store.now(),
     })
+}
+
+// ───────────────────────────────────────────────────────────────────────────── life-app metrics (§16.1)
+
+/// Money HQ's headline life-app metrics exactly as [`overview`] computes them, keyed by metric function id: the one
+/// source for the Money HQ KPI tiles (`money-hq.json`), Home insights and their "Show math", and editor KPI blocks.
+/// `ef_months` is a manifest expression (`ef_balance ÷ essential_monthly_spend`), so it equals the overview's
+/// `efMonths`. A figure the overview does not have (left to spend in a zero-based budget, no debts) is a `null`
+/// value — never a different formula. The browser mock's `moneyHook` emits the same values and math.
+pub fn money_metric_overrides(
+    store: &Store,
+    instance_id: &str,
+    marks: Option<&PortfolioMarks>,
+) -> ApiResult<BTreeMap<String, MetricValue>> {
+    use emp_store::lifeapps::metrics::{MathLine, format_money, format_pct};
+    let l = Ledger::load(store, instance_id)?;
+    let today = local_today(store);
+    let o = overview_of(store, instance_id, &l, YearMonth::of(today), marks)?;
+    let cur = o.net_worth.currency.clone();
+    let as_of = store.now();
+    let f = |m: &MoneyDto| m.amount.parse::<f64>().unwrap_or(0.0);
+    let fm = |x: f64| format_money(x, &cur);
+    let line = |label: &str, value: String, source: Option<&str>| MathLine {
+        label: label.to_owned(),
+        value,
+        source: source.map(str::to_owned),
+    };
+    let num = |x: f64, display: String, math: Vec<MathLine>| MetricValue {
+        value: json!(x + 0.0),
+        display,
+        math,
+        as_of,
+    };
+    let none = |math: Vec<MathLine>| MetricValue {
+        value: Value::Null,
+        display: "—".into(),
+        math,
+        as_of,
+    };
+    let mut out = BTreeMap::new();
+    let (nw, assets, liab) = (f(&o.net_worth), f(&o.assets), f(&o.liabilities));
+    let mut nw_math = vec![
+        line("Assets", fm(assets), Some("Accounts")),
+        line("Liabilities", fm(-liab), Some("Accounts")),
+    ];
+    if let Some(inv) = &o.investments {
+        nw_math.push(line("of which Portfolio", fm(f(inv)), Some("Portfolio")));
+    }
+    out.insert("money.net_worth".into(), num(nw, fm(nw), nw_math));
+    let d30 = f(&o.net_worth_delta30d);
+    out.insert(
+        "money.net_worth_delta_30d".into(),
+        num(
+            d30,
+            fm(d30),
+            vec![
+                line("Net worth today", fm(nw), Some("Accounts")),
+                line("30 days ago", fm(nw - d30), Some("Accounts")),
+            ],
+        ),
+    );
+    let budget_src = Some("Budget");
+    out.insert(
+        "money.to_be_assigned".into(),
+        match &o.to_be_assigned {
+            Some(t) => num(
+                f(t),
+                fm(f(t)),
+                vec![line("To be assigned", fm(f(t)), budget_src)],
+            ),
+            None => none(Vec::new()),
+        },
+    );
+    out.insert(
+        "money.left_to_spend".into(),
+        match &o.left_to_spend {
+            Some(t) => num(
+                f(t),
+                fm(f(t)),
+                vec![line("Left to spend", fm(f(t)), budget_src)],
+            ),
+            None => none(Vec::new()),
+        },
+    );
+    let (from, to) = emp_finance::metrics::savings_window(today);
+    let flows = emp_finance::metrics::income_spending(&l.txns, &l.categories, from, to);
+    let (inc, spend) = (
+        emp_finance::money::to_f64(flows.income),
+        emp_finance::money::to_f64(flows.spending),
+    );
+    let rate_math = vec![
+        line("Income (3 months)", fm(inc), Some("Transactions")),
+        line("Spending (3 months)", fm(spend), Some("Transactions")),
+        line("Savings rate", "(income − spending) ÷ income".into(), None),
+    ];
+    out.insert(
+        "money.savings_rate_3m".into(),
+        if inc > 0.0 {
+            num(o.savings_rate3m, format_pct(o.savings_rate3m), rate_math)
+        } else {
+            none(rate_math)
+        },
+    );
+    let ess = o.essential_monthly.as_ref().map_or(0.0, f);
+    out.insert(
+        "money.essential_monthly_spend".into(),
+        num(
+            ess,
+            fm(ess),
+            vec![line(
+                "Essentials / month (median of the last three 30-day periods)",
+                fm(ess),
+                Some("Transactions"),
+            )],
+        ),
+    );
+    let ef = o.ef_balance.as_ref().map_or(0.0, f);
+    out.insert(
+        "money.ef_balance".into(),
+        num(
+            ef,
+            fm(ef),
+            vec![line("Emergency fund", fm(ef), Some("Goals"))],
+        ),
+    );
+    let debts = ledger_debts(&l, today);
+    let debt_math = vec![
+        line("Debts", debts.len().to_string(), Some("Accounts")),
+        line("Paying", "minimums only".into(), None),
+    ];
+    out.insert(
+        "money.debt_free_date".into(),
+        match o
+            .debt_free_date
+            .as_deref()
+            .and_then(|m| m.parse::<YearMonth>().ok())
+        {
+            Some(m) => MetricValue {
+                value: json!(m.to_string()),
+                display: m.first_day().format("%b %Y").to_string(),
+                math: debt_math,
+                as_of,
+            },
+            None => none(debt_math),
+        },
+    );
+    Ok(out)
+}
+
+/// The life-app metric provider of the desktop app: Money HQ's headline metrics from [`money_metric_overrides`]
+/// (Portfolio from the market caches, as `finance_overview`); every other app keeps the built-in functions.
+struct FinanceMetrics;
+
+impl emp_store::MetricProvider for FinanceMetrics {
+    fn overrides(
+        &self,
+        store: &Store,
+        data: &emp_store::lifeapps::metrics::MetricData,
+    ) -> BTreeMap<String, MetricValue> {
+        if data.app_id != "money-hq" {
+            return BTreeMap::new();
+        }
+        let from = data.today - chrono::Duration::days(31);
+        let result = marks_now(store, None, &data.instance_id, Some(from))
+            .and_then(|marks| money_metric_overrides(store, &data.instance_id, marks.as_ref()));
+        match result {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::info!(code = e.code.as_str(), "finance metrics fell back to built-ins");
+                BTreeMap::new()
+            }
+        }
+    }
+}
+
+static METRIC_PROVIDER: std::sync::Once = std::sync::Once::new();
+
+/// Registers [`FinanceMetrics`] with the life-app engine (once per process) and remembers the app handle for the
+/// market router. Called by the life-app commands before they compute metrics, and by `finance_overview`.
+pub fn ensure_metric_provider(app: &AppHandle, store: &Store) {
+    let _ = APP.set(app.clone());
+    register_metric_provider(store);
+}
+
+/// Registers [`FinanceMetrics`] (once per process) without an app handle (no market router: Portfolio at cost).
+pub fn register_metric_provider(store: &Store) {
+    METRIC_PROVIDER.call_once(|| {
+        store.lifeapps_set_metric_provider(Some(Arc::new(FinanceMetrics)));
+    });
 }
 
 /// `finance_overview({ instanceId, month }) → { netWorth, netWorthDelta30d, toBeAssigned?, leftToSpend?, savingsRate3m,
@@ -1403,10 +1609,21 @@ pub async fn finance_networth_series(
     .await
 }
 
+/// The month a Net worth snapshot row records: its title (`YYYY-MM`), else its Date column.
+fn snapshot_month(d: &InstanceDb, r: &RowDto, date_col: &Option<String>) -> Option<YearMonth> {
+    d.title(r)
+        .trim()
+        .parse::<YearMonth>()
+        .ok()
+        .or_else(|| date(date_col.as_ref().and_then(|c| r.values.get(c))).map(YearMonth::of))
+}
+
 /// Computes `finance_networth_series` (pure over the store): one [`emp_finance::networth::point`] per month — month
-/// ends, the current month as of today, so the last point is exactly the overview's net worth. Snapshot rows the
-/// user entered (any source but *Automatic*) override past months; automatic rows are a record of the same
-/// computation and never override it, and the current month is always live.
+/// ends, the current month as of today, so the last point is exactly the overview's net worth — from the first
+/// ledger or Portfolio transaction (before the ledger's first transaction accounts sit at their opening balance).
+/// Snapshot rows the user entered (any source but *Automatic*; month from the title `YYYY-MM`, else the Date column)
+/// override past months; automatic rows are a record of the same computation and never override it, and the
+/// current month is always live. The browser mock's `finance_networth_series` follows the same rules.
 pub fn networth_series(
     store: &Store,
     instance_id: &str,
@@ -1420,9 +1637,10 @@ pub fn networth_series(
     let earliest = l
         .txns
         .iter()
-        .map(|t| YearMonth::of(t.date))
+        .map(|t| t.date)
+        .chain(marks.and_then(PortfolioMarks::first_date))
         .min()
-        .unwrap_or(to);
+        .map_or(to, YearMonth::of);
     let from = match months {
         Some(n) => to.plus_months(-(n - 1)),
         None => earliest,
@@ -1444,8 +1662,9 @@ pub fn networth_series(
         let a = d.keyed_id("assets", &["Assets"]);
         let li = d.keyed_id("liabilities", &["Liabilities"]);
         let source = d.keyed("source", &["Source"]);
+        let dcol = d.keyed_id("date", &["Date"]);
         for r in &d.rows {
-            let Ok(m) = d.title(r).trim().parse::<YearMonth>() else {
+            let Some(m) = snapshot_month(d, r, &dcol) else {
                 continue;
             };
             if m < from || m >= to {
@@ -1484,8 +1703,11 @@ pub fn networth_series(
 
 /// The automatic monthly net-worth snapshot (§15.5, §16.2 "Net worth snapshots"): for every Money HQ instance, the
 /// first time this runs in a month it adds a row (source *Automatic*) for each month from the latest snapshot row
-/// (exclusive) to the current month, valued from opening balances and transactions (the current month as of
-/// today). Returns the ids of the databases that got rows. Runs at unlock and from the background ticker.
+/// (exclusive) to the current month, valued with [`emp_finance::networth::point`] like the live series (the current
+/// month as of today, Portfolio from the market caches). While Portfolio's holdings have no cached price yet the
+/// run is deferred (prices are fetched meanwhile) for the first [`SNAPSHOT_PRICE_WAIT_DAYS`] days of the month, so
+/// the row records market values; after that, or without market access, holdings without a price are recorded at
+/// cost. Returns the ids of the databases that got rows. Runs at unlock and from the background ticker.
 pub fn auto_networth_snapshots(store: &Store) -> ApiResult<Vec<String>> {
     let today = local_today(store);
     let this_month = YearMonth::of(today).to_string();
@@ -1502,8 +1724,9 @@ pub fn auto_networth_snapshots(store: &Store) -> ApiResult<Vec<String>> {
                 continue;
             }
             match networth_snapshot_rows(store, &inst.id, today) {
-                Ok(Some(db)) => written.push(db),
-                Ok(None) => {}
+                Ok(SnapshotRun::Wrote(db)) => written.push(db),
+                Ok(SnapshotRun::Nothing) => {}
+                Ok(SnapshotRun::Deferred) => continue,
                 Err(e) => {
                     tracing::info!(code = e.code.as_str(), "net-worth snapshot skipped");
                     continue;
@@ -1515,30 +1738,45 @@ pub fn auto_networth_snapshots(store: &Store) -> ApiResult<Vec<String>> {
     Ok(written)
 }
 
-/// Writes the missing snapshot rows of one instance; `Some(database id)` when rows were added.
+/// Days into a month the automatic snapshot waits for Portfolio prices before recording holdings at cost.
+pub const SNAPSHOT_PRICE_WAIT_DAYS: u32 = 7;
+
+/// Outcome of [`networth_snapshot_rows`].
+#[derive(Debug, PartialEq, Eq)]
+enum SnapshotRun {
+    /// Rows were added to this database.
+    Wrote(String),
+    /// Nothing to write this month.
+    Nothing,
+    /// Waiting for market prices; try again on the next run.
+    Deferred,
+}
+
+/// Writes the missing snapshot rows of one instance.
 fn networth_snapshot_rows(
     store: &Store,
     instance_id: &str,
     today: NaiveDate,
-) -> ApiResult<Option<String>> {
+) -> ApiResult<SnapshotRun> {
     let l = Ledger::load(store, instance_id)?;
     let Some(d) = l.dbs.get("networth") else {
-        return Ok(None);
+        return Ok(SnapshotRun::Nothing);
     };
     if l.accounts.is_empty() {
-        return Ok(None);
+        return Ok(SnapshotRun::Nothing);
     }
+    let dcol = d.keyed_id("date", &["Date"]);
     let existing: Vec<YearMonth> = d
         .rows
         .iter()
-        .filter_map(|r| d.title(r).trim().parse::<YearMonth>().ok())
+        .filter_map(|r| snapshot_month(d, r, &dcol))
         .collect();
     let mut months = emp_finance::networth::missing_months(&existing, today);
     if months.len() > MAX_AUTO_SNAPSHOT_MONTHS {
         months.drain(..months.len() - MAX_AUTO_SNAPSHOT_MONTHS);
     }
     let (Some(&first), Some(&last)) = (months.first(), months.last()) else {
-        return Ok(None);
+        return Ok(SnapshotRun::Nothing);
     };
     let (Some(acol), Some(lcol)) = (
         d.keyed_id("assets", &["Assets"]),
@@ -1560,9 +1798,28 @@ fn networth_snapshot_rows(
         v: Some(v.round_dp(2).normalize().to_string()),
         cur: l.currency.clone(),
     };
-    // No market access here (background task): Portfolio is valued offline, at cost. These rows are a record; the
-    // live series recomputes every month with market prices and does not read them back (`networth_series`).
-    let marks = portfolio_marks_offline(store, instance_id, today)?;
+    // Portfolio from the market caches, like the live series (which recomputes and never reads these rows back).
+    let router = market_router(None);
+    let cached = portfolio_marks_cached(
+        store,
+        router.as_deref(),
+        instance_id,
+        today,
+        Some(first.first_day()),
+    )?;
+    let marks = match cached {
+        Some((marks, need)) => {
+            let priced = need.priced_today();
+            if let Some(r) = router {
+                refresh_marks(r, need);
+                if !priced && today.day() <= SNAPSHOT_PRICE_WAIT_DAYS {
+                    return Ok(SnapshotRun::Deferred);
+                }
+            }
+            Some(marks)
+        }
+        None => None,
+    };
     let rows: Vec<BTreeMap<String, CellValue>> = emp_finance::networth::backfill_from_transactions(
         &l.accounts,
         &l.txns,
@@ -1595,10 +1852,10 @@ fn networth_snapshot_rows(
     })
     .collect();
     if rows.is_empty() {
-        return Ok(None);
+        return Ok(SnapshotRun::Nothing);
     }
     store.db_rows_insert_bulk(d.id(), rows, None)?;
-    Ok(Some(d.id().to_owned()))
+    Ok(SnapshotRun::Wrote(d.id().to_owned()))
 }
 
 /// `finance_spending_breakdown` request.
@@ -3185,7 +3442,7 @@ mod tests {
         let today = local_today(&store);
         let month = YearMonth::of(today);
         assert!(
-            portfolio_marks_offline(&store, &money, today)
+            portfolio_marks_cached(&store, None, &money, today, None)
                 .unwrap()
                 .is_none()
         );
@@ -3213,9 +3470,10 @@ mod tests {
 
         // With Portfolio installed its value replaces the investment accounts, once.
         test_support::install(&store, "portfolio");
-        let marks = portfolio_marks_offline(&store, &money, today)
+        let (marks, need) = portfolio_marks_cached(&store, None, &money, today, None)
             .unwrap()
             .expect("portfolio");
+        assert_eq!(need, MarksRefresh::default(), "no router: nothing to refetch");
         let with = check(Some(&marks));
         let inv = money_of(&with["investments"]);
         assert_eq!(inv, marks.value_at(today));
@@ -3236,6 +3494,132 @@ mod tests {
         if ess > 0.0 {
             assert!((with["efMonths"].as_f64().unwrap() - ef / ess).abs() < 1e-9);
         }
+    }
+
+    #[test]
+    fn life_app_metrics_are_the_overview_figures() {
+        let (_dir, store) = test_support::temp_store();
+        let (_, money) = test_support::install(&store, "money-hq");
+        test_support::install(&store, "portfolio");
+        register_metric_provider(&store);
+        let today = local_today(&store);
+        let from = today - chrono::Duration::days(31);
+        let marks = portfolio_marks_cached(&store, None, &money, today, Some(from))
+            .unwrap()
+            .map(|(m, _)| m);
+        let o = serde_json::to_value(
+            overview(&store, &money, YearMonth::of(today), marks.as_ref()).unwrap(),
+        )
+        .unwrap();
+        let m = store.lifeapp_metrics(&money, &[]).unwrap();
+        let val = |k: &str| m.get(k).map(|v| v.value.clone()).unwrap_or(Value::Null);
+        let num = |k: &str| val(k).as_f64().unwrap_or(f64::NAN);
+        let dec = |k: &str| emp_finance::money::to_f64(money_of(&o[k]));
+        assert!((num("net_worth") - dec("netWorth")).abs() < 0.005);
+        assert!((num("net_worth_delta_30d") - dec("netWorthDelta30d")).abs() < 0.005);
+        assert!((num("savings_rate_3m") - o["savingsRate3m"].as_f64().unwrap()).abs() < 1e-9);
+        assert!((num("essential_monthly_spend") - dec("essentialMonthly")).abs() < 0.005);
+        assert!((num("ef_balance") - dec("efBalance")).abs() < 0.005);
+        assert!(
+            (num("ef_months") - o["efMonths"].as_f64().unwrap()).abs() < 1e-6,
+            "{} vs {}",
+            num("ef_months"),
+            o["efMonths"]
+        );
+        assert_eq!(
+            val("debt_free_date").as_str(),
+            o["debtFreeDate"].as_str(),
+            "one debt-free date"
+        );
+        for (metric, field) in [
+            ("to_be_assigned", "toBeAssigned"),
+            ("left_to_spend", "leftToSpend"),
+        ] {
+            match o.get(field) {
+                Some(v) => assert!(
+                    (num(metric) - emp_finance::money::to_f64(money_of(v))).abs() < 0.005
+                ),
+                None => assert!(val(metric).is_null(), "{metric}: no figure, no fallback"),
+            }
+        }
+        // "Show math" reproduces the result.
+        let math = &m["net_worth"].math;
+        assert_eq!(math[0].label, "Assets");
+        assert_eq!(math[1].label, "Liabilities");
+        assert!(marks.is_some());
+        assert_eq!(
+            math.get(2).map(|l| l.label.as_str()),
+            Some("of which Portfolio"),
+            "the provider, not the built-in, computed it"
+        );
+    }
+
+    #[test]
+    fn debt_free_date_is_the_minimum_payments_plan() {
+        let (_dir, store) = test_support::temp_store();
+        let (_, money) = test_support::install(&store, "money-hq");
+        let today = local_today(&store);
+        let l = Ledger::load(&store, &money).unwrap();
+        let debts = ledger_debts(&l, today);
+        let o = serde_json::to_value(overview(&store, &money, YearMonth::of(today), None).unwrap())
+            .unwrap();
+        if debts.is_empty() {
+            assert!(o.get("debtFreeDate").is_none());
+            return;
+        }
+        // The Debt tab's planner, same debts, minimums only, starting next month.
+        let req = emp_finance::debt::DebtPlanRequest {
+            debts: debts
+                .iter()
+                .map(|d| emp_finance::debt::DebtInput {
+                    name: d.name.clone(),
+                    balance: d.balance.to_string(),
+                    apr_pct: d.apr_pct.to_string(),
+                    min_payment: d.min_payment.to_string(),
+                })
+                .collect(),
+            strategy: emp_finance::debt::Strategy::Avalanche,
+            extra_monthly: "0".into(),
+            order: None,
+            start_month: YearMonth::of(today).next(),
+        };
+        let plan = emp_finance::debt::plan(&req).unwrap();
+        let min = plan
+            .strategies
+            .iter()
+            .find(|s| s.strategy == "minimum")
+            .unwrap();
+        assert_eq!(
+            o.get("debtFreeDate").and_then(Value::as_str),
+            min.payoff_date.map(|m| m.to_string()).as_deref()
+        );
+        assert!(debts.iter().all(|d| d.min_payment > Decimal::ZERO));
+    }
+
+    #[test]
+    fn the_series_reaches_back_to_portfolio_history() {
+        let (_dir, store) = test_support::temp_store();
+        let (_, money) = test_support::install(&store, "money-hq");
+        test_support::install(&store, "portfolio");
+        let today = local_today(&store);
+        let (marks, _) = portfolio_marks_cached(&store, None, &money, today, Some(NaiveDate::MIN))
+            .unwrap()
+            .unwrap();
+        let l = Ledger::load(&store, &money).unwrap();
+        let ledger_first = l.txns.iter().map(|t| t.date).min().unwrap();
+        let first = marks.first_date().unwrap().min(ledger_first);
+        let s = networth_series(&store, &money, None, Some(&marks)).unwrap();
+        assert_eq!(s.t.first().cloned(), Some(YearMonth::of(first).to_string()));
+        assert!(
+            (s.net.last().copied().unwrap()
+                - emp_finance::money::to_f64(
+                    l.net_worth_point(today, Some(marks.value_at(today)))
+                        .unwrap()
+                        .net_worth
+                ))
+            .abs()
+                < 0.005
+        );
     }
 
     #[test]

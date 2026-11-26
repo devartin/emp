@@ -25,7 +25,7 @@ import { useAsync, useDbChanged, useScrubIdx, useScrubStore, type ScrubStore } f
 import { InsightCard, Quiet, Section } from "../shared/ui";
 import { SpendWheel, WheelLegendRow } from "../shared/SpendWheel";
 import { localInsights } from "./insights";
-import { debtInputs, debtPlanStart, useLedgerCtx } from "./ledger";
+import { debtInputs, useLedgerCtx } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 import { BudgetRing, Envelope, HeroMoney, MetricCard, TxnLine, type EnvelopeData } from "./widgets";
 import { DetailBars, KpiDetail, KpiMorphStage, KpiMorphTile } from "./KpiMorph";
@@ -193,27 +193,21 @@ function MiniStat({ label, value, scrubbing }: { label: string; value: number | 
 
 // ───────────────────────────────────────────────────────────────────────────── side metrics
 
-/** Minimum-payments payoff month from the same planner (and the same debts) the Debt tab uses, so the two agree. */
-function useMinimumDebtFree(): string | null | undefined {
+/**
+ * The Debt-free tile's month: `FinanceOverview.debtFreeDate` — the one definition (minimum payments only, from next
+ * month, the Debt tab's debts) the `debt_free_date` metric and KPI tile show too. `""` with nothing owed, `null`
+ * when minimums never clear the debts, undefined while loading.
+ */
+function useMinimumDebtFree(debtFreeDate: string | undefined, loaded: boolean): string | null | undefined {
   const l = useLedgerCtx();
-  const debts = useMemo(() => (l.loading ? null : debtInputs(l.accounts)), [l.loading, l.accounts]);
-  const key = debts ? JSON.stringify(debts) : "";
-  const s = useAsync(
-    async () => {
-      if (!debts) return undefined;
-      if (!debts.length) return "";
-      const plan = await api.finance.debtPlan({ debts: debts.map(({ name, balance, aprPct, minPayment }) => ({ name, balance, aprPct, minPayment })), strategy: "avalanche", extraMonthly: "0", startMonth: debtPlanStart() });
-      const min = plan.strategies.find((x) => x.strategy === "minimum");
-      return min && min.months < 600 ? min.payoffDate : null;
-    },
-    [key],
-  );
-  return s.data;
+  if (!loaded || l.loading) return undefined;
+  if (debtFreeDate) return debtFreeDate;
+  return debtInputs(l.accounts).length ? null : "";
 }
 
 function SideMetrics() {
   const { overview: ov, go } = useMoney();
-  const debtFree = useMinimumDebtFree();
+  const debtFree = useMinimumDebtFree(ov?.debtFreeDate, !!ov);
   if (!ov) {
     return (
       <div className="flex flex-col gap-3 h-full">

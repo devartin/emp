@@ -26,7 +26,8 @@ import { cellDate, cellText, c, emoji } from '@/features/lifeapps/mock/env';
 import { nextOccurrence } from '@/features/lifeapps/engine/recurrence';
 import type { LifeAppHooks, Raw } from '@/features/lifeapps/mock/metrics';
 import type { MockCallCtx } from '../ctx';
-import { handlers as financeHandlers } from './finance';
+import { debtsOf, flows, handlers as financeHandlers, readLedger, resolveSet, savingsWindow } from './finance';
+import { spendingBudget } from '../../figures';
 import { handlers as portfolioHandlers } from './portfolio';
 
 const dbApi = (ctx: MockCtx): DbApi => {
@@ -400,38 +401,72 @@ function asMetrics(ctx: MockCtx, raw: Raw) {
   return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, { value: v.value, display: v.display, math: v.math ?? [], asOf }]));
 }
 
+/**
+ * Money HQ's headline metrics exactly as `finance_overview` computes them — the same metric set, values, "no
+ * value" nulls and "Show math" lines as the desktop app's `FinanceMetrics` provider (Rust
+ * `money_metric_overrides`), so KPI tiles, insights and editor KPI blocks never show a second formula. The mock's
+ * extra `month_spend` / `month_budget` metrics use the shared {@link spendingBudget} (Home ring, Overview).
+ */
 const moneyHook: LifeAppHooks = {
   async metrics(ctx, instanceId) {
     const fn = financeHandlers.finance_overview;
     if (!fn) return null;
     const today = isoDay(ctx.clock.now());
     const o = await fn({ instanceId, month: today.slice(0, 7) }, ctx as MockCallCtx);
+    const l = readLedger(ctx, resolveSet(ctx, instanceId));
     const cur = o.netWorth.currency;
+    const f = fmtM;
     const nw = money(o.netWorth);
+    const assets = money(o.assets);
+    const liab = money(o.liabilities);
     const d30 = money(o.netWorthDelta30d);
-    const assigned = o.budget.reduce((s2, b) => s2 + money(b.assigned), 0);
-    const spent = o.budget.reduce((s2, b) => s2 + Math.max(0, -money(b.activity)), 0);
+    const none = (math: Raw[string]['math'] = []) => ({ value: null, display: '—', math });
+    const nwMath = [
+      { label: 'Assets', value: f(assets, cur), source: 'Accounts' },
+      { label: 'Liabilities', value: f(-liab, cur), source: 'Accounts' },
+      ...(o.investments ? [{ label: 'of which Portfolio', value: f(money(o.investments), cur), source: 'Portfolio' }] : []),
+    ];
+    const [from, to] = savingsWindow(today);
+    const fl = flows(l, from, to);
+    const rateMath = [
+      { label: 'Income (3 months)', value: f(fl.income / 100, cur), source: 'Transactions' },
+      { label: 'Spending (3 months)', value: f(fl.spending / 100, cur), source: 'Transactions' },
+      { label: 'Savings rate', value: '(income − spending) ÷ income' },
+    ];
+    const ess = money(o.essentialMonthly);
+    const ef = money(o.efBalance);
+    const sb = spendingBudget(o.budget);
     const over = o.budget.filter((b) => money(b.available) < 0).length;
     const until = isoDay(ctx.clock.now() + 7 * 86_400_000);
     const bills = o.upcoming.filter((u) => u.due <= until);
     const billSum = bills.reduce((s2, u) => s2 + Math.abs(money(u.amount)), 0);
+    const debtMath = [
+      { label: 'Debts', value: String(debtsOf(l, today).length), source: 'Accounts' },
+      { label: 'Paying', value: 'minimums only' },
+    ];
+    const budgetLine = (label: string, m: { amount: string; currency: string } | undefined) => (m ? { value: money(m), display: f(money(m), cur), math: [{ label, value: f(money(m), cur), source: 'Budget' }] } : none());
     const raw: Raw = {
-      net_worth: { value: nw, display: fmtM(nw, cur), math: [{ label: 'Net worth today', value: fmtM(nw, cur), source: 'Accounts + transactions' }] },
-      net_worth_delta_30d: { value: nw - d30 ? d30 / Math.abs(nw - d30) : 0, display: fmtM(d30, cur), math: [{ label: 'Change in 30 days', value: fmtM(d30, cur) }] },
-      net_worth_delta_30d_amount: { value: d30, display: fmtM(d30, cur) },
-      savings_rate_3m: { value: o.savingsRate3m, display: pct(o.savingsRate3m) },
-      ef_months: { value: o.efMonths, display: `${o.efMonths.toFixed(1)} mo` },
+      net_worth: { value: nw, display: f(nw, cur), math: nwMath },
+      net_worth_delta_30d: { value: d30, display: f(d30, cur), math: [{ label: 'Net worth today', value: f(nw, cur), source: 'Accounts' }, { label: '30 days ago', value: f(nw - d30, cur), source: 'Accounts' }] },
+      to_be_assigned: budgetLine('To be assigned', o.toBeAssigned),
+      left_to_spend: budgetLine('Left to spend', o.leftToSpend),
+      savings_rate_3m: fl.income > 0 ? { value: o.savingsRate3m, display: pct(o.savingsRate3m), math: rateMath } : none(rateMath),
+      essential_monthly_spend: { value: ess, display: f(ess, cur), math: [{ label: 'Essentials / month (median of the last three 30-day periods)', value: f(ess, cur), source: 'Transactions' }] },
+      ef_balance: { value: ef, display: f(ef, cur), math: [{ label: 'Emergency fund', value: f(ef, cur), source: 'Goals' }] },
+      ef_months: { value: o.efMonths, display: `${o.efMonths.toFixed(1)} mo`, math: [{ label: 'Emergency fund', value: f(ef, cur), source: 'Goals' }, { label: 'Essentials / month', value: f(ess, cur), source: 'Transactions' }] },
+      debt_free_date: o.debtFreeDate
+        ? { value: o.debtFreeDate, display: new Date(`${o.debtFreeDate.slice(0, 7)}-01T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }), math: debtMath }
+        : none(debtMath),
       uncategorized_count: { value: o.uncategorized, display: String(o.uncategorized) },
-      upcoming_bills_7d: { value: billSum, display: fmtM(billSum, cur), math: bills.map((b) => ({ label: b.name, value: fmtM(Math.abs(money(b.amount)), cur), source: b.due })) },
+      upcoming_bills_7d: { value: billSum, display: f(billSum, cur), math: bills.map((b) => ({ label: b.name, value: f(Math.abs(money(b.amount)), cur), source: b.due })) },
       upcoming_bills_7d_count: { value: bills.length, display: String(bills.length) },
-      month_budget: { value: assigned, display: fmtM(assigned, cur) },
-      month_spend: { value: spent, display: fmtM(spent, cur) },
+      month_budget: { value: sb.assigned, display: f(sb.assigned, cur) },
+      month_spend: { value: sb.spent, display: f(sb.spent, cur) },
       cat_over_count: { value: over, display: String(over) },
     };
-    if (o.leftToSpend) raw.left_to_spend = { value: money(o.leftToSpend), display: fmtM(money(o.leftToSpend), cur) };
-    if (o.toBeAssigned) raw.to_be_assigned = { value: money(o.toBeAssigned), display: fmtM(money(o.toBeAssigned), cur) };
-    raw.budget_headline = raw.left_to_spend ?? raw.to_be_assigned ?? { value: assigned - spent, display: fmtM(assigned - spent, cur) };
-    if (o.debtFreeDate) raw.debt_free_date = { value: o.debtFreeDate, display: new Date(`${o.debtFreeDate.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }) };
+    // Rust's manifest expression: To be assigned for zero-based / envelopes, else Left to spend — the overview
+    // reports exactly one of the two.
+    raw.budget_headline = o.toBeAssigned ? raw.to_be_assigned : raw.left_to_spend;
     return asMetrics(ctx, raw);
   },
 };

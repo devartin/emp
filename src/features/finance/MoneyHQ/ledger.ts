@@ -9,6 +9,7 @@ import type { CellValue, DbSchema, Id, RowDTO } from "@/backend/types";
 import { notify } from "@/stores/toasts";
 import { cell, queryAll, useAsync, useDbChanged, useRoleDbs, V } from "../shared/hooks";
 import { addMonths, num, todayIso } from "../shared/format";
+import { debtMinimum } from "../shared/figures";
 
 export interface Account {
   id: Id;
@@ -349,12 +350,13 @@ export function useLedgerCtx(): Ledger {
 }
 
 export const DEBT_TYPES = new Set(["credit_card", "student_loan", "auto_loan", "mortgage", "personal_loan", "other_liability"]);
-/** The debts the planner works on: open loan/card accounts carrying a balance owed. One source for the Overview
- * "Debt-free" tile and the Debt tab, so both quote the same plan. */
+/** The debts the planner works on (Rust `ledger_debts`, the mock's `debtsOf` — the debts behind
+ * `FinanceOverview.debtFreeDate`): open loan/card accounts carrying a balance owed, at their minimum payment or
+ * `max($25, 2%)` without one. */
 export function debtInputs(accounts: Account[]): { key: Id; name: string; balance: string; aprPct: string; minPayment: string }[] {
   return accounts
     .filter((a) => DEBT_TYPES.has(a.type) && !a.closed && a.balance < 0)
-    .map((a) => ({ key: a.id, name: a.name, balance: (-a.balance).toFixed(2), aprPct: String(a.apr ?? 0), minPayment: a.minPayment.toFixed(2) }));
+    .map((a) => ({ key: a.id, name: a.name, balance: (-a.balance).toFixed(2), aprPct: String(a.apr ?? 0), minPayment: debtMinimum(a.minPayment, -a.balance).toFixed(2) }));
 }
 
 /** First month of a payoff plan: next month (this month's payments are already in the ledger). */

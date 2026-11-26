@@ -708,6 +708,13 @@ export function setup(ctx: MockCtx): void {
     if (day >= today) return strToCents(summary(c, l).totalValue.amount);
     return valueOfBook(c, l, rebuild(l, day), day, today);
   });
+  /** Date of Portfolio's first transaction (Money HQ's net-worth series reaches back to it, like Rust). */
+  ctx.services.provide('portfolio.firstDate', (c: MockCtx): string | null => {
+    const set = pfSets(c).all()[0];
+    if (!set || !dbs(c).has(set.dbs.txns)) return null;
+    const days = readPortfolio(c, set).txns.map((t) => t.date).filter((d) => d > '1970-01-01');
+    return days.length ? days.reduce((a, b) => (a < b ? a : b)) : null;
+  });
   /** Realised gains and dividends for the tax estimator (§16.4). */
   ctx.services.provide('portfolio.taxYear', (instanceId: Id | null, year: number) => {
     const set = resolvePf(ctx, instanceId);

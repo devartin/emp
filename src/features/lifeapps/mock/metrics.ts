@@ -437,12 +437,13 @@ export async function insightsFor(ctx: MockCtx, db: DbApi, inst: InstanceRecord)
     const muted = inst.muted[rule.id];
     if (muted === null || (typeof muted === 'number' && muted > now)) continue;
     if (!test(rule.when, scope)) continue;
+    // Rust `advisor::insights`: one line per math metric — its name, its displayed value, its first source.
     const math: InsightMath[] = [];
     for (const mm of rule.mathMetrics) {
       const r = raw[mm];
       if (!r) continue;
-      if (r.math?.length) math.push(...r.math);
-      else math.push({ label: mm.replace(/_/g, ' '), value: r.display });
+      const source = r.math?.[0]?.source;
+      math.push({ label: mm.replace(/_/g, ' '), value: r.display, ...(source ? { source } : {}) });
     }
     out.push({
       id: `${inst.id}:${rule.id}`,

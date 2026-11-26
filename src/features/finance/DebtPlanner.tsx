@@ -192,7 +192,7 @@ export default function DebtPlanner() {
         </section>
         <section className="fh-card fh-span-7 flex flex-col">
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <BigFact label="Debt-free" value={sel ? <SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /> : "—"} sub={sel ? `${sel.months} months` : ""} />
+            <BigFact label="Debt-free" value={sel ? <SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /> : "—"} sub={sel ? `${sel.months} months · ${extra > 0 ? `${fmtMoney(extra, "USD", { noCents: true })}/mo extra` : "no extra"}` : ""} />
             <BigFact label="Interest saved" value={sel ? <RollingNumber value={num(sel.interestSavedVsMin)} format={(n) => fmtMoney(Math.round(n), "USD", { noCents: true })} countUp={false} sensitive /> : "—"} sub="vs minimums only" good sensitive />
             <BigFact label="Months sooner" value={sel && minimum ? <RollingNumber value={Math.max(0, minimum.months - sel.months)} format={(n) => String(Math.round(n))} countUp={false} /> : "—"} sub={minimum ? `minimums: ${minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)}` : ""} good />
           </div>
