@@ -129,3 +129,5 @@ Their totals are in each file's `totals` field.
 | Date | Reason | Before → after |
 |---|---|---|
 | 2026-11-26 | Phase 1 re-split chunks | JS 1,343 → 1,348.4 KB (+0.4%), CSS 131.6 → 113.1 KB (-14.0%), Home boot 446.5 → 349.5 KB (-21.7%). Eight chunks failed the +5% per-chunk rule only because Rollup moved shared modules between chunks (for example the 29.5 KB `IconButton.js` chunk no longer exists on its own while `toasts.js` went from 13.5 to 40.9 KB; total JS is flat). The largest new chunk is `glyphs.js` at 17.8 KB, well under 50 KB. |
+
+| 2026-11-26 | Phase 2 kit pass: icon registry re-split shared lucide chunks (user.js 1.7 to 2.3 KB) | JS 1336.8 KB (-0.9%), CSS 101.3 KB, Home boot 353.5 KB |

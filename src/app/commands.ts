@@ -251,7 +251,7 @@ export function registerAppCommands(): () => void {
     },
     { id: 'go.home', title: 'Home', section: 'Go to', icon: 'house', keywords: ['dashboard', 'start'], when: inShell, run: go({ t: 'home' }) },
     { id: 'go.calendar', title: 'Calendar', section: 'Go to', icon: 'calendar', keywords: ['events', 'schedule'], when: inShell, run: go({ t: 'calendar' }) },
-    { id: 'go.markets', title: 'Markets', section: 'Go to', icon: 'chart-candlestick', keywords: ['stocks', 'quotes', 'watchlist'], when: inShell, run: go({ t: 'markets' }) },
+    { id: 'go.markets', title: 'Markets', section: 'Go to', icon: 'candlestick-chart', keywords: ['stocks', 'quotes', 'watchlist'], when: inShell, run: go({ t: 'markets' }) },
     { id: 'go.lifeapps', title: 'Life apps', section: 'Go to', icon: 'layout-grid', keywords: ['apps', 'gallery', 'add a life app', 'money', 'habits'], when: inShell, run: go({ t: 'lifeapps' }) },
     { id: 'go.trash', title: 'Trash', section: 'Go to', icon: 'trash-2', keywords: ['deleted', 'restore'], when: inShell, run: go({ t: 'trash' }) },
     { id: 'settings.open', title: 'Settings', section: 'Go to', icon: 'settings', keywords: ['preferences', 'options'], shortcut: 'mod+,', when: inShell, run: go({ t: 'settings', section: 'general' }) },

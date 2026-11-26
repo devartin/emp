@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { MASK, valueFormatter, type ValueFormat } from "./axis";
 import { useChartTheme } from "./theme";
 
@@ -25,17 +25,13 @@ export interface GaugeProps {
 }
 
 /**
- * Semicircle gauge (score, utilisation, savings rate). Track rgba(text,.08); value arc sweeps in over 700ms outExpo
- * (instant under reduced motion); optional target tick and min/max labels.
+ * Semicircle gauge (score, utilisation, savings rate). Track rgba(text,.08); the value arc paints at its value on first
+ * render (no sweep on arrival: earned motion) and settles to a changed value over --dur-settle (instant under reduced
+ * motion); optional target tick and min/max labels.
  */
 export function Gauge({ value, min = 0, max = 100, bands, target, label, format = "number", currency = "USD", size = 200, caption, className }: GaugeProps) {
   const t = useChartTheme();
   const fmt = valueFormatter(format, currency);
-  const [shown, setShown] = useState(t.reducedMotion ? 1 : 0);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setShown(1));
-    return () => cancelAnimationFrame(id);
-  }, []);
   const stroke = Math.round(size * 0.075);
   const r = size / 2 - stroke / 2 - 2;
   const cx = size / 2;
@@ -77,8 +73,8 @@ export function Gauge({ value, min = 0, max = 100, bands, target, label, format 
             strokeWidth={stroke}
             strokeLinecap="round"
             strokeDasharray={len}
-            strokeDashoffset={len * (1 - frac * shown)}
-            style={{ transition: t.reducedMotion ? "none" : "stroke-dashoffset 700ms cubic-bezier(.16,1,.3,1), stroke 160ms cubic-bezier(.2,0,0,1)" }}
+            strokeDashoffset={len * (1 - frac)}
+            style={{ transition: t.reducedMotion ? "none" : "stroke-dashoffset var(--dur-settle) var(--ease-out), stroke 160ms var(--ease-out)" }}
           />
           {tAngle !== null ? (
             <line

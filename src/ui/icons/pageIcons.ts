@@ -171,22 +171,24 @@ export const PAGE_ICON_NAMES: string[] = PAGE_ICON_GROUPS.flatMap((grp) =>
 /**
  * App glyphs: names features and stored data address directly (life-app manifests, commands, page kinds, seeded app
  * icons) that the picker does not offer. They are in the registry so `PageGlyph`, `Glyph` and `glyphSvg` render them
- * everywhere instead of an empty box. Real lucide-react names (two are lucide aliases: history, candlestick-chart).
+ * everywhere instead of an empty box. Real lucide-react names (history is a lucide alias). Older stored spellings (candlestick-chart, receipt-text)
+ * resolve through `GLYPH_ALIASES` to the canonical names the seed and commands use.
  */
 export const APP_GLYPH_NAMES: readonly string[] = [
   'ban',
   'bed-double',
   'book-open-text',
-  'candlestick-chart',
+  'chart-candlestick',
   'circle',
   'circle-dot',
+  'folder-check',
   'folders',
   'glass-water',
   'history',
   'layout-dashboard',
   'list',
   'phone-off',
-  'receipt-text',
+  'shapes',
   'sheet',
   'shield-check',
   'shuffle',

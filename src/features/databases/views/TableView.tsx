@@ -9,7 +9,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { AnimatePresence, m } from 'motion/react';
 import { ChevronRight, Copy, GripVertical, PanelRight, Plus, Trash2, X } from 'lucide-react';
 import {
-  memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as RKeyboardEvent,
+  memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent as ReactFocusEvent, type KeyboardEvent as RKeyboardEvent,
   type PointerEvent as RPointerEvent,
 } from 'react';
 import { api } from '@/backend';
@@ -397,13 +397,27 @@ export function TableView() {
         cellEl(nr, nc)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         sc.scrollLeft = left;
       }
-      const col = allCols[nc];
-      if (!col || nc === 0) return; // the title column is sticky: always in view
-      // Column offsets start at the grid; the scroller's left padding sits before it and is never sticky.
-      const padL = parseFloat(getComputedStyle(sc).paddingLeft) || 0;
-      const next = revealScrollLeft({ scrollLeft: sc.scrollLeft, viewWidth: sc.clientWidth - padL, stickyWidth: GUTTER + title.width, colLeft: col.left, colWidth: col.width });
-      if (next !== sc.scrollLeft) sc.scrollLeft = next;
+      revealCol(nc);
     });
+  };
+  /** Sticky-aware horizontal reveal of column `c`; the title column (0) is sticky, so it never moves the table. */
+  const revealCol = (c: number) => {
+    const sc = scrollRef.current;
+    const col = allCols[c];
+    if (!sc || !col || c === 0) return;
+    // Column offsets start at the grid; the scroller's left padding sits before it and is never sticky.
+    const padL = parseFloat(getComputedStyle(sc).paddingLeft) || 0;
+    const next = revealScrollLeft({ scrollLeft: sc.scrollLeft, viewWidth: sc.clientWidth - padL, stickyWidth: GUTTER + title.width, colLeft: col.left, colWidth: col.width });
+    if (next !== sc.scrollLeft) sc.scrollLeft = next;
+  };
+  // Native focus reveal (Tab into a cell control, focus returning after the side peek) can park a scrolling cell under
+  // the sticky gutter + title; correct it against the sticky edge. Focus inside the sticky title column (its Open
+  // button, the title cell itself) needs no reveal, so the user's horizontal position is kept.
+  const onScrollerFocus = (e: ReactFocusEvent<HTMLDivElement>) => {
+    const cellNode = (e.target as HTMLElement).closest?.<HTMLElement>('[data-col]');
+    const c = cellNode ? Number(cellNode.dataset.col) : NaN;
+    if (!Number.isFinite(c) || c === 0) return;
+    requestAnimationFrame(() => revealCol(c));
   };
   const onCell = useCallback((r: number, c: number, el: HTMLElement, dbl: boolean) => {
     setActive({ r, c });
@@ -714,9 +728,7 @@ export function TableView() {
       <div
         ref={scrollRef}
         className={cn('edb-table-scroll', scrolled.left && 'is-scrolled-x')}
-        // Native focus reveal (Tab into a cell control, focus returning after the side peek) keeps clear of the
-        // sticky gutter + title column instead of parking the cell underneath it.
-        style={{ '--edb-sticky-w': `${GUTTER + title.width}px` } as CSSProperties}
+        onFocus={onScrollerFocus}
         onScroll={onScroll}
       >
         <div

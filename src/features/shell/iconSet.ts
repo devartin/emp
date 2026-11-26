@@ -18,7 +18,7 @@ import {
   LayoutDashboard,
   List,
   PhoneOff,
-  ReceiptText,
+  Receipt,
   Sheet,
   Shuffle,
   Split,
@@ -32,7 +32,7 @@ export const ICON_SET: Record<string, LucideIcon> = {
   ban: Ban,
   "bed-double": BedDouble,
   "book-open-text": BookOpenText,
-  // Registry-canonical lucide name first; the older alias stays so stored icons and life-app manifests still resolve.
+  // Both lucide spellings resolve: seed, life-app manifests and the Rust store use the alias "candlestick-chart".
   "chart-candlestick": ChartCandlestick,
   "candlestick-chart": ChartCandlestick,
   circle: Circle,
@@ -43,7 +43,9 @@ export const ICON_SET: Record<string, LucideIcon> = {
   "layout-dashboard": LayoutDashboard,
   list: List,
   "phone-off": PhoneOff,
-  "receipt-text": ReceiptText,
+  // The kit registry aliases "receipt-text" to "receipt"; draw the same glyph here so every surface agrees.
+  receipt: Receipt,
+  "receipt-text": Receipt,
   sheet: Sheet,
   shuffle: Shuffle,
   split: Split,

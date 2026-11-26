@@ -56,6 +56,8 @@ export const GLYPH_ALIASES: Readonly<Record<string, string>> = {
   "area-chart": "chart-area",
   "line-chart": "chart-line",
   "bar-chart": "chart-column",
+  "candlestick-chart": "chart-candlestick",
+  "receipt-text": "receipt",
   sparkle: "star",
   sparkles: "star",
 };

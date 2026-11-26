@@ -75,9 +75,25 @@ describe("pageIcons", () => {
       expect(/sparkle/.test(n), n).toBe(false);
     }
     // the names life-app manifests, commands and seeded apps ask for
-    for (const n of ["list", "history", "split", "table-2", "ban", "folders", "shuffle", "shield-check", "sheet", "table", "phone-off", "candlestick-chart", "receipt-text"]) {
+    for (const n of ["list", "history", "split", "table-2", "ban", "folders", "shuffle", "shield-check", "sheet", "table", "phone-off", "chart-candlestick", "receipt"]) {
       expect(glyphName({ t: "lucide", v: n }), n).toBe(n);
     }
+    // older stored spellings (Rust life-app manifests) resolve to the canonical glyph
+    expect(glyphName({ t: "lucide", v: "candlestick-chart" })).toBe("chart-candlestick");
+    expect(glyphName({ t: "lucide", v: "receipt-text" })).toBe("receipt");
+  });
+
+  test("every lucide icon the mock seed stores on pages is registered", () => {
+    const files = ["src/backend/mock/seed/finance.ts", "src/backend/mock/seed/core.ts", "src/backend/mock/seed/sheets.ts", "src/backend/mock/seed/databases.ts", "src/backend/mock/seed/shell.ts", "src/backend/mock/seed/calendar.ts", "src/backend/mock/seed/lifeapps.ts"];
+    const seen = new Set<string>();
+    for (const f of files) {
+      const src = readFileSync(f, "utf8");
+      for (const m of src.matchAll(/lucide\('([a-z0-9-]+)'/g)) seen.add(m[1]!);
+      for (const m of src.matchAll(/t: 'lucide', v: '([a-z0-9-]+)'/g)) seen.add(m[1]!);
+    }
+    expect(seen.size).toBeGreaterThan(5);
+    const missing = [...seen].filter((n) => !glyphName({ t: "lucide", v: n }));
+    expect(missing).toEqual([]);
   });
 
   test("the registry holds exactly the curated set, the map targets and the app glyphs", () => {

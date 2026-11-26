@@ -7,7 +7,7 @@ import {
   EyeOff, FileDown, FilePlus, FilePlus2, History, House, Keyboard, LayoutTemplate, Link, Lock, MoveHorizontal, PanelLeft,
   PanelRight, Replace, Save, Search, Settings, ShieldCheck, Star, StarOff, SunMoon, Trash2, Type, WifiOff, ZoomIn,
   ZoomOut, Palette, Printer, Download, Upload, Archive, Moon, Sun, Monitor, Rows3, CaseSensitive, Activity, Eye, Database, Sheet,
-  ListTodo, Receipt, Landmark, HeartPulse, LayoutGrid, Wallet, Kanban, ReceiptText,
+  ListTodo, Receipt, Landmark, HeartPulse, LayoutGrid, Wallet, Kanban,
   type LucideIcon,
 } from "lucide-react";
 
@@ -18,7 +18,7 @@ const MAP: Record<string, LucideIcon> = {
   calendar: Calendar,
   "calendar-days": CalendarDays,
   "chart-candlestick": ChartCandlestick,
-  "candlestick-chart": ChartCandlestick, // legacy name (older data / manifests)
+  "candlestick-chart": ChartCandlestick, // lucide alias: the name the seed, life-app manifests and Rust store use
   "chevrons-up-down": ChevronsUpDown,
   copy: Copy,
   "corner-left-up": CornerLeftUp,
@@ -70,7 +70,7 @@ const MAP: Record<string, LucideIcon> = {
   "layout-grid": LayoutGrid,
   wallet: Wallet,
   kanban: Kanban,
-  "receipt-text": ReceiptText, // legacy name; palette commands use "receipt"
+  "receipt-text": Receipt, // kit registry alias of "receipt" (life-app manifests and the Rust store use this name)
 };
 
 export function commandIcon(name: string | undefined): LucideIcon {

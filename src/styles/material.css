@@ -369,7 +369,7 @@
   color: var(--text-disabled);
   box-shadow: inset 0 0 0 1px var(--border);
   background: var(--bg-surface-2);
-  transform: none;
+  transform: translateY(0); /* same value as the live key: enabling it is a colour change, never a transform transition */
 }
 .slab:is(.slab-ghost, [data-variant="ghost"], [data-variant="destructive-ghost"]):is(:disabled, [aria-disabled="true"]) {
   background: transparent;
@@ -541,6 +541,13 @@
   transition-duration: 0ms !important;
 }
 :root[data-motion="reduced"] :is(.slab, .keycap):is(:active, [data-down], [data-pressing]) {
+  transform: none;
+}
+/* The split key travels as one wrapper: same rule (the press still drops its shadow, it just doesn't move). */
+:root[data-motion="reduced"] :is(.slab-split, :has(> .slab[data-variant="primary"] + .slab[data-variant="primary"])) {
+  transition-duration: 0ms !important;
+}
+:root[data-motion="reduced"] :is(.slab-split, :has(> .slab[data-variant="primary"] + .slab[data-variant="primary"])):has(> .slab:not(:disabled):active, > .slab[data-pressing], > .slab[data-state="open"]) {
   transform: none;
 }
 
