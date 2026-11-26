@@ -1,5 +1,5 @@
 /**
- * Keyboard shortcuts page parity: the mock seed (core.ts) and the desktop tour (crates/emp-store/src/repo/tour.rs
+ * Keyboard shortcuts page parity: the mock seed (seed/core.ts) and the desktop tour (crates/emp-store/src/repo/tour.rs
  * `SHORTCUTS`) carry the same rows, and every key chord is a code chip (the Getting Started style), never plain text.
  */
 /// <reference types="node" />
@@ -8,9 +8,9 @@ import { describe, expect, test } from 'vitest';
 import { mockApi } from '@/test/helpers';
 import { isMac } from '@/lib/platform';
 import type { TipTapNode } from '@/backend/types';
-import { spellKeys } from '../lib/keys';
+import { spellKeys } from './lib/keys';
 
-const TOUR_RS = readFileSync(new URL('../../../../crates/emp-store/src/repo/tour.rs', import.meta.url), 'utf8');
+const TOUR_RS = readFileSync(new URL('../../../crates/emp-store/src/repo/tour.rs', import.meta.url), 'utf8');
 
 /** `SHORTCUTS` table rows from tour.rs as [keys markdown, action], spelled for this platform like `platform_keys`. */
 function rustRows(): [string, string][] {
