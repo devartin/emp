@@ -35,13 +35,14 @@ import { TemplatesDialog } from './TemplatesDialog';
 import { LAYOUT_ICON, LAYOUT_LABEL } from './ViewTabs';
 import { useController } from './ViewController';
 import { RollingNumber } from '@/ui/motion/RollingNumber';
+import { PageGlyph } from '@/ui/icons/Icon';
 
 function ToolButton({ icon, label, active, count, children, onClick }: { icon: ReactNode; label: string; active?: boolean; count?: number; children?: ReactNode; onClick?: () => void }) {
   return (
-    // §8.2: idle = a ghost keycap (icon only); active = a tag keycap latched half-down with its label and a rolling count
+    // idle = a ghost icon button; active = an ink wash with its label and count
     <button
       type="button"
-      className={cn('edb-tool slab', active ? 'is-active edb-tool-chip' : 'slab-ghost')}
+      className={cn('edb-tool', active && 'is-active edb-tool-chip')}
       data-icon-only={active ? undefined : ''}
       aria-pressed={!!active}
       onClick={onClick}
@@ -305,7 +306,7 @@ function SearchBox({ open, onOpenChange }: { open: boolean; onOpenChange: (open:
       <Slot dep={open} className={cn('edb-search', open && 'is-open')}>
         <button
           type="button"
-          className="edb-tool slab slab-ghost"
+          className="edb-tool"
           data-icon-only=""
           aria-label="Search this database"
           aria-expanded={open}
@@ -415,7 +416,7 @@ function NewButton({ onTemplates }: { onTemplates: () => void }) {
             Empty row
           </MenuItem>
           {templates.map((t) => (
-            <MenuItem key={t.id} icon={t.icon?.t === 'emoji' ? <span aria-hidden>{t.icon.v}</span> : LayoutTemplate} trailing={schema.database.defaultTemplateId === t.id ? <Star size={12} aria-label="Default" /> : undefined} onSelect={() => void newRow(undefined, { open: true, templateId: t.id })}>
+            <MenuItem key={t.id} icon={t.icon ? <PageGlyph icon={t.icon} context="row" fallback="file" /> : LayoutTemplate} trailing={schema.database.defaultTemplateId === t.id ? <Star size={12} aria-label="Default" /> : undefined} onSelect={() => void newRow(undefined, { open: true, templateId: t.id })}>
               {t.name}
             </MenuItem>
           ))}

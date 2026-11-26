@@ -27,6 +27,7 @@ import { cellOptionIds, isReadOnlyType, parseDateString, plainText, rt } from '.
 import { relationCache, useSchemas } from '../store';
 import { AssetThumb, openUrl } from './CellView';
 import { OptionPicker } from './OptionPicker';
+import { PageGlyph } from '@/ui/icons/Icon';
 
 export interface CellEditorProps {
   databaseId: Id;
@@ -327,7 +328,7 @@ function ProgressEditor({ prop, cell, onCommit, onClose }: CellEditorProps) {
     <div className="edb-pop-body" style={{ width: 240 }} onKeyDown={(e) => e.key === 'Enter' && (onCommit({ t: 'progress', v: v / 100 }), onClose('enter'))}>
       <div className="flex items-center justify-between">
         <span className="text-caption text-secondary">{prop.name}</span>
-        <span className="text-body-sm font-semibold tabular-nums">{v}%</span>
+        <span className="text-body-sm font-medium tabular-nums">{v}%</span>
       </div>
       <Slider value={[v]} min={0} max={100} step={5} onValueChange={([x]) => setV(x)} onValueCommit={([x]) => onCommit({ t: 'progress', v: x / 100 })} formatValue={(n) => `${n}%`} aria-label={prop.name} />
       <div className="flex gap-1">
@@ -426,7 +427,7 @@ export function DateEditor({ prop, cell, onCommit, onClose }: CellEditorProps) {
               else onClose('enter');
             } else if (e.key === 'Escape') onClose('escape');
           }}
-          placeholder={start ? (val?.time ? dfmt(start, 'MMM d, yyyy h:mm a') : dfmt(start, 'MMM d, yyyy')) + (end ? ' → ' + dfmt(end, val?.time ? 'MMM d h:mm a' : 'MMM d, yyyy') : '') : 'Type a date — “next fri”, “dec 3”'}
+          placeholder={start ? (val?.time ? dfmt(start, 'MMM d, yyyy h:mm a') : dfmt(start, 'MMM d, yyyy')) + (end ? ' → ' + dfmt(end, val?.time ? 'MMM d h:mm a' : 'MMM d, yyyy') : '') : 'Type a date, such as “next fri” or “dec 3”'}
           aria-label="Date"
         />
       </div>
@@ -607,7 +608,7 @@ function RelationEditor({ prop, cell, onCommit }: CellEditorProps) {
         {linked.length ? <div className="emp-menu-header">Linked{one ? ' (one)' : ''}</div> : null}
         {linked.map((o) => (
           <div key={o.id} className="edb-picker-item">
-            <span className="edb-rel-icon">{o.icon?.t === 'emoji' ? o.icon.v : <ArrowUpRight size={12} aria-hidden />}</span>
+            <span className="edb-rel-icon">{o.icon ? <PageGlyph icon={o.icon} context="inline" size={14} fallback="file" /> : <ArrowUpRight size={12} aria-hidden />}</span>
             <span className="flex-1 truncate">{o.title}</span>
             <IconButton size="xs" icon={X} label="Unlink" onClick={() => toggle(o.id)} />
           </div>
@@ -615,7 +616,7 @@ function RelationEditor({ prop, cell, onCommit }: CellEditorProps) {
         <div className="emp-menu-header">{q ? 'Results' : 'Recent'}</div>
         {rest.map((o, i) => (
           <div key={o.id} className={cn('edb-picker-item', i === hi && 'is-hi')} onMouseEnter={() => setHi(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => toggle(o.id)}>
-            <span className="edb-rel-icon">{o.icon?.t === 'emoji' ? o.icon.v : <ArrowUpRight size={12} aria-hidden />}</span>
+            <span className="edb-rel-icon">{o.icon ? <PageGlyph icon={o.icon} context="inline" size={14} fallback="file" /> : <ArrowUpRight size={12} aria-hidden />}</span>
             <span className="flex-1 truncate">{o.title}</span>
             <Plus size={14} className="text-tertiary" aria-hidden />
           </div>

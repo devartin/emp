@@ -2,7 +2,7 @@
  * Read-only rendering of a cell for every property type (table cells, cards, list rows, the row page).
  * Interactive shortcuts that don't need an editor (checkbox toggle, rating click) are handled here via `onChange`.
  */
-import { AlertCircle, ArrowUpRight, Check, FileText, Lock, Paperclip, Repeat, Star, Heart, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Check, Lock, Paperclip, Repeat, Star, Heart, Image as ImageIcon } from 'lucide-react';
 import { memo, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { api } from '@/backend';
 import type { AssetDTO, CellValue, Icon, Property, RichText } from '@/backend/types';
@@ -10,7 +10,6 @@ import { cn } from '@/lib/cn';
 import { formatNumber, MINUS } from '@/lib/format';
 import { useQuote } from '@/stores/market';
 import { Checkbox } from '@/ui/Checkbox';
-import { Ring } from '@/ui/Ring';
 import { Sensitive } from '@/ui/Sensitive';
 import { Tag } from '@/ui/Tag';
 import { loadAsset, cachedAsset } from '@/features/editor/lib/assets';
@@ -18,6 +17,7 @@ import { describeRRule, formatCell, numberConfig, tickerLabel } from '../engine/
 import { familyOf } from '../engine/schema';
 import { isEmptyCell, optionById, optionsOf, plainText, type SelectOption } from '../engine/values';
 import { relationCache } from '../store';
+import { PageGlyph } from '@/ui/icons/Icon';
 
 export type CellVariant = 'table' | 'card' | 'page' | 'list';
 
@@ -32,8 +32,7 @@ export interface CellViewProps {
 
 export function RowIcon({ icon, size = 16 }: { icon?: Icon; size?: number }) {
   if (!icon) return null;
-  if (icon.t === 'emoji') return <span className="edb-row-emoji" style={{ fontSize: size * 0.95, lineHeight: 1 }} aria-hidden>{icon.v}</span>;
-  return <FileText size={size} className="text-tertiary" aria-hidden />;
+  return <PageGlyph icon={icon} context="row" size={size} fallback="file" className="text-secondary" />;
 }
 
 function RichSpan({ v }: { v: RichText }) {
@@ -124,7 +123,7 @@ function RelationChips({ prop, ids, variant }: { prop: Property; ids: string[]; 
         const t = relationCache.title(prop.id, id);
         return (
           <span key={id} className="edb-chip edb-rel-chip">
-            {t?.icon?.t === 'emoji' ? <span aria-hidden>{t.icon.v}</span> : <ArrowUpRight size={12} aria-hidden className="text-tertiary" />}
+            {t?.icon ? <PageGlyph icon={t.icon} context="inline" size={12} fallback="file" /> : <ArrowUpRight size={12} aria-hidden className="text-tertiary" />}
             <span className="truncate">{t?.title ?? '…'}</span>
           </span>
         );
@@ -180,13 +179,26 @@ export function RatingStars({ value, max, icon, onChange, size = 14 }: { value: 
   );
 }
 
+/** A static 16px progress ring for dense cells: ink on a hairline track, drawn at its value from the first frame. */
+function MiniRing({ value }: { value: number }) {
+  const v = Math.max(0, Math.min(1, value));
+  const r = 6.5;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" className="edb-mini-ring" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(v * 100)}>
+      <circle cx={8} cy={8} r={r} strokeWidth={1.5} className="edb-mini-ring-track" />
+      {v > 0 ? <circle cx={8} cy={8} r={r} strokeWidth={1.5} strokeLinecap="round" strokeDasharray={`${c * v} ${c}`} transform="rotate(-90 8 8)" className="edb-mini-ring-fill" /> : null}
+    </svg>
+  );
+}
+
 export function ProgressView({ value, display, label = true }: { value: number; display: 'bar' | 'ring'; label?: boolean }) {
   const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
   const done = pct >= 100;
   if (display === 'ring')
     return (
       <span className="edb-progress-ring">
-        <Ring value={value} size={16} color={done ? 'var(--gain)' : undefined} />
+        <MiniRing value={value} />
         {label ? <span className="tabular-nums">{pct}%</span> : null}
       </span>
     );
@@ -208,7 +220,7 @@ function NumberView({ prop, n, text }: { prop: Property; n: number; text: string
     if (cfg.display === 'ring')
       return (
         <span className="edb-progress-ring">
-          <Ring value={frac} size={16} color={frac >= 1 ? 'var(--gain)' : undefined} />
+          <MiniRing value={frac} />
           <Sensitive className="tabular-nums">{text}</Sensitive>
         </span>
       );
@@ -254,7 +266,7 @@ function ComputedView({ prop, cell, variant }: { prop: Property; cell: Extract<C
 
 /**
  * Lightweight checkbox for dense grids: the same `.emp-check` skin as the UI kit without Radix Presence (which reads
- * computed styles per instance — too slow for thousands of virtualised cells). The check draws in over 180ms.
+ * computed styles per instance — too slow for thousands of virtualised cells). The check appears at once.
  */
 export function MiniCheck({ checked, indeterminate, onChange, disabled, label }: { checked: boolean; indeterminate?: boolean; onChange?: (v: boolean) => void; disabled?: boolean; label: string }) {
   const state = indeterminate ? 'indeterminate' : checked ? 'checked' : 'unchecked';

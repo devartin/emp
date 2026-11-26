@@ -24,7 +24,7 @@ export function SortMenu({ schema, sorts, onChange }: SortMenuProps) {
   const keyed = sorts.map((s) => ({ ...s, key: s.prop }));
   return (
     <div className="edb-sort">
-      {sorts.length === 0 ? <div className="edb-f-empty">No sorts. Rows follow their manual order — drag to rearrange.</div> : null}
+      {sorts.length === 0 ? <div className="edb-f-empty">No sorts. Rows follow their manual order; drag to rearrange.</div> : null}
       <Reorder.Group axis="y" values={keyed} onReorder={(next) => onChange(next.map(({ key: _k, ...s }) => s))} className="edb-sort-list">
         {keyed.map((s, i) => (
           <Reorder.Item key={s.key} value={s} className="edb-sort-row" transition={spring.layout} whileDrag={{ scale: 1.02, boxShadow: 'var(--elev-2)' }}>
