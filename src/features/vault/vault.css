@@ -14,7 +14,8 @@
 .emp-wordmark {
   display: inline-block;
   font-weight: 720;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
   color: var(--text-primary);
 }
 

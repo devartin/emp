@@ -381,7 +381,7 @@ pub fn portfolio(c: &PortfolioContext) -> Vec<Finding> {
                 class,
                 Severity::Warn,
                 format!("{class} is outside its band"),
-                format!("Drift is {drift:+.1} pp. Consider the rebalance planner (EMP never places trades)."),
+                format!("Drift is {drift:+.1} pp. Consider the rebalance planner (Ultra Note never places trades)."),
                 vec![m("Drift (pp)", format!("{drift:+.1}"))],
             ));
         }

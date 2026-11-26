@@ -1167,7 +1167,7 @@ function errorHelp(code: string): string {
     case '#DIV/0!': return 'The formula divides by zero or by an empty cell.';
     case '#VALUE!': return 'A value has the wrong type — for example text where a number is needed.';
     case '#REF!': return 'The formula refers to cells that were deleted.';
-    case '#NAME?': return 'The formula uses a name or function EMP doesn’t recognise.';
+    case '#NAME?': return 'The formula uses a name or function Ultra Note doesn’t recognise.';
     case '#NUM!': return 'The result isn’t a valid number.';
     case '#N/A': return 'A lookup didn’t find a match.';
     case '#SPILL!': return 'The result needs more room — clear the cells it would spill into.';

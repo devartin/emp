@@ -40,7 +40,7 @@ export function hasCode(e: unknown, ...codes: ErrorCode[]): boolean {
 }
 
 const FRIENDLY: Partial<Record<ErrorCode, string>> = {
-  LOCKED: 'EMP is locked.',
+  LOCKED: 'Ultra Note is locked.',
   BAD_PASSWORD: 'Incorrect password',
   RATE_LIMITED: 'Too many attempts. Try again shortly.',
   REAUTH_REQUIRED: 'Confirm your password to continue.',

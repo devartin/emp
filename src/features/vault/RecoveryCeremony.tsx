@@ -45,11 +45,11 @@ function keyText(words: string[]): string {
 }
 
 function saveAsFile(words: string[]) {
-  const body = `EMP recovery key\n\n${keyText(words)}\n\nCreated ${new Date().toLocaleDateString()}.\nStore this somewhere safe. If you lose both your password and this key, your data cannot be recovered.\n`;
+  const body = `Ultra Note recovery key\n\n${keyText(words)}\n\nCreated ${new Date().toLocaleDateString()}.\nStore this somewhere safe. If you lose both your password and this key, your data cannot be recovered.\n`;
   const url = URL.createObjectURL(new Blob([body], { type: "text/plain;charset=utf-8" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = "EMP Recovery Key.txt";
+  a.download = "Ultra Note Recovery Key.txt";
   a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
@@ -70,13 +70,13 @@ function printKey(words: string[]) {
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
   const cells = words.map((w, i) => `<li><span>${i + 1}</span>${esc(w)}</li>`).join("");
   doc.open();
-  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>EMP recovery key</title><style>
+  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>Ultra Note recovery key</title><style>
     body{font:14px/1.5 -apple-system,Segoe UI,Inter,sans-serif;color:#18181b;margin:48px}
     h1{font-size:20px;margin:0 0 4px} p{color:#52525b;margin:0 0 24px}
     ol{list-style:none;padding:20px;margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;border:1px solid #d4d4d8;border-radius:12px}
     li{font:600 17px/28px ui-monospace,Menlo,monospace} li span{display:inline-block;width:28px;color:#a1a1aa;font-size:11px;font-weight:500}
     .warn{margin-top:24px;padding:12px 14px;border:1px solid #f5a524;border-radius:10px;color:#a15c00}
-  </style></head><body><h1>EMP recovery key</h1><p>Printed ${esc(new Date().toLocaleDateString())}</p><ol>${cells}</ol>
+  </style></head><body><h1>Ultra Note recovery key</h1><p>Printed ${esc(new Date().toLocaleDateString())}</p><ol>${cells}</ol>
   <div class="warn">Store this somewhere safe. If you lose both your password and this key, your data cannot be recovered.</div></body></html>`);
   doc.close();
   const win = frame.contentWindow;

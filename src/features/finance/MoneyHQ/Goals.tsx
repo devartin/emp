@@ -76,7 +76,7 @@ export default function Goals() {
       </section>
       {!l.goals.length ? (
         <section className="fh-card">
-          <Quiet icon={Target} title="No goals yet" body="Name something you're saving for and EMP works out the monthly amount it needs." action={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>New goal</Button>} />
+          <Quiet icon={Target} title="No goals yet" body="Name something you're saving for and Ultra Note works out the monthly amount it needs." action={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>New goal</Button>} />
         </section>
       ) : (
         <m.div className="fh-goals" variants={staggerList(0.05)} initial="hidden" animate="show">
@@ -297,7 +297,7 @@ function AddGoal({ onClose }: { onClose: () => void }) {
       open
       onOpenChange={(o) => !o && onClose()}
       title="New goal"
-      description="Name it, set a target and (optionally) a date — EMP works out the monthly amount."
+      description="Name it, set a target and (optionally) a date — Ultra Note works out the monthly amount."
       size="sm"
       footer={
         <>

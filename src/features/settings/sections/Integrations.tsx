@@ -32,12 +32,12 @@ export function IntegrationsSection() {
 
   return (
     <div>
-      <SectionHeader icon={Cable} title="Integrations" description="Connections are optional and run only while EMP is unlocked. API keys and account connections are always stored encrypted." />
+      <SectionHeader icon={Cable} title="Integrations" description="Connections are optional and run only while Ultra Note is unlocked. API keys and account connections are always stored encrypted." />
 
       <Group
         id="google"
         title="Google"
-        description="Calendar sync, and importing Docs and Sheets by link. You bring your own OAuth client; EMP talks to Google directly."
+        description="Calendar sync, and importing Docs and Sheets by link. You bring your own OAuth client; Ultra Note talks to Google directly."
         actions={
           connected ? (
             <Button size="sm" variant="secondary" icon={Plus} onClick={() => setGoogleOpen(true)}>
@@ -99,7 +99,7 @@ function SavedKeys() {
   }, []);
   useEffect(() => load(), [load]);
   return (
-    <Group id="api-keys" title="Saved keys and connections" description="Write-only: EMP never shows a key again after you save it, only the last four characters if you allowed it." flush>
+    <Group id="api-keys" title="Saved keys and connections" description="Write-only: Ultra Note never shows a key again after you save it, only the last four characters if you allowed it." flush>
       {!list ? (
         <div className="st-block">
           <Skeleton height={40} radius={10} />

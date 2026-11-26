@@ -37,7 +37,7 @@ export function OfflineSwitch() {
     try {
       await api.network.setOffline({ offline: on });
       await useSettings.getState().load();
-      notify.info(on ? "Offline mode is on" : "Offline mode is off", { description: on ? "EMP won’t make any network requests, including update checks." : undefined });
+      notify.info(on ? "Offline mode is on" : "Offline mode is off", { description: on ? "Ultra Note won’t make any network requests, including update checks." : undefined });
     } catch (e) {
       notify.fromError(e, "Couldn’t change offline mode");
     } finally {
@@ -51,7 +51,7 @@ export function OfflineSwitch() {
       </span>
       <div className="min-w-0 flex-1">
         <div className="text-body font-semibold text-primary">Offline mode</div>
-        <div className="text-caption text-secondary">{offline ? "Every request is refused — Google, market data and updates." : "EMP only contacts services you’ve connected."}</div>
+        <div className="text-caption text-secondary">{offline ? "Every request is refused — Google, market data and updates." : "Ultra Note only contacts services you’ve connected."}</div>
       </div>
       <Switch checked={offline} disabled={busy} onCheckedChange={(v) => void set(v)} aria-label="Offline mode" />
     </div>
@@ -151,7 +151,7 @@ export function NetworkLog({ limit = 1000, height = 420 }: { limit?: number; hei
               {totals.failed ? ` · ${totals.failed} failed` : ""}
             </span>
             <span aria-hidden>·</span>
-            Query strings are never logged. EMP sends no telemetry.
+            Query strings are never logged. Ultra Note sends no telemetry.
           </m.p>
         ) : null}
       </AnimatePresence>

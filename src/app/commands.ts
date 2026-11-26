@@ -278,7 +278,7 @@ export function registerAppCommands(): () => void {
     },
     {
       id: 'vault.lock',
-      title: 'Lock EMP',
+      title: 'Lock Ultra Note',
       section: 'Privacy & security',
       icon: 'lock',
       keywords: ['lock', 'secure', 'away'],
@@ -300,7 +300,7 @@ export function registerAppCommands(): () => void {
         const v = useSettings.getState().vault;
         if (v) useSettings.setState({ vault: { ...v, offline } });
         notify.info(offline ? 'Offline mode on' : 'Offline mode off', {
-          description: offline ? 'EMP will not connect to the internet.' : 'Integrations can connect again.',
+          description: offline ? 'Ultra Note will not connect to the internet.' : 'Integrations can connect again.',
         });
       },
     },
@@ -316,5 +316,5 @@ export function registerAppCommands(): () => void {
 
 /** True when a lock is impossible (unencrypted vault) — the UI explains instead of failing. */
 export function lockUnavailableReason(e: unknown): string | null {
-  return hasCode(e, 'UNSUPPORTED') ? 'Turn on encryption in Settings → Security to lock EMP.' : null;
+  return hasCode(e, 'UNSUPPORTED') ? 'Turn on encryption in Settings → Security to lock Ultra Note.' : null;
 }

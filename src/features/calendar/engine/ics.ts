@@ -189,9 +189,9 @@ function fold(line: string): string {
   return out.join('\r\n');
 }
 
-export function writeIcs(events: IcsEvent[], name = 'EMP', stamp = new Date()): string {
+export function writeIcs(events: IcsEvent[], name = 'Ultra Note', stamp = new Date()): string {
   const dtstamp = fmtDate(stamp.toISOString(), false);
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//EMP//EMP Calendar//EN', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${escapeText(name)}`];
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Ultra Note//Ultra Note Calendar//EN', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${escapeText(name)}`];
   for (const e of events) {
     lines.push('BEGIN:VEVENT', `UID:${e.uid}`, `DTSTAMP:${dtstamp}`);
     if (e.allDay) {

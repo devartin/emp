@@ -33,8 +33,8 @@ type Phase =
 const KIND: Partial<Record<ImportKind, { label: string; icon: typeof FileText; note: string }>> = {
   markdown: { label: "Markdown file", icon: FileText, note: "Becomes a page. Front matter, tables, tasks and images are kept." },
   markdown_folder: { label: "Markdown folder", icon: FileArchive, note: "Each file becomes a page; folders become parent pages." },
-  notion_zip: { label: "Notion export", icon: FileArchive, note: "Pages, databases, relations and attachments are rebuilt as EMP pages and databases." },
-  ics: { label: "Calendar file", icon: CalendarDays, note: "Events are added to your EMP calendar." },
+  notion_zip: { label: "Notion export", icon: FileArchive, note: "Pages, databases, relations and attachments are rebuilt as Ultra Note pages and databases." },
+  ics: { label: "Calendar file", icon: CalendarDays, note: "Events are added to your Ultra Note calendar." },
   csv: { label: "CSV file", icon: Table, note: "Becomes a new database. Column types are detected from the values." },
   xlsx: { label: "Excel workbook", icon: FileSpreadsheet, note: "Becomes a new workbook with formulas and formatting." },
 };
@@ -231,10 +231,10 @@ function Ready({ grant, kind, onRun, onPickAgain, onClose }: { grant: FileGrant;
     );
   }
   if (kind === "empbackup") {
-    return <Redirect icon={FileArchive} title="EMP backup" body="Backups are restored from Settings → Backups. A restore always opens as a new vault, so nothing here is overwritten." action="Open Backups" onAction={() => (onClose(), navigate({ t: "settings", section: "backups" }))} onPickAgain={onPickAgain} />;
+    return <Redirect icon={FileArchive} title="Ultra Note backup" body="Backups are restored from Settings → Backups. A restore always opens as a new vault, so nothing here is overwritten." action="Open Backups" onAction={() => (onClose(), navigate({ t: "settings", section: "backups" }))} onPickAgain={onPickAgain} />;
   }
   if (!info) {
-    return <Redirect icon={FileText} title="Unsupported file" body={`EMP can't import ${grant.displayName}. Try Markdown, a Notion export zip, CSV, XLSX or an .ics calendar.`} onPickAgain={onPickAgain} />;
+    return <Redirect icon={FileText} title="Unsupported file" body={`Ultra Note can't import ${grant.displayName}. Try Markdown, a Notion export zip, CSV, XLSX or an .ics calendar.`} onPickAgain={onPickAgain} />;
   }
   const Icon = info.icon;
   return (

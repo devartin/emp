@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "EMP",
+  "productName": "Ultra Note",
   "version": "../package.json",
-  "identifier": "com.devartin.emp",
+  "identifier": "com.devartin.ultranote",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -15,7 +15,7 @@
       {
         "label": "main",
         "create": false,
-        "title": "EMP",
+        "title": "Ultra Note",
         "width": 1280,
         "height": 820,
         "minWidth": 800,
@@ -79,7 +79,7 @@
     "targets": ["app", "dmg", "nsis", "msi", "deb", "rpm", "appimage"],
     "category": "Productivity",
     "shortDescription": "Local-first, encrypted productivity super app",
-    "longDescription": "EMP keeps your notes, databases, spreadsheets and finances on your computer, optionally encrypted with 256-bit XChaCha20-Poly1305 under a key protected by your password using Argon2id.",
+    "longDescription": "Ultra Note keeps your notes, databases, spreadsheets and finances on your computer, optionally encrypted with 256-bit XChaCha20-Poly1305 under a key protected by your password using Argon2id.",
     "copyright": "Copyright (c) devartin. MIT License.",
     "publisher": "devartin",
     "homepage": "https://github.com/devartin/emp",

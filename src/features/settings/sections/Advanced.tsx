@@ -56,7 +56,7 @@ export function AdvancedSection() {
 
   const diagnostics = async () => {
     const lines = [
-      `EMP ${info?.version ?? "?"} (${info?.commit ?? "?"})`,
+      `Ultra Note ${info?.version ?? "?"} (${info?.commit ?? "?"})`,
       `Platform: ${info?.platform ?? "?"} ${info?.arch ?? ""} · ${info?.webview ?? ""}`,
       `Features: ${(info?.features ?? []).join(", ") || "none"}`,
       `Vault: ${status?.encrypted ? "encrypted" : "not encrypted"} · schema ${status?.schemaVersion ?? "?"} · pending migrations ${status?.pendingMigrations ?? 0} · integrity ${status?.integrity ?? "?"} · keychain ${status?.keychainAvailable ? "yes" : "no"}`,
@@ -128,7 +128,7 @@ export function AdvancedSection() {
             </dd>
           </dl>
         </Row>
-        <Row icon={<FolderOpen size={16} />} label="Data folder" description="Where EMP keeps your vault, snapshots and logs.">
+        <Row icon={<FolderOpen size={16} />} label="Data folder" description="Where Ultra Note keeps your vault, snapshots and logs.">
           <Button
             size="sm"
             variant="secondary"

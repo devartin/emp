@@ -151,7 +151,7 @@ function BootSplash() {
       animate={{ opacity: 1, transition: { delay: 0.35, duration: 0.24 } }}
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
       aria-busy
-      aria-label="Starting EMP"
+      aria-label="Starting Ultra Note"
     >
       <AppMark size={56} animate={false} className="opacity-70" />
     </m.div>
@@ -164,7 +164,7 @@ function BootError() {
     <m.div className="emp-phase stage-canvas flex items-center justify-center p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="alert">
       <div className="panel w-[420px] p-8 text-center" style={{ borderRadius: 22 }}>
         <AppMark size={56} animate={false} className="mx-auto" />
-        <h1 className="mt-5 text-title text-primary">EMP couldn't open your workspace</h1>
+        <h1 className="mt-5 text-title text-primary">Ultra Note couldn't open your workspace</h1>
         <p className="mt-2 text-body text-secondary">{message || "The app backend didn't respond."}</p>
         <Button className="mt-6" variant="primary" icon={RefreshCw} onClick={() => window.location.reload()}>
           Try again

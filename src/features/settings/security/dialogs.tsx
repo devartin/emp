@@ -159,14 +159,14 @@ export function EnableEncryptionDialog({ open, onOpenChange }: { open: boolean; 
         {phase === "password" ? (
           <m.div key="pw" {...step} className="flex flex-col gap-4">
             <NewPassword pw={pw} setPw={setPw} confirm={confirm} setConfirm={setConfirm} onStrength={setStrength} onEnter={() => void start()} />
-            <p className="st-hint">At least 10 characters and a “Strong” rating. EMP can’t recover a forgotten password — your recovery key is the only other way in.</p>
+            <p className="st-hint">At least 10 characters and a “Strong” rating. Ultra Note can’t recover a forgotten password — your recovery key is the only other way in.</p>
           </m.div>
         ) : null}
         {phase === "running" ? (
           <m.div key="run" {...step} className="flex flex-col gap-5 py-2">
             <EncryptingVisual />
             <JobProgress state={job.state} title="Encrypting your workspace" onCancel={job.cancel} doneLabel="Every record is encrypted" />
-            <p className="st-hint">Keep EMP open. This usually takes under a minute.</p>
+            <p className="st-hint">Keep Ultra Note open. This usually takes under a minute.</p>
           </m.div>
         ) : null}
         {phase === "recovery" ? (
@@ -189,7 +189,7 @@ export function EnableEncryptionDialog({ open, onOpenChange }: { open: boolean; 
               <ShieldCheck size={26} />
             </div>
             <p className="text-title text-primary">Your workspace is encrypted</p>
-            <p className="max-w-[380px] text-body-sm text-secondary">{`EMP now locks automatically when you step away. Press ${shortcutLabel("mod+shift+l")} any time to lock now.`}</p>
+            <p className="max-w-[380px] text-body-sm text-secondary">{`Ultra Note now locks automatically when you step away. Press ${shortcutLabel("mod+shift+l")} any time to lock now.`}</p>
           </m.div>
         ) : null}
       </AnimatePresence>
@@ -263,7 +263,7 @@ export function DisableEncryptionDialog({ open, onOpenChange }: { open: boolean;
           <LockOpen size={18} />
         </span>
       }
-      description="EMP will decrypt every page, row and attachment and store them as plain files on this device."
+      description="Ultra Note will decrypt every page, row and attachment and store them as plain files on this device."
       footer={
         done ? (
           <Button variant="primary" onClick={() => onOpenChange(false)}>
@@ -344,7 +344,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; on
       onOpenChange={(o) => !busy && onOpenChange(o)}
       size="md"
       title="Change password"
-      description="Your data stays encrypted with the same key; only the lock on that key changes. EMP derives it again with Argon2id and a fresh salt."
+      description="Your data stays encrypted with the same key; only the lock on that key changes. Ultra Note derives it again with Argon2id and a fresh salt."
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
@@ -501,7 +501,7 @@ export function StrengthenDialog({ open, onOpenChange }: { open: boolean; onOpen
       onOpenChange={(o) => !busy && onOpenChange(o)}
       size="sm"
       title="Strengthen key derivation"
-      description="EMP re-derives your key with Argon2id at the Standard profile (256 MiB, 3 passes) and re-wraps the data key. Your data isn’t re-encrypted."
+      description="Ultra Note re-derives your key with Argon2id at the Standard profile (256 MiB, 3 passes) and re-wraps the data key. Your data isn’t re-encrypted."
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>

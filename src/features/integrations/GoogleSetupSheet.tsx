@@ -230,7 +230,7 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
       open={open}
       onOpenChange={onOpenChange}
       title="Connect Google"
-      description={`Use your own Google client so EMP talks to Google directly from this device — no EMP servers in between.`}
+      description={`Use your own Google client so Ultra Note talks to Google directly from this device — no Ultra Note servers in between.`}
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
@@ -271,12 +271,12 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
           exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
         >
           <StepItem n={1} title="Create a Google Cloud project" done={configured}>
-            <p className="ig-p">Any name works. It’s yours — EMP never sees it.</p>
+            <p className="ig-p">Any name works. It’s yours — Ultra Note never sees it.</p>
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="secondary" iconRight={ExternalLink} onClick={() => openLink("https://console.cloud.google.com/projectcreate")}>
                 Open Cloud Console
               </Button>
-              <CopyChip value="EMP personal" />
+              <CopyChip value="Ultra Note personal" />
             </div>
           </StepItem>
           <StepItem n={2} title="Enable the APIs" done={configured}>
@@ -309,7 +309,7 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
           </StepItem>
           <StepItem n={5} title="Create an OAuth client of type Desktop app" done={configured}>
             <p className="ig-p">
-              Credentials → Create credentials → OAuth client ID → <strong>Desktop app</strong>. There’s no redirect URI to set: EMP picks a random <code className="ig-code">http://127.0.0.1:&lt;port&gt;</code> each time.
+              Credentials → Create credentials → OAuth client ID → <strong>Desktop app</strong>. There’s no redirect URI to set: Ultra Note picks a random <code className="ig-code">http://127.0.0.1:&lt;port&gt;</code> each time.
             </p>
             <Button className="self-start" size="sm" variant="secondary" iconRight={ExternalLink} onClick={() => openLink("https://console.cloud.google.com/apis/credentials/oauthclient")}>
               Create client
@@ -383,7 +383,7 @@ export function GoogleSetupSheet({ open, onOpenChange, feature = "calendar" }: G
         </AnimatePresence>
         <p className="flex items-start gap-2 text-caption text-tertiary">
           <ShieldCheck size={14} className="mt-px flex-none" aria-hidden />
-          EMP asks only for the scopes a feature needs, when you first use it. Tokens stay encrypted on this device; you can revoke them here or at myaccount.google.com.
+          Ultra Note asks only for the scopes a feature needs, when you first use it. Tokens stay encrypted on this device; you can revoke them here or at myaccount.google.com.
         </p>
         </m.div>
       </div>
@@ -534,7 +534,7 @@ export function GoogleAccountsCard({ compact, onChange }: { compact?: boolean; o
         open={!!disc}
         onOpenChange={(o) => !o && setDisc(null)}
         title={`Disconnect ${disc?.email ?? "Google"}?`}
-        description="EMP stops syncing. Pages you imported stay."
+        description="Ultra Note stops syncing. Pages you imported stay."
         size="sm"
         footer={
           <>

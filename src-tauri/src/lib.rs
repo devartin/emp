@@ -201,7 +201,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         platform = commands::app::platform(),
-        "EMP starting"
+        "Ultra Note starting"
     );
     let state = AppState::new(app.handle(), data_dir)?;
     app.manage(state);
@@ -232,7 +232,7 @@ fn on_exit(app: &AppHandle) {
             tracing::warn!(code = e.code(), "closing the vault failed");
         }
     }
-    tracing::info!("EMP exiting");
+    tracing::info!("Ultra Note exiting");
 }
 
 /// Runs the application.
@@ -542,7 +542,7 @@ pub fn run() {
         Ok(app) => app,
         Err(e) => {
             tracing::error!(error = %e, "failed to start");
-            eprintln!("EMP failed to start: {e}");
+            eprintln!("Ultra Note failed to start: {e}");
             std::process::exit(1);
         }
     };
@@ -594,10 +594,10 @@ mod tests {
         let raw = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tauri.conf.json"))
             .unwrap();
         let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(v["productName"], "EMP");
-        assert_eq!(v["identifier"], "com.devartin.emp");
+        assert_eq!(v["productName"], "Ultra Note");
+        assert_eq!(v["identifier"], "com.devartin.ultranote");
         let w = &v["app"]["windows"][0];
-        assert_eq!(w["title"], "EMP");
+        assert_eq!(w["title"], "Ultra Note");
         assert_eq!(
             (w["width"].as_u64(), w["height"].as_u64()),
             (Some(1280), Some(820))

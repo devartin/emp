@@ -34,10 +34,10 @@ export interface ImportTarget {
 const KIND_META: Record<string, { label: string; icon: typeof FileText; note: string }> = {
   markdown: { label: "Markdown file", icon: FileText, note: "Becomes a page. Front matter, tables, to-dos, code, math and [[wikilinks]] are kept." },
   markdown_folder: { label: "Markdown folder", icon: FileArchive, note: "Each file becomes a page; folders become parent pages. Images become attachments." },
-  notion_zip: { label: "Notion export", icon: FileArchive, note: "Pages, databases, row pages, attachments and links between pages are rebuilt in EMP." },
+  notion_zip: { label: "Notion export", icon: FileArchive, note: "Pages, databases, row pages, attachments and links between pages are rebuilt in Ultra Note." },
   csv: { label: "CSV file", icon: Table, note: "Becomes a new database. Column types are detected from the values." },
   xlsx: { label: "Excel workbook", icon: FileSpreadsheet, note: "Opens as a workbook with formulas and formatting, or as a database from the first sheet." },
-  ics: { label: "Calendar file", icon: CalendarDays, note: "Events are added to your EMP calendar." },
+  ics: { label: "Calendar file", icon: CalendarDays, note: "Events are added to your Ultra Note calendar." },
 };
 
 type Phase =
@@ -320,7 +320,7 @@ function Redirect({ kind, details, onClose }: { kind: ImportKind; details: Recor
       <div className="st-redirect">
         <FileArchive size={20} aria-hidden />
         <div>
-          <p className="text-body font-medium text-primary">EMP backup</p>
+          <p className="text-body font-medium text-primary">Ultra Note backup</p>
           <p className="mt-1 text-body-sm text-secondary">Backups are restored from Backups & snapshots. A restore always opens as a new vault, so nothing here is overwritten.</p>
           <Button className="mt-3" size="sm" variant="secondary" onClick={() => (onClose(), navigate({ t: "settings", section: "backups:restore" }, { replace: true }))}>
             Open Backups
@@ -333,7 +333,7 @@ function Redirect({ kind, details, onClose }: { kind: ImportKind; details: Recor
     <div className="st-redirect">
       <AlertTriangle size={20} aria-hidden />
       <div>
-        <p className="text-body font-medium text-primary">EMP can’t import this file</p>
+        <p className="text-body font-medium text-primary">Ultra Note can’t import this file</p>
         <p className="mt-1 text-body-sm text-secondary">{typeof details.reason === "string" ? `${details.reason}. ` : ""}Try Markdown, a Notion export (.zip), CSV, Excel or an .ics calendar.</p>
       </div>
     </div>

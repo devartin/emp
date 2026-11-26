@@ -221,7 +221,7 @@ mod linux {
     fn inhibit(manager: &Proxy<'_>) -> Option<OwnedFd> {
         match manager.call::<_, _, OwnedFd>(
             "Inhibit",
-            &("sleep", "EMP", "Locking the vault before sleep", "delay"),
+            &("sleep", "Ultra Note", "Locking the vault before sleep", "delay"),
         ) {
             Ok(fd) => Some(fd),
             Err(e) => {

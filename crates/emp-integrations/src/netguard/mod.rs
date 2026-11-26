@@ -45,7 +45,7 @@ use crate::error::{IntegrationError, Result};
 use crate::netlog::{NET_LOG_CAPACITY, NetLog, NetLogEntry};
 
 /// User agent sent on every request (SPEC §9.18).
-pub const USER_AGENT: &str = concat!("EMP/", env!("CARGO_PKG_VERSION"));
+pub const USER_AGENT: &str = concat!("UltraNote/", env!("CARGO_PKG_VERSION"));
 
 /// Cap applied when reading non-2xx bodies (they are truncated, not rejected).
 const ERROR_BODY_CAP: u64 = 64 * 1024;
@@ -739,7 +739,7 @@ mod tests {
         assert_eq!(log[0].bytes, 11);
         let seen = server.requests();
         assert_eq!(seen[0].path, "/latest?from=USD&secret=1");
-        assert!(seen[0].header("user-agent").unwrap().starts_with("EMP/"));
+        assert!(seen[0].header("user-agent").unwrap().starts_with("UltraNote/"));
     }
 
     #[tokio::test]

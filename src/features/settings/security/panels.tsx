@@ -163,7 +163,7 @@ const PROTECTED = [
 export function DiskDisclosure() {
   const fde = useSecurityInfo((s) => s.fdeAcknowledged);
   return (
-    <Group id="disk-visibility" title="What’s visible on disk" description="With encryption on, someone who copies your EMP folder can see some metadata but none of your content.">
+    <Group id="disk-visibility" title="What’s visible on disk" description="With encryption on, someone who copies your Ultra Note folder can see some metadata but none of your content.">
       <div className="st-disclose">
         <div className="st-disclose-col" data-kind="protected">
           <div className="st-disclose-head">
@@ -242,29 +242,29 @@ export function StrengthTable() {
 
 const FAQ: { q: string; a: string[] }[] = [
   {
-    q: "Is EMP military-grade encryption?",
+    q: "Is Ultra Note military-grade encryption?",
     a: [
-      "“Military grade” isn’t a technical standard, so we don’t use the term. EMP uses modern, widely reviewed cryptography (XChaCha20-Poly1305 with 256-bit keys and Argon2id password hashing) with conservative settings. It has not been certified by any government program. In practice, your security depends most on a strong password and keeping your computer free of malware. If someone can run software on your computer while EMP is unlocked, no app-level encryption can stop them.",
+      "“Military grade” isn’t a technical standard, so we don’t use the term. Ultra Note uses modern, widely reviewed cryptography (XChaCha20-Poly1305 with 256-bit keys and Argon2id password hashing) with conservative settings. It has not been certified by any government program. In practice, your security depends most on a strong password and keeping your computer free of malware. If someone can run software on your computer while Ultra Note is unlocked, no app-level encryption can stop them.",
     ],
   },
   {
     q: "Where is my data stored?",
-    a: ["Your workspace lives on your computer. EMP has no servers and no accounts, and we never receive your data."],
+    a: ["Your workspace lives on your computer. Ultra Note has no servers and no accounts, and we never receive your data."],
   },
   {
     q: "Can you reset my password?",
     a: ["Your password never leaves this device, and we can’t reset it. Your recovery key is the only other way in, so keep it safe."],
   },
   {
-    q: "Does EMP connect to the internet?",
+    q: "Does Ultra Note connect to the internet?",
     a: [
-      "Nothing connects to the internet unless you turn on an integration. You can see every request EMP makes in Privacy & network.",
+      "Nothing connects to the internet unless you turn on an integration. You can see every request Ultra Note makes in Privacy & network.",
       "API keys and account connections are always stored encrypted.",
     ],
   },
   {
     q: "What happens if someone edits my files?",
-    a: ["Tamper-evident: EMP detects if encrypted items are modified outside the app. Run an integrity check any time from this page."],
+    a: ["Tamper-evident: Ultra Note detects if encrypted items are modified outside the app. Run an integrity check any time from this page."],
   },
 ];
 

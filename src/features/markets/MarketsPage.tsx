@@ -55,7 +55,7 @@ export default function MarketsPage({ symbol }: MarketsPageProps) {
       footer={
         <footer className="fh-disclaimer">
           <ShieldCheck size={13} aria-hidden />
-          <span>Providers see which symbols you look up and your IP address. EMP never sends quantities, cost basis, account names or balances. Market data is for information only — not investment advice.</span>
+          <span>Providers see which symbols you look up and your IP address. Ultra Note never sends quantities, cost basis, account names or balances. Market data is for information only — not investment advice.</span>
         </footer>
       }
     >

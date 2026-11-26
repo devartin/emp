@@ -211,7 +211,7 @@ export default function Onboarding() {
         data-wide={wide ? "" : undefined}
         role="dialog"
         aria-modal="true"
-        aria-label="Set up EMP"
+        aria-label="Set up Ultra Note"
         initial={{ opacity: 0, scale: reduced ? 1 : 0.97, y: reduced ? 0 : 12 }}
         animate={{ opacity: 1, scale: 1, y: 0, transition: { ...spring.settle, opacity: { duration: 0.4, ease: ease.out } } }}
         exit={{ opacity: 0, scale: reduced ? 1 : 1.04, transition: { duration: 0.48, ease: ease.out } }}

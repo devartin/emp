@@ -65,7 +65,7 @@ pub enum StoreError {
     Sqlite(#[from] rusqlite::Error),
     /// The database was written by a newer app version.
     #[error(
-        "the vault was created by a newer version of EMP (schema {found}, this build knows {known})"
+        "the vault was created by a newer version of Ultra Note (schema {found}, this build knows {known})"
     )]
     SchemaTooNew {
         /// `user_version` on disk.

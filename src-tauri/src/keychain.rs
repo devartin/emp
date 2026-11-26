@@ -1,6 +1,6 @@
 //! Device-key storage in the OS keychain (SPEC §9.2).
 //!
-//! The device key of an unencrypted vault lives in the OS keychain under service `com.devartin.emp`, account
+//! The device key of an unencrypted vault lives in the OS keychain under service `com.devartin.ultranote` (the bundle identifier), account
 //! `device-key/<vault_id hex>`. When no keychain is available (headless Linux without a Secret Service, a locked
 //! keychain…) the key falls back to `<data>/device.key` (mode 0600) and Security Center warns that API keys are
 //! obfuscated, not protected.
@@ -11,7 +11,7 @@ use emp_crypto::{DeviceKey, VaultId};
 use emp_store::{DeviceKeyStore, FileDeviceKeyStore, Result as StoreResult, StoreError};
 
 /// Keychain service name.
-pub const SERVICE: &str = "com.devartin.emp";
+pub const SERVICE: &str = "com.devartin.ultranote";
 
 /// The keychain account for a vault's device key.
 #[must_use]

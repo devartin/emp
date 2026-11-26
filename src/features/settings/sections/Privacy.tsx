@@ -18,7 +18,7 @@ export function PrivacySection() {
   const hidden = usePrivacy((s) => s.hidden);
   return (
     <div>
-      <SectionHeader icon={EyeOff} title="Privacy & network" description="Keep numbers off-screen, keep secrets off the clipboard, and see every request EMP makes." />
+      <SectionHeader icon={EyeOff} title="Privacy & network" description="Keep numbers off-screen, keep secrets off the clipboard, and see every request Ultra Note makes." />
 
       <Group title="On screen">
         <Row id="hide-numbers" icon={<EyeOff size={16} />} label="Hide numbers on launch" description={`Start every session with balances and amounts masked. Toggle any time with ${shortcutLabel("mod+shift+h")}.`}>
@@ -27,7 +27,7 @@ export function PrivacySection() {
           </Button>
           <Switch checked={vault.hideNumbersOnLaunch} onCheckedChange={(v) => void setVault({ hideNumbersOnLaunch: v })} aria-label="Hide numbers on launch" />
         </Row>
-        <Row id="blur-inactive" icon={<Focus size={16} />} label="Blur when inactive" description="Blur EMP when you switch to another app. Money, Portfolio and Taxes always blur.">
+        <Row id="blur-inactive" icon={<Focus size={16} />} label="Blur when inactive" description="Blur Ultra Note when you switch to another app. Money, Portfolio and Taxes always blur.">
           <Switch checked={vault.blurWhenInactive} onCheckedChange={(v) => void setVault({ blurWhenInactive: v })} aria-label="Blur when inactive" />
         </Row>
       </Group>
@@ -52,10 +52,10 @@ export function PrivacySection() {
         <div className="st-block">
           <OfflineSwitch />
         </div>
-        <Row icon={<ShieldCheck size={16} />} label="No telemetry" description="EMP sends no telemetry, ever. No analytics, no crash reports, no usage pings." />
+        <Row icon={<ShieldCheck size={16} />} label="No telemetry" description="Ultra Note sends no telemetry, ever. No analytics, no crash reports, no usage pings." />
       </Group>
 
-      <Group id="network-log" title="Request log" description="The last 1,000 requests EMP made, newest first. Query strings are never recorded." flush>
+      <Group id="network-log" title="Request log" description="The last 1,000 requests Ultra Note made, newest first. Query strings are never recorded." flush>
         <div className="st-block">
           <NetworkLog limit={1000} height={360} />
         </div>

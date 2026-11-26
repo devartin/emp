@@ -9,9 +9,9 @@ import type { LifeAppManifest, Step, Template } from '@/backend/types';
 import { MONEY_HQ_STEPS } from './moneyHqSteps';
 
 export const FINANCE_DISCLAIMER =
-  'EMP provides estimates and common guidelines for education, not financial advice. Check important decisions with a qualified professional.';
+  'Ultra Note provides estimates and common guidelines for education, not financial advice. Check important decisions with a qualified professional.';
 const TAX_DISCLAIMER =
-  'EMP provides estimates for planning, not tax advice or a filed return. Rules change; check figures with the IRS or a qualified tax professional.';
+  'Ultra Note provides estimates for planning, not tax advice or a filed return. Rules change; check figures with the IRS or a qualified tax professional.';
 
 export interface TemplateSpec {
   title: string;
@@ -348,7 +348,7 @@ const spreadsheetStudio: LifeAppManifest = {
   estMinutes: 2,
   steps: [
     { id: 'intent', kind: 'choice_cards', title: 'What do you want to build?', quick: true, skippable: false, default: 'loan', options: SHEET_INTENTS },
-    { id: 'excel_compat', kind: 'toggle', title: 'Will you share this with Excel users?', quick: false, skippable: true, default: false, help: 'When on, we stick to functions that round-trip to Excel and warn about EMP-only ones (STOCK, FX).' },
+    { id: 'excel_compat', kind: 'toggle', title: 'Will you share this with Excel users?', quick: false, skippable: true, default: false, help: 'When on, we stick to functions that round-trip to Excel and warn about ones only Ultra Note has (STOCK, FX).' },
     {
       id: 'structure', kind: 'multi_chips', title: 'Which sections should the workbook have?', quick: false, skippable: true, default: ['inputs', 'calculations', 'output', 'checks', 'changelog'],
       why: 'Separating inputs from formulas is a common guideline that makes models easier to audit.',

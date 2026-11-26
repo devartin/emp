@@ -261,7 +261,7 @@ function ReconcileDialog({ account, onClose, onDone }: { account: Account; onClo
           <div className="flex-1">
             <div className="text-body-sm font-medium">{ok ? "Cleared balance matches" : `Off by ${fmtMoney(Math.abs(diff))}`}</div>
             <div className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-              Cleared in EMP: <Sensitive>{fmtMoney(account.cleared)}</Sensitive>
+              Cleared in Ultra Note: <Sensitive>{fmtMoney(account.cleared)}</Sensitive>
               {!ok ? " · look for a missing or duplicate transaction" : ""}
             </div>
           </div>

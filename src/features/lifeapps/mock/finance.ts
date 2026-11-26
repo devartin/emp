@@ -549,7 +549,7 @@ export async function installTax(env: Env): Promise<void> {
   const income = Array.isArray(answers.income) ? (answers.income as string[]) : ['employment'];
   const se = income.includes('self_employment');
   const remindDays = Number(answers.reminders ?? 14);
-  const disclaimer = '> [!note] EMP provides estimates for planning, not tax advice or a filed return. Check figures with the IRS or a qualified tax professional.';
+  const disclaimer = '> [!note] Ultra Note provides estimates for planning, not tax advice or a filed return. Check figures with the IRS or a qualified tax professional.';
 
   await env.step('Creating the estimator');
   env.page('estimator', { title: 'Estimator', icon: emoji('🧮'), blocks: md(`Pulls figures from Money HQ and Portfolio when installed; each pulled figure needs your confirmation.\n## Show math\nEvery line of the estimate is listed with its source.\n## Scenarios\n- +$5,000 self-employment income\n- +$X retirement contribution\n${disclaimer}`) });

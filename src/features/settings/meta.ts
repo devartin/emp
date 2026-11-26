@@ -14,7 +14,7 @@ export interface SectionMeta {
   id: SectionId;
   title: string;
   icon: LucideIcon;
-  group: "Workspace" | "Privacy & security" | "Data" | "EMP";
+  group: "Workspace" | "Privacy & security" | "Data" | "Ultra Note";
   description: string;
   keywords: string[];
 }
@@ -23,14 +23,14 @@ export const SECTIONS: SectionMeta[] = [
   { id: "general", title: "General", icon: Settings2, group: "Workspace", description: "Your name, region, start page and updates.", keywords: ["profile", "name", "language", "region", "currency", "timezone", "date format", "week", "updates", "trash"] },
   { id: "appearance", title: "Appearance", icon: Palette, group: "Workspace", description: "Theme, accent, density, text size and motion.", keywords: ["theme", "dark mode", "light", "midnight", "accent", "colour", "color", "density", "compact", "text size", "font", "motion", "animation", "reduced motion", "contrast", "glass", "effects"] },
   { id: "editor", title: "Editor", icon: PencilLine, group: "Workspace", description: "Writing defaults, typography and images.", keywords: ["spellcheck", "smart quotes", "markdown", "font", "serif", "mono", "full width", "small text", "images"] },
-  { id: "shortcuts", title: "Keyboard shortcuts", icon: Keyboard, group: "Workspace", description: "Every shortcut in EMP.", keywords: ["keys", "hotkeys", "cheat sheet", "keyboard"] },
+  { id: "shortcuts", title: "Keyboard shortcuts", icon: Keyboard, group: "Workspace", description: "Every shortcut in Ultra Note.", keywords: ["keys", "hotkeys", "cheat sheet", "keyboard"] },
   { id: "security", title: "Security Center", icon: ShieldCheck, group: "Privacy & security", description: "Encryption, password, recovery key and auto-lock.", keywords: ["encryption", "password", "recovery key", "lock", "auto-lock", "re-auth", "integrity", "security log", "argon2", "disk"] },
   { id: "privacy", title: "Privacy & network", icon: EyeOff, group: "Privacy & security", description: "Hide numbers, clipboard, offline mode and the request log.", keywords: ["privacy", "hide numbers", "blur", "clipboard", "offline", "network", "requests", "telemetry", "location"] },
   { id: "integrations", title: "Integrations", icon: Cable, group: "Privacy & security", description: "Google, market data and API keys.", keywords: ["google", "calendar", "drive", "market data", "api keys", "providers", "finnhub", "connections"] },
   { id: "backups", title: "Backups & snapshots", icon: Archive, group: "Data", description: "Automatic snapshots, backup files and restore.", keywords: ["backup", "snapshot", "restore", "verify", "retention", "empbackup"] },
   { id: "data", title: "Import & export", icon: ArrowDownUp, group: "Data", description: "Bring in Notion, Markdown and CSV; export anything.", keywords: ["import", "export", "notion", "markdown", "csv", "xlsx", "excel", "pdf", "json", "zip", "everything"] },
-  { id: "advanced", title: "Advanced", icon: SlidersHorizontal, group: "EMP", description: "Search index, jobs, diagnostics and data folder.", keywords: ["index", "reindex", "jobs", "diagnostics", "data folder", "debug", "reset"] },
-  { id: "about", title: "About", icon: Info, group: "EMP", description: "Version, licences and what EMP promises.", keywords: ["version", "licenses", "licences", "credits", "open source", "update"] },
+  { id: "advanced", title: "Advanced", icon: SlidersHorizontal, group: "Ultra Note", description: "Search index, jobs, diagnostics and data folder.", keywords: ["index", "reindex", "jobs", "diagnostics", "data folder", "debug", "reset"] },
+  { id: "about", title: "About", icon: Info, group: "Ultra Note", description: "Version, licences and what Ultra Note promises.", keywords: ["version", "licenses", "licences", "credits", "open source", "update"] },
 ];
 
 export const SECTION_ALIASES: Record<string, SectionId> = {

@@ -80,10 +80,10 @@ export function computeChecklist(status: VaultStatus | null, vault: VaultSetting
     { id: "sleep", title: "Locks on sleep and screen lock", detail: status?.autoLock.onSleep && status.autoLock.onScreenLock ? "Both triggers are on." : "Lock whenever your computer sleeps or locks.", weight: 5, done: enc && !!status?.autoLock.onSleep && !!status.autoLock.onScreenLock, blocked: needsEnc },
     { id: "snapshots", title: "Recent encrypted snapshot", detail: !enc ? "Automatic backups are off: set a backup password." : !vault?.snapshots.enabled ? "Automatic snapshots are turned off." : last ? "A snapshot was taken in the last 2 days." : "No snapshot yet.", weight: 15, done: freshSnap },
     { id: "kdf", title: "Key derivation at full strength", detail: status?.kdf?.belowStandard ? "Your key uses older, lighter settings." : "Argon2id at the Standard profile or above.", weight: 5, done: enc && !status?.kdf?.belowStandard, blocked: needsEnc },
-    { id: "integrity", title: "Integrity check passed", detail: status?.integrity === "ok" ? "No tampering detected." : status?.integrity === "warning" ? "Something changed outside EMP." : "Not checked yet.", weight: 5, done: status?.integrity === "ok" },
+    { id: "integrity", title: "Integrity check passed", detail: status?.integrity === "ok" ? "No tampering detected." : status?.integrity === "warning" ? "Something changed outside Ultra Note." : "Not checked yet.", weight: 5, done: status?.integrity === "ok" },
     { id: "clipboard", title: "Clipboard clears quickly", detail: `Copied secrets clear after ${vault?.clipboardClearSeconds ?? 30} s.`, weight: 5, done: (vault?.clipboardClearSeconds ?? 30) <= 30 },
     { id: "keys", title: "API keys protected", detail: enc ? "Keys are sealed with your vault key." : status?.keychainAvailable ? "Keys use this computer’s keychain." : "Your API keys are obfuscated, not protected. Turn on vault encryption to protect them.", weight: 5, done: enc || !!status?.keychainAvailable },
-    { id: "fde", title: "Full-disk encryption", detail: fde ? "You confirmed FileVault, BitLocker or LUKS is on." : "Covers the metadata EMP can’t hide (see below).", weight: 5, done: fde },
+    { id: "fde", title: "Full-disk encryption", detail: fde ? "You confirmed FileVault, BitLocker or LUKS is on." : "Covers the metadata Ultra Note can’t hide (see below).", weight: 5, done: fde },
   ];
 }
 

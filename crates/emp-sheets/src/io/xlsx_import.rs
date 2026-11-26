@@ -77,7 +77,7 @@ fn import_inner(
         .map(|x| parse_styles(&x))
         .unwrap_or_default();
     if z.by_name("xl/vbaProject.bin").is_ok() {
-        warnings.push("Macros were removed; EMP never runs macros.".to_string());
+        warnings.push("Macros were removed; Ultra Note never runs macros.".to_string());
     }
     let mut xl: Xlsx<_> = Xlsx::new(Cursor::new(bytes))
         .map_err(|e| SheetError::Io(format!("could not read xlsx: {e}")))?;

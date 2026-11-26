@@ -207,7 +207,7 @@ pub async fn snapshot_set_folder(app: AppHandle, req: SnapshotFolderReq) -> ApiR
     if let Some(g) = &req.grant_id {
         validate::grant_id("grantId", g)?;
         return Err(ApiError::unsupported(
-            "Snapshots can only be kept in the EMP data folder in this version",
+            "Snapshots can only be kept in the Ultra Note data folder in this version",
         ));
     }
     blocking(move || {

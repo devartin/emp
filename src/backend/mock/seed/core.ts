@@ -77,7 +77,7 @@ function azulejoSvg(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 600" width="1440" height="600"><rect width="1440" height="600" fill="#e9e4d8"/>${tiles.join('')}</svg>`;
 }
 
-const QUICK_REFERENCE = `# EMP quick reference
+const QUICK_REFERENCE = `# Ultra Note quick reference
 
 ## Everyday
 - ⌘K — command palette · ⌘P — quick find · ⌘N — new page
@@ -144,7 +144,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
   });
   const reference = ctx.assets.create({
     workspaceId: ws.id,
-    name: 'EMP quick reference.md',
+    name: 'Ultra Note quick reference.md',
     mime: 'text/markdown',
     blob: new Blob([QUICK_REFERENCE], { type: 'text/markdown' }),
     source: 'builtin',
@@ -166,7 +166,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     workspaceId: ws.id,
     parentId: gs.id,
     kind: 'doc',
-    title: 'Writing in EMP',
+    title: 'Writing in Ultra Note',
     icon: emoji('✍️'),
     createdAt: created(opts.demo ? 58 : 0),
     updatedAt: created(opts.demo ? 3 : 0),
@@ -215,14 +215,14 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     'page',
     makeDoc([
       b.p([
-        'EMP keeps your notes, money, plans and life admin in ',
+        'Ultra Note keeps your notes, money, plans and life admin in ',
         t.bold('one private place on this device'),
         '. This page is a short tour — the checklist below ticks itself as you try each thing.',
       ]),
       b.callout(
         [
           t.bold('Your workspace lives on your computer.'),
-          ' EMP has no servers and no accounts, and we never receive your data. Nothing connects to the internet unless you turn on an integration.',
+          ' Ultra Note has no servers and no accounts, and we never receive your data. Nothing connects to the internet unless you turn on an integration.',
         ],
         { icon: emoji('🛡️'), tone: 'gray' },
       ),
@@ -473,8 +473,8 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
         ' (256 MiB, 3 passes) into a key that unlocks a random 256-bit data key.',
       ]),
       b.numbered(['Every page, row and file is encrypted on your device with ', t.bold('XChaCha20-Poly1305'), '.']),
-      b.numbered('EMP locks itself after 15 idle minutes, when your computer sleeps, or when you press ⌘⇧L.'),
-      b.numbered('Tamper-evident: EMP detects if encrypted items are modified outside the app.'),
+      b.numbered('Ultra Note locks itself after 15 idle minutes, when your computer sleeps, or when you press ⌘⇧L.'),
+      b.numbered('Tamper-evident: Ultra Note detects if encrypted items are modified outside the app.'),
       b.h2('What encryption protects'),
       b.table(
         [
@@ -492,17 +492,17 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
         t.bold('Settings → Security'),
         '.',
       ]),
-      b.toggle('Is EMP military-grade encryption?', {
+      b.toggle('Is Ultra Note military-grade encryption?', {
         children: [
           b.p(
-            '“Military grade” isn’t a technical standard, so we don’t use the term. EMP uses modern, widely reviewed cryptography (XChaCha20-Poly1305 with 256-bit keys and Argon2id password hashing) with conservative settings. It has not been certified by any government program. In practice, your security depends most on a strong password and keeping your computer free of malware. If someone can run software on your computer while EMP is unlocked, no app-level encryption can stop them.',
+            '“Military grade” isn’t a technical standard, so we don’t use the term. Ultra Note uses modern, widely reviewed cryptography (XChaCha20-Poly1305 with 256-bit keys and Argon2id password hashing) with conservative settings. It has not been certified by any government program. In practice, your security depends most on a strong password and keeping your computer free of malware. If someone can run software on your computer while Ultra Note is unlocked, no app-level encryption can stop them.',
           ),
         ],
       }),
       b.toggle('What if I forget my password?', {
         children: [b.p('Choose “Use recovery key” on the lock screen and enter your 24 words. You’ll set a new password straight away.')],
       }),
-      b.toggle('Does EMP connect to the internet?', {
+      b.toggle('Does Ultra Note connect to the internet?', {
         children: [
           b.p('Only for integrations you turn on — market data, Google, update checks. Every request is listed in Security Center, and Offline mode (⌘⇧O) blocks them all.'),
         ],

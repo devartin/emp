@@ -76,7 +76,7 @@ export function ConflictSheet({ open, pageId, draft, onResolved, onOpenChange }:
         <span className="emp-conflict-icon">
           <GitCompareArrows size={22} />
         </span>
-        <p>Nothing is lost either way: EMP keeps both versions, and you can restore the other one later from Page history.</p>
+        <p>Nothing is lost either way: Ultra Note keeps both versions, and you can restore the other one later from Page history.</p>
       </div>
     </Sheet>
   );

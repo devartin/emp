@@ -51,7 +51,7 @@ const VIEWS: Record<SectionId, ComponentType> = {
   about: AboutSection,
 };
 
-const GROUPS = ["Workspace", "Privacy & security", "Data", "EMP"] as const;
+const GROUPS = ["Workspace", "Privacy & security", "Data", "Ultra Note"] as const;
 
 function flash(anchor: string) {
   const el = document.querySelector<HTMLElement>(`[data-setting="${CSS.escape(anchor)}"]`);

@@ -423,7 +423,7 @@ pub fn sanitize_file_name(name: &str) -> String {
     let trimmed = cleaned.trim().trim_matches('.').trim();
     let mut out: String = trimmed.chars().take(200).collect();
     if out.is_empty() {
-        out = "EMP export".into();
+        out = "Ultra Note export".into();
     }
     out
 }
@@ -520,8 +520,8 @@ mod tests {
             sanitize_file_name("Notes/2026: Q1?.md"),
             "Notes-2026- Q1-.md"
         );
-        assert_eq!(sanitize_file_name("..."), "EMP export");
-        assert_eq!(sanitize_file_name("  "), "EMP export");
+        assert_eq!(sanitize_file_name("..."), "Ultra Note export");
+        assert_eq!(sanitize_file_name("  "), "Ultra Note export");
         assert_eq!(sanitize_file_name("../../etc/passwd"), "-..-etc-passwd");
         assert!(sanitize_file_name(&"a".repeat(500)).chars().count() <= 200);
     }

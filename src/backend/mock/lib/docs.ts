@@ -17,7 +17,7 @@ export function createDocsService(ctx: MockCtx): DocsService {
     }
     const schemaVersion = doc.attrs?.schemaVersion;
     if (typeof schemaVersion === 'number' && schemaVersion > 1) {
-      throw new BackendError('SCHEMA_TOO_NEW', 'This document was written by a newer version of EMP');
+      throw new BackendError('SCHEMA_TOO_NEW', 'This document was written by a newer version of Ultra Note');
     }
   };
 

@@ -160,7 +160,7 @@ export function HistoryDrawer({ open, onOpenChange, pageId, workspaceId, title, 
           {versions === null ? (
             Array.from({ length: 6 }, (_, i) => <Skeleton key={i} height={44} radius={8} className="mb-1.5" />)
           ) : !versions.length ? (
-            <EmptyState icon={History} title="No versions yet" body="EMP keeps a version every 10 minutes while you edit, and whenever you save one." />
+            <EmptyState icon={History} title="No versions yet" body="Ultra Note keeps a version every 10 minutes while you edit, and whenever you save one." />
           ) : (
             groups.map((g) => (
               <div key={g.day} className="emp-history-group">

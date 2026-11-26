@@ -123,7 +123,7 @@ export default function QuarterlyPlan() {
       </Section>
       <div className="fh-alert" data-tone="info">
         <Info size={16} />
-        <span className="text-body-sm">Pay through IRS Direct Pay or EFTPS. EMP never makes payments — record them here so the plan and reminders stay accurate.</span>
+        <span className="text-body-sm">Pay through IRS Direct Pay or EFTPS. Ultra Note never makes payments — record them here so the plan and reminders stay accurate.</span>
       </div>
       {recording ? <RecordDialog period={recording.period} suggested={recording.suggested} onClose={() => setRecording(null)} /> : null}
     </div>

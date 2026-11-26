@@ -25,7 +25,7 @@ export function getTransport(): Promise<Transport> {
     transportPromise = import('./mock').then((m) => m.createMockTransport());
   } else {
     transportPromise = Promise.reject(
-      new BackendError('UNSUPPORTED', 'EMP must run inside the desktop app (browser preview is disabled in this build).'),
+      new BackendError('UNSUPPORTED', 'Ultra Note must run inside the desktop app (browser preview is disabled in this build).'),
     );
     transportPromise.catch(() => undefined);
   }

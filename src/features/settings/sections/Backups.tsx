@@ -59,7 +59,7 @@ export function BackupsSection() {
 
   const chooseFolder = async () => {
     try {
-      const g = await api.file.saveGrant({ purpose: "backup", suggestedName: "EMP Snapshots", filters: [] });
+      const g = await api.file.saveGrant({ purpose: "backup", suggestedName: "Ultra Note Snapshots", filters: [] });
       if (!g) return;
       await api.snapshot.setFolder({ grantId: g.grantId });
       await setVault({ snapshots: { ...s, folderGrantLabel: g.displayName } });
@@ -71,7 +71,7 @@ export function BackupsSection() {
 
   const pickRestore = async () => {
     try {
-      const [g] = await api.file.pick({ purpose: "restore", filters: [{ name: "EMP backups", extensions: ["empbackup", "empsnap"] }], multiple: false });
+      const [g] = await api.file.pick({ purpose: "restore", filters: [{ name: "Ultra Note backups", extensions: ["empbackup", "empsnap"] }], multiple: false });
       if (g) setRestoreGrant(g);
     } catch (e) {
       notify.fromError(e, "Couldn’t open the file");
@@ -111,7 +111,7 @@ export function BackupsSection() {
             <Select size="sm" value={String(s.keepMonthly)} onValueChange={(v) => void setVault({ snapshots: { ...s, keepMonthly: Number(v) } })} options={[0, 3, 6, 12].map((n) => ({ value: String(n), label: n ? `${n} monthly` : "No monthly" }))} aria-label="Monthly snapshots to keep" />
           </div>
         </Row>
-        <Row icon={<FolderOpen size={16} />} label="Location" description={s.folderGrantLabel ? `${s.folderGrantLabel} — a synced folder (iCloud Drive, Dropbox, a NAS) keeps a copy off this computer.` : "In EMP’s data folder on this computer. Choose a synced folder to keep a copy elsewhere."}>
+        <Row icon={<FolderOpen size={16} />} label="Location" description={s.folderGrantLabel ? `${s.folderGrantLabel} — a synced folder (iCloud Drive, Dropbox, a NAS) keeps a copy off this computer.` : "In Ultra Note’s data folder on this computer. Choose a synced folder to keep a copy elsewhere."}>
           {s.folderGrantLabel ? (
             <Button
               size="sm"
@@ -194,7 +194,7 @@ function SnapshotRow({ sn, latest }: { sn: SnapshotInfo; latest: boolean }) {
       const job = await api.snapshot.verify({ id: sn.id, onEvent: (e) => e.kind === "progress" && e.total > 0 && setVerify({ p: e.done / e.total }) });
       const r = await job.result;
       setVerify({ ok: r.ok });
-      if (!r.ok) notify.error("This snapshot failed verification", { description: "It may have been modified outside EMP. Don’t restore from it." });
+      if (!r.ok) notify.error("This snapshot failed verification", { description: "It may have been modified outside Ultra Note. Don’t restore from it." });
     } catch (e) {
       setVerify(null);
       notify.fromError(e, "Couldn’t verify the snapshot");
@@ -262,8 +262,8 @@ function CreateBackupDialog({ open, onOpenChange, encrypted }: { open: boolean; 
 
   const run = async () => {
     try {
-      const name = `EMP Backup ${isoDay()}.empbackup`;
-      const g = await api.file.saveGrant({ purpose: "backup", suggestedName: name, filters: [{ name: "EMP backup", extensions: ["empbackup"] }] });
+      const name = `Ultra Note Backup ${isoDay()}.empbackup`;
+      const g = await api.file.saveGrant({ purpose: "backup", suggestedName: name, filters: [{ name: "Ultra Note backup", extensions: ["empbackup"] }] });
       if (!g) return;
       setFile(g.displayName);
       await job.start((onEvent) => api.backup.create({ grantId: g.grantId, password: usePw && pw ? pw : undefined, onEvent }));
@@ -317,7 +317,7 @@ function CreateBackupDialog({ open, onOpenChange, encrypted }: { open: boolean; 
             {usePw ? (
               <m.div key="pw" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0, transition: { opacity: { duration: 0.16 }, y: spring.settle } }} exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}>
                 <div className="flex flex-col gap-3 pt-1">
-                  <PasswordField value={pw} onChange={setPw} label="Backup password" size="lg" purpose="new" helper="At least 8 characters. EMP can’t recover it." />
+                  <PasswordField value={pw} onChange={setPw} label="Backup password" size="lg" purpose="new" helper="At least 8 characters. Ultra Note can’t recover it." />
                   <PasswordField value={confirm} onChange={setConfirm} label="Confirm" size="lg" purpose="new" error={confirm && confirm !== pw ? "Passwords don’t match" : undefined} />
                 </div>
               </m.div>
@@ -376,7 +376,7 @@ function RestoreDialog({ grant, onClose }: { grant: FileGrant | null; onClose: (
 
   const repick = async () => {
     try {
-      const [ng] = await api.file.pick({ purpose: "restore", filters: [{ name: "EMP backups", extensions: ["empbackup", "empsnap"] }], multiple: false });
+      const [ng] = await api.file.pick({ purpose: "restore", filters: [{ name: "Ultra Note backups", extensions: ["empbackup", "empsnap"] }], multiple: false });
       if (ng) {
         setG(ng);
         job.reset();
@@ -405,7 +405,7 @@ function RestoreDialog({ grant, onClose }: { grant: FileGrant | null; onClose: (
       dismissible={!running}
       size="md"
       title="Restore from a backup"
-      description={done ? undefined : "EMP checks the file’s seal, opens it with your key and restores it as a new vault. Your current workspace isn’t changed."}
+      description={done ? undefined : "Ultra Note checks the file’s seal, opens it with your key and restores it as a new vault. Your current workspace isn’t changed."}
       footer={
         done ? (
           <Button variant="primary" onClick={() => void openRestored()}>

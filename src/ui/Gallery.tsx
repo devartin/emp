@@ -103,7 +103,7 @@ export function Gallery() {
     <div className="min-h-screen canvas-halo text-primary">
       <header className="glass-1 sticky top-0 z-30 flex items-center gap-3 px-6 h-14" style={{ boxShadow: "inset 0 -1px 0 var(--groove-lite), inset 0 -2px 0 var(--groove-dark)" }}>
         <img src="/emp.svg" width={24} height={24} alt="" style={{ borderRadius: 6, boxShadow: "0 3px 8px -3px rgba(0,0,0,.5)" }} />
-        <span className="text-title">EMP UI</span>
+        <span className="text-title">Ultra Note UI</span>
         <Badge tone="solid">v2 · Slab</Badge>
         <div className="ml-auto flex items-center gap-2">
           <Segmented

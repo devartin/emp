@@ -95,13 +95,13 @@ export function AppErrorBoundary({ children }: { children: ReactNode }) {
                 <AlertTriangle size={12} strokeWidth={2.4} />
               </span>
             </div>
-            <h1 className="text-title text-primary">EMP needs to restart</h1>
+            <h1 className="text-title text-primary">Ultra Note needs to restart</h1>
             <p className="mt-2 text-body text-secondary">
               Something unexpected happened. Your workspace is saved on this device; restarting reloads it.
             </p>
             <div className="mt-6 flex gap-2">
               <Button variant="primary" icon={RotateCcw} iconMotion="refresh" onClick={() => window.location.reload()}>
-                Restart EMP
+                Restart Ultra Note
               </Button>
               <Button variant="ghost" icon={Copy} onClick={() => copy(error)}>
                 Copy details

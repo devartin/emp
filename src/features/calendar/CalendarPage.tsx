@@ -412,7 +412,7 @@ function NewEventDialog({ open, onOpenChange, draft, setDraft, onSave, hasLifeOs
             value={draft.target}
             onValueChange={(t) => setDraft({ ...draft, target: t })}
             options={[
-              { value: "events", label: "Events", description: "Your calendar in EMP" },
+              { value: "events", label: "Events", description: "Your calendar in Ultra Note" },
               { value: "task", label: "Life OS task", description: "A scheduled block on your task list" },
             ]}
           />
@@ -589,7 +589,7 @@ export default function CalendarPage() {
       const schema = await api.db.getSchema({ id });
       const date = schema.properties.find((p) => p.type === "date");
       if (!date) return;
-      const grant = await api.file.saveGrant({ purpose: "export", suggestedName: "EMP events.ics", filters: [{ name: "Calendar", extensions: ["ics"] }] });
+      const grant = await api.file.saveGrant({ purpose: "export", suggestedName: "Ultra Note events.ics", filters: [{ name: "Calendar", extensions: ["ics"] }] });
       if (!grant) return;
       const res = await api.ics.export({ source: { databaseId: id, dateProp: date.id }, grantId: grant.grantId });
       notify.success(`Exported ${res.events} ${res.events === 1 ? "event" : "events"}`);

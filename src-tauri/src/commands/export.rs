@@ -248,7 +248,7 @@ fn export_all(store: &Store, dir: &Path, ctx: &JobCtx) -> ApiResult<u64> {
         manifest.push(json!({ "workspace": ws.name, "pageFiles": files, "databases": databases, "sheets": sheets }));
     }
     let man = json!({
-        "app": "EMP",
+        "app": "Ultra Note",
         "version": env!("CARGO_PKG_VERSION"),
         "exportedAt": chrono::Utc::now().to_rfc3339(),
         "workspaces": manifest,

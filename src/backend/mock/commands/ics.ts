@@ -15,11 +15,11 @@ export const handlers: MockHandlers = {
   ics_export: (req, ctx) => {
     const db = ctx.services.get<DbApi>('db.api');
     const events: IcsEvent[] = [];
-    let name = 'EMP';
+    let name = 'Ultra Note';
     if ('databaseId' in req.source) {
       if (!db) throw new BackendError('INTERNAL', 'Databases are not available');
       const schema = db.schema(ctx, req.source.databaseId);
-      name = schema.database.title || 'EMP';
+      name = schema.database.title || 'Ultra Note';
       const dateProp = schema.properties.find((p) => p.id === (req.source as { dateProp: Id }).dateProp);
       if (!dateProp || dateProp.type !== 'date') throw new BackendError('INVALID', 'Pick a date property to export', { field: 'dateProp' });
       const title = schema.properties.find((p) => p.id === schema.database.primaryPropId) as Property;

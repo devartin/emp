@@ -210,8 +210,8 @@ export class MockBackend {
 
     const vault = vaultRecord(ctx);
     if (!flags.preUnlock) {
-      if (vault.state === 'uninitialized') throw new BackendError('LOCKED', 'Set up EMP first');
-      if (vault.state !== 'unlocked') throw new BackendError('LOCKED', 'EMP is locked');
+      if (vault.state === 'uninitialized') throw new BackendError('LOCKED', 'Set up Ultra Note first');
+      if (vault.state !== 'unlocked') throw new BackendError('LOCKED', 'Ultra Note is locked');
       ctx.vault.stampActivity();
     }
     if (flags.reauth) ctx.vault.requireReauth();
@@ -339,7 +339,7 @@ export async function createMockTransport(): Promise<Transport> {
     installDateShim(() => backend.ctx.clock.wallNow());
     if (typeof console !== 'undefined') {
       console.info(
-        `%cEMP%c browser preview · mock backend (${singleton.options.seed}${singleton.options.encrypted ? ', encrypted — password "demo"' : ''})`,
+        `%cUltra Note%c browser preview · mock backend (${singleton.options.seed}${singleton.options.encrypted ? ', encrypted — password "demo"' : ''})`,
         'font-weight:700',
         'color:gray',
       );

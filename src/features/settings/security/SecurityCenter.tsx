@@ -205,7 +205,7 @@ export function SecurityCenter() {
       {/* Summaries */}
       <Group title="Backups, network & connections">
         <LinkRow icon={<Archive size={16} />} label="Backups & snapshots" detail={lastSnap ? `${snapshots?.length ?? 0} snapshots · last ${formatRelative(lastSnap.at)} · ${formatBytes(lastSnap.bytes)}` : enc ? "No snapshot yet" : "Automatic backups are off: set a backup password."} to="backups" tone={lastSnap ? "ok" : "warn"} />
-        <LinkRow icon={<Wifi size={16} />} label="Network" detail={vault?.offline ? "Offline mode is on — every request is refused." : "Nothing connects to the internet unless you turn on an integration. You can see every request EMP makes."} to="privacy:network-log" tone={vault?.offline ? "ok" : "neutral"} />
+        <LinkRow icon={<Wifi size={16} />} label="Network" detail={vault?.offline ? "Offline mode is on — every request is refused." : "Nothing connects to the internet unless you turn on an integration. You can see every request Ultra Note makes."} to="privacy:network-log" tone={vault?.offline ? "ok" : "neutral"} />
         <LinkRow icon={<Cable size={16} />} label="Integrations" detail="API keys and account connections are always stored encrypted." to="integrations" tone="neutral" />
       </Group>
 
@@ -447,7 +447,7 @@ function AutoLockCard() {
   const a = status.autoLock;
   const enc = status.encrypted;
   return (
-    <Group id="auto-lock" title="Auto-lock" description="When EMP locks, keys are wiped from memory and you’ll need your password again.">
+    <Group id="auto-lock" title="Auto-lock" description="When Ultra Note locks, keys are wiped from memory and you’ll need your password again.">
       {!enc ? (
         <div className="st-block">
           <Banner tone="info" inline action={<Button size="xs" variant="secondary" onClick={() => document.querySelector<HTMLElement>('[data-setting="encryption"] button')?.click()}>Turn on encryption</Button>}>
@@ -455,7 +455,7 @@ function AutoLockCard() {
           </Banner>
         </div>
       ) : null}
-      <Row icon={<Clock size={16} />} label="When idle" description="No keyboard or mouse input in EMP." badge={a.idleMinutes === null && enc ? <span className="st-tag" data-tone="warn">Never locks</span> : null}>
+      <Row icon={<Clock size={16} />} label="When idle" description="No keyboard or mouse input in Ultra Note." badge={a.idleMinutes === null && enc ? <span className="st-tag" data-tone="warn">Never locks</span> : null}>
         <Select
           size="sm"
           disabled={!enc}
@@ -472,7 +472,7 @@ function AutoLockCard() {
       <Row icon={<Lock size={16} />} label="When you lock your screen or switch users">
         <Switch disabled={!enc} checked={a.onScreenLock} onCheckedChange={(v) => void setAutoLock({ ...a, onScreenLock: v })} aria-label="Lock on screen lock" />
       </Row>
-      <Row icon={<HardDrive size={16} />} label="When EMP is in the background" description="The window is minimised or another app is focused.">
+      <Row icon={<HardDrive size={16} />} label="When Ultra Note is in the background" description="The window is minimised or another app is focused.">
         <Select size="sm" disabled={!enc} value={a.onBlurMinutes === null ? "off" : String(a.onBlurMinutes)} onValueChange={(v) => void setAutoLock({ ...a, onBlurMinutes: v === "off" ? null : Number(v) })} options={BLUR} aria-label="Lock in background" className="w-[180px]" />
       </Row>
       <Row icon={<Clock size={16} />} label="After a long session" description="Ask for the password again even while you’re active.">
@@ -518,10 +518,10 @@ function IntegrityCard() {
     }
   };
   return (
-    <Group id="integrity" title="Integrity" description="Tamper-evident: EMP detects if encrypted items are modified outside the app.">
+    <Group id="integrity" title="Integrity" description="Tamper-evident: Ultra Note detects if encrypted items are modified outside the app.">
       <Row
         icon={progress !== null ? <Ring value={progress} size={24} aria-label="Integrity check progress" /> : <ScanSearch size={16} />}
-        label={integrity === "ok" ? "No tampering detected" : integrity === "warning" ? "Something changed outside EMP" : "Not checked yet"}
+        label={integrity === "ok" ? "No tampering detected" : integrity === "warning" ? "Something changed outside Ultra Note" : "Not checked yet"}
         description={progress !== null ? label || "Checking…" : last ? `Last checked ${formatRelative(last)}` : "Checks every record’s seal and the vault manifest."}
       >
         {integrity === "warning" ? (

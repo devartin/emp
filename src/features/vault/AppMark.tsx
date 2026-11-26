@@ -271,7 +271,7 @@ export function AppMark({ size = 64, variant = "tile", animate = true, delay = 0
   );
 }
 
-/** "EMP" wordmark (Inter 720, −0.04em, §6.2 step 0). */
+/** "Ultra Note" wordmark (Inter 720, −0.03em, §6.2 step 0). Product renamed from EMP; class names keep the emp prefix. */
 export function Wordmark({ className, animate = true, delay = 0.5 }: { className?: string; animate?: boolean; delay?: number }) {
   const reduced = useReducedMotionPref();
   return (
@@ -281,7 +281,7 @@ export function Wordmark({ className, animate = true, delay = 0.5 }: { className
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.48, ease: ease.outExpo, delay }}
     >
-      EMP
+      Ultra Note
     </m.span>
   );
 }

@@ -29,7 +29,7 @@ export function OpenExternalPrompt() {
       size="sm"
       alert
       title="Open this link in your browser?"
-      description="Links leave EMP and open in your default browser."
+      description="Links leave Ultra Note and open in your default browser."
       icon={<ExternalLink size={18} aria-hidden />}
       footer={
         <>

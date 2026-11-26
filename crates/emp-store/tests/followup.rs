@@ -450,7 +450,7 @@ fn starter_tour_is_created_and_ticks_itself() {
     assert_eq!(
         kids,
         vec![
-            "Writing in EMP",
+            "Writing in Ultra Note",
             "Keyboard shortcuts",
             "Privacy & encryption",
             "Money & life apps"

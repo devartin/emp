@@ -115,7 +115,7 @@ export function DataSection() {
               </m.button>
             ))}
           </div>
-          <FileDropZone onBrowse={() => void pick([{ name: "Importable files", extensions: ALL_IMPORT }])} onFiles={() => notify.info("Choose the file to import", { description: "Files are opened through the file picker so EMP only reads what you allow." })} icon={Upload} title="Or choose any file" hint="EMP detects what it is: Markdown, Notion, CSV, Excel, .ics, bank statements or backups" accept={ALL_IMPORT.map((e) => `.${e}`)} />
+          <FileDropZone onBrowse={() => void pick([{ name: "Importable files", extensions: ALL_IMPORT }])} onFiles={() => notify.info("Choose the file to import", { description: "Files are opened through the file picker so Ultra Note only reads what you allow." })} icon={Upload} title="Or choose any file" hint="Ultra Note detects what it is: Markdown, Notion, CSV, Excel, .ics, bank statements or backups" accept={ALL_IMPORT.map((e) => `.${e}`)} />
         </div>
         <Row icon={<Landmark size={16} />} label="Bank statements" description="OFX, QFX, QIF and bank CSVs go through Money HQ so you can map accounts and review each transaction.">
           <Button size="sm" variant="ghost" onClick={() => navigate({ t: "lifeapps", appId: "money-hq" })}>
@@ -319,7 +319,7 @@ function ExportEverything() {
   const run = async () => {
     try {
       await withReauth("export everything unencrypted", async () => {
-        const g = await api.file.saveGrant({ purpose: "export", suggestedName: `EMP Export ${isoDay()}.zip`, filters: [{ name: "Zip archive", extensions: ["zip"] }] });
+        const g = await api.file.saveGrant({ purpose: "export", suggestedName: `Ultra Note Export ${isoDay()}.zip`, filters: [{ name: "Zip archive", extensions: ["zip"] }] });
         if (!g) return null;
         setFile(g.displayName);
         return job.start((onEvent) => api.export.everything({ grantId: g.grantId, onEvent }));

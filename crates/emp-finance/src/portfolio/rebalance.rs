@@ -535,7 +535,7 @@ pub fn plan(
 pub fn summary_line(plan: &RebalancePlan, on: NaiveDate) -> String {
     let buys = plan.trades.iter().filter(|t| t.side == Side::Buy).count();
     let sells = plan.trades.len() - buys;
-    format!("Rebalance plan for {on}: {buys} buy(s), {sells} sell(s). EMP never places trades.")
+    format!("Rebalance plan for {on}: {buys} buy(s), {sells} sell(s). Ultra Note never places trades.")
 }
 
 #[cfg(test)]

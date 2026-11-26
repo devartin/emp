@@ -109,13 +109,13 @@ export function GeneralSection() {
 
   return (
     <div>
-      <SectionHeader icon={Settings2} title="General" description="The basics: how EMP greets you, where it opens and how it formats things." />
+      <SectionHeader icon={Settings2} title="General" description="The basics: how Ultra Note greets you, where it opens and how it formats things." />
 
       <Group title="You">
         <Row id="profile-name" label="Your name" description="Used in greetings on Home. Stays on this device." htmlFor="st-name">
           <Input id="st-name" size="sm" value={name} onChange={(e) => setName(e.currentTarget.value)} onBlur={commitName} onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} placeholder="Your name" maxLength={80} wrapperClassName="w-[220px]" />
         </Row>
-        <Row id="start-page" label="Start page" description="What EMP shows after you unlock.">
+        <Row id="start-page" label="Start page" description="What Ultra Note shows after you unlock.">
           <Select size="sm" value={vault.startPage} onValueChange={(v) => void setVault({ startPage: v })} options={startOptions} className="w-[220px]" aria-label="Start page" />
         </Row>
       </Group>
@@ -198,7 +198,7 @@ export function GeneralSection() {
                 setChecking(true);
                 try {
                   const r = await api.app.checkUpdate();
-                  if (r.available) notify.info(`EMP ${r.version} is available`, { description: r.notes });
+                  if (r.available) notify.info(`Ultra Note ${r.version} is available`, { description: r.notes });
                   else notify.success("You’re up to date");
                 } catch (e) {
                   if (hasCode(e, "OFFLINE")) notify.warning("Couldn’t check for updates", { description: errorMessage(e) });

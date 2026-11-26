@@ -100,7 +100,7 @@ export function LaunchStep({ onDone }: { onDone: () => void }) {
     return () => window.clearTimeout(t);
   }, [onDone, reduced]);
   return (
-    <div className="flex flex-col items-center gap-5 py-6" aria-label="EMP">
+    <div className="flex flex-col items-center gap-5 py-6" aria-label="Ultra Note">
       <AppMark size={112} stage="drop" />
       <Wordmark className="text-[34px] leading-none" delay={0.5} />
     </div>
@@ -114,7 +114,7 @@ export function WelcomeStep({ next, update }: StepProps) {
     <div className="flex flex-col items-center text-center">
       <AppMark size={88} stage="rest" className="emp-onb-hero-mark" />
       <div className="mt-7">
-        <StepHeading title="Welcome to EMP" sub="Your notes, money, plans and life admin, in one private place on your device." center />
+        <StepHeading title="Welcome to Ultra Note" sub="Your notes, money, plans and life admin, in one private place on your device." center />
       </div>
       <div className="mt-8 flex w-full max-w-[320px] flex-col gap-2">
         <Button variant="primary" size="xl" block onClick={next} kbd="enter">
@@ -260,7 +260,7 @@ function ThemeCard({ t, selected, onSelect }: { t: ThemeChoice; selected: boolea
 export function ProtectStep({ draft, update, next, back, creating }: StepProps & { creating: boolean }) {
   return (
     <div>
-      <StepHeading title="Protect your workspace" sub="Choose how EMP stores your data on this device." />
+      <StepHeading title="Protect your workspace" sub="Choose how Ultra Note stores your data on this device." />
       <div className="mt-6 grid grid-cols-2 gap-3" role="radiogroup" aria-label="Encryption">
         <ChoiceCard
           selected={draft.encrypt === true}
@@ -289,7 +289,7 @@ export function ProtectStep({ draft, update, next, back, creating }: StepProps &
           <Info size={15} className="mt-0.5 flex-none text-tertiary" aria-hidden />
           {draft.encrypt
             ? "Your password never leaves this device, and we can't reset it. Your recovery key is the only other way in, so keep it safe."
-            : "Your workspace lives on your computer. EMP has no servers and no accounts, and we never receive your data."}
+            : "Your workspace lives on your computer. Ultra Note has no servers and no accounts, and we never receive your data."}
         </m.p>
       </AnimatePresence>
       <Footer back={back}>
@@ -337,7 +337,7 @@ export function PasswordStep({
 
   return (
     <div>
-      <StepHeading title="Create a password" sub="You'll use it to unlock EMP. Use at least 10 characters — a few random words work well." />
+      <StepHeading title="Create a password" sub="You'll use it to unlock Ultra Note. Use at least 10 characters — a few random words work well." />
       <div className="mt-6 flex flex-col gap-4">
         <PasswordField
           label="Password"
@@ -506,7 +506,7 @@ export function HelpStep({ draft, update, next, back }: StepProps) {
   };
   return (
     <div>
-      <StepHeading title="What should EMP help with?" sub="Pick as many as you like. We'll set up a starting point for each." />
+      <StepHeading title="What should Ultra Note help with?" sub="Pick as many as you like. We'll set up a starting point for each." />
       <div className="emp-onb-choice-grid mt-6" role="group" aria-label="Areas">
         {HELP_OPTIONS.map((o) => {
           const on = picks.has(o.id);
@@ -566,7 +566,7 @@ export function HelpStep({ draft, update, next, back }: StepProps) {
 export function ConnectionsStep({ draft, update, next, back }: StepProps) {
   return (
     <div>
-      <StepHeading title="Connections and updates" sub="Nothing connects to the internet unless you turn on an integration. You can see every request EMP makes in Security Center." />
+      <StepHeading title="Connections and updates" sub="Nothing connects to the internet unless you turn on an integration. You can see every request Ultra Note makes in Security Center." />
       <div className="mt-5">
         <div className="emp-onb-row">
           <span className="ico">
@@ -574,7 +574,7 @@ export function ConnectionsStep({ draft, update, next, back }: StepProps) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-body font-medium text-primary">Google Calendar and Drive</p>
-            <p className="text-body-sm text-tertiary">Connect from Settings → Integrations whenever you're ready. EMP talks to Google directly from this device.</p>
+            <p className="text-body-sm text-tertiary">Connect from Settings → Integrations whenever you're ready. Ultra Note talks to Google directly from this device.</p>
           </div>
           <Badge tone="outline">Later</Badge>
         </div>
@@ -707,7 +707,7 @@ export function BuildingStep({ tasks, onOpen, opening }: { tasks: BuildTask[]; o
             <m.div key="open" initial={{ opacity: 0, y: reduced ? 0 : 6, scale: reduced ? 1 : 0.96 }} animate={{ opacity: 1, y: 0, scale: 1, transition: spring.settle }}>
               <Magnetic strength={3}>
                 <Button variant="primary" size="xl" icon={Sparkles} iconMotion="sparkle" onClick={onOpen} loading={opening} kbd="enter" autoFocus>
-                  Open EMP
+                  Open Ultra Note
                 </Button>
               </Magnetic>
             </m.div>

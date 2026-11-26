@@ -152,7 +152,7 @@ impl ApiError {
     /// `LOCKED`.
     #[must_use]
     pub fn locked() -> Self {
-        Self::new(ErrorCode::Locked, "EMP is locked")
+        Self::new(ErrorCode::Locked, "Ultra Note is locked")
     }
 
     /// `UNSUPPORTED`.
@@ -282,7 +282,7 @@ mod tests {
         let v = serde_json::to_value(ApiError::locked()).unwrap();
         assert_eq!(
             v,
-            serde_json::json!({ "code": "LOCKED", "message": "EMP is locked" })
+            serde_json::json!({ "code": "LOCKED", "message": "Ultra Note is locked" })
         );
     }
 

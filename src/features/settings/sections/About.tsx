@@ -13,12 +13,12 @@ import { LICENCES } from "../licences";
 import { Group } from "../parts";
 
 const CLAIMS = [
-  "Your workspace lives on your computer. EMP has no servers and no accounts, and we never receive your data.",
+  "Your workspace lives on your computer. Ultra Note has no servers and no accounts, and we never receive your data.",
   "Optional encryption at rest: everything you write is encrypted on your device with 256-bit XChaCha20-Poly1305, under a key protected by your password using Argon2id.",
   "Your password never leaves this device, and we can’t reset it. Your recovery key is the only other way in, so keep it safe.",
   "API keys and account connections are always stored encrypted.",
-  "Nothing connects to the internet unless you turn on an integration. You can see every request EMP makes in Security Center.",
-  "Tamper-evident: EMP detects if encrypted items are modified outside the app.",
+  "Nothing connects to the internet unless you turn on an integration. You can see every request Ultra Note makes in Security Center.",
+  "Tamper-evident: Ultra Note detects if encrypted items are modified outside the app.",
 ];
 
 const PLATFORM: Record<string, string> = { macos: "macOS", windows: "Windows", linux: "Linux" };
@@ -39,7 +39,7 @@ export function AboutSection() {
     setChecking(true);
     try {
       const r = await api.app.checkUpdate();
-      if (r.available) notify.info(`EMP ${r.version} is available`, { description: r.notes });
+      if (r.available) notify.info(`Ultra Note ${r.version} is available`, { description: r.notes });
       else notify.success("You’re up to date");
     } catch (e) {
       if (hasCode(e, "OFFLINE")) notify.info("Update checks are off", { description: updates === "off" ? "Turn on “Check for updates automatically” in General." : errorMessage(e) });
@@ -51,7 +51,7 @@ export function AboutSection() {
 
   const copyVersion = async () => {
     if (!info) return;
-    await navigator.clipboard.writeText(`EMP ${info.version} (${info.commit}) · ${PLATFORM[info.platform] ?? info.platform} ${info.arch} · ${info.webview}`);
+    await navigator.clipboard.writeText(`Ultra Note ${info.version} (${info.commit}) · ${PLATFORM[info.platform] ?? info.platform} ${info.arch} · ${info.webview}`);
     notify.success("Version copied");
   };
 
@@ -79,7 +79,7 @@ export function AboutSection() {
         </m.div>
       </div>
 
-      <Group title="What EMP promises">
+      <Group title="What Ultra Note promises">
         <ul className="st-claims">
           {CLAIMS.map((c, i) => (
             <m.li key={c} initial={reduced ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.gentle, delay: reduced ? 0 : 0.1 + i * 0.04 }}>
@@ -95,7 +95,7 @@ export function AboutSection() {
       <Group
         id="licences"
         title="Open-source licences"
-        description="EMP is MIT-licensed, © 2026 devartin. It’s built on the work of these projects."
+        description="Ultra Note is MIT-licensed, © 2026 devartin. It’s built on the work of these projects."
         actions={
           <label className="st-search st-search-inline">
             <Search size={13} aria-hidden />

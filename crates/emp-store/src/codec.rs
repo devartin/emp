@@ -305,7 +305,7 @@ pub fn upcast(table: TableTag, value: Value) -> Result<Value> {
     let latest = latest_payload_version(table);
     if v == 0 || v > latest {
         return Err(StoreError::Unsupported(
-            "payload written by a newer version of EMP",
+            "payload written by a newer version of Ultra Note",
         ));
     }
     Ok(value)

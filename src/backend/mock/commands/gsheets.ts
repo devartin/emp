@@ -62,7 +62,7 @@ export const handlers: MockHandlers = {
       },
     });
     ctx.progress(3, 3, 'Done');
-    return { page: wb.page, warnings: ['1 cell used GOOGLETRANSLATE, which EMP doesn’t support — its value was frozen at import (amber corner flag).'] };
+    return { page: wb.page, warnings: ['1 cell used GOOGLETRANSLATE, which Ultra Note doesn’t support — its value was frozen at import (amber corner flag).'] };
   },
   gsheets_export: async (req, ctx) => {
     requireOnline(ctx);
