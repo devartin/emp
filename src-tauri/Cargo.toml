@@ -1,5 +1,5 @@
 [package]
-name = "emp"
+name = "emp-app"
 version.workspace = true
 description = "EMP — local-first, encrypted productivity super app"
 authors.workspace = true

@@ -31,3 +31,4 @@ dist-ssr
 .DS_Store
 /test-results
 /screenshots-tmp
+/dist-mock
