@@ -315,11 +315,11 @@ pub fn parse_sheet(xml: &[u8], max_cells: usize) -> SheetExtras {
                         && let (Ok(min), Ok(max), Ok(w)) =
                             (min.parse::<u32>(), max.parse::<u32>(), w.parse::<f64>())
                         && custom
-                        && min >= 1
+                        && (1..=MAX_COLS).contains(&min)
+                        && min <= max
+                        && w.is_finite()
                     {
-                        if min <= MAX_COLS && min <= max && w.is_finite() {
-                            col_spans.push((min - 1, max.min(MAX_COLS) - 1, width_to_px(w)));
-                        }
+                        col_spans.push((min - 1, max.min(MAX_COLS) - 1, width_to_px(w)));
                     }
                 }
                 b"row" => {
@@ -330,8 +330,7 @@ pub fn parse_sheet(xml: &[u8], max_cells: usize) -> SheetExtras {
                     if custom
                         && let (Some(rr), Some(ht)) = (attr(&e, b"r"), attr(&e, b"ht"))
                         && let (Ok(rr), Ok(ht)) = (rr.parse::<u32>(), ht.parse::<f64>())
-                        && rr >= 1
-                        && rr <= MAX_ROWS
+                        && (1..=MAX_ROWS).contains(&rr)
                         && ht.is_finite()
                     {
                         out.row_heights.push((rr - 1, (ht * 4.0 / 3.0).round()));

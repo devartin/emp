@@ -355,6 +355,16 @@ impl std::fmt::Debug for GeneratedPassphrase {
     }
 }
 
+/// The EFF Long Wordlist (CC BY 3.0 US, Electronic Frontier Foundation), one word per line. See `data/README.md`.
+const EFF_LONG_WORDLIST: &str = include_str!("../data/eff_large_wordlist.txt");
+/// Number of words in the EFF Long Wordlist.
+const EFF_LONG_WORDLIST_LEN: usize = 7776;
+
+/// Returns word `idx` (0-based) of the EFF Long Wordlist.
+fn eff_word(idx: usize) -> Option<&'static str> {
+    EFF_LONG_WORDLIST.lines().nth(idx)
+}
+
 /// Number of words in a generated passphrase.
 pub const PASSPHRASE_WORDS: usize = 5;
 /// Separators the generator picks from.
@@ -363,8 +373,7 @@ pub const PASSPHRASE_SEPARATORS: [char; 5] = ['-', '.', '_', '/', ' '];
 /// Generates 5 EFF-long-list words joined by one random separator from `- . _ / space` (OS CSPRNG,
 /// unbiased).
 pub fn generate_passphrase() -> Result<GeneratedPassphrase> {
-    let list = eff_wordlist::large::LIST;
-    let n = u32::try_from(list.len()).map_err(|_| CryptoError::Internal)?;
+    let n = u32::try_from(EFF_LONG_WORDLIST_LEN).map_err(|_| CryptoError::Internal)?;
     let sep_idx = rng::uniform_u32(PASSPHRASE_SEPARATORS.len() as u32)? as usize;
     let sep = *PASSPHRASE_SEPARATORS
         .get(sep_idx)
@@ -372,7 +381,7 @@ pub fn generate_passphrase() -> Result<GeneratedPassphrase> {
     let mut out = Zeroizing::new(String::with_capacity(64));
     for i in 0..PASSPHRASE_WORDS {
         let idx = rng::uniform_u32(n)? as usize;
-        let (_, word) = list.get(idx).ok_or(CryptoError::Internal)?;
+        let word = eff_word(idx).ok_or(CryptoError::Internal)?;
         if i > 0 {
             out.push(sep);
         }
@@ -552,7 +561,14 @@ mod tests {
         assert!(words.len() >= 5, "{:?}", p);
         assert!(!format!("{p:?}").contains(p.passphrase.as_str()));
         assert_ne!(generate_passphrase().unwrap().passphrase, p.passphrase);
-        assert_eq!(eff_wordlist::large::LIST.len(), 7776);
+        assert_eq!(EFF_LONG_WORDLIST.lines().count(), EFF_LONG_WORDLIST_LEN);
+        assert_eq!(eff_word(0), Some("abacus"));
+        assert_eq!(eff_word(7775), Some("zoom"));
+        assert!(
+            EFF_LONG_WORDLIST
+                .lines()
+                .all(|w| !w.is_empty() && w.bytes().all(|b| b.is_ascii_lowercase() || b == b'-'))
+        );
     }
 
     #[test]

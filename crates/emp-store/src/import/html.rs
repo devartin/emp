@@ -182,9 +182,15 @@ fn find_ascii_ci(hay: &str, needle: &str) -> Option<usize> {
     let (h, n) = (hay.as_bytes(), needle.as_bytes());
     let first = *n.first()?;
     let mut from = 0;
-    while let Some(off) = h.get(from..)?.iter().position(|b| b.eq_ignore_ascii_case(&first)) {
+    while let Some(off) = h
+        .get(from..)?
+        .iter()
+        .position(|b| b.eq_ignore_ascii_case(&first))
+    {
         let at = from + off;
-        if h.get(at..at + n.len()).is_some_and(|w| w.eq_ignore_ascii_case(n)) {
+        if h.get(at..at + n.len())
+            .is_some_and(|w| w.eq_ignore_ascii_case(n))
+        {
             return Some(at);
         }
         from = at + 1;

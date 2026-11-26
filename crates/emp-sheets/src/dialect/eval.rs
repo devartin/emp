@@ -71,12 +71,7 @@ fn num(x: f64) -> Res {
 
 /// Regex replace that gives up as soon as the result exceeds the text limit, so a replacement
 /// that expands every match (e.g. `replaceAll(t, ".", <32k chars>)`) cannot allocate gigabytes.
-fn bounded_replace(
-    re: &regex::Regex,
-    s: &str,
-    rep: &str,
-    all: bool,
-) -> Result<String, EvalError> {
+fn bounded_replace(re: &regex::Regex, s: &str, rep: &str, all: bool) -> Result<String, EvalError> {
     // A text of MAX_TEXT_LEN characters is at most 4 × MAX_TEXT_LEN bytes.
     const MAX_BYTES: usize = 4 * MAX_TEXT_LEN;
     let mut out = String::new();

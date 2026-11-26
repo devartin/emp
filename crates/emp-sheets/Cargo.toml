@@ -8,7 +8,7 @@ authors.workspace = true
 
 [features]
 default = ["io"]
-io = ["dep:calamine", "dep:rust_xlsxwriter", "dep:csv", "dep:quick-xml", "dep:zip"]
+io = ["dep:calamine", "dep:rust_xlsxwriter", "dep:csv", "dep:csv-core", "dep:quick-xml", "dep:zip"]
 
 [dependencies]
 serde = { workspace = true, features = ["rc"] }
@@ -21,6 +21,7 @@ regex = { version = "1", default-features = false, features = ["std", "unicode-c
 calamine = { version = "0.31", optional = true }
 rust_xlsxwriter = { version = "0.90", optional = true }
 csv = { version = "1", optional = true }
+csv-core = { version = "0.1", optional = true }
 quick-xml = { version = "0.38", optional = true }
 zip = { version = "4", optional = true, default-features = false, features = ["deflate"] }
 

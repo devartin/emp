@@ -1,7 +1,6 @@
 //! Text functions.
 
 use super::FnSpec;
-use crate::criteria::wildcard_match;
 use crate::eval::{Ev, EvalCtx, R, num, ok};
 use crate::fspec;
 use crate::limits::MAX_TEXT_LEN;
@@ -376,7 +375,10 @@ fn concatenate(ctx: &mut EvalCtx, a: &[Ev]) -> R {
 fn textjoin(ctx: &mut EvalCtx, a: &[Ev]) -> R {
     let d = ctx.text(&a[0])?;
     let ignore = ctx.boolean(&a[1])?;
-    let mut parts = Vec::new();
+    // Built incrementally and bounded like CONCAT: joining 100,000 items with a 32,000-character
+    // delimiter would otherwise build a 3 GB string before the length check.
+    let mut out = String::new();
+    let mut first = true;
     for ev in &a[2..] {
         let arr = ctx.to_array(ev)?;
         for v in arr.data() {
@@ -384,10 +386,17 @@ fn textjoin(ctx: &mut EvalCtx, a: &[Ev]) -> R {
             if ignore && s.is_empty() {
                 continue;
             }
-            parts.push(s);
+            if !first {
+                out.push_str(&d);
+            }
+            first = false;
+            out.push_str(&s);
+            if out.len() > MAX_TEXT_LEN * 4 {
+                return Err(ErrorKind::Value);
+            }
         }
     }
-    checked(parts.join(&d))
+    checked(out)
 }
 fn count_arg(ctx: &mut EvalCtx, a: &[Ev], i: usize, default: f64) -> Result<usize, ErrorKind> {
     let n = ctx.opt_num(a, i, default)?.trunc();
@@ -433,23 +442,29 @@ fn find_impl(ctx: &mut EvalCtx, a: &[Ev], ci: bool) -> R {
     if needle.is_empty() {
         return num(start);
     }
+    if ci && !needle.contains(['*', '?', '~']) {
+        // Case-insensitive substring search with a 1:1 per-character case mapping (so byte
+        // offsets map back to character positions), in linear time.
+        let lower = |c: &char| c.to_lowercase().next().unwrap_or(*c);
+        let h: String = hc[st..].iter().map(lower).collect();
+        let n: String = needle.chars().map(|c| lower(&c)).collect();
+        return match h.find(&n) {
+            Some(at) => num((st + h[..at].chars().count()) as f64 + 1.0),
+            None => Err(ErrorKind::Value),
+        };
+    }
     if ci {
-        let has_wild = crate::criteria::has_wildcards(&needle);
-        for i in st..hc.len() {
-            let rest: String = hc[i..].iter().collect();
-            if has_wild {
-                // Shortest match starting at i: try every end.
-                for j in (i..=hc.len()).map(|j| j - i) {
-                    let cand: String = rest.chars().take(j).collect();
-                    if wildcard_match(&needle, &cand) {
-                        return num(i as f64 + 1.0);
-                    }
-                }
-            } else if rest.to_lowercase().starts_with(&needle.to_lowercase()) {
-                return num(i as f64 + 1.0);
-            }
-        }
-        return Err(ErrorKind::Value);
+        // The earliest position where some prefix of the rest matches the pattern is the start
+        // of the leftmost match of the equivalent regex. Trying every start and every end with
+        // the glob matcher was O(n³·m): `SEARCH(REPT("?",16000)&"b",REPT("a",32000))` never
+        // finished. The regex engine runs in linear time.
+        let re = crate::limits::build_regex(&wildcard_regex(&needle), true)
+            .map_err(|_| ErrorKind::Value)?;
+        let from: usize = hc[..st].iter().map(|c| c.len_utf8()).sum();
+        return match re.find(&hay[from..]) {
+            Some(m) => num((st + hay[from..from + m.start()].chars().count()) as f64 + 1.0),
+            None => Err(ErrorKind::Value),
+        };
     }
     let nc = chars(&needle);
     if nc.len() > hc.len() {
@@ -462,6 +477,28 @@ fn find_impl(ctx: &mut EvalCtx, a: &[Ev], ci: bool) -> R {
     }
     Err(ErrorKind::Value)
 }
+/// An Excel wildcard pattern (`?`, `*`, `~` escapes) as an anchor-free regex, `.` matching
+/// newlines.
+fn wildcard_regex(pattern: &str) -> String {
+    let mut out = String::from("(?s)");
+    let mut it = pattern.chars().peekable();
+    while let Some(c) = it.next() {
+        match c {
+            '~' => match it.peek() {
+                Some(&n) if n == '*' || n == '?' || n == '~' => {
+                    out.push_str(&regex::escape(&n.to_string()));
+                    it.next();
+                }
+                _ => out.push_str(&regex::escape("~")),
+            },
+            '*' => out.push_str(".*?"),
+            '?' => out.push('.'),
+            c => out.push_str(&regex::escape(&c.to_string())),
+        }
+    }
+    out
+}
+
 fn find(ctx: &mut EvalCtx, a: &[Ev]) -> R {
     find_impl(ctx, a, false)
 }

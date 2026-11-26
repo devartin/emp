@@ -631,6 +631,9 @@ fn cum(ctx: &mut EvalCtx, a: &[Ev], interest: bool) -> R {
         return Err(ErrorKind::Num);
     }
     let p = pmt(r, n, pv_, 0.0, t)?;
+    // One step per period: charge them up front. Past 2^53 `per += 1.0` stops advancing, so
+    // without this an `end_period` of 1e300 looped forever.
+    ctx.tick((e - s + 1.0) as u64)?;
     let mut total = 0.0;
     let mut per = s;
     while per <= e {
@@ -717,6 +720,8 @@ fn ddb_fn(ctx: &mut EvalCtx, a: &[Ev]) -> R {
     if c < 0.0 || s < 0.0 || l <= 0.0 || per < 1.0 || per > l || factor <= 0.0 {
         return Err(ErrorKind::Num);
     }
+    // One step per period (see `cum`): a period of 1e300 used to loop forever.
+    ctx.tick(per.ceil() as u64)?;
     let mut book = c;
     let mut dep = 0.0;
     let mut p = 1.0;

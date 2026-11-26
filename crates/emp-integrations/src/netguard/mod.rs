@@ -875,7 +875,10 @@ mod tests {
             Reply::json(200, "{}"),
         ])
         .await;
-        let guard = guard_for(&["oauth2.googleapis.com", "www.googleapis.com"], server.addr());
+        let guard = guard_for(
+            &["oauth2.googleapis.com", "www.googleapis.com"],
+            server.addr(),
+        );
         let req = NetRequest::with_body(
             ConnectorId::Google,
             Method::Post,

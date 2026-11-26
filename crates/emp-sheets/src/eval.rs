@@ -491,7 +491,13 @@ impl<'a> EvalCtx<'a> {
     pub fn to_array(&mut self, ev: &Ev) -> Result<Array, ErrorKind> {
         match ev {
             Ev::Missing => Ok(Array::filled(1, 1, Value::Empty)),
-            Ev::V(Value::Array(a)) => Ok((**a).clone()),
+            Ev::V(Value::Array(a)) => {
+                // A deep copy: charge it. Lifting a function over an array argument copies its
+                // other array arguments once per element, so `INDEX(SEQUENCE(1e6),SEQUENCE(1e6))`
+                // was 10^12 uncharged copies.
+                self.tick(a.len() as u64 / 8 + 1)?;
+                Ok((**a).clone())
+            }
             Ev::V(v) => Ok(Array::filled(1, 1, v.clone())),
             Ev::R(a) => {
                 let a = self.clip(*a);

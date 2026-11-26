@@ -29,7 +29,6 @@ bip39 = { version = "2", default-features = false, features = ["std", "zeroize"]
 zstd = { version = "0.13", default-features = false }
 zxcvbn = { version = "3", default-features = false }
 unicode-normalization = "0.1"
-eff-wordlist = "1"
 
 [dev-dependencies]
 # Self dev-dependency: lets the integration tests in tests/ use the tiny `KdfParams::INSECURE_TEST` parameters.

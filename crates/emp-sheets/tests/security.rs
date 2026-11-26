@@ -76,9 +76,15 @@ fn broadcasting_is_bounded_before_allocation() {
 fn combinatorics_do_not_loop_for_huge_arguments() {
     // PERMUT used to loop k times (k ≈ 1e300, i.e. forever); COMBIN took seconds.
     assert_eq!(eval_on_second_sheet(&[], "=PERMUT(1E+300,1E+300)"), "#NUM!");
-    assert_eq!(eval_on_second_sheet(&[], "=PERMUT(1000000000,1000000000)"), "#NUM!");
+    assert_eq!(
+        eval_on_second_sheet(&[], "=PERMUT(1000000000,1000000000)"),
+        "#NUM!"
+    );
     assert_eq!(eval_on_second_sheet(&[], "=COMBIN(1E+15,1E+14)"), "#NUM!");
-    assert_eq!(eval_on_second_sheet(&[], "=COMBIN(1000000000,500000000)"), "#NUM!");
+    assert_eq!(
+        eval_on_second_sheet(&[], "=COMBIN(1000000000,500000000)"),
+        "#NUM!"
+    );
     assert_eq!(eval_on_second_sheet(&[], "=PERMUT(5,2)"), "20");
     assert_eq!(eval_on_second_sheet(&[], "=PERMUT(3,3)"), "6");
     assert_eq!(eval_on_second_sheet(&[], "=COMBIN(10,3)"), "120");
@@ -159,8 +165,12 @@ fn sparse_corner_cells_do_not_allocate_the_whole_grid() {
         r#"<sheetData><row r="1"><c r="A1"><v>1</v></c></row><row r="1048576"><c r="XFD1048576"><v>2</v></c></row></sheetData>"#,
     );
     let bytes = patch_xlsx(&one_sheet_xlsx(), &[("xl/worksheets/sheet1.xml", &xml)]);
-    let r = import_xlsx(&bytes, Arc::new(CacheHost::new()), &ImportOptions::default())
-        .expect("import");
+    let r = import_xlsx(
+        &bytes,
+        Arc::new(CacheHost::new()),
+        &ImportOptions::default(),
+    )
+    .expect("import");
     let s = r.workbook.sheets()[0].id;
     assert_eq!(r.workbook.value(s, 0, 0), Value::Number(1.0));
     assert_eq!(r.workbook.value(s, 1_048_575, 16_383), Value::Number(2.0));
@@ -172,8 +182,12 @@ fn cells_outside_the_grid_are_dropped_with_a_warning() {
         r#"<sheetData><row r="1"><c r="A1"><v>1</v></c><c r="XFE1"><v>2</v></c></row><row r="2000000"><c r="A2000000"><v>3</v></c></row></sheetData>"#,
     );
     let bytes = patch_xlsx(&one_sheet_xlsx(), &[("xl/worksheets/sheet1.xml", &xml)]);
-    let r = import_xlsx(&bytes, Arc::new(CacheHost::new()), &ImportOptions::default())
-        .expect("import");
+    let r = import_xlsx(
+        &bytes,
+        Arc::new(CacheHost::new()),
+        &ImportOptions::default(),
+    )
+    .expect("import");
     let s = r.workbook.sheets()[0].id;
     assert_eq!(r.workbook.value(s, 0, 0), Value::Number(1.0));
     assert!(
@@ -206,8 +220,12 @@ fn repeated_column_spans_do_not_multiply() {
     ));
     let bytes = patch_xlsx(&one_sheet_xlsx(), &[("xl/worksheets/sheet1.xml", &xml)]);
     let started = Instant::now();
-    let r = import_xlsx(&bytes, Arc::new(CacheHost::new()), &ImportOptions::default())
-        .expect("import");
+    let r = import_xlsx(
+        &bytes,
+        Arc::new(CacheHost::new()),
+        &ImportOptions::default(),
+    )
+    .expect("import");
     assert!(started.elapsed() < Duration::from_secs(20));
     let s = r.workbook.sheets()[0].id;
     assert_eq!(r.workbook.value(s, 0, 0), Value::Number(1.0));
@@ -245,7 +263,11 @@ fn entries_larger_than_declared_are_rejected() {
     let xml = sheet_xml(&format!("<sheetData>{rows}</sheetData>"));
     let mut bytes = patch_xlsx(&one_sheet_xlsx(), &[("xl/worksheets/sheet1.xml", &xml)]);
     lie_about_size(&mut bytes, "xl/worksheets/sheet1.xml", 1024);
-    let r = import_xlsx(&bytes, Arc::new(CacheHost::new()), &ImportOptions::default());
+    let r = import_xlsx(
+        &bytes,
+        Arc::new(CacheHost::new()),
+        &ImportOptions::default(),
+    );
     assert!(r.is_err(), "lying entry accepted");
 }
 
@@ -256,10 +278,18 @@ fn import_warnings_are_capped() {
         .collect();
     let xml = sheet_xml(&format!("<sheetData>{cells}</sheetData>"));
     let bytes = patch_xlsx(&one_sheet_xlsx(), &[("xl/worksheets/sheet1.xml", &xml)]);
-    let r = import_xlsx(&bytes, Arc::new(CacheHost::new()), &ImportOptions::default())
-        .expect("import");
+    let r = import_xlsx(
+        &bytes,
+        Arc::new(CacheHost::new()),
+        &ImportOptions::default(),
+    )
+    .expect("import");
     assert!(r.warnings.len() <= 201, "{} warnings", r.warnings.len());
-    assert!(r.warnings.last().is_some_and(|w| w.contains("more warning")));
+    assert!(
+        r.warnings
+            .last()
+            .is_some_and(|w| w.contains("more warning"))
+    );
 }
 
 #[test]
@@ -279,11 +309,124 @@ fn csv_export_protects_numbers_whose_format_renders_a_formula() {
         serde_json::from_value(serde_json::json!({ "numFmt": "$#,##0.00" })).expect("patch");
     w.set_style(s, &[emp_sheets::Rect::cell(0, 2)], &money)
         .expect("style");
-    assert!(w.display(s, 0, 0).starts_with('='), "{}", w.display(s, 0, 0));
+    assert!(
+        w.display(s, 0, 0).starts_with('='),
+        "{}",
+        w.display(s, 0, 0)
+    );
     let out = String::from_utf8(export_csv(&w, s, true).expect("csv")).expect("utf8");
     let first = out.lines().next().unwrap_or_default();
-    assert!(first.starts_with("\"'=cmd") || first.starts_with("'=cmd"), "{first}");
+    assert!(
+        first.starts_with("\"'=cmd") || first.starts_with("'=cmd"),
+        "{first}"
+    );
     // Plain negative numbers stay numbers.
     assert!(first.contains(",-5,"), "{first}");
     assert!(first.contains("-$1,234.50"), "{first}");
+}
+
+#[test]
+fn csv_records_with_huge_field_counts_are_bounded() {
+    use emp_sheets::io::csv::{import_csv, read_rows};
+    // One record of 20 million empty fields (20 MB): the csv crate kept a bound per field and we
+    // kept a String per field, ~650 MB for 20 MB of input (and proportionally more for 1 GiB).
+    let mut wide = vec![b','; 20_000_000];
+    wide.extend_from_slice(b"\nx,y\n");
+    let started = Instant::now();
+    let (_, rows) = read_rows(&wide, 10).expect("rows");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].len(), 16_384);
+    assert_eq!(rows[1], vec!["x".to_string(), "y".to_string()]);
+    let r = import_csv(
+        &wide,
+        "S",
+        Arc::new(CacheHost::new()),
+        &ImportOptions::default(),
+    )
+    .expect("import");
+    let s = r.workbook.sheets()[0].id;
+    assert_eq!(r.workbook.value(s, 1, 1), Value::text("y"));
+    assert!(started.elapsed() < Duration::from_secs(30));
+    // Quoting, embedded separators, CRLF and blank lines behave as before.
+    let (_, rows) = read_rows(b"a,\"b,\"\"c\"\"\"\r\n\r\n\n1,2\n", 10).expect("rows");
+    assert_eq!(
+        rows,
+        vec![
+            vec!["a".to_string(), "b,\"c\"".to_string()],
+            vec!["1".to_string(), "2".to_string()]
+        ]
+    );
+    let (_, rows) = read_rows(b"a,b", 10).expect("rows");
+    assert_eq!(rows, vec![vec!["a".to_string(), "b".to_string()]]);
+    let (_, rows) = read_rows(b"", 10).expect("rows");
+    assert!(rows.is_empty());
+}
+
+#[test]
+fn text_search_and_join_are_bounded() {
+    // SEARCH with wildcards tried every start × every end with a glob matcher (O(n³·m)).
+    let f = "=SEARCH(REPT(\"?\",16000)&\"b\",REPT(\"a\",32000))";
+    assert_eq!(eval_on_second_sheet(&[], f), "#VALUE!");
+    let f = "=SEARCH(REPT(\"*a\",10000)&\"b\",REPT(\"a\",32000))";
+    let v = eval_on_second_sheet(&[], f);
+    assert!(v.starts_with('#'), "{v}");
+    // Semantics are unchanged.
+    assert_eq!(eval_on_second_sheet(&[], "=SEARCH(\"B?D\",\"abcde\")"), "2");
+    assert_eq!(eval_on_second_sheet(&[], "=SEARCH(\"c*e\",\"abcde\")"), "3");
+    assert_eq!(eval_on_second_sheet(&[], "=SEARCH(\"~*\",\"a*b\")"), "2");
+    assert_eq!(eval_on_second_sheet(&[], "=SEARCH(\"B\",\"abcb\",3)"), "4");
+    assert_eq!(
+        eval_on_second_sheet(&[], "=SEARCH(\"É\",\"cafétéria\")"),
+        "4"
+    );
+    assert_eq!(
+        eval_on_second_sheet(&[], "=SEARCH(\"x\",\"abc\")"),
+        "#VALUE!"
+    );
+    // TEXTJOIN built the whole joined string (3 GB here) before checking its length.
+    let f = "=TEXTJOIN(REPT(\"x\",32000),TRUE,SEQUENCE(100000))";
+    assert_eq!(eval_on_second_sheet(&[], f), "#VALUE!");
+    assert_eq!(
+        eval_on_second_sheet(&[], "=TEXTJOIN(\"-\",TRUE,\"a\",\"\",\"b\")"),
+        "a-b"
+    );
+}
+
+#[test]
+fn period_and_holiday_loops_are_bounded() {
+    // `per += 1.0` stops advancing past 2^53: these looped forever (or for seconds).
+    assert_eq!(
+        eval_on_second_sheet(&[], "=DDB(1,0,1E+300,1E+300)"),
+        "#CALC!"
+    );
+    assert_eq!(
+        eval_on_second_sheet(&[], "=CUMIPMT(0.1,1E+300,1,1,1E+300,0)"),
+        "#CALC!"
+    );
+    assert!(eval_on_second_sheet(&[], "=CUMPRINC(0.1,1E+9,1,1,1E+9,0)").starts_with('#'),);
+    assert_eq!(eval_on_second_sheet(&[], "=DDB(2400,300,10,2)"), "384");
+    // A million holidays used to be scanned once per day and once per holiday.
+    assert_eq!(
+        eval_on_second_sheet(&[], "=NETWORKDAYS(1,2958465,SEQUENCE(1000000))"),
+        eval_on_second_sheet(&[], "=NETWORKDAYS(1000001,2958465)")
+    );
+    assert_eq!(
+        eval_on_second_sheet(
+            &[],
+            "=NETWORKDAYS(DATE(2026,1,1),DATE(2026,1,31),{46023,46023,46030})"
+        ),
+        "20"
+    );
+}
+
+#[test]
+fn lifted_array_copies_are_charged() {
+    // Each of the million INDEX calls deep-copied the million-element first argument without
+    // charging the operation budget, so the recalculation never paused.
+    let v = eval_on_second_sheet(&[], "=SUM(INDEX(SEQUENCE(1000000),SEQUENCE(1000000)))");
+    assert_eq!(v, "#CALC!");
+    assert_eq!(
+        eval_on_second_sheet(&[], "=SUM(INDEX(SEQUENCE(10),SEQUENCE(3)))"),
+        "6"
+    );
 }

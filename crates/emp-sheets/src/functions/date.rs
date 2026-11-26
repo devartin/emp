@@ -561,6 +561,11 @@ fn holidays(ctx: &mut EvalCtx, ev: Option<&Ev>) -> Result<Vec<f64>, ErrorKind> {
                     }
                 }
             }
+            // Sorted and unique so lookups are binary searches: with a million holidays the
+            // linear `contains` per day (and per holiday) never finished.
+            ctx.tick(out.len() as u64 / 8 + 1)?;
+            out.sort_by(f64::total_cmp);
+            out.dedup();
             Ok(out)
         }
     }
@@ -568,7 +573,7 @@ fn holidays(ctx: &mut EvalCtx, ev: Option<&Ev>) -> Result<Vec<f64>, ErrorKind> {
 
 fn is_workday(s: f64, mask: &[bool; 7], hol: &[f64], d1904: bool) -> bool {
     let w = (weekday0(s, d1904) + 6) % 7; // Monday = 0
-    !mask[w as usize] && !hol.contains(&s)
+    !mask[w as usize] && hol.binary_search_by(|h| h.total_cmp(&s)).is_err()
 }
 
 fn netdays(ctx: &mut EvalCtx, s: f64, e: f64, mask: [bool; 7], hol: Vec<f64>) -> R {
@@ -586,11 +591,10 @@ fn netdays(ctx: &mut EvalCtx, s: f64, e: f64, mask: [bool; 7], hol: Vec<f64>) ->
         }
         d += 1.0;
     }
-    let mut seen = Vec::new();
+    // `hol` is sorted and unique (see `holidays`).
     for h in hol {
-        if h >= lo && h <= hi && !seen.contains(&h) && is_workday(h, &mask, &[], d1904) {
+        if h >= lo && h <= hi && is_workday(h, &mask, &[], d1904) {
             count -= 1.0;
-            seen.push(h);
         }
     }
     num(count * sign)

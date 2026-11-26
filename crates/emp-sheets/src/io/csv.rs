@@ -62,7 +62,12 @@ pub fn decode(bytes: &[u8]) -> (String, &'static str) {
 
 /// Pick the delimiter among `, ; \t |` with the most consistent column count over the first 20 lines.
 pub fn sniff_delimiter(text: &str) -> char {
-    let sample: String = text.lines().take(20).collect::<Vec<_>>().join("\n");
+    // Sniff on a bounded prefix: twenty "lines" can be the whole file when it has no newline.
+    let mut end = text.len().min(64 * 1024);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let sample: String = text[..end].lines().take(20).collect::<Vec<_>>().join("\n");
     let mut best = (',', 0usize, 0usize); // (delim, consistent lines, columns)
     for d in [',', ';', '\t', '|'] {
         let mut rdr = ::csv::ReaderBuilder::new()
@@ -120,18 +125,19 @@ pub fn read_rows(
     }
     let (text, enc) = decode(bytes);
     let delim = sniff_delimiter(&text);
-    let mut rdr = ::csv::ReaderBuilder::new()
-        .delimiter(delim as u8)
-        .has_headers(false)
-        .flexible(true)
-        .from_reader(text.as_bytes());
-    let mut rows = Vec::new();
-    for rec in rdr.records() {
-        let r = rec.map_err(|e| SheetError::Io(e.to_string()))?;
-        rows.push(r.iter().map(|s| s.to_string()).collect());
-        if rows.len() >= max_rows {
-            break;
+    let mut records = Records::new(text.as_bytes(), delim as u8);
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut fields = 0usize;
+    while rows.len() < max_rows
+        && let Some(r) = records.next_record()
+    {
+        fields += r.len();
+        if fields > CSV_MAX_TOTAL_FIELDS {
+            return Err(SheetError::TooLarge(format!(
+                "the file has more than {CSV_MAX_TOTAL_FIELDS} fields"
+            )));
         }
+        rows.push(r);
     }
     Ok((
         CsvSniff {
@@ -176,6 +182,71 @@ fn looks_numeric(s: &str) -> bool {
         })
 }
 
+/// Most fields one record keeps (the grid's width); later fields are dropped.
+pub const CSV_MAX_FIELDS_PER_RECORD: usize = crate::limits::MAX_COLS as usize;
+/// Most bytes one field keeps; the rest of the field is dropped.
+pub const CSV_MAX_FIELD_BYTES: usize = 1 << 20;
+/// Most fields [`read_rows`] returns in total.
+pub const CSV_MAX_TOTAL_FIELDS: usize = 25_000_000;
+
+/// A streaming CSV record reader with bounded memory per record.
+///
+/// The `csv` crate's records keep every field of a record (an 8-byte bound each, plus the
+/// strings we built from them), so a single line of a billion commas would need tens of
+/// gigabytes. This reader keeps at most [`CSV_MAX_FIELDS_PER_RECORD`] fields of at most
+/// [`CSV_MAX_FIELD_BYTES`] bytes and skips the rest. Quoting and blank-line handling are those
+/// of `csv_core`, which the `csv` crate itself uses.
+pub(crate) struct Records<'a> {
+    rdr: csv_core::Reader,
+    input: &'a [u8],
+    out: Vec<u8>,
+    field: Vec<u8>,
+    done: bool,
+}
+
+impl<'a> Records<'a> {
+    pub(crate) fn new(input: &'a [u8], delimiter: u8) -> Self {
+        Records {
+            rdr: csv_core::ReaderBuilder::new().delimiter(delimiter).build(),
+            input,
+            out: vec![0; 64 * 1024],
+            field: Vec::new(),
+            done: false,
+        }
+    }
+
+    /// The next record, or `None` at the end of the input.
+    pub(crate) fn next_record(&mut self) -> Option<Vec<String>> {
+        use csv_core::ReadFieldResult;
+        if self.done {
+            return None;
+        }
+        let mut rec: Vec<String> = Vec::new();
+        loop {
+            let (res, nin, nout) = self.rdr.read_field(self.input, &mut self.out);
+            self.input = &self.input[nin..];
+            let room = CSV_MAX_FIELD_BYTES.saturating_sub(self.field.len());
+            self.field.extend_from_slice(&self.out[..nout.min(room)]);
+            match res {
+                ReadFieldResult::InputEmpty | ReadFieldResult::OutputFull => {}
+                ReadFieldResult::Field { record_end } => {
+                    if rec.len() < CSV_MAX_FIELDS_PER_RECORD {
+                        rec.push(String::from_utf8_lossy(&self.field).into_owned());
+                    }
+                    self.field.clear();
+                    if record_end {
+                        return Some(rec);
+                    }
+                }
+                ReadFieldResult::End => {
+                    self.done = true;
+                    return (!rec.is_empty()).then_some(rec);
+                }
+            }
+        }
+    }
+}
+
 fn dangerous(s: &str) -> bool {
     matches!(s.chars().next(), Some('=' | '+' | '-' | '@' | '\t' | '\r'))
 }
@@ -211,24 +282,19 @@ fn import_inner(
     let name = crate::address::sanitize_sheet_name(sheet_name);
     let sid = wb.push_sheet(&name);
     let mut warnings = Vec::new();
-    let mut rdr = ::csv::ReaderBuilder::new()
-        .delimiter(delim as u8)
-        .has_headers(false)
-        .flexible(true)
-        .from_reader(text.as_bytes());
+    let mut records = Records::new(text.as_bytes(), delim as u8);
     let mut cells = 0usize;
     let mut formula_cells = 0usize;
     let mut out: Vec<(u32, u32, Cell)> = Vec::new();
-    for (r, rec) in rdr.records().enumerate() {
+    for (r, rec) in std::iter::from_fn(|| records.next_record()).enumerate() {
         if r % 10_000 == 0 {
             opts.check_cancel()?;
         }
-        let rec = rec.map_err(|e| SheetError::Io(e.to_string()))?;
         if r as u32 >= crate::limits::MAX_ROWS {
             warnings.push("Rows beyond 1,048,576 were dropped.".into());
             break;
         }
-        for (c, field) in rec.iter().enumerate() {
+        for (c, field) in rec.iter().map(String::as_str).enumerate() {
             if c as u32 >= crate::limits::MAX_COLS || field.is_empty() {
                 continue;
             }

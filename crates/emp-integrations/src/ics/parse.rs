@@ -843,7 +843,8 @@ END:VCALENDAR\r\n";
         let _ = ev.effective_end();
         let _ = ev.length();
         let from = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
-        let _ = super::super::expand_event(ev, from, DateTime::<Utc>::MAX_UTC, &IcsLimits::default());
+        let _ =
+            super::super::expand_event(ev, from, DateTime::<Utc>::MAX_UTC, &IcsLimits::default());
     }
 
     #[test]

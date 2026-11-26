@@ -246,7 +246,9 @@ pub fn expand_event(
                 // ~300 million steps. Refuse rules whose candidate count is out of reach.
                 let first = start.to_utc(None);
                 let span_end = window_end.min(horizon);
-                let span_start = window_start.checked_sub_signed(length).unwrap_or(window_start);
+                let span_start = window_start
+                    .checked_sub_signed(length)
+                    .unwrap_or(window_start);
                 let estimate =
                     candidate_estimate(&r, first, span_start, span_end, limits.max_instances);
                 if estimate > MAX_RULE_CANDIDATES {
@@ -503,7 +505,8 @@ mod tests {
             assert!(x.occurrences.len() <= 5_000, "{rule}");
             if rule.starts_with("FREQ=SECONDLY") || rule.starts_with("FREQ=DAILY;BYHOUR") {
                 assert!(x.warning.is_some(), "{rule} should be refused");
-            } else if rule.starts_with("FREQ=HOURLY") || rule.starts_with("FREQ=MINUTELY;INTERVAL") {
+            } else if rule.starts_with("FREQ=HOURLY") || rule.starts_with("FREQ=MINUTELY;INTERVAL")
+            {
                 assert!(x.warning.is_none(), "{rule}: {:?}", x.warning);
                 assert!(!x.occurrences.is_empty(), "{rule}");
             }

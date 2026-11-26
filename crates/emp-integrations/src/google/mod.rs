@@ -218,7 +218,9 @@ mod tests {
         for dots in ["", ".", "..", "..."] {
             assert!(path_segment(dots).is_err(), "{dots:?}");
         }
-        assert!(crate::google::drive::metadata_request(&crate::SecretString::new("t"), "..").is_err());
+        assert!(
+            crate::google::drive::metadata_request(&crate::SecretString::new("t"), "..").is_err()
+        );
     }
 
     #[tokio::test]

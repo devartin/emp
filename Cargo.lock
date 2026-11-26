@@ -1336,15 +1336,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
-name = "eff-wordlist"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd8bc86f92f53c5f70e170794b075ecf275126dfcea3c814a4dbf3bbcbb0612b"
-dependencies = [
- "rand 0.8.8",
-]
-
-[[package]]
 name = "either"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1419,7 +1410,6 @@ dependencies = [
  "argon2",
  "bip39",
  "chacha20poly1305",
- "eff-wordlist",
  "emp-crypto",
  "getrandom 0.2.17",
  "hex",
@@ -1493,6 +1483,7 @@ dependencies = [
  "calamine",
  "chrono",
  "csv",
+ "csv-core",
  "quick-xml 0.38.4",
  "regex",
  "rust_xlsxwriter",

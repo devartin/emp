@@ -5,10 +5,10 @@ use super::{ImportOptions, prescan_zip, read_entry};
 use crate::address::{CellKey, Rect, sanitize_sheet_name};
 use crate::functions::is_supported;
 use crate::host::Host;
+use crate::limits::{MAX_COLS, MAX_ROWS};
 use crate::value::{ErrorKind, Value};
 use crate::workbook::sheet::{Cell, CellInput};
 use crate::workbook::{DefinedName, SheetError, Workbook, is_valid_name};
-use crate::limits::{MAX_COLS, MAX_ROWS};
 use calamine::{Data, DataType, Reader, Xlsx};
 use std::collections::BTreeSet;
 use std::io::Cursor;
@@ -168,7 +168,7 @@ fn import_inner(
                         opts.max_cells
                     )));
                 }
-                if total_cells % 65_536 == 0 {
+                if total_cells.is_multiple_of(65_536) {
                     opts.check_cancel()?;
                 }
                 let value = Data::from(cell.get_value().clone());
