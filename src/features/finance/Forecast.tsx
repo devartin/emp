@@ -7,12 +7,12 @@ import { useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { Id } from "@/backend/types";
 import { FanChart } from "@/charts/Fan";
-import { Badge } from "@/ui/Badge";
+import { Amount } from "@/ui/Amount";
 import { Segmented } from "@/ui/Segmented";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { dayLabel, fmtMoney, todayIso, fmtWhole } from "./shared/format";
+import { dayLabel, fmtMoney, todayIso, fmtWhole, toMoney } from "./shared/format";
 import { useAsync, useDbChanged } from "./shared/hooks";
 import { Section } from "./shared/ui";
 import { useLedgerCtx } from "./MoneyHQ/ledger";
@@ -69,7 +69,7 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
             <div className="text-body-sm font-semibold">
               {checking?.name} may dip to <Sensitive>{fmtMoney(breach.amount)}</Sensitive> around {dayLabel(breach.date)}
             </div>
-            <div className="text-caption" style={{ fontWeight: 400 }}>
+            <div className="text-caption">
               Below your {fmtWhole(fc.data?.threshold ?? 0)} low-balance threshold. Biggest outflows before then: {breach.topOutflows.join(", ")}.
             </div>
           </div>
@@ -92,7 +92,7 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
           <div className="fh-fan" key={`${horizon}:${fc.data ? 1 : 0}`} data-reveal="">
           <FanChart data={data} height={300} xFormat={(v) => dayLabel(String(v))} target={fc.data?.threshold !== undefined && p10min !== null && p10min < fc.data.threshold * 4 + 1500 ? { value: fc.data.threshold, label: "Low-balance threshold" } : undefined} loading={fc.loading && !fc.data} summaryLabel="Projected checking balance" />
           </div>
-          <div className="flex items-center gap-5 mt-3 text-caption text-tertiary" style={{ fontWeight: 400 }}>
+          <div className="flex items-center gap-5 mt-3 text-caption text-tertiary">
             <span className="inline-flex items-center gap-1.5"><i className="fh-key" style={{ background: "var(--text-primary)" }} />Actual</span>
             <span className="inline-flex items-center gap-1.5"><i className="fh-key" style={{ background: "var(--accent-solid)", height: 2 }} />Median projection</span>
             <span className="inline-flex items-center gap-1.5"><i className="fh-key fh-key-band" />Likely range (p10–p90)</span>
@@ -101,7 +101,7 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
         <div className="fh-span-4 flex flex-col gap-3">
           <Fact label={`In ${horizon} days`} value={fc.data ? end : null} sub={checking ? `from ${fmtWhole(checking.balance)} today` : ""} />
           <Fact label="Lowest point" value={fc.data ? min : null} sub={minIdx >= 0 && fc.data ? `around ${dayLabel(fc.data.t[minIdx])}` : ""} />
-          <Fact label="Cautious low (p10)" value={p10min} sub={p10min !== null && fc.data?.threshold !== undefined ? (p10min > fc.data.threshold ? "stays above your threshold" : "touches your threshold") : ""} icon={p10min !== null && fc.data?.threshold !== undefined && p10min > fc.data.threshold ? <CheckCircle2 size={16} className="text-gain" /> : undefined} />
+          <Fact label="Cautious low (p10)" value={p10min} sub={p10min !== null && fc.data?.threshold !== undefined ? (p10min > fc.data.threshold ? "stays above your threshold" : "touches your threshold") : ""} icon={p10min !== null && fc.data?.threshold !== undefined && p10min > fc.data.threshold ? <CheckCircle2 size={16} absoluteStrokeWidth strokeWidth={1.25} className="text-secondary" /> : undefined} />
         </div>
       </div>
       <Section title="Scheduled in this window" subtitle={checking ? `From the Recurring database, for ${checking.name}` : undefined} actions={<CalendarRange size={16} className="text-tertiary" />} pad={false}>
@@ -113,9 +113,10 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
                 <b>{Number(f.day.slice(8, 10))}</b>
               </span>
               <span className="flex-1 truncate text-body-sm">{f.name}</span>
-              {f.amount > 0 ? <Badge tone="gain">Income</Badge> : null}
-              <span className="text-body-sm font-semibold tabular w-[110px] text-right" style={{ color: f.amount > 0 ? "var(--gain-text)" : undefined }}>
-                <Sensitive>{fmtMoney(f.amount, undefined, { signed: f.amount > 0 })}</Sensitive>
+              {f.amount > 0 ? <span className="text-caption text-tertiary">Income</span> : null}
+              {/* A scheduled flow is a ledger figure: ink, a true minus, cents in tertiary. Not gain/loss colour. */}
+              <span className="w-[110px] text-right">
+                <Amount value={toMoney(f.amount)} role="row" align="end" />
               </span>
             </div>
           ))}

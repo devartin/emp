@@ -21,10 +21,10 @@ import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { addMonths, assignColors, dayLabel, fmtPct, monthLabel, num, relDays, toMoney, todayIso, fmtWhole } from "../shared/format";
-import { allSpending, budgetLeft, budgetSpent, keptFromSankey } from "../shared/definitions";
+import { allSpending, budgetLeft, budgetSpent, figureLabel, keptFromSankey } from "../shared/definitions";
 import { isSavingGroup, spendingBudget } from "../shared/figures";
 import { Figure } from "../shared/Figure";
-import { loadDebtPlanChoice, STRATEGY_LABEL, useDebtPlanChoice } from "../shared/debtPlanChoice";
+import { debtFreeKind, loadDebtPlanChoice, STRATEGY_LABEL, useDebtPlanChoice } from "../shared/debtPlanChoice";
 import { useAsync, useDbChanged, useScrubIdx, useScrubStore, type ScrubStore } from "../shared/hooks";
 import { InsightCard, Quiet, Section } from "../shared/ui";
 import { localInsights } from "./insights";
@@ -233,6 +233,7 @@ export function useDebtFree(debtFreeDate: string | undefined, loaded: boolean): 
   const saved = useDebtPlanChoice(instanceId);
   useEffect(() => void loadDebtPlanChoice(instanceId), [instanceId]);
   const choice = saved ?? undefined;
+  const kind = debtFreeKind(saved);
   const debts = l.loading ? [] : debtInputs(l.accounts);
   const key = JSON.stringify({ debts: debts.map((d) => [d.balance, d.aprPct, d.minPayment]), choice });
   const plan = useAsync(
@@ -244,8 +245,8 @@ export function useDebtFree(debtFreeDate: string | undefined, loaded: boolean): 
     [key],
     { enabled: !l.loading },
   );
-  if (!loaded || l.loading || saved === undefined) return { kind: choice ? "plan" : "minimum", month: undefined, detail: "" };
-  if (!debts.length) return { kind: choice ? "plan" : "minimum", month: "", detail: "" };
+  if (!loaded || l.loading || saved === undefined) return { kind, month: undefined, detail: "" };
+  if (!debts.length) return { kind, month: "", detail: "" };
   if (choice) {
     const p = plan.data;
     const detail = `${STRATEGY_LABEL[choice.strategy]} · ${choice.extra > 0 ? `${fmtWhole(choice.extra)}/mo extra` : "no extra"}`;
@@ -271,7 +272,7 @@ function SideMetrics() {
   const rate = ov.savingsRate3m;
   const cur = ov.netWorth.currency;
   // While the scenario is still loading the label names no scenario (it would otherwise guess "at minimum payments").
-  const dfLabel = debtFree.month === undefined ? "Debt-free" : debtFree.kind === "plan" ? "Debt-free with your plan" : "Debt-free at minimum payments";
+  const dfLabel = debtFree.month === undefined ? "Debt-free" : figureLabel(debtFree.kind === "plan" ? "debtFree.plan" : "debtFree.minimum");
   return (
     <div className="fh-metrics flex flex-col -mt-3">
       {tba !== null ? (

@@ -15,7 +15,7 @@ import { notify } from "@/stores/toasts";
 import { useQuotes } from "@/stores/market";
 import { Amount } from "@/ui/Amount";
 import { Button } from "@/ui/Button";
-import { DeltaPill, GainLoss } from "@/ui/DeltaPill";
+import { Delta } from "@/ui/Delta";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Segmented } from "@/ui/Segmented";
@@ -27,7 +27,8 @@ import { Figure } from "../finance/shared/Figure";
 import { figureLabel, periodReturn, portfolioParts, rangeYears } from "../finance/shared/definitions";
 import { fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney, fmtWhole } from "../finance/shared/format";
 import { useAsync, useScrubIdx, useScrubStore, type ScrubStore } from "../finance/shared/hooks";
-import { Disclaimer, HubPage, InsightCard, Quiet, Section } from "../finance/shared/ui";
+import { Disclaimer, HubPage, InsightCard, Quiet, Section, Signed } from "../finance/shared/ui";
+import { baseCurrency } from "../finance/shared/currency";
 import { HeroMoney, MetricCard } from "../finance/MoneyHQ/widgets";
 import { ticker } from "../markets/data";
 import { CLASS_ORDER, usePortfolioSummary } from "./data";
@@ -101,7 +102,7 @@ export default function PortfolioDashboard({ instanceId, tab }: PortfolioDashboa
       tabs={tabs}
       tab={current}
       onTab={go}
-      footer={<Disclaimer>Example starting points, not recommendations. Ultra Note never places trades. Only ticker symbols leave this device — never quantities, cost basis, account names or balances.</Disclaimer>}
+      footer={<Disclaimer>Example starting points, not recommendations. Ultra Note never places trades. Only ticker symbols leave this device, never quantities, cost basis, account names or balances.</Disclaimer>}
     >
       <Suspense fallback={<Skeleton height={420} radius={10} />}>
         {current === "overview" ? <Overview instanceId={instanceId} summary={summary.data} go={go} /> : null}
@@ -131,7 +132,7 @@ function Overview({ instanceId, summary: s, go }: { instanceId: Id; summary?: Po
       <div className="fh-span-4 flex flex-col gap-3">
         <Kpi
           label="Unrealised gain"
-          value={s ? <GainLoss value={num(s.unrealized.amount)}><Figure id="pf.unrealised" inputs={[{ label: "Holdings value", value: fmtWhole(parts?.holdings ?? 0, { currency: s.totalValue.currency }) }, { label: "Cost basis", value: fmtWhole(parts?.cost ?? 0, { currency: s.totalValue.currency }) }, { label: "Gain on cost", value: fmtPct(s.unrealizedPct, 1, true), sensitive: false }]}><Sensitive>{fmtWhole(s.unrealized.amount, { signed: true, currency: s.unrealized.currency })}</Sensitive></Figure></GainLoss> : null}
+          value={s ? <Signed value={num(s.unrealized.amount)}><Figure id="pf.unrealised" inputs={[{ label: "Holdings value", value: fmtWhole(parts?.holdings ?? 0, { currency: s.totalValue.currency }) }, { label: "Cost basis", value: fmtWhole(parts?.cost ?? 0, { currency: s.totalValue.currency }) }, { label: "Gain on cost", value: fmtPct(s.unrealizedPct, 1, true), sensitive: false }]}><Sensitive>{fmtWhole(s.unrealized.amount, { signed: true, currency: s.unrealized.currency })}</Sensitive></Figure></Signed> : null}
           sub={s ? `${fmtPct(s.unrealizedPct, 1, true)} on cost` : ""}
         />
         {/* Three returns, three names (definitions.ts): since first buy (annualised), this year (not annualised), and
@@ -248,7 +249,7 @@ function HeroReadout({ scrub, data, summary: s, xf }: { scrub: ScrubStore; data:
   const growth = cur && first ? cur.value - first.value - (cur.contributions - first.contributions) : null;
   return (
     <div>
-      <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
+      <div className="text-caption text-secondary font-medium">
         {figureLabel("pf.value")}
       </div>
       <div className="mt-1 h-[48px] flex items-center">
@@ -260,26 +261,17 @@ function HeroReadout({ scrub, data, summary: s, xf }: { scrub: ScrubStore; data:
           <Skeleton width={220} height={38} />
         )}
       </div>
-      <div className="flex items-center gap-2 h-6 mt-1">
+      <div className="flex items-center gap-2 h-6 mt-1 text-caption whitespace-nowrap">
         {cur && first ? (
           <>
-            <span className="text-caption tabular font-semibold whitespace-nowrap" style={{ color: (growth ?? 0) >= 0 ? "var(--gain-text)" : "var(--loss-text)" }} data-sensitive="">
-              <RollingNumber value={growth ?? 0} format={(n) => fmtWhole(Math.round(n), { signed: true })} scrubbing countUp={false} sensitive /> market growth
-            </span>
-            <span className="text-caption text-tertiary whitespace-nowrap" style={{ fontWeight: 400 }}>
+            {/* One sign convention for the whole line: the drawn arrow carries the direction, the figures are unsigned. */}
+            <Delta money={{ amount: String(Math.round(growth ?? 0)), currency: s?.totalValue.currency ?? baseCurrency() }} label="market growth" />
+            <span className="text-tertiary">
               since {xf(first.t)} · {fmtFull(cur.t)}
             </span>
           </>
         ) : s ? (
-          <>
-            <DeltaPill value={s.dayChangePct} digits={2} />
-            <span className="text-caption tabular font-semibold" style={{ color: num(s.dayChange.amount) >= 0 ? "var(--gain-text)" : "var(--loss-text)" }}>
-              <Sensitive>{fmtWhole(s.dayChange.amount, { signed: true, currency: s.dayChange.currency })}</Sensitive>
-            </span>
-            <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>
-              today
-            </span>
-          </>
+          <Delta money={s.dayChange} percent={s.dayChangePct} digits={2} label="today" />
         ) : null}
       </div>
     </div>
@@ -319,12 +311,15 @@ function Allocation({ summary: s, onRebalance }: { summary?: PortfolioSummary; o
     const list = s.allocation.slice().sort((a, b) => CLASS_ORDER.indexOf(a.assetClass) - CLASS_ORDER.indexOf(b.assetClass));
     return list.map((x) => ({ ...x, cls: x.assetClass }));
   }, [s]);
-  const outside = rows.filter((r) => r.status === "outside_band").length;
+  // The summary names the classes it counts, so the count can be checked against the coloured rows (some of which can
+  // sit below the fold): one rule (`status`, from the backend's band test) drives both.
+  const outsideRows = rows.filter((r) => r.status === "outside_band");
+  const outside = outsideRows.length;
   const [active, setActive] = useState<string | null>(null);
   return (
     <Section
       title="Allocation vs target"
-      subtitle={s ? (outside ? `${outside} ${outside === 1 ? "class is" : "classes are"} outside the band · max drift ${fmtPp(s.maxDrift)}` : "Every class is within its band") : "\u00a0"}
+      subtitle={s ? (outside ? `Outside the band: ${outsideRows.map((r) => r.cls).join(", ")}` : "Every class is within its band") : "\u00a0"}
       actions={
         <Button size="xs" variant={outside ? "primary" : "ghost"} iconRight={ChevronRight} onClick={onRebalance}>
           Rebalance
@@ -344,7 +339,7 @@ function Allocation({ summary: s, onRebalance }: { summary?: PortfolioSummary; o
               outside: r.status === "outside_band",
               note: (
                 <span className="tabular">
-                  {r.current.toFixed(1)}% now · {r.target.toFixed(1)}% target
+                  {fmtPct(r.current / 100, 1)} now · {fmtPct(r.target / 100, 1)} target{r.status === "outside_band" ? " · outside the band" : ""}
                 </span>
               ),
             }))}
@@ -353,7 +348,7 @@ function Allocation({ summary: s, onRebalance }: { summary?: PortfolioSummary; o
             active={active}
             onActive={setActive}
           />
-          <div className="text-caption text-tertiary mt-3">Bars show drift from target in percentage points; amber is outside the band (±5 pp or 25% of target).</div>
+          <div className="text-caption text-tertiary mt-3">Drift from target in points. A class is outside the band when it drifts more than 5 pts or 25% of its target; those rows are marked.</div>
         </div>
       )}
     </Section>
@@ -389,10 +384,9 @@ function TopHoldings({ instanceId, summary: s }: { instanceId: Id; summary?: Por
                 <tr key={h.symbol} data-clickable onClick={() => navigate({ t: "app", instanceId, tab: `holding:${h.symbol}` })}>
                   <td>
                     <div className="flex items-center gap-3">
-                      <span className="pf-ticker-chip">{ticker(h.symbol).slice(0, 4)}</span>
                       <span className="min-w-0">
                         <span className="block font-medium">{ticker(h.symbol)}</span>
-                        <span className="block text-caption text-tertiary truncate max-w-[220px]" style={{ fontWeight: 400 }}>
+                        <span className="block text-caption text-tertiary truncate max-w-[220px]">
                           {h.name} · <Sensitive>{fmtQty(h.qty)}</Sensitive> sh
                         </span>
                       </span>
@@ -403,14 +397,14 @@ function TopHoldings({ instanceId, summary: s }: { instanceId: Id; summary?: Por
                       {fmtPrice(price)}
                     </PriceFlash>
                   </td>
-                  <td className="num">{q ? <GainLoss value={q.changePct}>{q.changePct >= 0 ? "+" : "−"}{Math.abs(q.changePct * 100).toFixed(2)}%</GainLoss> : "—"}</td>
+                  <td className="num">{q ? <Signed value={q.changePct}>{fmtPct(q.changePct, 2, true)}</Signed> : "—"}</td>
                   <td className="num font-medium">
                     <Amount value={toMoney(Math.round((q ? q.price * num(h.qty) : num(h.value.amount)) * 100) / 100)} align="end" noCents />
                   </td>
                   <td className="num">
-                    <GainLoss value={num(h.gain.amount)}>
+                    <Signed value={num(h.gain.amount)}>
                       <Sensitive align="end">{fmtWhole(h.gain.amount, { signed: true, currency: h.gain.currency })}</Sensitive>
-                    </GainLoss>
+                    </Signed>
                     <span className="text-tertiary text-caption ml-1.5">{fmtPct(h.gainPct, 0, true)}</span>
                   </td>
                   <td className="num">

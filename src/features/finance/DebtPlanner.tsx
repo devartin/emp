@@ -28,7 +28,7 @@ import { Quiet, Section } from "./shared/ui";
 import { debtInputs, debtPlanStart, useLedgerCtx } from "./MoneyHQ/ledger";
 import { useMoney } from "./MoneyHQ/MoneyHQ";
 import { Figure } from "./shared/Figure";
-import { loadDebtPlanChoice, saveDebtPlanChoice, useDebtPlanChoice } from "./shared/debtPlanChoice";
+import { choiceToSave, DEFAULT_DEBT_PLAN, loadDebtPlanChoice, saveDebtPlanChoice, useDebtPlanChoice } from "./shared/debtPlanChoice";
 
 interface DebtRow {
   key: string;
@@ -50,8 +50,8 @@ export default function DebtPlanner() {
   const saved = useDebtPlanChoice(instanceId);
   useEffect(() => void loadDebtPlanChoice(instanceId), [instanceId]);
   const [debts, setDebts] = useState<DebtRow[] | null>(null);
-  const [extra, setExtra] = useState(saved?.extra ?? 200);
-  const [strategy, setStrategy] = useState<DebtStrategy>(saved?.strategy ?? "avalanche");
+  const [extra, setExtra] = useState(saved?.extra ?? DEFAULT_DEBT_PLAN.extra);
+  const [strategy, setStrategy] = useState<DebtStrategy>(saved?.strategy ?? DEFAULT_DEBT_PLAN.strategy);
   // The saved choice arrives from the vault: start from it once, unless the user has already changed something.
   const interacted = useRef(false);
   useEffect(() => {
@@ -103,7 +103,9 @@ export default function DebtPlanner() {
     const ex = next.extra ?? extra;
     if (next.strategy) setStrategy(next.strategy);
     if (next.extra !== undefined) setExtra(next.extra);
-    if (isLedger && st !== "custom") void saveDebtPlanChoice(instanceId, { strategy: st, extra: ex });
+    // Only a real edit is written (choiceToSave): opening, computing, or committing what was already shown saves nothing.
+    const c = choiceToSave(saved, { strategy: st, extra: ex }, isLedger);
+    if (c) void saveDebtPlanChoice(instanceId, c);
   };
   const isYourPlan = isLedger && !!saved && saved.strategy === strategy && saved.extra === extra;
 
@@ -194,7 +196,7 @@ export default function DebtPlanner() {
                   <span className="flex-1 min-w-0 text-left">
                     <span className="flex items-center gap-1.5 text-body-sm font-semibold">
                       {s.title}
-                      {best === s.id ? <Badge tone="gain">Least interest</Badge> : null}
+                      {best === s.id ? <Badge tone="neutral">Least interest</Badge> : null}
                     </span>
                     <span className="block text-caption text-tertiary truncate" style={{ fontWeight: 400 }}>
                       {s.blurb}
@@ -225,8 +227,8 @@ export default function DebtPlanner() {
               value={sel ? isYourPlan ? <Figure id="debtFree.plan" inputs={[{ label: "Strategy", value: STRATS.find((x) => x.id === strategy)?.title ?? strategy, sensitive: false }, { label: "Extra a month", value: fmtWhole(extra) }, { label: "Months", value: String(sel.months), sensitive: false }]}><SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /></Figure> : <SlideText text={monthLabel(sel.payoffDate)} order={sel.months} /> : "—"}
               sub={sel ? `${STRATS.find((x) => x.id === strategy)?.title ?? ""} · ${extra > 0 ? `${fmtWhole(extra)}/mo extra` : "no extra"} · ${sel.months} months` : ""}
             />
-            <BigFact label="Interest saved" value={sel ? <RollingNumber value={num(sel.interestSavedVsMin)} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive /> : "—"} sub="vs minimums only" good sensitive />
-            <BigFact label="Months sooner" value={sel && minimum ? <RollingNumber value={Math.max(0, minimum.months - sel.months)} format={(n) => String(Math.round(n))} countUp={false} /> : "—"} sub={minimum ? `Debt-free at minimum payments: ${minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)}` : ""} good />
+            <BigFact label="Interest saved" value={sel ? <RollingNumber value={num(sel.interestSavedVsMin)} format={(n) => fmtWhole(Math.round(n))} countUp={false} sensitive /> : "—"} sub="vs minimums only" sensitive />
+            <BigFact label="Months sooner" value={sel && minimum ? <RollingNumber value={Math.max(0, minimum.months - sel.months)} format={(n) => String(Math.round(n))} countUp={false} /> : "—"} sub={minimum ? `Debt-free at minimum payments: ${minimum.months >= 600 ? "never" : monthLabel(minimum.payoffDate)}` : ""} />
           </dl>
           {error ? <div className="text-body-sm text-loss-text">{error}</div> : null}
           <LineChart

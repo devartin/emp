@@ -403,7 +403,8 @@ function summary(ctx: MockCtx, l: PfLedger) {
     const current = total > 0 ? ((byClass.get(cls) ?? 0) / total) * 100 : 0;
     const target = t?.target ?? 0;
     const drift = current - target;
-    const out = Math.abs(drift) > (t?.bandAbs ?? 5) || (target > 0 && Math.abs(drift) > (t?.bandRel ?? 0.25) * target);
+    // Same test as emp-finance `outside_band`: a class without a target (0%) is outside as soon as it holds anything.
+    const out = Math.abs(drift) > (t?.bandAbs ?? 5) + 1e-9 || Math.abs(drift) > (t?.bandRel ?? 0.25) * target + 1e-9;
     return { assetClass: cls, current: round2(current), target, drift: round2(drift), status: (out ? 'outside_band' : 'ok') as 'ok' | 'outside_band' };
   });
   const order = ['US equity', 'Intl developed', 'Emerging', 'Bonds', 'Inflation-linked', 'REIT', 'Cash', 'Crypto', 'Other'];
@@ -513,7 +514,7 @@ function rebalance(ctx: MockCtx, l: PfLedger, req: { newCash: string; allowTaxab
     const cur = ((classValue.get(c) ?? 0) / total) * 100;
     const tg = t?.target ?? 0;
     const d = Math.abs(cur - tg);
-    return d > (t?.bandAbs ?? 5) || (tg > 0 && d > (t?.bandRel ?? 0.25) * tg);
+    return d > (t?.bandAbs ?? 5) + 1e-9 || d > (t?.bandRel ?? 0.25) * tg + 1e-9;
   };
   // 1. New cash → most underweight classes, in proportion to their deficit.
   if (newCash > 0) {

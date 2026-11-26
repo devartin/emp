@@ -8,8 +8,8 @@ import { LineChart } from "@/charts/Line";
 import { BarChart } from "@/charts/Bar";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
-import { DeltaPill } from "@/ui/DeltaPill";
-import { monthLabel, fmtWhole } from "../shared/format";
+import { Delta } from "@/ui/Delta";
+import { monthLabel, fmtWhole, toMoney } from "../shared/format";
 import { useAsync, useDbChanged } from "../shared/hooks";
 import { Section } from "../shared/ui";
 import { useLedgerCtx } from "./ledger";
@@ -39,7 +39,7 @@ export default function NetWorth() {
     <div className="flex flex-col gap-4">
       <Section
         title="Net worth history"
-        subtitle={first && lastPt ? <span className="inline-flex items-center gap-2"><Sensitive>{fmtWhole(lastPt.net - first.net, { signed: true })}</Sensitive><DeltaPill value={first.net ? (lastPt.net - first.net) / Math.abs(first.net) : 0} plain /> over this period</span> : null}
+        subtitle={first && lastPt ? <Delta money={toMoney(Math.round(lastPt.net - first.net))} percent={first.net ? (lastPt.net - first.net) / Math.abs(first.net) : undefined} label="over this period" /> : null}
         actions={<Segmented size="sm" value={range} onValueChange={setRange} aria-label="Range" options={[{ value: "1y", label: "1Y" }, { value: "3y", label: "3Y" }, { value: "5y", label: "5Y" }, { value: "all", label: "All" }]} />}
       >
         <LineChart

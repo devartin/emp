@@ -3,7 +3,6 @@
  * 52-week range, your position (from Portfolio) and alerts. Only ticker symbols ever leave the device.
  */
 import { Bell, CandlestickChart, Plus, ShieldCheck } from "lucide-react";
-import { m } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { SymbolKey } from "@/backend/types";
@@ -12,15 +11,14 @@ import { useQuote } from "@/stores/market";
 import { useWorkspace } from "@/stores/workspace";
 import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
-import { DeltaPill } from "@/ui/DeltaPill";
+import { Delta } from "@/ui/Delta";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from "@/ui/Menu";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
-import { spring } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
-import { fmtPrice, fmtQty, fmtWhole } from "../finance/shared/format";
+import { formatNumber } from "@/lib/format";
+import { fmtPct, fmtPrice, fmtPriceMove, fmtQty, fmtWhole, toMoney } from "../finance/shared/format";
 import { baseCurrency } from "../finance/shared/currency";
 import { useAsync } from "../finance/shared/hooks";
 import { FreshnessBadge, HubPage, MarketStateChip } from "../finance/shared/ui";
@@ -54,7 +52,7 @@ export default function MarketsPage({ symbol }: MarketsPageProps) {
       footer={
         <footer className="fh-disclaimer">
           <ShieldCheck size={13} aria-hidden />
-          <span>Providers see which symbols you look up and your IP address. Ultra Note never sends quantities, cost basis, account names or balances. Market data is for information only — not investment advice.</span>
+          <span>Providers see which symbols you look up and your IP address. Ultra Note never sends quantities, cost basis, account names or balances. Market data is for information only, not investment advice.</span>
         </footer>
       }
     >
@@ -92,7 +90,6 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
   const item = inList?.symbols.find((s) => s.key === symbol);
   const [listForAlert, setListForAlert] = useState<string | null>(null);
   useEffect(() => setListForAlert(inList?.id ?? null), [inList?.id]);
-  const reduced = useReducedMotionPref();
   const pos = useMemo(() => (q && lo52 !== null && hi52 !== null && hi52 > lo52 ? (q.price - lo52) / (hi52 - lo52) : null), [q, lo52, hi52]);
   return (
     <section className="fh-card mk-detail">
@@ -111,10 +108,8 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
                     <RollingNumber value={q.price} format={(n) => fmtPrice(n, q.currency)} countUp={false} />
                   </PriceFlash>
                 </span>
-                <span className={q.change >= 0 ? "emp-gain tabular font-semibold" : "emp-loss tabular font-semibold"}>
-                  <RollingNumber value={q.change} format={(n) => `${n >= 0 ? "+" : "\u2212"}${fmtPrice(Math.abs(n), q.currency)}`} countUp={false} />
-                </span>
-                <DeltaPill value={q.changePct} digits={2} label="today" />
+                {/* One delta: the arrow carries the direction; the move is set at the price's own decimals. */}
+                <Delta text={fmtPriceMove(q.change, q.price, q.currency)} percent={q.changePct} digits={2} label="today" />
               </>
             ) : (
               <Skeleton width={200} height={34} />
@@ -162,33 +157,25 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
         <div className="mk-stat mk-stat-wide">
           <span className="mk-stat-label">52-week range</span>
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-caption tabular text-secondary">{lo52 !== null ? fmtPrice(lo52) : "—"}</span>
+            <span className="text-caption tabular text-secondary">{lo52 !== null ? fmtPrice(lo52, q?.currency) : "—"}</span>
             <span className="mk-range">
-              {pos !== null ? (
-                <m.span className="mk-range-rail" initial={reduced ? false : { x: "0%" }} animate={{ x: `${Math.max(0, Math.min(1, pos)) * 100}%` }} transition={reduced ? { duration: 0 } : { ...spring.settle, delay: 0.2 }}>
-                  <i />
-                </m.span>
-              ) : null}
+              {/* Placed, not animated: no motion on arrival (DESIGN §7). */}
+              {pos !== null ? <i style={{ left: `${Math.max(0, Math.min(1, pos)) * 100}%` }} /> : null}
             </span>
-            <span className="text-caption tabular text-secondary">{hi52 !== null ? fmtPrice(hi52) : "—"}</span>
+            <span className="text-caption tabular text-secondary">{hi52 !== null ? fmtPrice(hi52, q?.currency) : "—"}</span>
           </div>
         </div>
       </div>
 
       {holding && pfInstance ? (
         <button type="button" className="mk-position" onClick={() => navigate({ t: "app", instanceId: pfInstance, tab: `holding:${symbol}` })}>
-          <span className="text-caption text-secondary" style={{ fontWeight: 500 }}>
-            Your position
-          </span>
+          <span className="text-caption text-secondary font-medium">Your position</span>
           <span className="flex items-baseline gap-4 tabular">
-            <span className="text-body font-semibold">
+            <span className="text-body font-medium">
               <Sensitive>{fmtQty(holding.qty)} sh · {fmtWhole(holding.value.amount, { currency: holding.value.currency })}</Sensitive>
             </span>
-            <span className={Number(holding.gain.amount) >= 0 ? "emp-gain text-body-sm font-semibold" : "emp-loss text-body-sm font-semibold"}>
-              <Sensitive>{fmtWhole(holding.gain.amount, { signed: true, currency: holding.gain.currency })}</Sensitive> ({holding.gainPct >= 0 ? "+" : "−"}
-              {Math.abs(holding.gainPct * 100).toFixed(1)}%)
-            </span>
-            <span className="text-caption text-tertiary">{(holding.weight * 100).toFixed(1)}% of portfolio · open in Portfolio →</span>
+            <Delta money={toMoney(Math.round(Number(holding.gain.amount)), holding.gain.currency)} percent={holding.gainPct} arrow={false} className="text-body-sm" label="unrealised" />
+            <span className="text-caption text-tertiary">{fmtPct(holding.weight, 1)} of the portfolio · open in Portfolio</span>
           </span>
         </button>
       ) : null}
@@ -207,8 +194,5 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function compactVol(v: number): string {
-  if (v >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
-  if (v >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
-  return String(v);
+  return formatNumber(v, { notation: "compact", maximumFractionDigits: v >= 1e6 ? 2 : 1 });
 }

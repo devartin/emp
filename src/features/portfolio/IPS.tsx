@@ -38,7 +38,7 @@ const DEFAULT: IpsDoc = {
   drop: "hold",
   rebalance: "Check allocation every quarter. Rebalance when a class drifts more than 5 percentage points (or 25% of its target), using new contributions first and avoiding taxable sales.",
   contributions: "Invest $1,000 a month through payroll and automatic transfers, split by target allocation.",
-  rules: ["I will not sell because prices have fallen — a 30% drop is expected a few times in a lifetime.", "I keep 6 months of essential spending in cash so I never have to sell in a downturn.", "I rebalance into whatever has fallen, on schedule, without forecasting.", "I wait 72 hours before any change that isn't on this page."],
+  rules: ["I will not sell because prices have fallen. A 30% drop is expected a few times in a lifetime.", "I keep 6 months of essential spending in cash so I never have to sell in a downturn.", "I rebalance into whatever has fallen, on schedule, without forecasting.", "I wait 72 hours before any change that isn't on this page."],
   reviewDate: `${new Date().getFullYear() + 1}-01-15`,
   signedBy: "",
   signedOn: "",
@@ -171,7 +171,7 @@ export default function IPS({ instanceId, summary: s }: { instanceId: Id; summar
             <Input label="Signed" value={doc.signedBy} placeholder="Your name" onChange={(e) => update({ signedBy: e.target.value })} />
             <div className="flex items-center gap-2">
               {doc.signedOn ? (
-                <span className="inline-flex items-center gap-1.5 text-body-sm text-gain-text"><Check size={15} /> Signed {dayLabel(doc.signedOn, true)}</span>
+                <span className="inline-flex items-center gap-1.5 text-body-sm text-secondary"><Check size={14} absoluteStrokeWidth strokeWidth={1.25} /> Signed {dayLabel(doc.signedOn, true)}</span>
               ) : (
                 <Button variant="primary" disabled={!doc.signedBy.trim()} onClick={() => update({ signedOn: todayIso() })}>
                   Sign and date

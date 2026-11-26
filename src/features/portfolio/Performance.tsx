@@ -4,14 +4,13 @@ import { api } from "@/backend";
 import type { Id, PerfRange, PortfolioSummary } from "@/backend/types";
 import { LineChart } from "@/charts/Line";
 import { Badge } from "@/ui/Badge";
-import { GainLoss } from "@/ui/DeltaPill";
 import { Segmented } from "@/ui/Segmented";
 import { Sensitive } from "@/ui/Sensitive";
 import { dayLabel, fmtPct, fmtPp, fmtQty, num, fmtWhole } from "../finance/shared/format";
 import { Figure } from "../finance/shared/Figure";
 import { figureLabel, periodReturn, rangeYears, twrFigures, vsBenchmarkPts } from "../finance/shared/definitions";
 import { useAsync } from "../finance/shared/hooks";
-import { Quiet, Section, Stat } from "../finance/shared/ui";
+import { Quiet, Section, Signed, Stat } from "../finance/shared/ui";
 import { ticker } from "../markets/data";
 
 const BENCHMARK = "EMP500:INDEX";
@@ -46,12 +45,12 @@ export default function Performance({ instanceId, summary: s }: { instanceId: Id
         <div className="flex gap-8 mb-4">
           <Stat
             label={figureLabel("pf.twr", rangeLabel)}
-            value={twr ? <GainLoss value={twr.cumulative}><Figure id="pf.twr" range={rangeLabel} inputs={twr.annual !== null ? [{ label: "A year", value: fmtPct(twr.annual, 1, true), sensitive: false }] : undefined}>{fmtPct(twr.cumulative, 1, true)}</Figure></GainLoss> : "—"}
+            value={twr ? <Signed value={twr.cumulative}><Figure id="pf.twr" range={rangeLabel} inputs={twr.annual !== null ? [{ label: "A year", value: fmtPct(twr.annual, 1, true), sensitive: false }] : undefined}>{fmtPct(twr.cumulative, 1, true)}</Figure></Signed> : "—"}
             sub={twr?.annual != null && years > 1.05 ? `${fmtPct(twr.annual, 1, true)} a year` : undefined}
             size="lg"
           />
-          <Stat label={`${benchLabel} · ${rangeLabel}`} value={last ? <GainLoss value={last.bench}>{fmtPct(last.bench, 1, true)}</GainLoss> : "—"} size="lg" />
-          <Stat label={`vs ${benchLabel}`} value={last ? <GainLoss value={last.twr - last.bench}><Figure id="pf.vsBench" range={rangeLabel}>{fmtPp(vsBenchmarkPts(last.twr, last.bench))}</Figure></GainLoss> : "—"} size="lg" />
+          <Stat label={`${benchLabel} · ${rangeLabel}`} value={last ? <Signed value={last.bench}>{fmtPct(last.bench, 1, true)}</Signed> : "—"} size="lg" />
+          <Stat label={`vs ${benchLabel}`} value={last ? <Signed value={last.twr - last.bench}><Figure id="pf.vsBench" range={rangeLabel}>{fmtPp(vsBenchmarkPts(last.twr, last.bench))}</Figure></Signed> : "—"} size="lg" />
           <Stat
             label={figureLabel("pf.mwr.range", rangeLabel)}
             value={mwr ? <Figure id="pf.mwr.range" range={rangeLabel}>{fmtPct(mwr.value, 1, true)}</Figure> : "—"}
@@ -81,9 +80,9 @@ export default function Performance({ instanceId, summary: s }: { instanceId: Id
       <div className="fh-grid">
         <Section className="fh-span-4" title={`Realised in ${year}`} subtitle="Taxable and sheltered accounts">
           <div className="flex flex-col gap-4">
-            <Stat label="Short-term (held ≤ 1 year)" value={realized.data ? <GainLoss value={num(realized.data.totals.short)}><Sensitive>{fmtWhole(realized.data.totals.short, { signed: true })}</Sensitive></GainLoss> : "—"} />
-            <Stat label="Long-term" value={realized.data ? <GainLoss value={num(realized.data.totals.long)}><Sensitive>{fmtWhole(realized.data.totals.long, { signed: true })}</Sensitive></GainLoss> : "—"} />
-            <Stat label="Unrealised today" value={s ? <GainLoss value={num(s.unrealized.amount)}><Sensitive>{fmtWhole(s.unrealized.amount, { signed: true, currency: s.unrealized.currency })}</Sensitive></GainLoss> : "—"} />
+            <Stat label="Short-term (held ≤ 1 year)" value={realized.data ? <Signed value={num(realized.data.totals.short)}><Sensitive>{fmtWhole(realized.data.totals.short, { signed: true })}</Sensitive></Signed> : "—"} />
+            <Stat label="Long-term" value={realized.data ? <Signed value={num(realized.data.totals.long)}><Sensitive>{fmtWhole(realized.data.totals.long, { signed: true })}</Sensitive></Signed> : "—"} />
+            <Stat label="Unrealised today" value={s ? <Signed value={num(s.unrealized.amount)}><Sensitive>{fmtWhole(s.unrealized.amount, { signed: true, currency: s.unrealized.currency })}</Sensitive></Signed> : "—"} />
           </div>
         </Section>
         <Section className="fh-span-8" title="Sales this year" pad={false}>
@@ -110,7 +109,7 @@ export default function Performance({ instanceId, summary: s }: { instanceId: Id
                     <td className="num"><Sensitive align="end">{fmtQty(l.qty)}</Sensitive></td>
                     <td className="num"><Sensitive align="end">{fmtWhole(l.proceeds)}</Sensitive></td>
                     <td className="num text-secondary"><Sensitive align="end">{fmtWhole(l.basis)}</Sensitive></td>
-                    <td className="num"><GainLoss value={num(l.gain)}><Sensitive align="end">{fmtWhole(l.gain, { signed: true })}</Sensitive></GainLoss></td>
+                    <td className="num"><Signed value={num(l.gain)}><Sensitive align="end">{fmtWhole(l.gain, { signed: true })}</Sensitive></Signed></td>
                     <td><Badge tone={l.term === "long" ? "neutral" : "warning"}>{l.term === "long" ? "Long" : "Short"}</Badge></td>
                   </tr>
                 ))}

@@ -11,15 +11,14 @@ import { navigate } from "@/app/router";
 import { useQuote } from "@/stores/market";
 import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
-import { GainLoss } from "@/ui/DeltaPill";
-import { DeltaPill } from "@/ui/DeltaPill";
+import { Delta } from "@/ui/Delta";
 import { Input } from "@/ui/Input";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { Textarea } from "@/ui/Textarea";
-import { daysBetween, dayLabel, fmtPct, fmtPrice, fmtQty, num, todayIso, fmtWhole } from "../finance/shared/format";
-import { Disclaimer, FreshnessBadge, MarketStateChip, Section, Stat } from "../finance/shared/ui";
+import { daysBetween, dayLabel, fmtPct, fmtPrice, fmtPriceMove, fmtQty, num, todayIso, fmtWhole } from "../finance/shared/format";
+import { Disclaimer, FreshnessBadge, MarketStateChip, Section, Signed, Stat } from "../finance/shared/ui";
 import PriceChart from "../markets/CandleChart";
 import { ticker, useSymbolInfo } from "../markets/data";
 import "../markets/markets.css";
@@ -56,9 +55,6 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
         </Button>
       </div>
       <header className="flex items-start gap-4 mb-5">
-        <span className="pf-ticker-chip" style={{ width: 48, height: 48, fontSize: 13, borderRadius: 14 }}>
-          {ticker(symbol).slice(0, 4)}
-        </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="fh-title">{info?.name ?? ticker(symbol)}</h1>
@@ -71,7 +67,7 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
                 <span className="mk-price">
                   <PriceFlash value={q.price} symbol={symbol}>{fmtPrice(q.price, q.currency)}</PriceFlash>
                 </span>
-                <DeltaPill value={q.changePct} digits={2} label="today" />
+                <Delta text={fmtPriceMove(q.change, q.price, q.currency)} percent={q.changePct} digits={2} label="today" />
                 <FreshnessBadge freshness={q.freshness} source={q.source} delayedMin={q.delayedMin} />
                 <MarketStateChip state={q.marketState} asOf={q.asOf} />
               </>
@@ -86,7 +82,7 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
       </header>
       <div className="fh-grid">
         <Section className="fh-span-8">
-          <PriceChart symbol={symbol} height={320} defaultRange="1y" defaultMode={experience === "advanced" ? "candles" : "area"} indicators={experience === "advanced"} />
+          <PriceChart symbol={symbol} height={320} defaultRange="1y" defaultMode={experience === "advanced" ? "candles" : "line"} indicators={experience === "advanced"} />
         </Section>
         <div className="fh-span-4 flex flex-col gap-3">
           <div className="fh-card">
@@ -104,7 +100,7 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
             {h ? (
               <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-subtle">
                 <Stat label="Cost basis" value={<Sensitive>{fmtWhole(h.costBasis.amount, { currency: h.costBasis.currency })}</Sensitive>} size="sm" />
-                <Stat label="Unrealised" value={<GainLoss value={value - num(h.costBasis.amount)}><Sensitive>{fmtWhole(value - num(h.costBasis.amount), { signed: true })}</Sensitive></GainLoss>} sub={fmtPct(num(h.costBasis.amount) ? (value - num(h.costBasis.amount)) / num(h.costBasis.amount) : 0, 1, true)} size="sm" />
+                <Stat label="Unrealised" value={<Signed value={value - num(h.costBasis.amount)}><Sensitive>{fmtWhole(value - num(h.costBasis.amount), { signed: true })}</Sensitive></Signed>} sub={fmtPct(num(h.costBasis.amount) ? (value - num(h.costBasis.amount)) / num(h.costBasis.amount) : 0, 1, true)} size="sm" />
                 <Stat label="Avg cost" value={fmtPrice(num(h.costBasis.amount) / Math.max(1e-9, num(h.qty)))} size="sm" />
                 <Stat label="Dividends received" value={<Sensitive>{fmtWhole(divTotal)}</Sensitive>} sub={`${divs.length} payments`} size="sm" />
               </div>
@@ -141,7 +137,7 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
                       <td className="num text-secondary">{fmtPrice(l.costPerUnit)}</td>
                       <td className="num"><Sensitive align="end">{fmtWhole(l.costPerUnit * l.qty)}</Sensitive></td>
                       <td className="num"><Sensitive align="end">{fmtWhole(price * l.qty)}</Sensitive></td>
-                      <td className="num"><GainLoss value={g}><Sensitive align="end">{fmtWhole(g, { signed: true })}</Sensitive></GainLoss></td>
+                      <td className="num"><Signed value={g}><Sensitive align="end">{fmtWhole(g, { signed: true })}</Sensitive></Signed></td>
                       <td>
                         {l.taxTreatment !== "taxable" ? (
                           <span className="text-caption text-tertiary">Sheltered account</span>
@@ -185,7 +181,7 @@ function ResearchNote({ symbol }: { symbol: string }) {
     });
   if (!note) return <Skeleton height={240} radius={10} />;
   return (
-    <Section title={<span className="inline-flex items-center gap-2"><NotebookPen size={14} />Research note</span>} subtitle={state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Why you own it — in your own words"}>
+    <Section title={<span className="inline-flex items-center gap-2"><NotebookPen size={14} />Research note</span>} subtitle={state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Why you own it, in your own words"}>
       <div className="flex flex-col gap-2.5">
         <Textarea placeholder="Thesis: why I own this" value={note.thesis} onChange={(e) => update({ thesis: e.target.value })} aria-label="Thesis" />
         <Textarea placeholder="What would change my mind" value={note.change} onChange={(e) => update({ change: e.target.value })} aria-label="What would change my mind" />

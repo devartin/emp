@@ -195,7 +195,7 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
       </Section>
       <div className="fh-alert" data-tone="info">
         <Info size={16} />
-        <span className="text-body-sm">Prices move between planning and trading; amounts are approximate. Selling in a taxable account can create a tax bill — the estimate uses your FIFO lots.</span>
+        <span className="text-body-sm">Prices move between planning and trading; amounts are approximate. Selling in a taxable account can create a tax bill; the estimate uses your FIFO lots.</span>
       </div>
     </div>
   );

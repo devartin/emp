@@ -1562,7 +1562,7 @@ export const handlers: MockHandlers = {
 
   finance_import_preview: (req, ctx) => {
     const s = sessionsOf(ctx).get(req.importId);
-    if (!s) ctx.fail('NOT_FOUND', 'This import expired — choose the file again');
+    if (!s) ctx.fail('NOT_FOUND', 'This import expired. Choose the file again.');
     const set = finSets(ctx).require(s!.setId);
     const l = readLedger(ctx, set);
     if (!l.acctById.has(req.accountId)) ctx.fail('INVALID', 'Choose an account', { field: 'accountId' });
@@ -1571,7 +1571,7 @@ export const handlers: MockHandlers = {
 
   finance_import_commit: async (req, ctx) => {
     const s = sessionsOf(ctx).get(req.importId);
-    if (!s) ctx.fail('NOT_FOUND', 'This import expired — choose the file again');
+    if (!s) ctx.fail('NOT_FOUND', 'This import expired. Choose the file again.');
     const set = finSets(ctx).require(s!.setId);
     const l = readLedger(ctx, set);
     const acct = l.acctById.get(req.accountId);

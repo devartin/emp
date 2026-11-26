@@ -94,7 +94,7 @@ export default function QuarterlyPlan() {
                     <td className="text-secondary">{dayLabel(d.date, true)}</td>
                     <td>
                       {isPaid ? (
-                        <Badge tone="gain" icon={Check}>Paid {paidRow?.paidOn ? dayLabel(paidRow.paidOn) : ""}</Badge>
+                        <Badge tone="neutral" icon={Check}>Paid {paidRow?.paidOn ? dayLabel(paidRow.paidOn) : ""}</Badge>
                       ) : d.status === "late" ? (
                         <Badge tone="danger">Past due</Badge>
                       ) : d.status === "due_soon" ? (

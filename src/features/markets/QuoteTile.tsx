@@ -4,12 +4,11 @@ import { Sparkline } from "@/charts/Sparkline";
 import { cn } from "@/lib/cn";
 import { useQuote } from "@/stores/market";
 import { Delta } from "@/ui/Delta";
-import { GainLoss } from "@/ui/DeltaPill";
 import { RollingNumber } from "@/ui/motion/RollingNumber";
 import { PriceFlash } from "@/ui/PriceFlash";
 import { Skeleton } from "@/ui/Skeleton";
-import { fmtPrice } from "../finance/shared/format";
-import { FreshnessBadge } from "../finance/shared/ui";
+import { fmtPct, fmtPrice } from "../finance/shared/format";
+import { FreshnessBadge, Signed } from "../finance/shared/ui";
 import { ticker, useSparkline, useSymbolInfo } from "./data";
 
 export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: SymbolKey; onClick?: () => void; selected?: boolean; compact?: boolean }) {
@@ -76,10 +75,9 @@ export function QuoteRow({ symbol, q, onClick, selected, trailing }: { symbol: S
                 <RollingNumber value={quote.price} format={(n) => fmtPrice(n, quote.currency)} countUp={false} />
               </PriceFlash>
             </div>
-            <GainLoss value={quote.changePct} className="text-caption font-semibold">
-              {quote.changePct >= 0 ? "+" : "−"}
-              {Math.abs(quote.changePct * 100).toFixed(2)}%
-            </GainLoss>
+            <Signed value={quote.changePct} className="text-caption">
+              {fmtPct(quote.changePct, 2, true)}
+            </Signed>
           </>
         ) : (
           <Skeleton width={70} height={12} className="ml-auto" />

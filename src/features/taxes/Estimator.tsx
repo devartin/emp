@@ -10,6 +10,7 @@ import { api } from "@/backend";
 import type { TaxEstimate, TaxInput } from "@/backend/types";
 import { cn } from "@/lib/cn";
 import { Badge } from "@/ui/Badge";
+import { Delta } from "@/ui/Delta";
 import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { MoneyField } from "@/ui/MoneyField";
@@ -209,10 +210,9 @@ export default function Estimator() {
                 <m.div key="delta" {...disclose}>
                   <div className="tx-delta">
                     <span className="text-body-sm text-secondary">With these changes, estimated total tax</span>
-                    <span className="tabular font-semibold" style={{ color: num(alt.data.totalTax) > num(est.totalTax) ? "var(--loss-text)" : "var(--gain-text)" }}>
-                      <Sensitive>{fmtWhole(num(alt.data.totalTax) - num(est.totalTax), { signed: true })}</Sensitive>
-                    </span>
-                    <span className="text-caption text-tertiary">→ {num(alt.data.balance) >= 0 ? "balance due" : "refund"} <Sensitive>{fmtWhole(Math.abs(num(alt.data.balance)))}</Sensitive></span>
+                    {/* A change in tax is a delta; up is bad (invert), the arrow stays truthful. */}
+                    <Delta money={taxMoneyValue(Math.round(num(alt.data.totalTax) - num(est.totalTax)), tx.currency)} invert className="text-body-sm font-medium" />
+                    <span className="text-caption text-tertiary">{num(alt.data.balance) >= 0 ? "Balance due" : "Refund"} <Sensitive>{fmtWhole(Math.abs(num(alt.data.balance)))}</Sensitive></span>
                   </div>
                 </m.div>
               ) : null}
@@ -401,4 +401,9 @@ export function Brackets({ est, scrubbing }: { est: TaxEstimate; scrubbing?: boo
       </div>
     </Section>
   );
+}
+
+/** A whole-unit tax figure as `Money` in the tax year's currency (for `<Delta>`). */
+function taxMoneyValue(amount: number, currency: string) {
+  return { amount: String(amount), currency };
 }
