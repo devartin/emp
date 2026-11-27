@@ -102,7 +102,7 @@ export default function PortfolioDashboard({ instanceId, tab }: PortfolioDashboa
       tabs={tabs}
       tab={current}
       onTab={go}
-      footer={<Disclaimer>Example starting points, not recommendations. Ultra Note never places trades. Only ticker symbols leave this device, never quantities, cost basis, account names or balances.</Disclaimer>}
+      footer={<Disclaimer>Example starting points, not recommendations. Ultranote never places trades. Only ticker symbols leave this device, never quantities, cost basis, account names or balances.</Disclaimer>}
     >
       <Suspense fallback={<Skeleton height={420} radius={10} />}>
         {current === "overview" ? <Overview instanceId={instanceId} summary={summary.data} go={go} /> : null}

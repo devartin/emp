@@ -45,7 +45,7 @@ use crate::error::{IntegrationError, Result};
 use crate::netlog::{NET_LOG_CAPACITY, NetLog, NetLogEntry};
 
 /// User agent sent on every request (SPEC §9.18).
-pub const USER_AGENT: &str = concat!("UltraNote/", env!("CARGO_PKG_VERSION"));
+pub const USER_AGENT: &str = concat!("Ultranote/", env!("CARGO_PKG_VERSION"));
 
 /// Cap applied when reading non-2xx bodies (they are truncated, not rejected).
 const ERROR_BODY_CAP: u64 = 64 * 1024;
@@ -743,7 +743,7 @@ mod tests {
             seen[0]
                 .header("user-agent")
                 .unwrap()
-                .starts_with("UltraNote/")
+                .starts_with("Ultranote/")
         );
     }
 

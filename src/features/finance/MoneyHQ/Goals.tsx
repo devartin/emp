@@ -67,7 +67,7 @@ export default function Goals() {
       </section>
       {!l.goals.length ? (
         <section className="fh-card">
-          <Quiet icon={Target} title="No goals yet" body="Name something you're saving for and Ultra Note works out the monthly amount it needs." action={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>New goal</Button>} />
+          <Quiet icon={Target} title="No goals yet" body="Name something you're saving for and Ultranote works out the monthly amount it needs." action={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>New goal</Button>} />
         </section>
       ) : (
         <div className="fh-goals">
@@ -268,7 +268,7 @@ function AddGoal({ onClose }: { onClose: () => void }) {
       open
       onOpenChange={(o) => !o && onClose()}
       title="New goal"
-      description="Name, target and an optional date. Ultra Note works out the monthly amount."
+      description="Name, target and an optional date. Ultranote works out the monthly amount."
       size="sm"
       footer={
         <>

@@ -1,4 +1,4 @@
-Product renamed to Ultra Note on 2026-11-26; 'EMP' below refers to the same product.
+Product renamed to Ultranote on 2026-11-26; 'EMP' below refers to the same product.
 
 # EMP v1 Build Spec
 

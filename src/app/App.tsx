@@ -140,7 +140,7 @@ function BootSplash() {
       animate={{ opacity: 1, transition: { delay: 0.35, duration: 0.24 } }}
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
       aria-busy
-      aria-label="Starting Ultra Note"
+      aria-label="Starting Ultranote"
     >
       <AppMark size={56} animate={false} className="opacity-70" />
     </m.div>
@@ -153,7 +153,7 @@ function BootError() {
     <m.div className="emp-phase flex items-start justify-center bg-canvas px-6 pt-[18vh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="alert">
       <div className="w-[420px] max-w-full">
         <AppMark size={40} animate={false} />
-        <h1 className="mt-5 text-h2 text-primary">Ultra Note couldn't open your workspace</h1>
+        <h1 className="mt-5 text-h2 text-primary">Ultranote couldn't open your workspace</h1>
         <p className="mt-2 text-body text-secondary">{message || "The app backend didn't respond."}</p>
         <Button className="mt-6" variant="primary" icon={RefreshCw} onClick={() => window.location.reload()}>
           Try again

@@ -1,4 +1,4 @@
-# Ultra Note UI kit v3 "Paper, ink and keys": guide for feature teams
+# Ultranote UI kit v3 "Paper, ink and keys": guide for feature teams
 
 The binding spec is `docs/DESIGN.md` (v3). This page is the short version: **which primitive or class to use for
 what**. Live reference: `ui-gallery.html` (add `?theme=dark|midnight`). Every v2 component API still compiles;

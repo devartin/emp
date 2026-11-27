@@ -124,7 +124,7 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
       </div>
       <Section
         title="Trade checklist"
-        subtitle="Ultra Note never places trades. Tick each one off as you do it at your broker."
+        subtitle="Ultranote never places trades. Tick each one off as you do it at your broker."
         actions={
           <>
             <AnimatePresence>

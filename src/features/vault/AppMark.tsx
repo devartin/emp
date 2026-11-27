@@ -282,7 +282,7 @@ export function AppMark({ size = 64, variant = "tile", animate = false, delay = 
   );
 }
 
-/** "Ultra Note" wordmark (IBM Plex Sans 700, −0.02em). Static by default; `animate` fades it in (no travel). */
+/** "Ultranote" wordmark (IBM Plex Sans 700, −0.02em). Static by default; `animate` fades it in (no travel). */
 export function Wordmark({ className, animate = false, delay = 0 }: { className?: string; animate?: boolean; delay?: number }) {
   return (
     <m.span
@@ -291,7 +291,7 @@ export function Wordmark({ className, animate = false, delay = 0 }: { className?
       animate={{ opacity: 1 }}
       transition={{ duration: T.drawIn, ease: ease.out, delay }}
     >
-      Ultra Note
+      Ultranote
     </m.span>
   );
 }

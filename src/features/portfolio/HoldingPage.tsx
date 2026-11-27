@@ -155,7 +155,7 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
           )}
         </Section>
       </div>
-      <Disclaimer>For your own records and education. Not investment advice. Ultra Note never places trades.</Disclaimer>
+      <Disclaimer>For your own records and education. Not investment advice. Ultranote never places trades.</Disclaimer>
     </div>
   );
 }

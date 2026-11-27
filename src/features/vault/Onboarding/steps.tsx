@@ -108,7 +108,7 @@ export function WelcomeStep({ draft, update, next }: StepProps) {
   return (
     <div>
       <AppMark size={40} stage="rest" className="onb-mark" />
-      <StepHeading title="Welcome to Ultra Note" sub="Notes, tasks and money, kept on this device." />
+      <StepHeading title="Welcome to Ultranote" sub="Notes, tasks and money, kept on this device." />
       <div className="onb-field">
         <Input
           label="Your name"
@@ -153,7 +153,7 @@ const PROTECT: { value: "yes" | "no"; title: string; detail: string; note?: stri
 export function ProtectStep({ draft, update, next, back, creating }: StepProps & { creating: boolean }) {
   return (
     <div>
-      <StepHeading title="Protect your workspace" sub="Your workspace lives on this computer. Ultra Note has no servers and no accounts." />
+      <StepHeading title="Protect your workspace" sub="Your workspace lives on this computer. Ultranote has no servers and no accounts." />
       <ChoiceRows
         label="Encryption"
         value={draft.encrypt === null ? null : draft.encrypt ? "yes" : "no"}
@@ -210,7 +210,7 @@ export function PasswordStep({
 
   return (
     <div>
-      <StepHeading title="Create a password" sub="You'll use it to unlock Ultra Note. Use at least 10 characters; a few random words work well." />
+      <StepHeading title="Create a password" sub="You'll use it to unlock Ultranote. Use at least 10 characters; a few random words work well." />
       <div className="mt-6 flex flex-col gap-4">
         <PasswordField
           label="Password"

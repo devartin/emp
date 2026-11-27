@@ -1149,7 +1149,7 @@ export const handlers: MockHandlers = {
       details.words = text.split(/\s+/).filter(Boolean).length;
       details.headings = (text.match(/^#{1,6}\s/gm) ?? []).length;
     }
-    if (kind === 'unknown') details.reason = 'Ultra Note can’t import this kind of file';
+    if (kind === 'unknown') details.reason = 'Ultranote can’t import this kind of file';
     return { kind, details };
   },
 

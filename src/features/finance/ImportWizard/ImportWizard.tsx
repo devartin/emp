@@ -356,7 +356,7 @@ function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts
       </div>
       <div>
         <div className="text-caption text-secondary mb-2" style={{ fontWeight: 500 }}>
-          How Ultra Note reads it
+          How Ultranote reads it
         </div>
         <div className="fh-parsed">
           {(preview?.rows ?? []).slice(0, 4).map((r) => (

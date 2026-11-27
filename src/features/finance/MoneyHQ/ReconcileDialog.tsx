@@ -126,7 +126,7 @@ export default function ReconcileDialog({ account, onClose, onDone }: { account:
                 {!cmp.entered ? (isDebt ? "Enter the amount owed" : "Enter the statement balance") : cmp.ok ? (isDebt ? "Matches the cleared amount owed" : "Matches the cleared balance") : <>Off by <Sensitive>{fmtMoney(Math.abs(cmp.diff), currency)}</Sensitive></>}
               </div>
               <div className="text-caption text-tertiary tabular font-normal">
-                {isDebt ? "Owed (cleared) in Ultra Note" : "Cleared in Ultra Note"} on {dayLabel(asOf, true)}: <Sensitive>{fmtMoney(cmp.clearedShown, currency)}</Sensitive>
+                {isDebt ? "Owed (cleared) in Ultranote" : "Cleared in Ultranote"} on {dayLabel(asOf, true)}: <Sensitive>{fmtMoney(cmp.clearedShown, currency)}</Sensitive>
                 {cmp.hint ? ` · ${cmp.hint}` : ""}
               </div>
             </div>

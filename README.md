@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
-    <img src="docs/assets/banner.png" alt="Ultra Note: notes, databases, spreadsheets and money, on your computer" width="100%">
+    <img src="docs/assets/banner.png" alt="Ultranote: notes, databases, spreadsheets and money, on your computer" width="100%">
   </picture>
 </p>
 
@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <b>Ultra Note</b> is a desktop app for pages, databases, spreadsheets and personal finance.<br>
+  <b>Ultranote</b> is a desktop app for pages, databases, spreadsheets and personal finance.<br>
   Everything lives in a folder on your computer. Encryption is optional and no account is needed.
 </p>
 
@@ -32,7 +32,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/features-dark.png">
-    <img src="docs/assets/features.png" alt="Three screens from Ultra Note: Home showing today's agenda and to-dos, Money HQ showing net worth and this month's figures, and a Client CRM database in table view" width="100%">
+    <img src="docs/assets/features.png" alt="Three screens from Ultranote: Home showing today's agenda and to-dos, Money HQ showing net worth and this month's figures, and a Client CRM database in table view" width="100%">
   </picture>
 </p>
 
@@ -73,10 +73,10 @@ Each clip is a GIF; click it for the full-quality MP4.
   </tr>
 </table>
 
-## Why Ultra Note
+## Why Ultranote
 
 Block-based workspaces are good at pages and tables. They are less good offline, they keep your data on someone
-else's server, and they stop short of a real spreadsheet or a budget that understands money. Ultra Note keeps the
+else's server, and they stop short of a real spreadsheet or a budget that understands money. Ultranote keeps the
 workspace and adds the parts that usually live in other apps.
 
 - **Local-first.** The workspace is a SQLite database and an assets folder on your disk. No account, no server, no
@@ -189,8 +189,8 @@ in a row"* or *"Not reconciled in the last 30 days"*. Each app has a written gui
   zips, .ics calendars, CSV (as a new database), Excel workbooks and bank files. Finished imports can be undone.
 - **Export** pages as Markdown or JSON, or export everything to a folder of Markdown, CSV and XLSX.
 - **Google Calendar** sync, and **Google Docs** and **Google Sheets** import and export, using your own Google Cloud
-  OAuth client. Ultra Note ships no secrets.
-- A built-in **network log** and an **offline switch** (<kbd>⌘⇧O</kbd>): you can see every request Ultra Note makes,
+  OAuth client. Ultranote ships no secrets.
+- A built-in **network log** and an **offline switch** (<kbd>⌘⇧O</kbd>): you can see every request Ultranote makes,
   and stop them all.
 
 ## Screenshots
@@ -204,11 +204,11 @@ in a row"* or *"Not reconciled in the last 30 days"*. Each app has a written gui
 | <img src="docs/screenshots/page-light.png" alt="The Website relaunch page: a callout with the one-sentence goal, goals, non-goals and a milestones table"> **Pages.** A block editor with callouts, tables and backlinks | <img src="docs/screenshots/sheet-dark.png" alt="Household budget 2026 spreadsheet in dark mode: monthly income and expense columns with totals, net cash flow and savings rate"> **Sheets.** About 240 functions, with dynamic arrays |
 | <img src="docs/screenshots/calendar-light.png" alt="Calendar month view for November 2026 with Personal, Work, Family, US holidays and Life OS task calendars"> **Calendar.** Every calendar in one month view | <img src="docs/screenshots/life-os-dark.png" alt="Life OS in dark mode: the Tasks tab with Inbox, Next, Scheduled, Waiting, Someday and Done lists and a quick-add field"> **Life OS.** Tasks, projects and a weekly review |
 | <img src="docs/screenshots/habits-light.png" alt="Habits check-in: morning, afternoon, evening and anytime habits with amounts, and notes on the right"> **Habits.** A daily check-in, with heatmaps and stats a tab away | <img src="docs/screenshots/life-apps-dark.png" alt="Life apps list in dark mode: Money HQ, Portfolio, Tax Organizer, Spreadsheet Studio, Life OS and Habits"> **Life apps.** Each one sets up the pages and databases for one area of your life |
-| <img src="docs/screenshots/command-palette-light.png" alt="The command palette over Home with the query 'budget': a Money HQ place, pages and matches inside page content"> **Command palette.** Places, pages and page content in one list | <img src="docs/screenshots/first-run-dark.png" alt="First run in dark mode: Welcome to Ultra Note, an optional name, and three ways to start: start fresh, bring in Notion, Markdown or Obsidian, or bring in money"> **First run.** Three short steps, then Home |
+| <img src="docs/screenshots/command-palette-light.png" alt="The command palette over Home with the query 'budget': a Money HQ place, pages and matches inside page content"> **Command palette.** Places, pages and page content in one list | <img src="docs/screenshots/first-run-dark.png" alt="First run in dark mode: Welcome to Ultranote, an optional name, and three ways to start: start fresh, bring in Notion, Markdown or Obsidian, or bring in money"> **First run.** Three short steps, then Home |
 
 ## Design
 
-Ultra Note's visual language is called *paper, ink and keys*. The full rules are in [docs/DESIGN.md](docs/DESIGN.md).
+Ultranote's visual language is called *paper, ink and keys*. The full rules are in [docs/DESIGN.md](docs/DESIGN.md).
 
 - **Paper and ink.** A warm paper background and graphite ink as the only accent. Colour appears only where it
   carries meaning: gains and losses, over-budget amounts, and your own tags and chart categories.
@@ -228,7 +228,7 @@ Ultra Note's visual language is called *paper, ink and keys*. The full rules are
 
 ## Security
 
-Ultra Note is designed so that a stolen laptop reveals as little as possible.
+Ultranote is designed so that a stolen laptop reveals as little as possible.
 
 | | |
 |---|---|
@@ -300,7 +300,7 @@ See [scripts/media/README.md](scripts/media/README.md) for options such as `--on
 ## Architecture
 
 ```
-┌───────────────────── Ultra Note desktop app (Tauri 2) ─────────────────────┐
+┌───────────────────── Ultranote desktop app (Tauri 2) ─────────────────────┐
 │  React 19 · TypeScript · Tailwind · motion · TipTap · Recharts             │
 │  ── typed IPC (231 commands, strict allowlist) ──                          │
 │  emp-app      commands, auto-lock, jobs, asset protocol, OS keychain       │
@@ -312,7 +312,7 @@ See [scripts/media/README.md](scripts/media/README.md) for options such as `--on
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Ultra Note was called EMP during early development. The codename survives in internal identifiers (the `emp-*`
+Ultranote was called EMP during early development. The codename survives in internal identifiers (the `emp-*`
 crates, file extensions such as `.empbackup`, storage keys); only the product name changed.
 
 The build spec (schema, IPC commands, security model) is [docs/SPEC.md](docs/SPEC.md). The visual design is

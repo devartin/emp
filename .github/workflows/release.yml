@@ -77,7 +77,7 @@ jobs:
           # once all three builds have attached their files. A manual run (workflow_dispatch) is a build-only
           # dry run: with no tag name, nothing is uploaded.
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: "Ultra Note ${{ github.ref_name }}"
+          releaseName: "Ultranote ${{ github.ref_name }}"
           releaseBody: "See [CHANGELOG.md](https://github.com/devartin/ultra-note/blob/main/CHANGELOG.md) for what's new. Download the installer for your platform below."
           releaseDraft: true
           prerelease: false

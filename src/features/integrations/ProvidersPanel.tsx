@@ -28,7 +28,7 @@ const HEALTH: Record<ProviderInfo["health"], { label: string; cls: string }> = {
   unknown: { label: "Not checked yet", cls: "is-unknown" },
 };
 
-export const PROVIDER_DISCLOSURE = "Providers see which symbols you look up and your IP address. Ultra Note never sends quantities, cost basis, account names or balances.";
+export const PROVIDER_DISCLOSURE = "Providers see which symbols you look up and your IP address. Ultranote never sends quantities, cost basis, account names or balances.";
 
 function ProviderRow({ p, index, count, onChange, onMove }: { p: ProviderInfo; index: number; count: number; onChange: (p: ProviderInfo) => void; onMove: (dir: -1 | 1) => void }) {
   const [key, setKey] = useState("");

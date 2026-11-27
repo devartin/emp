@@ -72,7 +72,7 @@ async function openPreviewPage() {
       {
         type: 'blockGroup',
         content: [
-          p('Every Ultra Note block that shows live data, side by side with text.'),
+          p('Every Ultranote block that shows live data, side by side with text.'),
           h(2, 'Spending'),
           c({ type: 'chart', attrs: { source: { kind: 'db', databaseId: 'db_spend' }, spec: { type: 'bar', x: { prop: 'p_cat' }, y: [{ agg: 'sum', prop: 'p_amt' }] } } }),
           c({ type: 'chart', attrs: { source: { kind: 'db', databaseId: 'db_spend' }, spec: { type: 'area', x: { prop: '$created', bucket: 'month' }, y: [{ agg: 'sum', prop: 'p_amt' }] } } }),

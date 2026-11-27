@@ -1,4 +1,4 @@
-# Ultra Note Design Language v3 — "Paper, ink and keys"
+# Ultranote Design Language v3 — "Paper, ink and keys"
 
 **Status:** binding for all UI work from Phase 1 of the v3 programme (`docs/design/PROGRAMME-v3.md`). It supersedes
 v2 "Slab" and SPEC §3–§5 for materials, depth, colour use and motion (CLAUDE.md override 5). Token **names** and
@@ -19,7 +19,7 @@ midnight).
 
 ---
 
-## 1. What makes it Ultra Note (the R-4 signature rules)
+## 1. What makes it Ultranote (the R-4 signature rules)
 
 These five rules are the identity. Token values can be copied by any theme generator; these cannot.
 
@@ -74,7 +74,7 @@ the strong border ≥ 3:1. **Its allowlist is empty.**
 | `--accent-ring` → `--ring` | `#8e8b86` | `#8a8883` | 2px focus ring, 1px offset (≈ ink at 50%) |
 
 Notion's measured values (`references.md` §1.2) are the calibration: text `#2c2c2b`, secondary `#7d7a75`, dividers
-`rgba(42,28,0,.07)`. Ultra Note is a shade warmer and its secondary is darker to pass 4.5:1 on every surface.
+`rgba(42,28,0,.07)`. Ultranote is a shade warmer and its secondary is darker to pass 4.5:1 on every surface.
 
 ### 2.2 Accent, semantic and data colour
 

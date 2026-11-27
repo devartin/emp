@@ -1,6 +1,6 @@
 # Words and phrases that keep their capitals inside sentence-case labels (copy lint, title_case rule).
 # One per line; a line with a space is a phrase. Acronyms (CSV, OFX, …) and camel-case brands (iCloud) pass on their own.
-Ultra Note
+Ultranote
 Money HQ
 Life OS
 Spreadsheet Studio

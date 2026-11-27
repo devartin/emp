@@ -1,7 +1,7 @@
 /**
  * The closing balance the last imported file reported for each account (`FinanceImportPreview.statement`, OFX
  * `<LEDGERBAL>` or the CSV balance column), remembered so the reconcile dialog can offer it — labelled with its
- * source and date — instead of pre-filling Ultra Note's own figure. Kept in the vault (`kv` namespace
+ * source and date — instead of pre-filling Ultranote's own figure. Kept in the vault (`kv` namespace
  * `ui.finance.statement`, key = account id), never in browser storage; it is a convenience, never the record — the
  * reconciled state itself lives in the ledger.
  */

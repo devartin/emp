@@ -238,7 +238,7 @@ export async function sealContainer(
 export function parseContainer(text: string): Container {
   const nl = text.indexOf('\n');
   const head = nl > 0 ? text.slice(0, nl).trim() : '';
-  if (head !== CONTAINER_MAGIC && head !== SNAPSHOT_MAGIC) throw new BackendError('INVALID', 'This isn’t an Ultra Note backup file');
+  if (head !== CONTAINER_MAGIC && head !== SNAPSHOT_MAGIC) throw new BackendError('INVALID', 'This isn’t an Ultranote backup file');
   let c: Container;
   try {
     c = JSON.parse(text.slice(nl + 1)) as Container;
@@ -248,7 +248,7 @@ export function parseContainer(text: string): Container {
   if (!c || c.magic !== head || typeof c.payload !== 'string' || typeof c.mac !== 'string' || !c.manifest) {
     throw new BackendError('INTEGRITY', 'This backup is damaged and can’t be read');
   }
-  if (c.version > CONTAINER_VERSION) throw new BackendError('SCHEMA_TOO_NEW', 'This backup was made by a newer version of Ultra Note. Update Ultra Note to restore it.');
+  if (c.version > CONTAINER_VERSION) throw new BackendError('SCHEMA_TOO_NEW', 'This backup was made by a newer version of Ultranote. Update Ultranote to restore it.');
   return c;
 }
 
@@ -280,7 +280,7 @@ export async function openContainer(c: Container, secrets: { password?: string; 
   }
   const { mac, ...body } = c;
   const ok = await subtle().verify('HMAC', await macKey(dek, c.manifest.vaultId), buf(fromHex(mac)), buf(macInput(body)));
-  if (!ok) throw new BackendError('INTEGRITY', 'This backup was modified outside Ultra Note and can’t be trusted');
+  if (!ok) throw new BackendError('INTEGRITY', 'This backup was modified outside Ultranote and can’t be trusted');
   if (dek && c.iv) {
     try {
       packed = new Uint8Array(await subtle().decrypt({ name: 'AES-GCM', iv: buf(fromB64(c.iv)) }, await aesKey(dek), buf(fromB64(c.payload))));

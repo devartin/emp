@@ -1,6 +1,6 @@
-# Ultra Note — build conventions (read before changing anything)
+# Ultranote — build conventions (read before changing anything)
 
-Ultra Note (codename EMP; internal identifiers keep the emp prefix) is a local-first, optionally-encrypted productivity super app (Notion-class editor + databases, Excel-grade sheets,
+Ultranote (codename EMP; internal identifiers keep the emp prefix) is a local-first, optionally-encrypted productivity super app (Notion-class editor + databases, Excel-grade sheets,
 personal finance, portfolio/markets, taxes, guided "life apps", Google integrations). Tauri 2 + Rust workspace +
 React 19/TypeScript frontend.
 

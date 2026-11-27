@@ -88,11 +88,11 @@ export function AppErrorBoundary({ children }: { children: ReactNode }) {
         <div className="fixed inset-0 z-[var(--z-lock)] flex items-start justify-center overflow-y-auto bg-canvas px-6 pt-[18vh]" role="alert">
           <div className="w-[420px] max-w-full">
             <AppMark size={40} animate={false} />
-            <h1 className="mt-5 text-h2 text-primary">Ultra Note needs to restart</h1>
+            <h1 className="mt-5 text-h2 text-primary">Ultranote needs to restart</h1>
             <p className="mt-2 text-body text-secondary">Something unexpected happened. Your workspace is saved on this device; restarting reloads it.</p>
             <div className="mt-6 flex gap-2">
               <Button variant="primary" icon={RotateCcw} onClick={() => window.location.reload()}>
-                Restart Ultra Note
+                Restart Ultranote
               </Button>
               <Button variant="ghost" icon={Copy} onClick={() => copy(error)}>
                 Copy details

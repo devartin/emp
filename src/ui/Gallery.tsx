@@ -108,7 +108,7 @@ export function Gallery() {
     <div className="min-h-screen bg-canvas text-primary">
       <header className="sticky top-0 z-30 flex items-center gap-3 px-6 h-14 bg-canvas border-b border-default">
         <img src="/emp.svg" width={24} height={24} alt="" className="rounded-sm" />
-        <span className="text-title">Ultra Note UI</span>
+        <span className="text-title">Ultranote UI</span>
         <Badge tone="solid">v3 Paper, ink and keys</Badge>
         <div className="ml-auto flex items-center gap-2">
           <Segmented

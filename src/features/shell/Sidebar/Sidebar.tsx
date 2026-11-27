@@ -671,7 +671,7 @@ function WorkspaceRow() {
           </MenuItem>
           {encrypted ? (
             <MenuItem icon={Lock} shortcut="mod+shift+l" onSelect={() => runCommand("vault.lock")}>
-              Lock Ultra Note
+              Lock Ultranote
             </MenuItem>
           ) : (
             <MenuItem icon={LockOpen} onSelect={() => navigate({ t: "settings", section: "security" })}>

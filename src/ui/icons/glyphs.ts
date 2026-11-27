@@ -1,5 +1,5 @@
 /**
- * Static registry of every Lucide glyph Ultra Note can show as a page / app / habit / category icon: the curated
+ * Static registry of every Lucide glyph Ultranote can show as a page / app / habit / category icon: the curated
  * picker set (pageIcons.ts), every target of the emoji map (emoji-map.json) and the app glyphs that features address
  * by name without offering them in the picker (APP_GLYPH_NAMES in pageIcons.ts). Generated from those three lists;
  * pageIcons.test.ts fails when they drift apart. Imported individually so the bundle carries only these glyphs.

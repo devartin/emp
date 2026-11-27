@@ -348,7 +348,7 @@ const spreadsheetStudio: LifeAppManifest = {
   estMinutes: 2,
   steps: [
     { id: 'intent', kind: 'choice_cards', title: 'What do you want to build?', quick: true, skippable: false, default: 'loan', options: SHEET_INTENTS },
-    { id: 'excel_compat', kind: 'toggle', title: 'Will you share this with Excel users?', quick: false, skippable: true, default: false, help: 'When on, workbooks stick to functions that round-trip to Excel and warn about ones only Ultra Note has (STOCK, FX).' },
+    { id: 'excel_compat', kind: 'toggle', title: 'Will you share this with Excel users?', quick: false, skippable: true, default: false, help: 'When on, workbooks stick to functions that round-trip to Excel and warn about ones only Ultranote has (STOCK, FX).' },
     {
       id: 'structure', kind: 'multi_chips', title: 'Which sections should the workbook have?', quick: false, skippable: true, default: ['inputs', 'calculations', 'output', 'checks', 'changelog'],
       why: 'Separating inputs from formulas makes models easier to audit.',

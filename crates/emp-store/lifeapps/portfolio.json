@@ -278,7 +278,7 @@
       "spec": {
         "title": "Portfolio",
         "icon": "lucide:candlestick-chart",
-        "subtitle": "Holdings, allocation, performance and dividends. Ultra Note never places trades.",
+        "subtitle": "Holdings, allocation, performance and dividends. Ultranote never places trades.",
         "tabs": [
           "Overview",
           "Holdings",
@@ -439,7 +439,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "## How rebalancing bands work\nEach asset class has a **target** and two bands. A class is *outside its band* when its drift (current % − target %) is more than:\n- the **absolute band**: {{answers.rebalance_bandabs}} percentage points, or\n- the **relative band**: {{answers.rebalance_bandrel}}% of the target (for a 20% target, 5 points).\n\nWith this \"5/25\" rule small drifts are left alone, which keeps trading and taxes low.\n\n## Steps, in order\n1. **New cash first.** Put contributions and dividends into the most underweight classes.\n2. **Tax-advantaged accounts next.** Trades inside IRAs and 401(k)s do not create taxable gains.\n3. **Taxable sells last**, and only if you allow them: losses first, then the highest-basis lots.\n4. Skip trades smaller than **{{fmt_money(coalesce(answers.rebalance_mintrade, 50))}}**.\n\nUltra Note suggests trades; it never places them."
+            "md": "## How rebalancing bands work\nEach asset class has a **target** and two bands. A class is *outside its band* when its drift (current % − target %) is more than:\n- the **absolute band**: {{answers.rebalance_bandabs}} percentage points, or\n- the **relative band**: {{answers.rebalance_bandrel}}% of the target (for a 20% target, 5 points).\n\nWith this \"5/25\" rule small drifts are left alone, which keeps trading and taxes low.\n\n## Steps, in order\n1. **New cash first.** Put contributions and dividends into the most underweight classes.\n2. **Tax-advantaged accounts next.** Trades inside IRAs and 401(k)s do not create taxable gains.\n3. **Taxable sells last**, and only if you allow them: losses first, then the highest-basis lots.\n4. Skip trades smaller than **{{fmt_money(coalesce(answers.rebalance_mintrade, 50))}}**.\n\nUltranote suggests trades; it never places them."
           },
           {
             "t": "database",
@@ -927,7 +927,7 @@
       "spec": {
         "title": "Lots",
         "icon": "lucide:brick-wall",
-        "description": "Computed by Ultra Note from investment transactions (read-only).",
+        "description": "Computed by Ultranote from investment transactions (read-only).",
         "properties": [
           {
             "key": "name",

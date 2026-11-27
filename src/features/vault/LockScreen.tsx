@@ -31,7 +31,7 @@ function captionFor(reason: string | null, idleMinutes: number | null): string {
     case "screen":
       return "Locked when your screen locked";
     case "blur":
-      return "Locked while Ultra Note was in the background";
+      return "Locked while Ultranote was in the background";
     case "session_max":
       return "Locked at the end of the session limit";
     case "panic":
@@ -125,7 +125,7 @@ export default function LockScreen() {
   };
 
   const attempts = status?.failedAttempts ?? 0;
-  const name = identity.workspaceName || "Ultra Note";
+  const name = identity.workspaceName || "Ultranote";
 
   return (
     <m.div

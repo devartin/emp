@@ -208,7 +208,7 @@ describe('pages and docs', () => {
     expect(events[events.length - 1].kind).toBe('done');
     const after = await api.workspace.open({ id: ws.id });
     expect(after.pages.filter((p) => p.parentId === copy.id).map((p) => p.title)).toEqual([
-      'Writing in Ultra Note',
+      'Writing in Ultranote',
       'Keyboard shortcuts',
       'Privacy & encryption',
       'Money & life apps',

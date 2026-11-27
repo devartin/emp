@@ -92,7 +92,7 @@ export default function AppPage({ instanceId, tab }: AppPageProps) {
   else
     body = (
       <div className="flex h-full min-h-[480px] items-center justify-center p-8">
-        <EmptyState icon={LayoutGrid} title="Unknown life app" body={`“${inst.appId}” isn’t available in this version of Ultra Note.`} />
+        <EmptyState icon={LayoutGrid} title="Unknown life app" body={`“${inst.appId}” isn’t available in this version of Ultranote.`} />
       </div>
     );
 

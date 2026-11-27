@@ -1,5 +1,5 @@
 /*
- * Ultra Note Design Language v3 — "Paper, ink and keys" (docs/DESIGN.md §3–§4).
+ * Ultranote Design Language v3 — "Paper, ink and keys" (docs/DESIGN.md §3–§4).
  * v2's material vocabulary survives as NAMES only (features reference --panel-*, --well-*, --slab-*, --glass-* …);
  * every value now resolves to the v3 rules:
  *

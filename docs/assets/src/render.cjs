@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Ultra Note brand art generator.
+ * Ultranote brand art generator.
  *
  *   npm run media:art                 capture fresh screenshots, then render every PNG
  *   npm run media:art -- --port 1907  use (or start) the mock app on this port

@@ -223,7 +223,7 @@ mod linux {
             "Inhibit",
             &(
                 "sleep",
-                "Ultra Note",
+                "Ultranote",
                 "Locking the vault before sleep",
                 "delay",
             ),

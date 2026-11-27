@@ -358,7 +358,7 @@ impl AppState {
     /// The open vault, or `LOCKED` when there is none yet.
     pub fn store(&self) -> ApiResult<Store> {
         self.store_opt()
-            .ok_or_else(|| ApiError::new(ErrorCode::Locked, "Ultra Note is not set up yet"))
+            .ok_or_else(|| ApiError::new(ErrorCode::Locked, "Ultranote is not set up yet"))
     }
 
     /// The unlocked vault (`state.session()?` of SPEC §11.1): `LOCKED` while locked; stamps activity.

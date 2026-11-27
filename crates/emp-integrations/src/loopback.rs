@@ -27,7 +27,7 @@ pub const CALLBACK_PATH: &str = "/oauth/callback";
 /// Default wait for the user to finish in the browser.
 pub const DEFAULT_CALLBACK_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// Text shown in the browser after the redirect.
-pub const DONE_TEXT: &str = "You can close this tab and return to Ultra Note.";
+pub const DONE_TEXT: &str = "You can close this tab and return to Ultranote.";
 
 const MAX_HEAD: usize = 8 * 1024;
 const CONN_READ_TIMEOUT: Duration = Duration::from_secs(10);
@@ -147,9 +147,9 @@ async fn serve(
     let (status, outcome) = evaluate(&head, expected_host, expected_state, claimed);
     let body = match status {
         200 => format!(
-            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Ultra Note</title></head><body><p>{DONE_TEXT}</p></body></html>"
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Ultranote</title></head><body><p>{DONE_TEXT}</p></body></html>"
         ),
-        _ => "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Ultra Note</title></head><body><p>Invalid request.</p></body></html>".to_string(),
+        _ => "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Ultranote</title></head><body><p>Invalid request.</p></body></html>".to_string(),
     };
     let reason = match status {
         200 => "OK",

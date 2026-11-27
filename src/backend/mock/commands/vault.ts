@@ -94,7 +94,7 @@ function markUnlocked(ctx: MockCtx, v: VaultRecord) {
 }
 
 function requireUnlocked(v: VaultRecord) {
-  if (v.state !== 'unlocked') throw new BackendError('LOCKED', 'Ultra Note is locked');
+  if (v.state !== 'unlocked') throw new BackendError('LOCKED', 'Ultranote is locked');
 }
 
 function emitStatus(ctx: MockCtx) {
@@ -106,7 +106,7 @@ export const handlers: MockHandlers = {
 
   vault_create: async (req, ctx) => {
     const v = vaultRecord(ctx);
-    if (v.state !== 'uninitialized') throw new BackendError('INVALID', 'Ultra Note is already set up');
+    if (v.state !== 'uninitialized') throw new BackendError('INVALID', 'Ultranote is already set up');
     const autoLock = validateAutoLock(req.autoLock ?? DEFAULT_AUTOLOCK);
     const encrypted = typeof req.password === 'string' && req.password.length > 0;
     let recoveryWords: string[] | undefined;
@@ -136,7 +136,7 @@ export const handlers: MockHandlers = {
 
   vault_unlock: async (req, ctx) => {
     const v = vaultRecord(ctx);
-    if (v.state === 'uninitialized') throw new BackendError('INVALID', 'Set up Ultra Note first');
+    if (v.state === 'uninitialized') throw new BackendError('INVALID', 'Set up Ultranote first');
     if (v.state === 'unlocked') return statusOf(ctx);
     checkLockout(ctx, v);
     const pw = normalisePassword(req.password);
@@ -171,7 +171,7 @@ export const handlers: MockHandlers = {
 
   vault_lock: async (_req, ctx) => {
     const v = vaultRecord(ctx);
-    if (!v.encrypted) throw new BackendError('UNSUPPORTED', 'Turn on encryption to lock Ultra Note');
+    if (!v.encrypted) throw new BackendError('UNSUPPORTED', 'Turn on encryption to lock Ultranote');
     await ctx.vault.lock('manual');
     ctx.events.internal('gettingStarted:tick', { item: 'lock' });
   },

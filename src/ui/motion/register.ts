@@ -1,5 +1,5 @@
 /**
- * The motion register (docs/DESIGN.md §7; PROGRAMME-v3 K3). Every animation in Ultra Note belongs to exactly one
+ * The motion register (docs/DESIGN.md §7; PROGRAMME-v3 K3). Every animation in Ultranote belongs to exactly one
  * frequency class, and the class sets its budget. Motion is earned: the more often something happens, the less it
  * moves. register.test.ts enforces the budgets against this table and against the kit's CSS.
  *

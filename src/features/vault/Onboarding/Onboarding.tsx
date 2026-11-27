@@ -206,7 +206,7 @@ export default function Onboarding() {
         data-inert={isPresent ? undefined : ""}
         role="dialog"
         aria-modal="true"
-        aria-label="Set up Ultra Note"
+        aria-label="Set up Ultranote"
       >
         {screen >= 0 ? (
           <ol className="onb-steps" aria-label={`Step ${screen + 1} of ${SCREENS.length}`}>

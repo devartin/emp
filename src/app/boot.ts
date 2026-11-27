@@ -206,7 +206,7 @@ export function wireBackendEvents(): () => void {
       void notify.info(`${e.symbol.split(':')[0]} ${e.kind === 'above' ? 'rose above' : e.kind === 'below' ? 'fell below' : 'moved past'} your alert`, {
         description: `Now ${e.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
       }),
-    'update:available': (e) => void notify.info(`Ultra Note ${e.version} is available`, { description: 'Install it from Settings → About.' }),
+    'update:available': (e) => void notify.info(`Ultranote ${e.version} is available`, { description: 'Install it from Settings → About.' }),
     'integrity:warning': (e) =>
       void notify.error('Integrity check found a problem', {
         description: `${e.damaged} item${e.damaged === 1 ? '' : 's'} could not be verified. Open Security Center for details.`,

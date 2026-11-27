@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Ultra Note doesn't work as expected.
+description: Something in Ultranote doesn't work as expected.
 labels: ["bug"]
 body:
   - type: markdown
@@ -27,7 +27,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Ultra Note version
+      label: Ultranote version
       description: The release you downloaded, or the commit you built from.
       placeholder: "0.3.0"
     validations:

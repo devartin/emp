@@ -467,7 +467,7 @@ export const handlers: MockHandlers = {
     pack.add('manifest.json', JSON.stringify({
       format: 'emp-export',
       version: 1,
-      app: 'Ultra Note 1.0.0',
+      app: 'Ultranote 1.0.0',
       exportedAt: new Date(ctx.clock.now()).toISOString(),
       counts: { pages: docsOnly.length, databases: dbs.length, sheets: sheets.length, attachments: entries.filter((e) => e.path.startsWith('attachments/')).length },
       files: entries,

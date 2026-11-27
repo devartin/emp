@@ -11,7 +11,7 @@ use super::{IcsDateTime, IcsEvent, IcsTodo, ZoneRef};
 use crate::error::{IntegrationError, Result};
 
 /// Product identifier written to every file.
-pub const PRODID: &str = "-//devartin//Ultra Note//EN";
+pub const PRODID: &str = "-//devartin//Ultranote//EN";
 /// Longest span of years a generated `VTIMEZONE` covers.
 const MAX_TZ_YEARS: i32 = 30;
 

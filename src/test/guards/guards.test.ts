@@ -222,7 +222,7 @@ describe('guard matchers', () => {
       we_voice: 1,
     });
     expect(isTitleCase('Open in Google Sheets', nouns)).toBe(false);
-    expect(isTitleCase('Import from Ultra Note', nouns)).toBe(false);
+    expect(isTitleCase('Import from Ultranote', nouns)).toBe(false);
     expect(isTitleCase('New page', nouns)).toBe(false);
     expect(isTitleCase('Create New Page', nouns)).toBe(true);
   });

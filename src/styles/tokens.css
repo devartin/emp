@@ -1,5 +1,5 @@
 /*
- * Ultra Note design tokens — Design Language v3 "Paper, ink and keys" (docs/DESIGN.md §2). Pure CSS custom properties;
+ * Ultranote design tokens — Design Language v3 "Paper, ink and keys" (docs/DESIGN.md §2). Pure CSS custom properties;
  * the Tailwind mapping lives in theme.css. Token NAMES are the SPEC §3 names (CLAUDE.md override 5); the VALUES are v3:
  *   warm paper surfaces, graphite ink as the only accent, hairlines at 7–11% ink, four weights, radii {4, 6, 10, 12},
  *   flat by default — shadows only on things that float (menus, dialogs) and on keys.

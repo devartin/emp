@@ -34,7 +34,7 @@ export function ShortcutsSection() {
       <SectionHeader
         icon={Keyboard}
         title="Keyboard shortcuts"
-        description={isMac ? "Ultra Note is keyboard-first. ⌘ is the Command key." : "Ultra Note is keyboard-first. Shortcuts use Ctrl, Alt and Shift on this computer."}
+        description={isMac ? "Ultranote is keyboard-first. ⌘ is the Command key." : "Ultranote is keyboard-first. Shortcuts use Ctrl, Alt and Shift on this computer."}
         actions={
           <Button size="sm" variant="secondary" kbd="mod+/" onClick={() => useUi.getState().setShortcutsOpen(true)}>
             Cheat sheet

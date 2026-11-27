@@ -980,7 +980,7 @@
             "key": "balance",
             "name": "Balance",
             "type": "computed",
-            "description": "Opening balance plus transactions; kept up to date by Ultra Note."
+            "description": "Opening balance plus transactions; kept up to date by Ultranote."
           },
           {
             "key": "cleared",

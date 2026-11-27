@@ -117,7 +117,7 @@ export function AppearanceSection() {
 
   return (
     <div>
-      <SectionHeader icon={Palette} title="Appearance" description="Make Ultra Note feel like yours. Changes apply instantly on this device." />
+      <SectionHeader icon={Palette} title="Appearance" description="Make Ultranote feel like yours. Changes apply instantly on this device." />
 
       <Group id="theme" title="Theme">
         <div className="st-block">
@@ -129,7 +129,7 @@ export function AppearanceSection() {
         </div>
       </Group>
 
-      <Group id="accent" title="Accent colour" description="One colour for buttons, selection and focus. Graphite keeps Ultra Note monochrome.">
+      <Group id="accent" title="Accent colour" description="One colour for buttons, selection and focus. Graphite keeps Ultranote monochrome.">
         <div className="st-block st-accent-block">
           <div className="st-swatches" role="radiogroup" aria-label="Accent colour" ref={swatchRow}>
             {ACCENTS.map((a) => {
@@ -236,10 +236,10 @@ const TRANSPARENCY_NOTES: Record<GlassStatus, string> = {
   "forced-on": "Frosted glass on menus, dialogs and the command palette, even where Auto would turn it off.",
   "forced-off": "Menus, dialogs and the command palette are solid. Every other effect stays.",
   "auto-on": "Frosted glass on menus, dialogs and the command palette, unless your system asks for less transparency.",
-  "auto-probing": "Glass is on while Ultra Note checks that menus and dialogs stay smooth on this computer.",
+  "auto-probing": "Glass is on while Ultranote checks that menus and dialogs stay smooth on this computer.",
   "auto-passed": "Glass is on. Menus and dialogs run smoothly with it on this computer.",
   "auto-stepped-down": "Turned off on this computer because menus and dialogs dropped frames with glass more than once.",
-  "auto-session-off": "Off for now because menus and dialogs dropped frames with glass. Ultra Note checks again next time it opens.",
+  "auto-session-off": "Off for now because menus and dialogs dropped frames with glass. Ultranote checks again next time it opens.",
   "auto-os": "Off because your system asks for reduced transparency.",
   "auto-effects": "Off while visual effects are reduced.",
 };

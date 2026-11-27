@@ -41,7 +41,7 @@ export async function installSheets(env: Env): Promise<void> {
 - Constants live in **named ranges** on the Inputs sheet.
 - A **Checks** row turns green when the model is consistent.
 - Header rows are frozen and dates are ISO (2026-11-26).
-${answers.excel_compat ? '\n> [!info] Excel-compatible mode is on: workbooks avoid functions only Ultra Note has, like STOCK and FX.' : ''}`),
+${answers.excel_compat ? '\n> [!info] Excel-compatible mode is on: workbooks avoid functions only Ultranote has, like STOCK and FX.' : ''}`),
     });
   }
 }

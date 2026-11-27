@@ -82,17 +82,17 @@ pub struct StarterTour {
 }
 
 const GUIDES: [(&str, &str, &str); 4] = [
-    ("Writing in Ultra Note", "pen-line", WRITING),
+    ("Writing in Ultranote", "pen-line", WRITING),
     ("Keyboard shortcuts", "keyboard", SHORTCUTS),
     ("Privacy & encryption", "lock", PRIVACY),
     ("Money & life apps", "compass", MONEY),
 ];
 
-const INTRO: &str = "Ultra Note keeps your notes, money, plans and life admin in **one private place on this device**. \
+const INTRO: &str = "Ultranote keeps your notes, money, plans and life admin in **one private place on this device**. \
 This page is a short tour: the checklist below ticks itself as you try each thing.
 
 > [!note]
-> **Your workspace lives on your computer.** Ultra Note has no servers and no accounts, and your data never leaves this device. \
+> **Your workspace lives on your computer.** Ultranote has no servers and no accounts, and your data never leaves this device. \
 Nothing connects to the internet unless you turn on an integration.
 
 ## Your first ten minutes
@@ -101,7 +101,7 @@ Nothing connects to the internet unless you turn on an integration.
 const OUTRO: &str = "
 ## Find your way around
 
-- **Write:** docs with headings, toggles, tables, maths, code and columns, all keyboard-first. See [[Writing in Ultra Note]].
+- **Write:** docs with headings, toggles, tables, maths, code and columns, all keyboard-first. See [[Writing in Ultranote]].
 - **Move fast:** press `⌘K` anywhere to jump to pages, run commands, even do quick maths with `=`. See [[Keyboard shortcuts]].
 - **Stay private:** optional encryption with a password only you know, plus a recovery key you keep safe. See [[Privacy & encryption]].
 - **Plan your money:** guided life apps build real pages, databases and dashboards. See [[Money & life apps]].
@@ -218,8 +218,8 @@ keep it safe.
 
 1. Your password is stretched with **Argon2id** into a key that unlocks a random 256-bit data key.
 2. Every page, row and file is encrypted on your device with **XChaCha20-Poly1305**.
-3. Ultra Note locks itself after 15 idle minutes, when your computer sleeps, or when you press `⌘⇧L`.
-4. Tamper-evident: Ultra Note detects if encrypted items are modified outside the app.
+3. Ultranote locks itself after 15 idle minutes, when your computer sleeps, or when you press `⌘⇧L`.
+4. Tamper-evident: Ultranote detects if encrypted items are modified outside the app.
 
 ## What encryption protects
 
@@ -236,7 +236,7 @@ Turn on full-disk encryption (FileVault, BitLocker or LUKS) to cover the rest. R
 
 - **What if I forget my password?** Choose \"Use recovery key\" on the lock screen and enter your 24 words. You'll \
 set a new password straight away.
-- **Does Ultra Note connect to the internet?** Only for integrations you turn on: market data, Google, update checks. \
+- **Does Ultranote connect to the internet?** Only for integrations you turn on: market data, Google, update checks. \
 Every request is listed in Security Center, and Offline mode (`⌘⇧O`) blocks them all.
 ";
 

@@ -183,7 +183,7 @@ pub fn name_from_url(url: &url::Url) -> String {
         .map(percent_decode)
         .unwrap_or_default();
     let name = super::app::sanitize_file_name(&seg);
-    if seg.trim().is_empty() || name == "Ultra Note export" {
+    if seg.trim().is_empty() || name == "Ultranote export" {
         "image".into()
     } else {
         name
@@ -319,7 +319,7 @@ pub async fn asset_open_external(app: AppHandle, req: AssetIdReq) -> ApiResult<(
             .ok_or_else(|| ApiError::not_found("asset"))?;
         if is_executable_name(&meta.name) {
             return Err(ApiError::unsupported(
-                "Ultra Note doesn't open programs. Use Save as… instead.",
+                "Ultranote doesn't open programs. Use Save as… instead.",
             ));
         }
         Ok(store.asset_open_external(&req.id)?)

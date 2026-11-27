@@ -144,7 +144,7 @@ pub async fn vault_create(app: AppHandle, req: VaultCreateReq) -> ApiResult<Vaul
         if state.store_opt().is_some() {
             return Err(ApiError::invalid(
                 "password",
-                "Ultra Note is already set up",
+                "Ultranote is already set up",
             ));
         }
         let _guard = state.begin_unlock()?;
@@ -276,7 +276,7 @@ pub async fn vault_lock(app: AppHandle, req: LockReq) -> ApiResult<()> {
         let store = state.store()?;
         if !store.is_encrypted()? {
             return Err(ApiError::unsupported(
-                "Turn on encryption to lock Ultra Note",
+                "Turn on encryption to lock Ultranote",
             ));
         }
         state.lock_now(LockReason::Manual, false)

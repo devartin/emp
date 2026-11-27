@@ -1,4 +1,4 @@
-# Contributing to Ultra Note
+# Contributing to Ultranote
 
 Thanks for helping. Bug reports, fixes and focused improvements are all welcome.
 

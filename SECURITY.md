@@ -6,7 +6,7 @@ Please **do not open a public issue** for security problems. Use GitHub's
 [private vulnerability reporting](https://github.com/devartin/ultra-note/security/advisories/new) instead.
 We aim to acknowledge reports within 72 hours.
 
-## What Ultra Note protects
+## What Ultranote protects
 
 With vault encryption on, everything you write — page content, titles, database values, spreadsheet cells,
 transactions, attachments — is encrypted at rest with XChaCha20-Poly1305 under a random 256-bit data key. That key is
@@ -16,7 +16,7 @@ memory while the vault is unlocked and are zeroised when it locks (manually, on 
 API keys and OAuth tokens are always encrypted, even when vault encryption is off (using a device key held in the OS
 keychain).
 
-## What Ultra Note does not protect
+## What Ultranote does not protect
 
 - **Structural metadata stays visible on disk:** record ids, the page tree shape, record kinds, sort order, timestamps,
   revision numbers, approximate sizes, and which life apps are installed. The full list is in

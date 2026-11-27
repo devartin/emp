@@ -75,7 +75,7 @@ impl Category {
             Category::Date => "Date and time",
             Category::Financial => "Financial",
             Category::Information => "Information",
-            Category::Emp => "Ultra Note",
+            Category::Emp => "Ultranote",
         }
     }
 }
