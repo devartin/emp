@@ -160,12 +160,14 @@ export function BackupsSection() {
           id="backup-location"
           label="Where"
           description={
-            <>
-              <span className="st-mono st-path" title={status?.folderPath}>
-                {status?.folderPath ?? where}
-              </span>
-              {status?.folderUnavailable ? <span className="block">{`${where} can’t be reached right now, so backups go to Ultranote’s data folder until it’s back.`}</span> : null}
-            </>
+            status?.customFolder ? (
+              <>
+                <span className="st-mono st-path">{status.folderPath}</span>
+                {status.folderUnavailable ? <span className="block">{`${where} can’t be reached right now, so backups go to Ultranote’s data folder until it’s back.`}</span> : null}
+              </>
+            ) : (
+              <span title={status?.folderPath}>Ultranote’s data folder on this computer. Choose a synced folder (Dropbox, iCloud Drive, a network drive) to keep a copy somewhere else.</span>
+            )
           }
         >
           {status?.customFolder ? (
