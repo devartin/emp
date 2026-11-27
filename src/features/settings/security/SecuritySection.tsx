@@ -341,7 +341,7 @@ function IntegrityRow() {
       label="Integrity check"
       description={progress !== null ? "Checking…" : integrity === "ok" ? `Nothing changed outside Ultranote${last ? ` · checked ${formatRelative(last)}` : ""}.` : integrity === "warning" ? "Something changed outside Ultranote." : "Checks that nothing was changed outside Ultranote."}
     >
-      {progress !== null ? <Ring value={progress} size={22} aria-label="Integrity check progress" /> : null}
+      {progress !== null ? <Ring value={progress} size={24} aria-label="Integrity check progress" /> : null}
       {integrity === "warning" ? (
         <Button
           size="sm"

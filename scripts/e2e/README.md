@@ -40,6 +40,8 @@ the desktop engine.
   the picked apps have built (`apps` are card labels such as `'Money'`, app ids, or the 0.3.x labels; Tasks is picked
   unless `tasks: false`). `onboardEncrypted(s, u, { password, saveTo })` locks with a password and returns the 24
   recovery words; with `saveTo` it saves the key through the native save dialog first (xdotool).
+- `waitHome(s)` waits until Home is open with its content shown (its body fades in once every section has its data).
+  Use it rather than waiting for sidebar text: below 900 px the sidebar is an overlay and its labels are not visible.
 - `endSession(s)` ends the WebDriver session **and** kills the app if it outlived its window. A leftover instance holds
   the single-instance lock, and every later launch on the same D-Bus session hands over to it and exits (the WebDriver
   session then hangs for minutes). Running specs next to other people? Start your own bus

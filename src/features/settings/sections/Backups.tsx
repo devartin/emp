@@ -336,7 +336,7 @@ function SnapshotRow({ sn, latest }: { sn: SnapshotInfo; latest: boolean }) {
       </div>
       {verify && "p" in verify ? (
         <span className="flex items-center gap-2 text-caption text-tertiary">
-          <Ring value={verify.p} size={22} aria-label="Checking" /> Checking
+          <Ring value={verify.p} size={24} aria-label="Checking" /> Checking
         </span>
       ) : verify && "ok" in verify ? (
         <span className="st-verify" data-ok={verify.ok ? "" : undefined}>

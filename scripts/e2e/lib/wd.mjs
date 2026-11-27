@@ -85,10 +85,17 @@ export const KEY = { enter: '', escape: '', tab: '', backspace: '', 
  * Launch the real desktop binary with a fresh (or given) data directory.
  * Requires DISPLAY (Xvfb + a window manager), tauri-driver and WebKitWebDriver on PATH.
  */
-export async function desktopSession({ app = process.env.ULTRANOTE_BIN || '/usr/bin/ultranote', dataHome, port = 4444, nativePort = 4445 } = {}) {
+export async function desktopSession({ app = process.env.ULTRANOTE_BIN || '/usr/bin/ultranote', dataHome, port = 4444, nativePort = 4445, compositing = process.env.E2E_COMPOSITING === '1' } = {}) {
   const home = dataHome || mkdtempSync(join(tmpdir(), 'ultranote-e2e-'));
   const driver = spawn('tauri-driver', ['--port', String(port), '--native-port', String(nativePort)], {
-    env: { ...process.env, XDG_DATA_HOME: home, XDG_CONFIG_HOME: join(home, 'config'), WEBKIT_DISABLE_COMPOSITING_MODE: '1' },
+    // Compositing off is the robust default under Xvfb; pass compositing: true (or E2E_COMPOSITING=1) to run the way
+    // most users do and catch launch-time races that only show with it on.
+    env: (() => {
+      const env = { ...process.env, XDG_DATA_HOME: home, XDG_CONFIG_HOME: join(home, 'config') };
+      if (compositing) delete env.WEBKIT_DISABLE_COMPOSITING_MODE;
+      else env.WEBKIT_DISABLE_COMPOSITING_MODE = '1';
+      return env;
+    })(),
     stdio: 'ignore',
   });
   const base = `http://127.0.0.1:${port}`;
