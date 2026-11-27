@@ -20,7 +20,7 @@ import { createEnv, instancesTable, isoDay, lucide, type InstanceRecord, type En
 import { installLifeOs, sampleLifeOs } from '@/features/lifeapps/mock/lifeos';
 import { habitItems, installHabits, refreshHabitStats, sampleLog } from '@/features/lifeapps/mock/habits';
 import { installMoneyHq, installPortfolio, installTax } from '@/features/lifeapps/mock/finance';
-import { installSheets, addWorkbook } from '@/features/lifeapps/mock/sheets';
+import { installSheets, addWorkbook, addStudioSpreadsheet } from '@/features/lifeapps/mock/sheets';
 import { insightsFor, metricsFor, rawMetrics } from '@/features/lifeapps/mock/metrics';
 import { cellDate, cellText, c } from '@/features/lifeapps/mock/env';
 import { iconOf } from '../lib/icons';
@@ -154,6 +154,8 @@ export interface InstallInput {
   disabledKeys: string[];
   workspaceId: Id;
   sampleData: boolean;
+  /** Document or project the hub is created in (Rust validates the same: a live doc page, not an app page). */
+  parentId?: Id | null;
 }
 
 export async function installApp(
@@ -165,7 +167,14 @@ export async function installApp(
   const m = requireManifest(input.appId);
   const answers = checkAnswers(input.answers);
   if (instancesTable(ctx).find((i) => i.appId === m.id && i.workspaceId === input.workspaceId && !i.detached)) {
-    throw new BackendError('CONFLICT', `${m.title} is already set up. Use Tune-up to change it.`);
+    throw new BackendError('CONFLICT', `${m.title} is already set up. Use Tune up to change it.`, { field: 'appId' });
+  }
+  const parentId = input.parentId ?? null;
+  if (parentId) {
+    const parent = ctx.pages.get(parentId);
+    if (!parent || parent.deletedAt || parent.workspaceId !== input.workspaceId) throw new BackendError('NOT_FOUND', 'parent page not found');
+    if (parent.kind !== 'doc') throw new BackendError('INVALID', 'apps can only be added to documents and projects', { field: 'parentId' });
+    if (parent.appInstanceId) throw new BackendError('INVALID', "apps can't be added inside another app", { field: 'parentId' });
   }
   const today = isoDay(ctx.clock.now());
   const plan: GenerationPlan = buildPlan(m, answers, input.mode, input.disabledKeys ?? [], today);
@@ -177,7 +186,7 @@ export async function installApp(
   const rootTitle = plan.items.find((i) => i.kind === 'dashboard')?.title ?? m.title;
   const root = ctx.pages.create({
     workspaceId: input.workspaceId,
-    parentId: null,
+    parentId,
     kind: 'app',
     title: rootTitle,
     icon: lucide(m.icon),
@@ -381,6 +390,8 @@ function onDbChanged(ctx: MockCtx, databaseId: Id, rowIds: Id[] | undefined): vo
       values[status.id] = { t: 'status', v: nextOpt ?? null };
       if (due) values[due.id] = c.date(nextDay)!;
       db.createRow(ctx, databaseId, { values, afterId: row.id });
+      // As in Rust: the completed occurrence keeps its history and hands the repeat rule to the new one.
+      if (repeat) db.updateRows(ctx, [{ id: row.id, values: { [repeat.id]: null } }]);
     }
   }
 }
@@ -553,7 +564,7 @@ export const handlers: MockHandlers = {
     return buildPlan(m, checkAnswers(req.answers ?? {}), req.mode === 'guided' ? 'guided' : 'quick', req.disabledKeys ?? [], isoDay(ctx.clock.now()));
   },
   lifeapp_install: async (req, ctx) =>
-    installApp(ctx, { appId: req.appId, answers: req.answers ?? {}, mode: req.mode === 'guided' ? 'guided' : 'quick', disabledKeys: req.disabledKeys ?? [], workspaceId: req.workspaceId, sampleData: !!req.sampleData }, ctx.progress, ctx.checkCancelled),
+    installApp(ctx, { appId: req.appId, answers: req.answers ?? {}, mode: req.mode === 'guided' ? 'guided' : 'quick', disabledKeys: req.disabledKeys ?? [], workspaceId: req.workspaceId, sampleData: !!req.sampleData, parentId: req.parentId ?? null }, ctx.progress, ctx.checkCancelled),
   lifeapp_instances: (req, ctx) => listInstances(ctx, req.workspaceId),
   lifeapp_tuneup_preview: (req, ctx) => tuneupDiff(ctx, requireInstance(ctx, req.instanceId), checkAnswers(req.answers ?? {})),
   lifeapp_tuneup_apply: async (req, ctx) => {
@@ -659,6 +670,30 @@ export const handlers: MockHandlers = {
       x.checklist = { ...x.checklist, [req.itemId]: true };
       if (inst.appId === 'life-os' && req.itemId === 'review') x.lastReviewAt = ctx.clock.now();
     });
+  },
+  lifeapp_event: (req, ctx) => {
+    if (!/^[a-z0-9_.-]{1,64}$/.test(req.event ?? '')) throw new BackendError('INVALID', 'invalid id', { field: 'event' });
+    const out: { instanceId: Id; itemId: string }[] = [];
+    for (const inst of instancesTable(ctx).all()) {
+      if (inst.detached) continue;
+      const m = manifestById(inst.appId);
+      for (const item of m?.checklist ?? []) {
+        if (item.autoTick?.event !== req.event || inst.checklist[item.id]) continue;
+        instancesTable(ctx).update(inst.id, (x) => void (x.checklist = { ...x.checklist, [item.id]: true }));
+        out.push({ instanceId: inst.id, itemId: item.id });
+      }
+    }
+    return out;
+  },
+  lifeapp_add_workbook: (req, ctx) => {
+    const inst = requireInstance(ctx, req.instanceId);
+    if (inst.appId !== 'spreadsheet-studio') throw new BackendError('INVALID', 'not a Spreadsheet Studio app', { field: 'instanceId' });
+    if (inst.detached) throw new BackendError('INVALID', 'this app was detached');
+    const intents = (requireManifest(inst.appId).steps.find((st) => st.id === 'intent')?.options ?? []).map((o) => o.value);
+    if (!intents.includes(req.intent) || req.intent === 'import') throw new BackendError('INVALID', 'unknown template', { field: 'intent' });
+    const structure = Array.isArray(inst.answers.structure) ? (inst.answers.structure as string[]) : ['inputs', 'calculations', 'output', 'checks', 'changelog'];
+    const id = addStudioSpreadsheet(ctx, inst, req.intent, structure);
+    return ctx.pages.meta(id);
   },
 };
 

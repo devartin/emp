@@ -15,10 +15,11 @@ import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Sensitive } from "@/ui/Sensitive";
 import { baseCurrency } from "../shared/currency";
 import { dayLabel, fmtMoney, num, todayIso } from "../shared/format";
-import { V } from "../shared/hooks";
+import { useAsync } from "../shared/hooks";
 import { loadStatement, useRememberedStatement } from "../shared/statements";
-import { DEBT_TYPES, useLedgerCtx, type Account } from "./ledger";
-import { clearedAsOf, reconcileCompare, statementFieldFromFile } from "./reconcile";
+import { DEBT_TYPES, type Account } from "./ledger";
+import { useMoney } from "./MoneyHQ";
+import { reconcileCompare, statementFieldFromFile } from "./reconcile";
 
 /**
  * Honest reconcile (PROGRAMME-v3 K5b): the statement balance is the user's to enter — never pre-filled with Ultra
@@ -29,7 +30,7 @@ import { clearedAsOf, reconcileCompare, statementFieldFromFile } from "./reconci
  * (≤ 600 ms; a crossfade under reduced motion), then the dialog closes.
  */
 export default function ReconcileDialog({ account, onClose, onDone }: { account: Account; onClose: () => void; onDone: () => void }) {
-  const l = useLedgerCtx();
+  const { instanceId } = useMoney();
   const isDebt = DEBT_TYPES.has(account.type);
   const remembered = useRememberedStatement(account.id);
   useEffect(() => void loadStatement(account.id), [account.id]);
@@ -51,7 +52,11 @@ export default function ReconcileDialog({ account, onClose, onDone }: { account:
   const [done, setDone] = useState(false);
   const reduced = useReducedMotionPref();
   const fromFile = offered !== null && statement === offered;
-  const cmp = reconcileCompare(isDebt, statement, clearedAsOf(account, l.txns, asOf));
+  // The cleared balance as of the statement date, from the backend's ledger (exact decimals).
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(asOf);
+  const preview = useAsync(() => api.finance.reconcile({ instanceId, accountId: account.id, asOf, commit: false }), [instanceId, account.id, asOf], { enabled: validDate });
+  const cleared = preview.data ? num(preview.data.cleared) : null;
+  const cmp = reconcileCompare(isDebt, statement, cleared ?? 0);
   useEffect(() => {
     if (!done) return;
     // The C3 moment plays out, then holds for a beat before the dialog closes.
@@ -59,16 +64,11 @@ export default function ReconcileDialog({ account, onClose, onDone }: { account:
     return () => window.clearTimeout(t);
   }, [done, reduced, onDone]);
   const finish = async () => {
-    const A = l.schemas.accounts;
-    const X = l.schemas.txns;
-    if (!A || !X) return;
+    if (cleared === null) return;
     setBusy(true);
     try {
-      const rows = l.txns.filter((t) => t.accountId === account.id && t.cleared === "cleared" && t.date <= asOf);
-      if (rows.length) await api.db.rowsUpdate({ updates: rows.map((t) => ({ id: t.id, values: { [X.database.roles["txn.cleared"]]: V.status("reconciled") } })) });
-      const recRole = A.database.roles["acct.reconciled"];
-      if (recRole) await api.db.rowsUpdate({ updates: [{ id: account.id, values: { [recRole]: V.date(asOf) } }] });
-      notify.success(`${account.name} reconciled`, { description: `${rows.length} cleared ${rows.length === 1 ? "transaction" : "transactions"} locked to ${dayLabel(asOf, true)}.` });
+      const res = await api.finance.reconcile({ instanceId, accountId: account.id, asOf, commit: true });
+      notify.success(`${account.name} reconciled`, { description: `${res.count} cleared ${res.count === 1 ? "transaction" : "transactions"} locked to ${dayLabel(asOf, true)}.` });
       setDone(true);
     } catch (e) {
       notify.fromError(e, "Couldn't reconcile");
@@ -89,7 +89,7 @@ export default function ReconcileDialog({ account, onClose, onDone }: { account:
           <Button variant="secondary" onClick={onClose} disabled={done}>
             Cancel
           </Button>
-          <Button variant="primary" disabled={!cmp.ok || done} loading={busy} onClick={finish}>
+          <Button variant="primary" disabled={!cmp.ok || done || cleared === null} loading={busy} onClick={finish}>
             Finish reconciling
           </Button>
         </>
@@ -101,6 +101,9 @@ export default function ReconcileDialog({ account, onClose, onDone }: { account:
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
             <MoneyField
+              // A focused field keeps its own text, so the statement offered from the last import (it loads from the
+              // vault after the dialog opens) remounts the field to show it, until the user types.
+              key={touched ? "typed" : (offered ?? "empty")}
               label={isDebt ? "Amount owed on statement" : "Statement balance"}
               value={statement}
               onChange={(v) => {
@@ -126,7 +129,7 @@ export default function ReconcileDialog({ account, onClose, onDone }: { account:
                 {!cmp.entered ? (isDebt ? "Enter the amount owed" : "Enter the statement balance") : cmp.ok ? (isDebt ? "Matches the cleared amount owed" : "Matches the cleared balance") : <>Off by <Sensitive>{fmtMoney(Math.abs(cmp.diff), currency)}</Sensitive></>}
               </div>
               <div className="text-caption text-tertiary tabular font-normal">
-                {isDebt ? "Owed (cleared) in Ultranote" : "Cleared in Ultranote"} on {dayLabel(asOf, true)}: <Sensitive>{fmtMoney(cmp.clearedShown, currency)}</Sensitive>
+                {isDebt ? "Owed (cleared) in Ultranote" : "Cleared in Ultranote"} on {validDate ? dayLabel(asOf, true) : "that date"}: <Sensitive>{cleared === null ? "…" : fmtMoney(cmp.clearedShown, currency)}</Sensitive>
                 {cmp.hint ? ` · ${cmp.hint}` : ""}
               </div>
             </div>

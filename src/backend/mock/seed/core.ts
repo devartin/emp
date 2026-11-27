@@ -14,6 +14,7 @@ import { b, makeDoc, t, type Inline } from '../lib/doc';
 import { dailyTitle } from '../lib/templates';
 import { patchVaultSettings } from '../lib/settings';
 import { logNetwork } from '../commands/network';
+import { kvWrite } from '../commands/kv';
 import { localDay } from '../clock';
 import { isMac } from '@/lib/platform';
 import { platformKeys, spellKeys } from '../lib/keys';
@@ -123,18 +124,18 @@ function createWorkspace(ctx: MockCtx, name: string): WorkspaceRecord {
   return ws;
 }
 
+/** The checklist (mirrors `ITEMS` / `LOCK_ITEM` in crates/emp-store/src/repo/tour.rs, and Home's checklist): only
+ * things a new workspace can do; "Lock" only when it is encrypted. */
 const GS_ITEMS: { key: string; content: Inline[] }[] = [
-  { key: 'create_page', content: [t.bold('Create a page'), ': press ', t.code('⌘N'), ' or the + next to Pages.'] },
-  { key: 'try_slash', content: [t.bold('Add any block'), ': type ', t.code('/'), ' on an empty line.'] },
-  { key: 'open_palette', content: [t.bold('Search everything'), ': press ', t.code('⌘K'), ' to find a page or run any command.'] },
-  { key: 'add_transaction', content: [t.bold('Add a transaction'), ' in Money HQ, or import a bank statement.'] },
-  { key: 'hide_numbers', content: [t.bold('Hide numbers'), ': press ', t.code('⌘⇧H'), ' when someone can see your screen.'] },
-  { key: 'lock', content: [t.bold('Lock'), ': press ', t.code('⌘⇧L'), ' and an encrypted workspace locks at once.'] },
-  { key: 'templates', content: [t.bold('Browse templates'), ' for meeting notes, weekly reviews, trip plans and more.'] },
+  { key: 'create_page', content: [t.bold('Write a document'), ': press ', t.code('⌘N'), ', or choose New document on Home.'] },
+  { key: 'try_slash', content: [t.bold('Add a heading, list or table'), ': type ', t.code('/'), ' on an empty line.'] },
+  { key: 'capture', content: [t.bold('Add a task or a note'), ': type it in the field on Home and press Enter.'] },
+  { key: 'open_palette', content: [t.bold('Find anything'), ': press ', t.code('⌘K'), ' to open a page or run any command.'] },
 ];
+const GS_LOCK_ITEM = { key: 'lock', content: [t.bold('Lock Ultranote'), ': press ', t.code('⌘⇧L'), ' when you step away.'] as Inline[] };
 
 /** Creates the workspace and the Getting Started tour. Used by vault_create (onboarding) and the demo seed. */
-export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo?: boolean } = {}): TourIds {
+export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo?: boolean; encrypted?: boolean } = {}): TourIds {
   const now = ctx.clock.now();
   const ws = createWorkspace(ctx, opts.name ?? 'Personal');
   const created = (daysAgo: number) => now - daysAgo * DAY;
@@ -203,7 +204,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     workspaceId: ws.id,
     parentId: gs.id,
     kind: 'doc',
-    title: 'Money & life apps',
+    title: 'Apps in Ultranote',
     icon: lucide('compass'),
     createdAt: created(opts.demo ? 58 : 0),
     updatedAt: created(opts.demo ? 9 : 0),
@@ -212,7 +213,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
 
   // ── Getting Started
   const itemIds: Record<string, string> = {};
-  const todos = GS_ITEMS.map((item) => {
+  const todos = [...GS_ITEMS, ...(opts.encrypted ? [GS_LOCK_ITEM] : [])].map((item) => {
     const id = ctx.blockId();
     itemIds[item.key] = id;
     return b.todo(item.content, false, { id });
@@ -222,14 +223,14 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     'page',
     tourDoc([
       b.p([
-        'Ultranote keeps your notes, money, plans and life admin in ',
-        t.bold('one private place on this device'),
+        'Ultranote keeps your notes, spreadsheets, tasks and money in ',
+        t.bold('one private place on this computer'),
         '. This page is a short tour: the checklist below ticks itself as you try each thing.',
       ]),
       b.callout(
         [
           t.bold('Your workspace lives on your computer.'),
-          ' Ultranote has no servers and no accounts, and your data never leaves this device. Nothing connects to the internet unless you turn on an integration.',
+          ' Ultranote has no servers and no accounts, and your data never leaves this device. Nothing connects to the internet unless you turn on a connection.',
         ],
         { icon: lucide('shield'), tone: 'gray' },
       ),
@@ -256,7 +257,7 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
         ],
         [
           b.h3('Stay private'),
-          b.p('Optional encryption with a password only you know, plus a recovery key you keep safe.'),
+          b.p('An optional password that encrypts everything, plus a recovery key you keep safe.'),
           b.pageLink(privacy.id),
         ],
       ]),
@@ -272,6 +273,8 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
     ]),
   );
   ctx.db.setMeta('gettingStarted', { pageId: gs.id, items: itemIds });
+  // Like Rust (`UI_TOUR_KEY`): Home reads the page's to-dos through this, so a hand tick counts there too.
+  kvWrite(ctx, 'ui.gettingStarted', 'tour', { pageId: gs.id, items: itemIds });
 
   // ── Writing in EMP (every block type)
   const today = ctx.clock.today();
@@ -472,19 +475,16 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
         { icon: lucide('key-round'), tone: 'yellow' },
       ),
       b.h2('How it works'),
-      b.numbered([
-        'Your password is stretched with ',
-        t.bold('Argon2id'),
-        ' (256 MiB, 3 passes) into a key that unlocks a random 256-bit data key.',
-      ]),
-      b.numbered(['Every page, row and file is encrypted on your device with ', t.bold('XChaCha20-Poly1305'), '.']),
-      b.numbered('Ultranote locks itself after 15 idle minutes, when your computer sleeps, or when you press ⌘⇧L.'),
-      b.numbered('Tamper-evident: Ultranote detects if encrypted items are modified outside the app.'),
+      b.numbered('Your password unlocks a random key that only exists on this device.'),
+      b.numbered('That key encrypts every page, row and file before it is written to disk.'),
+      b.numbered('When encryption is on, Ultranote locks itself after the idle time you choose in Settings, when your computer sleeps, or when you press ⌘⇧L.'),
+      b.numbered('Ultranote notices if encrypted items are changed outside the app.'),
+      b.p(['The technical details (the ciphers and how the password is stretched) are in ', t.bold('Settings → Privacy & security'), '.']),
       b.h2('What encryption protects'),
       b.table(
         [
           ['Protected', 'Still visible on disk'],
-          ['Titles, text and documents', 'That a vault exists, and its creation day'],
+          ['Titles, text and documents', 'That a workspace exists, and the day it was made'],
           ['Property names and values, views', 'How many pages, rows and files there are'],
           ['File names, types and contents', 'The shape of the page tree'],
           ['Tickers, accounts and amounts', 'When things were created and edited'],
@@ -494,13 +494,13 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       ),
       b.p([
         'Turn on full-disk encryption (FileVault, BitLocker or LUKS) to cover the rest. Read more in ',
-        t.bold('Settings → Security'),
+        t.bold('Settings → Privacy & security'),
         '.',
       ]),
       b.toggle('Is Ultranote military-grade encryption?', {
         children: [
           b.p(
-            '“Military grade” isn’t a technical standard, so Ultranote doesn’t use the term. It uses modern, widely reviewed cryptography (XChaCha20-Poly1305 with 256-bit keys and Argon2id password hashing) with conservative settings. It has not been certified by any government program. In practice, your security depends most on a strong password and keeping your computer free of malware. If someone can run software on your computer while Ultranote is unlocked, no app-level encryption can stop them.',
+            '“Military grade” isn’t a technical standard, so Ultranote doesn’t use the term. It uses modern, widely reviewed encryption with 256-bit keys and conservative settings (the details are in Settings). It has not been certified by any government program. In practice, your security depends most on a strong password and keeping your computer free of malware. If someone can run software on your computer while Ultranote is unlocked, no app-level encryption can stop them.',
           ),
         ],
       }),
@@ -509,29 +509,32 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
       }),
       b.toggle('Does Ultranote connect to the internet?', {
         children: [
-          b.p('Only for integrations you turn on: market data, Google, update checks. Every request is listed in Security Center, and Offline mode (⌘⇧O) blocks them all.'),
+          b.p('Only for connections you turn on: market data, Google, update checks. Every request is listed in Settings, and Offline mode (⌘⇧O) blocks them all.'),
         ],
+      }),
+      b.toggle('No password yet?', {
+        children: [b.p([ 'You can add one any time in ', t.bold('Settings → Privacy & security'), '.'])],
       }),
     ]),
   );
 
-  // ── Money & life apps
+  // ── Apps in Ultranote
   ctx.docs.save(
     money.id,
     'page',
     tourDoc([
-      b.p('Life apps are guided set-ups that build real pages, databases and dashboards for you, then get out of the way.'),
-      b.h2('The six apps'),
+      b.p(['Apps are guided set-ups that build real pages, databases and dashboards for you, then get out of the way. Add one from ', t.bold('Apps'), ' in the sidebar.']),
+      b.h2('The apps'),
       b.columns([
         [
-          b.callout([t.bold('Money HQ'), ': budget, spending, bills and net worth.'], { icon: lucide('credit-card'), tone: 'green' }),
-          b.callout([t.bold('Portfolio'), ': holdings, performance, allocation and rebalancing.'], { icon: lucide('trending-up'), tone: 'blue' }),
-          b.callout([t.bold('Tax Organizer'), ': documents, deductions and quarterly estimates.'], { icon: lucide('receipt'), tone: 'yellow' }),
+          b.callout([t.bold('Tasks'), ': to-dos, lists and a weekly plan.'], { icon: lucide('folder-kanban'), tone: 'gray' }),
+          b.callout([t.bold('Habits'), ': streaks and gentle check-ins.'], { icon: lucide('sprout'), tone: 'red' }),
+          b.callout([t.bold('Money'), ': budget, spending, bills and net worth.'], { icon: lucide('credit-card'), tone: 'green' }),
         ],
         [
+          b.callout([t.bold('Investments'), ': holdings, performance, allocation and rebalancing.'], { icon: lucide('trending-up'), tone: 'blue' }),
+          b.callout([t.bold('Taxes'), ': documents, deductions and quarterly estimates.'], { icon: lucide('receipt'), tone: 'yellow' }),
           b.callout([t.bold('Spreadsheet Studio'), ': calculators and models with real formulas.'], { icon: lucide('calculator'), tone: 'purple' }),
-          b.callout([t.bold('Life OS'), ': goals, projects and tasks in one system.'], { icon: lucide('folder-kanban'), tone: 'gray' }),
-          b.callout([t.bold('Habits'), ': streaks and gentle check-ins.'], { icon: lucide('sprout'), tone: 'red' }),
         ],
       ]),
       b.h2('How the advice works'),
@@ -547,8 +550,8 @@ export function createStarterWorkspace(ctx: MockCtx, opts: { name?: string; demo
   // Order children explicitly (create() appended them in this order already).
   ctx.pages.emitTree(ws.id, [gs.id, writing.id, shortcuts.id, privacy.id, money.id]);
 
+  // Not pinned to Favorites (it would list twice in the sidebar, 1.0 brief §2.1); the demo seed pins its own.
   ctx.db.table<WorkspaceRecord>('workspaces').update(ws.id, (w) => {
-    w.favorites = [gs.id];
     w.recents = [gs.id];
   });
 

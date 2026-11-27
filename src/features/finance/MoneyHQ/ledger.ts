@@ -1,22 +1,25 @@
 /**
- * Client view of the Money HQ ledger: Accounts, Categories, Transactions, Recurring and Goals read by role from
- * their databases, refreshed on `db:changed`. Edits go through `db_rows_update` / `db_row_create` (optimistic,
- * reconciled by the change event) so every other view of those databases stays coherent.
+ * Client view of the Money HQ ledger (ULTRANOTE-1.0 §5). The backend builds it over its cached ledger
+ * (`finance_ledger`): accounts with exact balances, cleared balances and 90-day history, categories, recurring items,
+ * goals, the latest transactions and the review counts. Select and status values arrive as option keys, and every
+ * edit goes through a key-based command (`finance_txns_update`, `finance_txn_create`, `finance_txn_split`), so the
+ * frontend never compares or writes generated option ids. Refreshed on `db:changed` of the instance's databases.
  */
 import { createContext, useCallback, useContext, useMemo } from "react";
 import { api } from "@/backend";
-import type { CellValue, DbSchema, Id, RowDTO } from "@/backend/types";
+import type { FinanceLedger, Id, LedgerAccount, LedgerTxn } from "@/backend/types";
 import { notify } from "@/stores/toasts";
-import { cell, queryAll, useAsync, useDbChanged, useRoleDbs, V } from "../shared/hooks";
+import { useAsync, useDbChanged } from "../shared/hooks";
 import { addMonths, num, todayIso } from "../shared/format";
 import { debtMinimum } from "../shared/figures";
 
 export interface Account {
   id: Id;
   name: string;
+  /** `acct.type` key. */
   type: string;
   institution: string;
-  /** ISO 4217 code from `acct.currency`; "" means the base currency. */
+  /** ISO 4217 code; "" means the base currency. */
   currency: string;
   opening: number;
   apr: number | null;
@@ -26,8 +29,11 @@ export interface Account {
   lowThreshold: number | null;
   reconciled: string | null;
   closed: boolean;
+  /** As of today, computed by the backend in exact decimals. */
   balance: number;
   cleared: number;
+  /** End-of-day balances of the last 90 days, oldest first. */
+  history: number[];
 }
 
 export interface Category {
@@ -52,11 +58,14 @@ export interface Txn {
   accountId: Id | null;
   categoryId: Id | null;
   transferId: Id | null;
+  /** The account on the other side of a transfer. */
+  transferAccountId: Id | null;
   splitParent: Id | null;
+  /** `uncleared`, `cleared` or `reconciled`. */
   cleared: string;
-  /** `txn.reviewed` (SPEC §16): null when the Transactions database has no Reviewed property yet. */
+  /** `txn.reviewed` (SPEC §16): null when the Transactions database has no Reviewed property. */
   reviewed: boolean | null;
-  /** `txn.source` option name ("Import", "Manual", "Rule", …) when the property exists, else "". */
+  /** `txn.source` key (`manual`, `import`, `rule`), or "". */
   source: string;
   tags: string[];
   splits: Txn[];
@@ -70,6 +79,7 @@ export interface RecurringRow {
   dtstart: string;
   accountId: Id | null;
   categoryId: Id | null;
+  /** bill, income, subscription, transfer, savings */
   kind: string;
   autopay: boolean;
   variable: boolean;
@@ -80,6 +90,7 @@ export interface RecurringRow {
 export interface GoalRow {
   id: Id;
   name: string;
+  /** emergency, sinking, savings */
   kind: string;
   target: number;
   date: string | null;
@@ -89,15 +100,19 @@ export interface GoalRow {
   icon: string;
 }
 
-const ROLES = { accounts: "acct.type", categories: "cat.group", txns: "txn.amount", recurring: "rec.amount", goals: "goal.target" } as const;
-type DbKey = keyof typeof ROLES;
+export type TxnPatch = Partial<Pick<Txn, "categoryId" | "memo" | "date" | "amount" | "cleared" | "reviewed">>;
 
 export interface Ledger {
-  schemas: Partial<Record<DbKey, DbSchema>>;
+  /** The instance's database ids (for `db:changed` subscriptions). */
+  dbs: FinanceLedger["dbs"];
+  /** Every id in `dbs`. */
+  dbIds: Id[];
+  currency: string;
   accounts: Account[];
   categories: Category[];
-  /** Top-level transactions (split children nested in `splits`), newest first. */
-  txns: Txn[];
+  /** The latest top-level transactions, newest first (split parts nested in `splits`). */
+  recent: Txn[];
+  counts: FinanceLedger["counts"];
   recurring: RecurringRow[];
   goals: GoalRow[];
   acct: Map<Id, Account>;
@@ -105,217 +120,146 @@ export interface Ledger {
   loading: boolean;
   error: string | null;
   reload: () => void;
-  /** Optimistic transaction edit. */
-  updateTxn: (id: Id, patch: Partial<Pick<Txn, "categoryId" | "payee" | "memo" | "date" | "amount" | "cleared" | "reviewed">>) => Promise<void>;
   /** Whether the Transactions database carries the Reviewed property (`txn.reviewed`). */
   hasReviewed: boolean;
+  /** Edits transactions by meaning (one batch). Resolves false when the backend refused. */
+  updateTxns: (updates: ({ id: Id } & TxnPatch)[]) => Promise<boolean>;
+  updateTxn: (id: Id, patch: TxnPatch) => Promise<boolean>;
   setSplits: (parent: Txn, parts: { categoryId: Id; amount: number }[]) => Promise<void>;
-  addTxn: (t: { date: string; payee: string; amount: number; accountId: Id; categoryId?: Id | null; memo?: string }) => Promise<void>;
+  addTxn: (t: { date: string; payee: string; amount: number; accountId: Id; categoryId?: Id | null; memo?: string }) => Promise<boolean>;
   deleteTxns: (ids: Id[]) => Promise<void>;
 }
 
-const roleOf = (s: DbSchema | undefined, role: string) => s?.database.roles[role];
-
-function parseAll(schemas: Partial<Record<DbKey, DbSchema>>, rows: Partial<Record<DbKey, RowDTO[]>>) {
-  const A = schemas.accounts;
-  const C = schemas.categories;
-  const X = schemas.txns;
-  const R = schemas.recurring;
-  const G = schemas.goals;
-  const opt = (s: DbSchema | undefined, role: string, v: CellValue | undefined) => {
-    const id = cell.sel(v);
-    const p = s?.properties.find((x) => x.id === roleOf(s, role));
-    return ((p?.config.options as { id: string; name: string }[] | undefined) ?? []).find((o) => o.id === id)?.name ?? id ?? "";
+/** A wire transaction as the client model (amounts as numbers, for display only). */
+export function toTxn(t: LedgerTxn): Txn {
+  return {
+    id: t.id,
+    rev: t.rev,
+    date: t.date,
+    payee: t.payee,
+    raw: t.raw,
+    memo: t.memo,
+    amount: num(t.amount),
+    accountId: t.accountId,
+    categoryId: t.categoryId,
+    transferId: t.transferId,
+    transferAccountId: t.transferAccountId,
+    splitParent: t.splitParent,
+    cleared: t.cleared,
+    reviewed: t.reviewed,
+    source: t.source,
+    tags: t.tags,
+    splits: t.splits.map(toTxn),
   };
-  const inst = A?.properties.find((p) => p.name === "Institution")?.id;
-  const accounts: Account[] = (rows.accounts ?? []).map((r) => ({
-    id: r.id,
-    name: cell.text(r.values[A!.database.primaryPropId]) || "Untitled account",
-    type: cell.sel(r.values[roleOf(A, "acct.type")!]) ?? "other_asset",
-    institution: inst ? cell.text(r.values[inst]) : "",
-    currency: (cell.text(r.values[roleOf(A, "acct.currency")!]) || cell.sel(r.values[roleOf(A, "acct.currency")!]) || "").trim().toUpperCase(),
-    // Card and loan openings are amounts owed, whichever sign they were entered with (Rust `opening_as_counted`).
-    opening: openingAsCounted(cell.sel(r.values[roleOf(A, "acct.type")!]) ?? "other_asset", num(cell.money(r.values[roleOf(A, "acct.opening")!]))),
-    apr: cell.num(r.values[roleOf(A, "acct.apr")!]),
-    minPayment: num(cell.money(r.values[roleOf(A, "acct.min_payment")!])),
-    limit: cell.money(r.values[roleOf(A, "acct.limit")!]) !== null ? num(cell.money(r.values[roleOf(A, "acct.limit")!])) : null,
-    onBudget: cell.check(r.values[roleOf(A, "acct.on_budget")!]),
-    lowThreshold: cell.money(r.values[roleOf(A, "acct.low_threshold")!]) !== null ? num(cell.money(r.values[roleOf(A, "acct.low_threshold")!])) : null,
-    reconciled: cell.date(r.values[roleOf(A, "acct.reconciled")!]),
-    closed: cell.check(r.values[roleOf(A, "acct.closed")!]),
-    balance: 0,
-    cleared: 0,
-  }));
-  const categories: Category[] = (rows.categories ?? []).map((r) => ({
-    id: r.id,
-    name: cell.text(r.values[C!.database.primaryPropId]) || "Untitled",
-    group: opt(C, "cat.group", r.values[roleOf(C, "cat.group")!]) || "Everyday",
-    color: cell.sel(r.values[roleOf(C, "cat.color")!]) ?? "gray",
-    icon: cell.text(r.values[roleOf(C, "cat.icon")!]) || "circle-dollar-sign",
-    essential: cell.check(r.values[roleOf(C, "cat.essential")!]),
-    rollover: cell.check(r.values[roleOf(C, "cat.rollover")!]),
-    target: num(cell.money(r.values[roleOf(C, "cat.target")!])),
-  }));
-  const all: Txn[] = (rows.txns ?? []).map((r) => ({
-    id: r.id,
-    rev: r.rev,
-    date: cell.date(r.values[roleOf(X, "txn.date")!]) ?? "",
-    payee: cell.text(r.values[X!.database.primaryPropId]),
-    raw: cell.text(r.values[roleOf(X, "txn.raw")!]),
-    memo: cell.text(r.values[roleOf(X, "txn.memo")!]),
-    amount: num(cell.money(r.values[roleOf(X, "txn.amount")!])),
-    accountId: cell.rel(r.values[roleOf(X, "txn.account")!]),
-    categoryId: cell.rel(r.values[roleOf(X, "txn.category")!]),
-    transferId: cell.rel(r.values[roleOf(X, "txn.transfer")!]),
-    splitParent: cell.rel(r.values[roleOf(X, "txn.split_parent")!]),
-    cleared: cell.sel(r.values[roleOf(X, "txn.cleared")!]) ?? "uncleared",
-    reviewed: roleOf(X, "txn.reviewed") ? cell.check(r.values[roleOf(X, "txn.reviewed")!]) : null,
-    source: roleOf(X, "txn.source") ? opt(X, "txn.source", r.values[roleOf(X, "txn.source")!]) : "",
-    tags: cell.multi(r.values[roleOf(X, "txn.tags")!]),
-    splits: [],
-  }));
-  const byId = new Map(all.map((t) => [t.id, t]));
-  for (const t of all) if (t.splitParent) byId.get(t.splitParent)?.splits.push(t);
-  const txns = all.filter((t) => !t.splitParent).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  const acct = new Map(accounts.map((a) => [a.id, a]));
-  for (const a of accounts) a.balance = a.cleared = a.opening;
-  // Balances are "as of today", the same cut the backend uses for net worth (finance_overview / networth_series);
-  // future-dated (scheduled) rows otherwise made Accounts disagree with the Overview hero.
-  const today = todayIso();
-  for (const t of txns) {
-    const a = t.accountId ? acct.get(t.accountId) : undefined;
-    if (!a || t.date > today) continue;
-    a.balance += t.amount;
-    if (t.cleared !== "uncleared") a.cleared += t.amount;
-  }
-  const recurring: RecurringRow[] = (rows.recurring ?? []).map((r) => {
-    const sv = r.values[roleOf(R, "rec.schedule")!];
-    const rv = sv && sv.t === "recurrence" ? sv.v : null;
-    return {
-      id: r.id,
-      name: cell.text(r.values[R!.database.primaryPropId]),
-      amount: num(cell.money(r.values[roleOf(R, "rec.amount")!])),
-      rrule: rv?.rrule ?? "FREQ=MONTHLY",
-      dtstart: rv?.dtstart?.slice(0, 10) ?? "",
-      accountId: cell.rel(r.values[roleOf(R, "rec.account")!]),
-      categoryId: cell.rel(r.values[roleOf(R, "rec.category")!]),
-      kind: cell.sel(r.values[roleOf(R, "rec.kind")!]) ?? "bill",
-      autopay: cell.check(r.values[roleOf(R, "rec.autopay")!]),
-      variable: cell.check(r.values[roleOf(R, "rec.variable")!]),
-      prevAmount: cell.money(r.values[roleOf(R, "rec.prev_amount")!]) !== null ? num(cell.money(r.values[roleOf(R, "rec.prev_amount")!])) : null,
-      cancelUrl: cell.text(r.values[roleOf(R, "rec.cancel_url")!]),
-    };
-  });
-  const goals: GoalRow[] = (rows.goals ?? []).map((r) => ({
-    id: r.id,
-    name: cell.text(r.values[G!.database.primaryPropId]),
-    kind: cell.sel(r.values[roleOf(G, "goal.kind")!]) ?? "savings",
-    target: num(cell.money(r.values[roleOf(G, "goal.target")!])),
-    date: cell.date(r.values[roleOf(G, "goal.date")!]),
-    saved: num(cell.money(r.values[roleOf(G, "goal.saved")!])),
-    accountId: cell.rel(r.values[roleOf(G, "goal.account")!]),
-    priority: cell.sel(r.values[roleOf(G, "goal.priority")!]) ?? "medium",
-    icon: cell.text(r.values[roleOf(G, "goal.icon")!]) || "target",
-  }));
-  return { accounts, categories, txns, recurring, goals, acct, cat: new Map(categories.map((c) => [c.id, c])) };
+}
+
+function toAccount(a: LedgerAccount): Account {
+  return {
+    id: a.id,
+    name: a.name,
+    type: a.type,
+    institution: a.institution,
+    currency: a.currency,
+    opening: num(a.opening),
+    apr: a.apr,
+    minPayment: num(a.minPayment),
+    limit: a.limit === null ? null : num(a.limit),
+    onBudget: a.onBudget,
+    lowThreshold: a.lowThreshold === null ? null : num(a.lowThreshold),
+    reconciled: a.reconciled,
+    closed: a.closed,
+    balance: num(a.balance),
+    cleared: num(a.cleared),
+    history: a.history,
+  };
+}
+
+function parse(v: FinanceLedger) {
+  const accounts = v.accounts.map(toAccount);
+  const categories: Category[] = v.categories.map((c) => ({ id: c.id, name: c.name, group: c.group, color: c.color, icon: c.icon, essential: c.essential, rollover: c.rollover, target: num(c.target) }));
+  const recurring: RecurringRow[] = v.recurring.map((r) => ({ ...r, amount: num(r.amount), prevAmount: r.prevAmount === null ? null : num(r.prevAmount) }));
+  const goals: GoalRow[] = v.goals.map((g) => ({ ...g, target: num(g.target), saved: num(g.saved) }));
+  return {
+    view: v,
+    accounts,
+    categories,
+    recent: v.recent.map(toTxn),
+    recurring,
+    goals,
+    acct: new Map(accounts.map((a) => [a.id, a])),
+    cat: new Map(categories.map((c) => [c.id, c])),
+  };
+}
+
+/** Exact two-decimal string of a display amount (inputs from fields are already cents-precise). */
+export const amountStr = (n: number): string => (Math.round(n * 100) / 100).toFixed(2);
+
+/** The wire form of a transaction patch. */
+function wirePatch(id: Id, p: TxnPatch) {
+  return {
+    id,
+    ...("categoryId" in p ? { categoryId: p.categoryId ?? null } : {}),
+    ...(p.memo !== undefined ? { memo: p.memo } : {}),
+    ...(p.date !== undefined ? { date: p.date } : {}),
+    ...(p.amount !== undefined ? { amount: amountStr(p.amount) } : {}),
+    ...(p.cleared !== undefined ? { cleared: p.cleared as "uncleared" | "cleared" | "reconciled" } : {}),
+    ...(p.reviewed !== undefined && p.reviewed !== null ? { reviewed: p.reviewed } : {}),
+  };
 }
 
 export function useLedger(instanceId: Id): Ledger {
-  const { schemas, ready, error: dbErr } = useRoleDbs(instanceId, ROLES);
-  const ids = (Object.keys(ROLES) as DbKey[]).map((k) => schemas[k]?.database.id);
-  const state = useAsync(
-    async () => {
-      const keys = Object.keys(ROLES) as DbKey[];
-      const results = await Promise.all(keys.map((k) => (schemas[k] ? queryAll(schemas[k]!.database.id) : Promise.resolve([] as RowDTO[]))));
-      const rows: Partial<Record<DbKey, RowDTO[]>> = {};
-      keys.forEach((k, i) => (rows[k] = results[i]));
-      return parseAll(schemas, rows);
-    },
-    [ids.join("|")],
-    { enabled: ready },
-  );
-  useDbChanged(ids, state.reload);
+  const state = useAsync(async () => parse(await api.finance.ledger({ instanceId })), [instanceId]);
+  const dbs = state.data?.view.dbs;
+  const dbIds = useMemo(() => (dbs ? (Object.values(dbs).filter(Boolean) as Id[]) : []), [dbs]);
+  useDbChanged(dbIds, state.reload);
 
-  const X = schemas.txns;
-  const updateTxn = useCallback<Ledger["updateTxn"]>(
-    async (id, patch) => {
-      if (!X) return;
-      const values: Record<Id, CellValue | null> = {};
-      const r = X.database.roles;
-      if ("categoryId" in patch) values[r["txn.category"]] = V.rel(patch.categoryId ? [patch.categoryId] : []);
-      if (patch.payee !== undefined) values[X.database.primaryPropId] = V.text(patch.payee);
-      if (patch.memo !== undefined) values[r["txn.memo"]] = V.text(patch.memo);
-      if (patch.date !== undefined) values[r["txn.date"]] = V.date(patch.date);
-      if (patch.amount !== undefined) values[r["txn.amount"]] = V.money(patch.amount.toFixed(2));
-      if (patch.cleared !== undefined) values[r["txn.cleared"]] = V.status(patch.cleared);
-      if (patch.reviewed !== undefined && patch.reviewed !== null && r["txn.reviewed"]) values[r["txn.reviewed"]] = V.check(patch.reviewed);
-      state.set((prev) => (prev ? { ...prev, txns: prev.txns.map((t) => (t.id === id ? { ...t, ...patch } : t)) } : prev));
+  const updateTxns = useCallback<Ledger["updateTxns"]>(
+    async (updates) => {
+      if (!updates.length) return true;
+      const byId = new Map(updates.map((u) => [u.id, u]));
+      const patch = (t: Txn): Txn => {
+        const u = byId.get(t.id);
+        return u ? { ...t, ...u } : t;
+      };
+      state.set((prev) => (prev ? { ...prev, recent: prev.recent.map(patch) } : prev));
       try {
-        await api.db.rowsUpdate({ updates: [{ id, values }] });
+        await api.finance.txnsUpdate({ instanceId, updates: updates.map(({ id, ...p }) => wirePatch(id, p)) });
+        return true;
       } catch (e) {
         notify.fromError(e, "Couldn't update the transaction");
         state.reload();
+        return false;
       }
     },
-    [X, state],
+    [instanceId, state],
   );
+  const updateTxn = useCallback<Ledger["updateTxn"]>((id, patch) => updateTxns([{ id, ...patch }]), [updateTxns]);
 
   const setSplits = useCallback<Ledger["setSplits"]>(
     async (parent, parts) => {
-      if (!X) return;
-      const r = X.database.roles;
       try {
-        if (parent.splits.length) await api.db.rowsDelete({ ids: parent.splits.map((s) => s.id) });
-        for (const p of parts) {
-          await api.db.rowCreate({
-            databaseId: X.database.id,
-            values: {
-              [X.database.primaryPropId]: V.text(parent.payee),
-              [r["txn.date"]]: V.date(parent.date),
-              [r["txn.amount"]]: V.money(p.amount.toFixed(2)),
-              ...(parent.accountId ? { [r["txn.account"]]: V.rel([parent.accountId]) } : {}),
-              [r["txn.category"]]: V.rel([p.categoryId]),
-              [r["txn.split_parent"]]: V.rel([parent.id]),
-              [r["txn.cleared"]]: V.status(parent.cleared),
-            },
-          } as Parameters<typeof api.db.rowCreate>[0]);
-        }
-        if (parts.length) await api.db.rowsUpdate({ updates: [{ id: parent.id, values: { [r["txn.category"]]: V.rel([]) } }] });
+        await api.finance.txnSplit({ instanceId, parentId: parent.id, parts: parts.map((p) => ({ categoryId: p.categoryId, amount: amountStr(p.amount) })) });
         notify.success(parts.length ? `Split into ${parts.length} categories` : "Split removed");
       } catch (e) {
         notify.fromError(e, "Couldn't split the transaction");
       }
       state.reload();
     },
-    [X, state],
+    [instanceId, state],
   );
 
   const addTxn = useCallback<Ledger["addTxn"]>(
     async (t) => {
-      if (!X) return;
-      const r = X.database.roles;
       try {
-        await api.db.rowCreate({
-          databaseId: X.database.id,
-          values: {
-            [X.database.primaryPropId]: V.text(t.payee),
-            [r["txn.date"]]: V.date(t.date),
-            [r["txn.amount"]]: V.money(t.amount.toFixed(2)),
-            [r["txn.account"]]: V.rel([t.accountId]),
-            ...(t.categoryId ? { [r["txn.category"]]: V.rel([t.categoryId]) } : {}),
-            ...(t.memo ? { [r["txn.memo"]]: V.text(t.memo) } : {}),
-            [r["txn.cleared"]]: V.status("uncleared"),
-            ...(r["txn.source"] ? { [r["txn.source"]]: V.sel("manual") } : {}),
-            // Entered by hand, field by field: nothing left to review.
-            ...(r["txn.reviewed"] ? { [r["txn.reviewed"]]: V.check(true) } : {}),
-          },
-        } as Parameters<typeof api.db.rowCreate>[0]);
+        await api.finance.txnCreate({ instanceId, date: t.date, payee: t.payee, amount: amountStr(t.amount), accountId: t.accountId, ...(t.categoryId ? { categoryId: t.categoryId } : {}), ...(t.memo ? { memo: t.memo } : {}) });
         state.reload();
+        return true;
       } catch (e) {
         notify.fromError(e, "Couldn't add the transaction");
+        return false;
       }
     },
-    [X, state],
+    [instanceId, state],
   );
 
   const deleteTxns = useCallback<Ledger["deleteTxns"]>(
@@ -337,24 +281,28 @@ export function useLedger(instanceId: Id): Ledger {
   const d = state.data;
   return useMemo(
     () => ({
-      schemas,
+      dbs: d?.view.dbs ?? { accounts: null, categories: null, transactions: null, recurring: null, goals: null, budgets: null, payees: null },
+      dbIds,
+      currency: d?.view.currency ?? "",
       accounts: d?.accounts ?? [],
       categories: d?.categories ?? [],
-      txns: d?.txns ?? [],
+      recent: d?.recent ?? [],
+      counts: d?.view.counts ?? { txns: 0, toReview: null, uncategorized: 0 },
       recurring: d?.recurring ?? [],
       goals: d?.goals ?? [],
       acct: d?.acct ?? new Map(),
       cat: d?.cat ?? new Map(),
-      loading: !ready || (state.loading && !d),
-      error: dbErr ?? state.error,
+      loading: state.loading && !d,
+      error: state.error,
       reload: state.reload,
-      hasReviewed: !!schemas.txns?.database.roles["txn.reviewed"],
+      hasReviewed: !!d?.view.hasReviewed,
+      updateTxns,
       updateTxn,
       setSplits,
       addTxn,
       deleteTxns,
     }),
-    [schemas, d, ready, state.loading, state.error, dbErr, state.reload, updateTxn, setSplits, addTxn, deleteTxns],
+    [d, dbIds, state.loading, state.error, state.reload, updateTxns, updateTxn, setSplits, addTxn, deleteTxns],
   );
 }
 
@@ -382,6 +330,13 @@ export function debtInputs(accounts: Account[]): { key: Id; name: string; balanc
 
 /** First month of a payoff plan: next month (this month's payments are already in the ledger). */
 export const debtPlanStart = (): string => addMonths(todayIso().slice(0, 7), 1);
+
+/** Sum of display amounts in whole cents (no float drift across many rows). */
+export function sumCents(values: readonly number[]): number {
+  let c = 0;
+  for (const v of values) c += Math.round(v * 100);
+  return c / 100;
+}
 
 export const ACCOUNT_TYPE_LABEL: Record<string, string> = {
   checking: "Checking",

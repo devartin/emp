@@ -1,18 +1,17 @@
 /**
- * App shell (§6.1): sidebar (248, resizable 200–420, collapsible, hover-peek), top bar (44px), content, optional
- * right panel (320, 280–480) and the shell-level overlays (side peek, command palette, shortcuts, templates, import,
- * link confirmation). Below 900px the sidebar becomes a hover-peek overlay.
+ * App shell (§6.1, brief §2): sidebar (248, resizable 200–420, hide/show, hover-peek), top bar (44px), content,
+ * optional right panel (320, 280–480) and the shell-level overlays (side peek, command palette, shortcuts, templates,
+ * import, project pickers, link confirmation). Below 900px the sidebar becomes an overlay.
  */
-import { m } from "motion/react";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { routeKey, routePageId, useRoute, type AppRoute } from "@/app/router";
 import { CommandPaletteEntry, RouteOutlet } from "@/app/routes";
 import { writeLockIdentity } from "@/features/vault/identity";
 import { usePrivacy } from "@/stores/privacy";
-import { useUi } from "@/stores/ui";
+import { useTree } from "@/stores/tree";
+import { useCompactWindow, useUi } from "@/stores/ui";
 import { useWorkspace } from "@/stores/workspace";
-import { spring } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
+import { ProjectDialogs } from "@/features/projects/ProjectDialogs";
 import { loadIconSet } from "./icons";
 import { ImportDialog } from "./ImportDialog";
 import { OpenExternalPrompt } from "./OpenExternalPrompt";
@@ -22,31 +21,31 @@ import { SidebarFrame } from "./Sidebar/Sidebar";
 import { SidePeek } from "./SidePeek";
 import { TemplatesDialog } from "./TemplatesDialog";
 import { Topbar } from "./Topbar";
+import { SIDEBAR_MS, SIDEBAR_OUT_MS, flipX, useShellMotion } from "./shellMotion";
 import "./shell.css";
 
 const SENSITIVE_APPS = new Set(["money-hq", "portfolio", "tax-organizer"]);
 
-function useCompact(): boolean {
-  const q = "(max-width: 899px)";
-  const [compact, setCompact] = useState(() => typeof window !== "undefined" && window.matchMedia(q).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(q);
-    const on = () => setCompact(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return compact;
-}
-
 const CommandPalette = CommandPaletteEntry.C;
 
 export default function Shell() {
-  const compact = useCompact();
+  const compact = useCompactWindow();
   const collapsed = useUi((s) => s.sidebarCollapsed);
-  const reduced = useReducedMotionPref();
+  const motion = useShellMotion();
   const hidden = collapsed || compact;
   const scrollRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  // The main column moves over as the sidebar slides (a FLIP: its margin changes at once, the transform glides back
+  // to rest). The resting position is the margin, so a dropped animation never leaves it out of place.
+  const wasHidden = useRef(hidden);
+  useLayoutEffect(() => {
+    if (wasHidden.current === hidden) return;
+    wasHidden.current = hidden;
+    if (!motion) return;
+    const w = useUi.getState().sidebarWidth;
+    flipX(mainRef.current, hidden ? w : -w, hidden ? SIDEBAR_OUT_MS : SIDEBAR_MS);
+  }, [hidden, motion]);
   // The committed sidebar width is written imperatively: subscribing would re-render the whole shell (and the
   // route under it) at the end of every resize drag.
   useLayoutEffect(() => {
@@ -70,6 +69,8 @@ export default function Shell() {
   useEffect(() => {
     const inst = route.t === "app" ? lifeapps.find((i) => i.id === route.instanceId) : undefined;
     usePrivacy.getState().setSensitiveView(!!inst && SENSITIVE_APPS.has(inst.appId));
+    // An app inside a project (or any page) shows as selected in the sidebar: open its parents.
+    if (inst) useTree.getState().reveal(inst.rootPageId);
   }, [route, lifeapps]);
 
   const onRouteChange = useCallback((r: AppRoute) => {
@@ -77,7 +78,11 @@ export default function Shell() {
     if (el && !(r.t === "page" && r.blockId)) el.scrollTop = 0;
     setScrolled(false);
     const id = routePageId(r);
-    if (id) useWorkspace.getState().touchRecent(id);
+    if (id) {
+      useWorkspace.getState().touchRecent(id);
+      // The page you are on is visible in the sidebar (its parents open), wherever it was created from.
+      useTree.getState().reveal(id);
+    }
     // Focus follows the route (N-FL4): when the element that had focus left with the old route, the content region
     // takes it, so the keyboard keeps working. A route that focuses its own input (Life OS) keeps that focus.
     requestAnimationFrame(() => {
@@ -109,15 +114,8 @@ export default function Shell() {
         Skip to content
       </button>
       <SidebarFrame compact={compact} />
-      <m.main
-        className="emp-main"
-        layout={reduced ? false : "position"}
-        layoutDependency={hidden}
-        transition={spring.ui}
-        style={{ marginLeft: hidden ? 0 : "var(--sb-live-w, var(--sb-w))" }}
-        data-route-key={routeKey(route)}
-      >
-        <Topbar sidebarHidden={hidden} compact={compact} scrolled={scrolled} />
+      <main ref={mainRef} className="emp-main" style={{ marginLeft: hidden ? 0 : "var(--sb-live-w, var(--sb-w))" }} data-route-key={routeKey(route)}>
+        <Topbar sidebarHidden={hidden} scrolled={scrolled} />
         <div className="flex min-h-0 flex-1">
           <div
             ref={scrollRef}
@@ -133,12 +131,13 @@ export default function Shell() {
           </div>
           <RightPanel />
         </div>
-      </m.main>
+      </main>
       <SidePeek />
       <ShortcutsDialog />
       <TemplatesDialog />
       <ImportDialog />
       <OpenExternalPrompt />
+      <ProjectDialogs />
       <Suspense fallback={null}>
         <CommandPalette />
       </Suspense>

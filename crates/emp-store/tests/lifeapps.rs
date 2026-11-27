@@ -74,8 +74,15 @@ fn install_all(encrypted: bool) {
     let e = env(encrypted);
     register_tax_pack(&e.store);
     let ws = e.workspace();
+    // One instance per app and workspace: guided installs go to a second workspace.
+    let ws2 = e.store.workspace_create("Second", None).unwrap().id;
     for m in catalog() {
         for mode in [Mode::Quick, Mode::Guided] {
+            let target = if mode == Mode::Quick {
+                ws.clone()
+            } else {
+                ws2.clone()
+            };
             let a = answers(&m.id);
             let plan = e
                 .store
@@ -96,7 +103,7 @@ fn install_all(encrypted: bool) {
                         answers: a,
                         mode,
                         disabled_keys: vec![],
-                        workspace_id: ws.clone(),
+                        workspace_id: target.clone(),
                         sample_data: true,
                     },
                     &NoProgress,
@@ -130,10 +137,25 @@ fn install_all(encrypted: bool) {
             }
         }
     }
-    let inst = e.store.lifeapp_instances(&ws).unwrap();
-    assert_eq!(inst.len(), catalog().len() * 2);
-    let list = e.store.lifeapp_list(Some(&ws)).unwrap();
-    assert!(list.iter().all(|s| s.installed == 2));
+    for w in [&ws, &ws2] {
+        let inst = e.store.lifeapp_instances(w).unwrap();
+        assert_eq!(inst.len(), catalog().len());
+        let list = e.store.lifeapp_list(Some(w)).unwrap();
+        assert!(list.iter().all(|s| s.installed == 1));
+    }
+    // A second instance of an installed app is refused.
+    let again = e.store.lifeapp_install(
+        &LifeappInstall {
+            app_id: "habits".into(),
+            answers: answers("habits"),
+            mode: Mode::Quick,
+            disabled_keys: vec![],
+            workspace_id: ws.clone(),
+            sample_data: false,
+        },
+        &NoProgress,
+    );
+    assert_eq!(again.unwrap_err().code(), "CONFLICT");
 }
 
 #[test]
@@ -413,7 +435,8 @@ fn uninstall_without_content_trashes_and_detach_unlinks() {
 fn ids_are_deterministic_per_instance_and_locked_vault_refuses() {
     let e = env(true);
     let ws = e.workspace();
-    let mk = || {
+    let ws2 = e.store.workspace_create("Second", None).unwrap().id;
+    let mk = |w: &String| {
         e.store
             .lifeapp_install(
                 &LifeappInstall {
@@ -421,15 +444,15 @@ fn ids_are_deterministic_per_instance_and_locked_vault_refuses() {
                     answers: answers("spreadsheet-studio"),
                     mode: Mode::Quick,
                     disabled_keys: vec![],
-                    workspace_id: ws.clone(),
+                    workspace_id: w.clone(),
                     sample_data: false,
                 },
                 &NoProgress,
             )
             .unwrap()
     };
-    let a = mk();
-    let b = mk();
+    let a = mk(&ws);
+    let b = mk(&ws2);
     assert_ne!(a.root_page_id, b.root_page_id);
     let g = emp_store::lifeapps::ids::IdGen::new(&a.instance_id).unwrap();
     assert_eq!(g.id("studio"), a.root_page_id);

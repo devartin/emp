@@ -3,6 +3,7 @@
  * position and lots, dividends received, and a research note (thesis, what would change my mind, risks, review
  * date) saved per holding in kv `ui.portfolio`.
  */
+import { appName } from "@/features/lifeapps/identity";
 import { ArrowLeft, NotebookPen } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
@@ -38,11 +39,11 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
   const book = usePortfolioBook(instanceId);
   const h = summary?.holdings.find((x) => x.symbol === symbol);
   const lots = useMemo(() => book.lotsFor(symbol), [book, symbol]);
-  const sec = book.secByKey.get(symbol);
-  const divs = useMemo(() => book.txns.filter((t) => t.secId === sec?.id && t.type === "dividend"), [book.txns, sec]);
-  const divTotal = divs.reduce((a, t) => a + Math.abs(t.amount), 0);
-  const price = q?.price ?? h?.price ?? 0;
-  const value = h ? price * num(h.qty) : 0;
+  const divs = useMemo(() => book.income.filter((t) => t.symbol === symbol && t.kind === "dividend"), [book.income, symbol]);
+  const divTotal = divs.reduce((a, t) => a + Math.round(Math.abs(t.amount) * 100), 0) / 100;
+  // Without a quote the holding is valued at cost by the backend (`h.value`); lots then show no gain.
+  const price: number | null = q?.price ?? h?.price ?? null;
+  const value = h ? (price === null ? num(h.value.amount) : price * num(h.qty)) : 0;
   const [experience, setExperience] = useState<string>("advanced");
   useEffect(() => {
     api.kv.get({ ns: "ui.portfolio", key: "experience" }).then((v) => typeof v === "string" && setExperience(v)).catch(() => undefined);
@@ -51,7 +52,7 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
     <div className="fh-page">
       <div className="flex items-center gap-2 mb-4">
         <Button size="sm" variant="ghost" icon={ArrowLeft} onClick={() => navigate({ t: "app", instanceId, tab: "holdings" })}>
-          Portfolio
+          {appName("portfolio")}
         </Button>
       </div>
       <header className="flex items-start gap-4 mb-5">
@@ -127,7 +128,7 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
               </thead>
               <tbody>
                 {lots.slice().reverse().map((l, i) => {
-                  const g = (price - l.costPerUnit) * l.qty;
+                  const g = price === null ? null : price * l.qty - l.basis;
                   const days = daysBetween(l.acquired, todayIso());
                   return (
                     <tr key={i}>
@@ -135,9 +136,9 @@ export default function HoldingPage({ instanceId, symbol, summary }: { instanceI
                       <td className="text-secondary">{l.accountName}</td>
                       <td className="num"><Sensitive align="end">{fmtQty(l.qty)}</Sensitive></td>
                       <td className="num text-secondary">{fmtPrice(l.costPerUnit)}</td>
-                      <td className="num"><Sensitive align="end">{fmtWhole(l.costPerUnit * l.qty)}</Sensitive></td>
-                      <td className="num"><Sensitive align="end">{fmtWhole(price * l.qty)}</Sensitive></td>
-                      <td className="num"><Signed value={g}><Sensitive align="end">{fmtWhole(g, { signed: true })}</Sensitive></Signed></td>
+                      <td className="num"><Sensitive align="end">{fmtWhole(l.basis)}</Sensitive></td>
+                      <td className="num">{price === null ? <span className="text-tertiary">—</span> : <Sensitive align="end">{fmtWhole(price * l.qty)}</Sensitive>}</td>
+                      <td className="num">{g === null ? <span className="text-tertiary">—</span> : <Signed value={g}><Sensitive align="end">{fmtWhole(g, { signed: true })}</Sensitive></Signed>}</td>
                       <td>
                         {l.taxTreatment !== "taxable" ? (
                           <span className="text-caption text-tertiary">Sheltered account</span>

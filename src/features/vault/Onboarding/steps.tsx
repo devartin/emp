@@ -1,39 +1,29 @@
 /**
- * First-run steps (PROGRAMME-v3 K4). Each step renders its own heading (focused on entry) and footer. Plain copy:
- * what the step does, no coaching.
+ * The two first-run screens (1.0 brief §2.5). Each renders its own heading (focused on entry) and footer. Plain copy:
+ * what the screen does, no coaching, no jargon (§1).
  */
-import { ArrowLeft, Check, CircleHelp, CircleAlert, RefreshCw } from "lucide-react";
+import { ArrowLeft, CandlestickChart, Copy, FileText, ListTodo, LockKeyhole, LockOpen, ReceiptText, Sheet, Sprout, Wallet, type LucideIcon } from "lucide-react";
 import { AnimatePresence, m, useIsPresent } from "motion/react";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { api, errorMessage } from "@/backend";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { api } from "@/backend";
 import type { PasswordStrength } from "@/backend/types";
+import { usePrivacy } from "@/stores/privacy";
 import { Button } from "@/ui/Button";
-import { Checkbox } from "@/ui/Checkbox";
+import { ChoiceCard } from "@/ui/ChoiceCard";
 import { Input } from "@/ui/Input";
 import { Kbd } from "@/ui/Kbd";
-import { Popover, PopoverContent, PopoverTrigger } from "@/ui/Popover";
-import { Radio, RadioGroupRoot } from "@/ui/Radio";
-import { Segmented } from "@/ui/Segmented";
-import { Spinner } from "@/ui/Spinner";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { AppMark } from "../AppMark";
 import { PasswordField, passwordAcceptable } from "../PasswordField";
 import { RecoveryCeremony } from "../RecoveryCeremony";
-import { appsFor, TRACK_OPTIONS, type AutoLockChoice, type Draft, type StartWith } from "./model";
-
-export interface StepProps {
-  draft: Draft;
-  update: (patch: Partial<Draft>) => void;
-  next: () => void;
-  back: (() => void) | null;
-}
+import { USE_CARDS, type Draft } from "./model";
 
 // ───────────────────────────────────────────────────────────────────────────── shared
 
-export function StepHeading({ title, sub, center }: { title: ReactNode; sub?: ReactNode; center?: boolean }) {
+export function StepHeading({ title, sub }: { title: ReactNode; sub?: ReactNode }) {
   const ref = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    // §6.2: focus moves to the step's heading — unless a field on the step asked for autofocus.
+    // Focus moves to the screen's heading, unless a field on the screen asked for autofocus.
     const t = window.setTimeout(() => {
       const active = document.activeElement;
       if (active && active !== document.body && ref.current?.closest(".onb-panel")?.contains(active)) return;
@@ -42,7 +32,7 @@ export function StepHeading({ title, sub, center }: { title: ReactNode; sub?: Re
     return () => window.clearTimeout(t);
   }, []);
   return (
-    <div className={center ? "text-center" : undefined}>
+    <div>
       <h1 ref={ref} tabIndex={-1} className="onb-title">
         {title}
       </h1>
@@ -70,49 +60,54 @@ export function Footer({ back, children, hint = true }: { back: (() => void) | n
   );
 }
 
-/** A ruled list of single-choice rows: the radio, a title and one line of detail. The whole row is the target. */
-function ChoiceRows<V extends string>({ label, value, onChange, options }: { label: string; value: V | null; onChange: (v: V) => void; options: { value: V; title: string; detail: string; note?: string }[] }) {
-  const base = useId();
+/** A height + opacity reveal (160 ms; instant under reduced motion). */
+function Reveal({ show, children, id }: { show: boolean; children: ReactNode; id: string }) {
+  const reduced = useReducedMotionPref();
   return (
-    <RadioGroupRoot className="onb-list" aria-label={label} value={value ?? undefined} onValueChange={(v) => onChange(v as V)}>
-      {options.map((o) => {
-        const id = `${base}-${o.value}`;
-        return (
-          <label key={o.value} htmlFor={id} className="onb-row" data-on={value === o.value ? "" : undefined}>
-            <span className="onb-row-ctl">
-              <Radio id={id} value={o.value} />
-            </span>
-            <span className="onb-row-text">
-              <span className="onb-row-title">
-                {o.title}
-                {o.note ? <span className="onb-row-note">{o.note}</span> : null}
-              </span>
-              <span className="onb-row-detail">{o.detail}</span>
-            </span>
-          </label>
-        );
-      })}
-    </RadioGroupRoot>
+    <AnimatePresence initial={false}>
+      {show ? (
+        <m.div
+          key={id}
+          className="overflow-hidden"
+          initial={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+          animate={reduced ? { opacity: 1, transition: { duration: 0.08 } } : { opacity: 1, height: "auto", transition: { duration: 0.16, ease: [0.2, 0, 0, 1] } }}
+          exit={reduced ? { opacity: 0, transition: { duration: 0.06 } } : { opacity: 0, height: 0, transition: { duration: 0.12 } }}
+        >
+          {children}
+        </m.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
 // ───────────────────────────────────────────────────────────────────────────── 1 · welcome
 
-const STARTS: { value: StartWith; title: string; detail: string }[] = [
-  { value: "fresh", title: "Start fresh", detail: "An empty workspace with the apps you pick next." },
-  { value: "pages", title: "Bring in Notion, Markdown or Obsidian", detail: "Pages and simple databases. Relations and formulas may not come across." },
-  { value: "money", title: "Bring in money", detail: "A bank file (OFX, QFX or CSV) goes into Money HQ." },
-];
+const CARD_ICON: Record<string, LucideIcon> = {
+  notes: FileText,
+  tasks: ListTodo,
+  habits: Sprout,
+  money: Wallet,
+  investments: CandlestickChart,
+  taxes: ReceiptText,
+  spreadsheets: Sheet,
+};
 
-export function WelcomeStep({ draft, update, next }: StepProps) {
+export function WelcomeStep({ draft, update, next }: { draft: Draft; update: (p: Partial<Draft>) => void; next: () => void }) {
+  const picks = new Set(draft.picks);
+  const toggle = (appId: string) => {
+    const set = new Set(picks);
+    if (set.has(appId)) set.delete(appId);
+    else set.add(appId);
+    update({ picks: USE_CARDS.flatMap((c) => (c.appId && set.has(c.appId) ? [c.appId] : [])) });
+  };
   return (
     <div>
       <AppMark size={40} stage="rest" className="onb-mark" />
-      <StepHeading title="Welcome to Ultranote" sub="Notes, tasks and money, kept on this device." />
+      <StepHeading title="Welcome to Ultranote" sub="Your notes, spreadsheets, tasks and money in one private place on this computer." />
       <div className="onb-field">
         <Input
-          label="Your name"
-          helper="Optional. Shown on the lock screen."
+          label="Your first name"
+          helper="Optional. Your workspace is named after you."
           placeholder="First name"
           value={draft.name}
           maxLength={60}
@@ -127,8 +122,29 @@ export function WelcomeStep({ draft, update, next }: StepProps) {
           autoFocus
         />
       </div>
-      <h2 className="onb-section">How do you want to start?</h2>
-      <ChoiceRows label="How do you want to start?" value={draft.start} onChange={(start) => update({ start })} options={STARTS} />
+      <h2 className="onb-section" id="onb-use">
+        What would you like to use it for?
+      </h2>
+      <p className="onb-note mt-0">Pick any you like. You can add more later.</p>
+      <div className="onb-cards" role="group" aria-labelledby="onb-use">
+        {USE_CARDS.map((c) => {
+          const always = c.appId === null;
+          const on = always || picks.has(c.appId as string);
+          return (
+            <ChoiceCard
+              key={c.key}
+              role="checkbox"
+              className="onb-card"
+              selected={on}
+              disabled={always}
+              onSelect={() => c.appId && toggle(c.appId)}
+              icon={CARD_ICON[c.key]}
+              title={c.label}
+              description={always ? "Always included" : c.detail}
+            />
+          );
+        })}
+      </div>
       <Footer back={null}>
         <Button variant="primary" onClick={next}>
           Continue
@@ -138,128 +154,150 @@ export function WelcomeStep({ draft, update, next }: StepProps) {
   );
 }
 
-// ───────────────────────────────────────────────────────────────────────────── 3 · protect
+// ───────────────────────────────────────────────────────────────────────────── 2 · keep it private?
 
-const PROTECT: { value: "yes" | "no"; title: string; detail: string; note?: string }[] = [
-  {
-    value: "yes",
-    title: "Encrypt with a password",
-    note: "Recommended",
-    detail: "Everything is encrypted on disk with XChaCha20-Poly1305. Without your password or recovery key it can't be read.",
-  },
-  { value: "no", title: "Don't encrypt", detail: "Quicker to set up. You can turn on encryption later in Settings." },
-];
-
-export function ProtectStep({ draft, update, next, back, creating }: StepProps & { creating: boolean }) {
-  return (
-    <div>
-      <StepHeading title="Protect your workspace" sub="Your workspace lives on this computer. Ultranote has no servers and no accounts." />
-      <ChoiceRows
-        label="Encryption"
-        value={draft.encrypt === null ? null : draft.encrypt ? "yes" : "no"}
-        onChange={(v) => update({ encrypt: v === "yes" })}
-        options={PROTECT}
-      />
-      <p className="onb-note">
-        {draft.encrypt
-          ? "Your password never leaves this device and can't be reset. The recovery key is the only other way in."
-          : "Anyone who can open your user account on this computer can read the files."}
-      </p>
-      <Footer back={back}>
-        <Button variant="primary" onClick={next} loading={creating} disabled={draft.encrypt === null}>
-          Continue
-        </Button>
-      </Footer>
-    </div>
-  );
+export interface PrivateStepProps {
+  draft: Draft;
+  update: (p: Partial<Draft>) => void;
+  back: (() => void) | null;
+  creating: boolean;
+  opening: boolean;
+  error: string | null;
+  onCreate: () => void;
+  onStart: () => void;
 }
 
-// ───────────────────────────────────────────────────────────────────────────── 3a · password
+export function PrivateStep(props: PrivateStepProps) {
+  const { draft } = props;
+  // Once the encrypted workspace exists, the screen turns into its recovery key.
+  if (draft.vaultCreated && draft.recoveryWords) return <RecoveryPart {...props} words={draft.recoveryWords} />;
+  return <ChoosePart {...props} />;
+}
 
-const AUTO_LOCK: { value: AutoLockChoice; label: string; "aria-label"?: string }[] = [
-  { value: "5", label: "5 min", "aria-label": "5 minutes" },
-  { value: "15", label: "15 min", "aria-label": "15 minutes" },
-  { value: "30", label: "30 min", "aria-label": "30 minutes" },
-  { value: "60", label: "60 min", "aria-label": "60 minutes" },
-  { value: "sleep", label: "On sleep" },
-];
-
-export function PasswordStep({
-  draft,
-  update,
-  back,
-  onCreate,
-  creating,
-  error,
-}: StepProps & { onCreate: () => void; creating: boolean; error: string | null }) {
+function ChoosePart({ draft, update, back, creating, opening, error, onCreate, onStart }: PrivateStepProps) {
   const [strength, setStrength] = useState<PasswordStrength | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggested, setSuggested] = useState<string | null>(null);
+  const copySensitive = usePrivacy((s) => s.copySensitive);
+  const withPassword = draft.privacy === "password";
   const ok = passwordAcceptable(draft.password, strength);
   const match = draft.password === draft.confirm;
-  const canContinue = ok && match && !creating;
+  const canCreate = withPassword && ok && match && !creating;
 
-  const generate = async () => {
-    setGenerating(true);
+  const suggest = async () => {
+    setSuggesting(true);
     try {
       const { passphrase } = await api.password.generate();
+      setSuggested(passphrase);
       update({ password: passphrase, confirm: passphrase });
+    } catch {
+      /* the button stays; typing a password still works */
     } finally {
-      setGenerating(false);
+      setSuggesting(false);
     }
   };
+  const showSuggestion = !!suggested && draft.password === suggested;
 
   return (
     <div>
-      <StepHeading title="Create a password" sub="You'll use it to unlock Ultranote. Use at least 10 characters; a few random words work well." />
-      <div className="mt-6 flex flex-col gap-4">
-        <PasswordField
-          label="Password"
-          purpose="new"
-          value={draft.password}
-          onChange={(password) => update({ password })}
-          strength
-          onStrength={setStrength}
-          autoFocus
-          trailing={
-            <Button size="xs" variant="ghost" loading={generating} onClick={() => void generate()} tooltip="5 random words, about 65 bits">
-              Suggest a passphrase
-            </Button>
-          }
+      <StepHeading title="Keep it private?" sub="Everything stays on this computer. A password also encrypts it, so nobody else who uses this computer can read it." />
+      <div className="onb-cards is-two" role="radiogroup" aria-label="Keep it private?">
+        <ChoiceCard
+          role="radio"
+          className="onb-card"
+          selected={withPassword}
+          onSelect={() => update({ privacy: "password" })}
+          icon={LockKeyhole}
+          title="Lock with a password"
+          description="Everything is encrypted. You'll unlock Ultranote with your password."
         />
-        <PasswordField
-          label="Confirm password"
-          purpose="new"
-          value={draft.confirm}
-          onChange={(confirm) => update({ confirm })}
-          error={draft.confirm && !match ? "Passwords don't match" : undefined}
-          onEnter={() => canContinue && onCreate()}
+        <ChoiceCard
+          role="radio"
+          className="onb-card"
+          selected={draft.privacy === "none"}
+          onSelect={() => update({ privacy: "none" })}
+          icon={LockOpen}
+          title="Not now"
+          description="You can turn this on any time in Settings."
         />
-        <div>
-          <div className="flex items-center justify-between">
-            <span className="emp-label">Lock automatically after</span>
-            <StrengthTable />
-          </div>
-          <Segmented className="mt-1.5" block aria-label="Auto-lock" value={draft.autoLock} onValueChange={(autoLock) => update({ autoLock })} options={AUTO_LOCK} />
-        </div>
       </div>
+      <Reveal show={withPassword} id="pw">
+        <div className="flex flex-col gap-4 pt-6">
+          <PasswordField
+            label="Password"
+            purpose="new"
+            value={draft.password}
+            onChange={(password) => update({ password })}
+            strength
+            onStrength={setStrength}
+            autoFocus
+            trailing={
+              <Button size="xs" variant="ghost" loading={suggesting} onClick={() => void suggest()}>
+                Suggest one
+              </Button>
+            }
+          />
+          <AnimatePresence initial={false}>
+            {showSuggestion ? (
+              <m.div
+                key="suggested"
+                className="onb-suggest"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, transition: { duration: 0.12 } }}
+                exit={{ opacity: 0, transition: { duration: 0.08 } }}
+                role="status"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="onb-suggest-label">Your new password</span>
+                  <code className="onb-suggest-value" data-sensitive="">
+                    {suggested}
+                  </code>
+                  <span className="onb-suggest-help">Write it down or keep it in a password manager.</span>
+                </div>
+                <Button size="sm" icon={Copy} onClick={() => suggested && copySensitive(suggested)}>
+                  Copy
+                </Button>
+              </m.div>
+            ) : null}
+          </AnimatePresence>
+          <PasswordField
+            label="Confirm password"
+            purpose="new"
+            value={draft.confirm}
+            onChange={(confirm) => update({ confirm })}
+            error={draft.confirm && !match ? "The passwords don't match" : undefined}
+            onEnter={() => canCreate && onCreate()}
+          />
+          <p className="onb-note mt-0">There's no way to reset a forgotten password. Next you'll get a recovery key, the only other way in.</p>
+        </div>
+      </Reveal>
+      <Reveal show={draft.privacy === "none"} id="none">
+        <p className="onb-note">Anyone who can sign in to your account on this computer could open your workspace files.</p>
+      </Reveal>
       {error ? (
-        <p className="emp-helper mt-3" data-invalid="" role="alert">
+        <p className="emp-helper mt-4" data-invalid="" role="alert">
           <span>{error}</span>
         </p>
       ) : null}
-      <Footer back={creating ? null : back}>
-        <Button variant="primary" onClick={onCreate} disabled={!canContinue && !creating} loading={creating} className="min-w-[132px]">
-          Continue
-        </Button>
+      <Footer back={creating || opening ? null : back} hint={draft.privacy === "none"}>
+        {withPassword ? (
+          <Button variant="primary" onClick={onCreate} disabled={!canCreate} loading={creating} className="min-w-[132px]">
+            Continue
+          </Button>
+        ) : (
+          <Button variant="primary" onClick={onStart} disabled={draft.privacy !== "none"} loading={opening}>
+            Start using Ultranote
+          </Button>
+        )}
       </Footer>
       <AnimatePresence>
-        {creating ? (
+        {creating && withPassword ? (
           <m.div
             key="securing"
             className="emp-forge"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, transition: { duration: 0.18 } }}
-            exit={{ opacity: 0, transition: { duration: 0.28, delay: 0.12 } }}
+            exit={{ opacity: 0, transition: { duration: 0.24, delay: 0.1 } }}
             role="status"
             aria-live="polite"
           >
@@ -271,11 +309,26 @@ export function PasswordStep({
   );
 }
 
+function RecoveryPart({ words, opening, error, onStart }: PrivateStepProps & { words: string[] }) {
+  return (
+    <div>
+      <StepHeading title="Save your recovery key" sub="If you ever forget your password, these 24 words are the only other way in." />
+      <div className="mt-6">
+        <RecoveryCeremony words={words} allowSkip={false} continueLabel="Start using Ultranote" busy={opening} onDone={() => onStart()} />
+      </div>
+      {error ? (
+        <p className="emp-helper mt-3" data-invalid="" role="alert">
+          <span>{error}</span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * While the key is derived: the three slabs of the mark close up as the progress line fills (part of the vault
- * moment; the length is the real KDF work).
- * Key derivation reports no intermediate progress, so the groove eases toward 92% on the KDF's time scale and closes
- * the last stretch when the vault exists (the overlay's exit) — it never claims completion early.
+ * moment; the length is the real key-derivation work). It reports no intermediate progress, so the line eases toward
+ * 92% and closes the last stretch when the workspace exists (the overlay's exit); it never claims completion early.
  */
 function ForgeGlyph() {
   const reduced = useReducedMotionPref();
@@ -286,16 +339,18 @@ function ForgeGlyph() {
       setP(1);
       return;
     }
+    if (reduced) return;
     const t0 = performance.now();
     let raf = 0;
     const tick = () => {
       const t = (performance.now() - t0) / 1000;
-      setP(Math.min(0.92, 1 - Math.exp(-t / 0.42)));
-      raf = requestAnimationFrame(tick);
+      const v = Math.min(0.92, 1 - Math.exp(-t / 0.42));
+      setP(v);
+      if (v < 0.919) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [present]);
+  }, [present, reduced]);
   const shown = reduced ? (present ? 0.5 : 1) : p;
   return (
     <>
@@ -304,210 +359,9 @@ function ForgeGlyph() {
         <span className="emp-forge-groove" aria-hidden>
           <i style={{ transform: `scaleX(${shown})` }} />
         </span>
-        <span className="text-body-sm text-secondary">{present ? "Deriving your encryption key…" : "Encrypted"}</span>
+        <span className="text-body-sm text-secondary">{present ? "Encrypting your workspace…" : "Encrypted"}</span>
       </div>
     </>
   );
 }
 
-function StrengthTable() {
-  const rows: [string, string][] = [
-    ["Leaked top 10M", "~10 s"],
-    ["8 lowercase letters", "~2–3 days"],
-    ["4 Diceware words", "~100 years"],
-    ["10 random ASCII characters", "~1.7 million years"],
-    ["6 Diceware words", "billions of years"],
-  ];
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button type="button" className="emp-link inline-flex items-center gap-1 text-caption">
-          <CircleHelp size={12} aria-hidden /> How strong is my password?
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="top" align="end" className="w-[320px]">
-        <p className="text-body-sm font-semibold text-primary">Time to try every guess</p>
-        <p className="mt-0.5 text-caption text-tertiary">
-          Order-of-magnitude estimate at a million guesses per second.
-        </p>
-        <table className="mt-3 w-full text-body-sm">
-          <tbody>
-            {rows.map(([k, v]) => (
-              <tr key={k} className="border-t border-subtle first:border-t-0">
-                <td className="py-1.5 text-secondary">{k}</td>
-                <td className="py-1.5 text-right font-medium text-primary tabular">{v}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────── 3b · recovery key
-
-export function RecoveryStep({ draft, update, next }: StepProps) {
-  if (!draft.recoveryWords) return null;
-  return (
-    <div>
-      <StepHeading title="Save your recovery key" sub="If you forget your password, these 24 words are the only other way in." />
-      <div className="mt-6">
-        <RecoveryCeremony
-          words={draft.recoveryWords}
-          onDone={(confirmed) => {
-            update({ recoveryConfirmed: confirmed });
-            next();
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────── 2 · what do you want to track?
-
-export function TrackStep({ draft, update, next, back }: StepProps) {
-  const picks = new Set(draft.picks);
-  const set = (id: string, on: boolean) => {
-    const nextPicks = new Set(picks);
-    if (on) nextPicks.add(id);
-    else nextPicks.delete(id);
-    update({ picks: TRACK_OPTIONS.filter((o) => nextPicks.has(o.appId)).map((o) => o.appId) });
-  };
-  const n = appsFor(draft).length;
-  const base = useId();
-  return (
-    <div>
-      <StepHeading title="What do you want to track?" sub="Each pick becomes a life app with its own pages and databases. Add or remove apps later." />
-      <div className="onb-list" role="group" aria-label="Life apps">
-        {TRACK_OPTIONS.map((o) => {
-          const id = `${base}-${o.appId}`;
-          const on = picks.has(o.appId);
-          return (
-            <label key={o.appId} htmlFor={id} className="onb-row is-compact" data-on={on ? "" : undefined}>
-              <span className="onb-row-ctl">
-                <Checkbox id={id} checked={on} onCheckedChange={(v) => set(o.appId, v)} />
-              </span>
-              <span className="onb-row-title">{o.label}</span>
-              <span className="onb-row-meta">{o.detail}</span>
-            </label>
-          );
-        })}
-      </div>
-      <p className="onb-note" aria-live="polite">
-        {n ? `${n} ${n === 1 ? "app" : "apps"} to build` : "No apps. You'll start with a blank workspace."}
-      </p>
-      <Footer back={back}>
-        <Button variant="primary" onClick={next}>
-          Continue
-        </Button>
-      </Footer>
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────── 7 · building your workspace
-
-export interface BuildTask {
-  id: string;
-  label: string;
-  /** Reports 0..1 when the work knows its own progress (a life-app build). */
-  run: (progress: (p: number) => void) => Promise<void>;
-}
-
-type RowState = "pending" | "running" | "done" | "error";
-
-/**
- * The build (one of the three signature moments, PROGRAMME-v3 K3): each row is real work and its length is the work.
- * When everything is done the app opens on Home by itself; an error stops here with Retry.
- */
-export function BuildingStep({ tasks, onOpen, opening }: { tasks: BuildTask[]; onOpen: () => void; opening: boolean }) {
-  const reduced = useReducedMotionPref();
-  const [states, setStates] = useState<RowState[]>(() => tasks.map(() => "pending"));
-  const [progress, setProgress] = useState<number[]>(() => tasks.map(() => 0));
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const done = states.every((s) => s === "done");
-  const tasksRef = useRef(tasks);
-  tasksRef.current = tasks;
-  const openRef = useRef(onOpen);
-  openRef.current = onOpen;
-
-  useEffect(() => {
-    let live = true;
-    (async () => {
-      const list = tasksRef.current;
-      for (let i = 0; i < list.length; i++) {
-        if (!live) return;
-        let skip = false;
-        setStates((cur) => {
-          skip = cur[i] === "done";
-          return skip ? cur : cur.map((s, k) => (k === i ? "running" : s));
-        });
-        if (skip) continue;
-        try {
-          await list[i].run((p) => live && setProgress((cur) => cur.map((x, k) => (k === i ? Math.max(x, Math.min(1, p)) : x))));
-        } catch (e) {
-          if (!live) return;
-          setError(errorMessage(e) || "Something went wrong");
-          setStates((cur) => cur.map((s, k) => (k === i ? "error" : s)));
-          return;
-        }
-        if (!live) return;
-        setStates((cur) => cur.map((s, k) => (k === i ? "done" : s)));
-      }
-      // Everything is built: open on Home (a short beat so the last check is seen).
-      if (live) window.setTimeout(() => live && openRef.current(), reduced ? 0 : 400);
-    })();
-    return () => {
-      live = false;
-    };
-  }, [attempt, reduced]);
-
-  return (
-    <div>
-      <StepHeading title={done ? "Ready" : "Setting up your workspace"} sub={done ? "Opening Home." : undefined} />
-      <ul className="onb-list">
-        {tasks.map((t, i) => (
-          <li key={t.id} className="onb-build-row" data-state={states[i]}>
-            <span className="onb-build-mark" aria-hidden>
-              {states[i] === "running" ? <Spinner size={14} /> : null}
-              {states[i] === "done" ? <Check size={16} strokeWidth={1.5} absoluteStrokeWidth /> : null}
-              {states[i] === "error" ? <CircleAlert size={16} strokeWidth={1.25} absoluteStrokeWidth /> : null}
-            </span>
-            <span className="flex-1">{t.label}</span>
-            {states[i] === "running" && progress[i] > 0 ? <span className="onb-row-meta tabular">{Math.round(progress[i] * 100)}%</span> : null}
-            <span className="sr-only">{states[i]}</span>
-          </li>
-        ))}
-      </ul>
-      {error ? (
-        <div className="mt-3 flex items-center gap-3">
-          <p className="emp-helper flex-1" data-invalid="" role="alert">
-            <span>{error}</span>
-          </p>
-          <Button
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => {
-              setError(null);
-              setStates((cur) => cur.map((s) => (s === "error" ? "pending" : s)));
-              setAttempt((a) => a + 1);
-            }}
-          >
-            Retry
-          </Button>
-        </div>
-      ) : null}
-      {done ? (
-        <div className="onb-foot">
-          <span className="flex-1" />
-          <Button variant="primary" onClick={onOpen} loading={opening} kbd="enter" autoFocus>
-            Open
-          </Button>
-        </div>
-      ) : null}
-    </div>
-  );
-}

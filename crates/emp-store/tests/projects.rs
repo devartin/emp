@@ -130,7 +130,8 @@ fn ipc_shapes_accept_the_project_flag() {
     }))
     .unwrap();
     assert_eq!(req.flags.and_then(|f| f.project), Some(true));
-    let patch: PageMetaPatch = serde_json::from_value(serde_json::json!({ "flags": { "project": false } })).unwrap();
+    let patch: PageMetaPatch =
+        serde_json::from_value(serde_json::json!({ "flags": { "project": false } })).unwrap();
     assert_eq!(patch.flags.and_then(|f| f.project), Some(false));
     // Absent means not a project, and a plain page serialises without the key.
     let flags: PageFlags = serde_json::from_value(serde_json::json!({})).unwrap();

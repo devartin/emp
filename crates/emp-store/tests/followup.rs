@@ -453,17 +453,40 @@ fn starter_tour_is_created_and_ticks_itself() {
             "Writing in Ultranote",
             "Keyboard shortcuts",
             "Privacy & encryption",
-            "Money & life apps"
+            "Apps in Ultranote"
         ]
     );
-    assert_eq!(
-        e.store.workspace_get(&w).unwrap().favorites,
-        vec![gs.clone()]
-    );
+    // Not pinned: Getting Started lists once, under Documents (1.0 brief §2.1).
+    assert!(e.store.workspace_get(&w).unwrap().favorites.is_empty());
+    // Only items a new workspace can do; this one is encrypted, so "Lock" is listed last.
     let items = checklist(&e, &gs);
-    assert_eq!(items.len(), 7);
+    assert_eq!(items.len(), 5);
     assert!(items.iter().all(|(c, _)| !c));
-    assert!(items[0].1.starts_with("Create a page"));
+    assert!(items[0].1.starts_with("Write a document"));
+    // One checklist: the same items Home lists (no "Hide numbers" in a workspace that may have no money).
+    assert!(items[2].1.starts_with("Add a task or a note"));
+    assert!(!items.iter().any(|(_, t)| t.starts_with("Hide numbers")));
+    assert!(items[4].1.starts_with("Lock Ultranote"));
+    // Home reads the page's to-dos (ticked by hand too) through the published item → block map.
+    let tour = e
+        .store
+        .kv_get("ui.gettingStarted", "tour")
+        .unwrap()
+        .expect("the tour map is published for Home");
+    assert_eq!(tour["pageId"], json!(gs));
+    for key in [
+        "create_page",
+        "try_slash",
+        "capture",
+        "open_palette",
+        "lock",
+    ] {
+        assert_eq!(
+            tour["items"][key],
+            json!(st.items[key]),
+            "{key} maps to its to-do block"
+        );
+    }
     // Guide pages are linked from Getting Started (wikilinks resolved to mentions of the real pages).
     assert!(!e.store.backlinks_of(&e, &gs).is_empty());
     // Creating the tour again returns the same one.
@@ -496,14 +519,56 @@ fn starter_tour_is_created_and_ticks_itself() {
     e.store.db_set_roles(&db.page.id, roles).unwrap();
     e.store.db_row_create(RowCreate::new(&db.page.id)).unwrap();
     let done: Vec<bool> = checklist(&e, &gs).into_iter().map(|(c, _)| c).collect();
-    assert_eq!(done, vec![true, true, false, true, false, false, false]);
+    assert_eq!(done, vec![true, true, false, false, false]);
+    // Every tick (listed on the page or not) is recorded where Home's checklist reads it.
+    for item in ["create_page", "try_slash", "add_transaction"] {
+        assert!(
+            e.store.kv_get("ui.gettingStarted", item).unwrap().is_some(),
+            "{item}"
+        );
+    }
+    assert!(
+        e.store
+            .kv_get("ui.gettingStarted", "open_palette")
+            .unwrap()
+            .is_none()
+    );
+    // The editor's slash menu recording a block ticks "Add a heading, list or table".
+    e.store
+        .kv_set("ui.editor", "slashRecent", json!(["heading"]))
+        .unwrap();
     // Ticking again is a no-op; unknown items are ignored.
     assert!(!e.store.getting_started_tick("try_slash").unwrap());
     assert!(!e.store.getting_started_tick("nonsense").unwrap());
+    assert!(
+        e.store
+            .kv_get("ui.gettingStarted", "nonsense")
+            .unwrap()
+            .is_none()
+    );
     // Locking ticks "lock" before the keys go.
     e.store.lock().unwrap();
     e.store.unlock(&pw(PASSWORD)).unwrap();
-    assert!(checklist(&e, &gs)[5].0);
+    assert!(checklist(&e, &gs)[4].0);
+    assert!(
+        e.store
+            .kv_get("ui.gettingStarted", "lock")
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
+fn plain_workspaces_list_no_lock_item_and_slash_ticks_try_slash() {
+    let e = env_with(false, true);
+    let st = e.store.getting_started_state().unwrap().unwrap();
+    let items = checklist(&e, &st.page_id);
+    assert_eq!(items.len(), 4);
+    assert!(!items.iter().any(|(_, t)| t.starts_with("Lock")));
+    e.store
+        .kv_set("ui.editor", "slashRecent", json!(["todo"]))
+        .unwrap();
+    assert!(checklist(&e, &st.page_id)[1].0);
 }
 
 #[test]

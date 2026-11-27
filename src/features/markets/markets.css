@@ -71,3 +71,12 @@
 .mk-block-head { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border); font-size: calc(12rem / 14); color: var(--text-tertiary); }
 
 .mk-indices { padding-bottom: 2px; }
+
+/* Prices unavailable (offline mode, no connection): one plain message above the strip. */
+.mk-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}

@@ -18,6 +18,7 @@ import { Tooltip } from "@/ui/Tooltip";
 import { dayLabel, fmtMoney, relDays, toMoney, todayIso, fmtWhole } from "../shared/format";
 import { useAsync, useDbChanged } from "../shared/hooks";
 import { Glyph, Quiet, Section } from "../shared/ui";
+import { navigate } from "@/app/router";
 import { useLedgerCtx, type RecurringRow } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 import { cadenceLabel, nextDue, occurrences, perMonth } from "./recurrence";
@@ -27,7 +28,7 @@ export default function Recurring() {
   const { instanceId } = useMoney();
   const today = todayIso();
   const detected = useAsync(() => api.finance.recurringDetect({ instanceId }), [instanceId]);
-  useDbChanged([l.schemas.recurring?.database.id, l.schemas.txns?.database.id], detected.reload, 400);
+  useDbChanged(l.dbIds, detected.reload, 400);
   const items = useMemo(() => l.recurring.map((r) => ({ r, next: nextDue(r.rrule, r.dtstart, today) })).sort((a, b) => (a.next ?? "9") < (b.next ?? "9") ? -1 : 1), [l.recurring, today]);
   const subs = items.filter((x) => x.r.kind === "subscription");
   const bills = items.filter((x) => x.r.kind === "bill");
@@ -63,7 +64,12 @@ export default function Recurring() {
                 ))}
               </div>
             ) : (
-              <Quiet icon={Repeat} title="No subscriptions yet" body="Accept a detected subscription or add one to the Recurring database." />
+              <Quiet
+                icon={Repeat}
+                title="No subscriptions yet"
+                body="Accept a detected subscription, or add one to the Recurring database."
+                action={l.dbs.recurring ? <Button size="sm" variant="secondary" onClick={() => navigate({ t: "db", id: l.dbs.recurring! })}>Open the Recurring database</Button> : undefined}
+              />
             )}
           </Section>
         </div>

@@ -165,7 +165,7 @@ describe('one definition per headline figure', () => {
   it('search snippets keep blocks apart ("net worth.Portfolio" never glued)', async () => {
     const { api } = await mockApi();
     const res = await api.search.query({ q: 'net worth', limit: 20, reqId: 1 });
-    const hit = res.hits.find((h) => h.title === 'Money & life apps');
+    const hit = res.hits.find((h) => h.title === 'Apps in Ultranote');
     expect(hit?.snippet?.text).toBeTruthy();
     for (const h of res.hits) expect(h.snippet?.text ?? '').not.toMatch(/[a-z]\.[A-Z]/);
   });

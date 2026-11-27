@@ -128,7 +128,7 @@ export const handlers: MockHandlers = {
     v.integrity = 'ok';
     v.createdAt = ctx.clock.now();
     markUnlocked(ctx, v);
-    createStarterWorkspace(ctx);
+    createStarterWorkspace(ctx, { encrypted });
     if (encrypted) ctx.vault.securityLog('enc_on');
     ctx.vault.securityLog('unlock_ok');
     return recoveryWords ? { status: statusOf(ctx), recoveryWords } : { status: statusOf(ctx) };

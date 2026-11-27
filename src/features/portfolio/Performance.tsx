@@ -1,6 +1,7 @@
 /** Performance: time-weighted return vs benchmark, XIRR, and realised gains for the year (short vs long term). */
 import { useMemo, useState } from "react";
 import { api } from "@/backend";
+import { backendMode } from "@/backend/runtime";
 import type { Id, PerfRange, PortfolioSummary } from "@/backend/types";
 import { LineChart } from "@/charts/Line";
 import { Badge } from "@/ui/Badge";
@@ -13,7 +14,8 @@ import { useAsync } from "../finance/shared/hooks";
 import { Quiet, Section, Signed, Stat } from "../finance/shared/ui";
 import { ticker } from "../markets/data";
 
-const BENCHMARK = "EMP500:INDEX";
+/** The benchmark: the S&P 500 ETF on desktop (real market data), the demo index in the browser preview. */
+const BENCHMARK = backendMode === "tauri" ? "SPY:ARCX" : "EMP500:INDEX";
 const PERF_RANGES: { value: PerfRange; label: string }[] = [
   { value: "3m", label: "3M" },
   { value: "ytd", label: "YTD" },
@@ -74,6 +76,7 @@ export default function Performance({ instanceId, summary: s }: { instanceId: Id
           xFormat={(v) => new Date(Number(v)).toLocaleDateString(undefined, long ? { month: "short", year: "2-digit" } : { month: "short", day: "numeric" })}
           xTooltipFormat={(v) => new Date(Number(v)).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
           loading={perf.loading && !perf.data}
+          empty={perf.data && perf.data.t.length < 2 ? "No price history for this range yet. It fills in when market data can be reached." : undefined}
           summaryLabel="Cumulative time-weighted return versus benchmark"
         />
       </Section>

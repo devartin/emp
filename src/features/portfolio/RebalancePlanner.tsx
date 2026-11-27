@@ -19,6 +19,7 @@ import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
+import { Select } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
 import { assignColors, fmtPp, fmtQty, num, fmtWhole } from "../finance/shared/format";
 import { Quiet, Section } from "../finance/shared/ui";
@@ -28,18 +29,21 @@ import { CLASS_ORDER, usePortfolioBook } from "./data";
 export default function RebalancePlanner({ instanceId, summary: s }: { instanceId: Id; summary?: PortfolioSummary }) {
   const t = useChartTheme();
   const book = usePortfolioBook(instanceId);
-  const [cash, setCash] = useState<string | null>("2500.00");
+  const [cash, setCash] = useState<string | null>("0.00");
   const [taxable, setTaxable] = useState(false);
   const [fractional, setFractional] = useState(true);
   const [minTrade, setMinTrade] = useState<string | null>("50.00");
+  // The account new cash goes into (default: the first taxable account, like the backend).
+  const [cashAccount, setCashAccount] = useState<Id | null>(null);
+  const cashTo = cashAccount ?? book.accountList.find((a) => a.tax === "taxable")?.id ?? book.accountList[0]?.id ?? null;
   const [plan, setPlan] = useState<RebalancePlan | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
-  const key = JSON.stringify({ cash, taxable, fractional, minTrade });
+  const key = JSON.stringify({ cash, taxable, fractional, minTrade, cashTo });
   useEffect(() => {
     let live = true;
     const h = setTimeout(() => {
       api.portfolio
-        .rebalancePlan({ instanceId, newCash: cash ?? "0", allowTaxableSells: taxable, minTrade: minTrade ?? "0", fractional })
+        .rebalancePlan({ instanceId, newCash: cash ?? "0", allowTaxableSells: taxable, minTrade: minTrade ?? "0", fractional, ...(cashTo ? { cashAccountId: cashTo } : {}) })
         .then((p) => live && (setPlan(p), setDone(new Set())))
         .catch((e) => notify.fromError(e, "Couldn't plan the rebalance"));
     }, 160);
@@ -78,6 +82,7 @@ export default function RebalancePlanner({ instanceId, summary: s }: { instanceI
         <Section className="fh-span-4" title="Plan settings" subtitle="Cash-flow first; avoid taxable sales unless you allow them.">
           <div className="flex flex-col gap-4">
             <MoneyField label="New cash to invest" value={cash} onChange={setCash} />
+            {book.accountList.length > 1 ? <Select label="Put new cash in" value={cashTo} onValueChange={setCashAccount} options={book.accountList.map((a) => ({ value: a.id, label: a.name }))} /> : null}
             <MoneyField label="Smallest trade worth making" value={minTrade} onChange={setMinTrade} />
             <Switch checked={taxable} onCheckedChange={setTaxable} label="Allow sales in taxable accounts" description="Losses are sold first, then the highest-cost lots." />
             <Switch checked={fractional} onCheckedChange={setFractional} label="Fractional shares" description="Off rounds to whole shares (crypto stays fractional)." />

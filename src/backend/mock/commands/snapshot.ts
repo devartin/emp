@@ -1,13 +1,15 @@
 /**
  * snapshot_list / snapshot_now / snapshot_set_folder / snapshot_verify (§9.21 `.empsnap`).
  *
- * Automatic snapshots run daily (and on quit, at most every 6 h) while encryption is on: a plaintext vault needs a
- * backup password first, so its snapshots are skipped and Security Center warns. Retention keeps 7 daily, 4 weekly
+ * Automatic snapshots run daily (and on quit, at most every 6 h). An encrypted vault seals them with its key; an
+ * unencrypted one needs a backup password first (`snapshot_set_backup_password`, as in Rust), and its snapshots are
+ * sealed with it. The folder is chosen with `snapshot_choose_folder` (the desktop app opens the native dialog; the
+ * preview records a labelled folder). Retention keeps 7 daily, 4 weekly
  * and 6 monthly snapshots (from the vault settings). Payloads sealed in this session stay in memory so `Verify`
  * re-checks the real MAC and digest; older entries (seeded history) verify their sealed manifest.
  */
 import { BackendError } from '../../errors';
-import type { SnapshotInfo } from '../../types';
+import type { SnapshotInfo, SnapshotStatus } from '../../types';
 import type { MockCallCtx, MockCtx, MockHandlers } from '../ctx';
 import { patchVaultSettings, vaultSettings } from '../lib/settings';
 import { vaultRecord } from '../lib/vault';
@@ -36,9 +38,27 @@ const payloadsOf = (ctx: MockCtx) => {
 
 const toInfo = ({ id, at, bytes, schemaVersion, location }: SnapshotRecord): SnapshotInfo => ({ id, at, bytes, schemaVersion, location });
 
+const backupPassword = (ctx: MockCtx) => ctx.db.meta<string>('snapshots.backupPassword') ?? null;
+
 function snapshotsAllowed(ctx: MockCtx): boolean {
   const v = vaultRecord(ctx);
-  return v.state === 'unlocked' && v.encrypted;
+  return v.state === 'unlocked' && (v.encrypted || !!backupPassword(ctx));
+}
+
+const PREVIEW_FOLDER = '~/Ultranote (browser preview)';
+
+function status(ctx: MockCtx): SnapshotStatus {
+  const encrypted = vaultRecord(ctx).encrypted;
+  const set = !encrypted && !!backupPassword(ctx);
+  const label = vaultSettings(ctx).snapshots.folderGrantLabel;
+  return {
+    encrypted,
+    backupPasswordSet: set,
+    automatic: vaultSettings(ctx).snapshots.enabled && (encrypted || set),
+    folderPath: label ? `${PREVIEW_FOLDER}/${label}/Ultranote snapshots` : `${PREVIEW_FOLDER}/snapshots`,
+    customFolder: !!label,
+    folderUnavailable: false,
+  };
 }
 
 /** Seed a realistic history once (demo seed, encrypted vault), sized like a real sealed snapshot of this vault. */
@@ -114,7 +134,8 @@ async function takeSnapshot(ctx: MockCtx, reason: SnapshotRecord['reason'], prog
   p(2, 'Copying encrypted attachments');
   await pause(90);
   p(3, 'Sealing the snapshot');
-  const { text } = await sealContainer(ctx, dump, { vault: vaultSecrets(ctx) }, SNAPSHOT_MAGIC);
+  const pw = vaultRecord(ctx).encrypted ? undefined : (backupPassword(ctx) ?? undefined);
+  const { text } = await sealContainer(ctx, dump, pw ? { backupPassword: pw } : { vault: vaultSecrets(ctx) }, SNAPSHOT_MAGIC);
   const digest = await sha256Hex(text);
   await pause(80);
   p(4, 'Applying retention');
@@ -148,7 +169,7 @@ export const handlers: MockHandlers = {
   snapshot_now: async (_req, ctx) => {
     await ensureHistory(ctx);
     if (!snapshotsAllowed(ctx)) {
-      throw new BackendError('UNSUPPORTED', 'Automatic backups are off: set a backup password. Turn on encryption, or save a password-protected backup file instead.');
+      throw new BackendError('UNSUPPORTED', 'Automatic backups are off: set a backup password');
     }
     const rec = await takeSnapshot(ctx, 'manual', ctx);
     ctx.progress(5, 5, 'Done');
@@ -156,16 +177,38 @@ export const handlers: MockHandlers = {
   },
 
   snapshot_set_folder: (req, ctx) => {
-    if (req.grantId !== null && (typeof req.grantId !== 'string' || !req.grantId.startsWith('grant:'))) {
-      throw new BackendError('INVALID', 'Choose a folder', { field: 'grantId' });
-    }
+    if (req.grantId !== null) throw new BackendError('INVALID', 'Choose the folder with the folder picker', { field: 'grantId' });
     const cur = vaultSettings(ctx).snapshots;
-    if (req.grantId === null) {
-      const { folderGrantLabel: _drop, ...rest } = cur;
-      ctx.db.setMeta('settings.vault', { ...vaultSettings(ctx), snapshots: rest });
-    } else {
-      patchVaultSettings(ctx, { snapshots: { ...cur, folderGrantLabel: cur.folderGrantLabel ?? 'Chosen folder' } });
+    const { folderGrantLabel: _drop, ...rest } = cur;
+    ctx.db.setMeta('settings.vault', { ...vaultSettings(ctx), snapshots: rest });
+  },
+
+  snapshot_status: (_req, ctx) => status(ctx),
+
+  snapshot_set_backup_password: (req, ctx) => {
+    if (vaultRecord(ctx).encrypted) {
+      throw new BackendError('INVALID', 'Snapshots of an encrypted workspace use its password and recovery key', { field: 'password' });
     }
+    if (req.password && [...req.password].length < 10) {
+      throw new BackendError('INVALID', 'backup passwords need at least 10 characters', { field: 'password' });
+    }
+    if (req.password) {
+      ctx.db.setMeta('snapshots.backupPassword', req.password);
+      patchVaultSettings(ctx, { snapshots: { ...vaultSettings(ctx).snapshots, enabled: true } });
+    } else {
+      ctx.db.setMeta('snapshots.backupPassword', null);
+    }
+    return status(ctx);
+  },
+
+  // The preview has no folder dialog: it records a labelled folder so the flow can be followed end to end.
+  snapshot_choose_folder: (_req, ctx) => {
+    patchVaultSettings(ctx, { snapshots: { ...vaultSettings(ctx).snapshots, folderGrantLabel: 'Backups' } });
+    return status(ctx);
+  },
+
+  snapshot_reveal: () => {
+    throw new BackendError('UNSUPPORTED', 'The backups folder lives on your device in the desktop app.');
   },
 
   snapshot_verify: async (req, ctx) => {
@@ -183,7 +226,7 @@ export const handlers: MockHandlers = {
       try {
         const secrets = vaultSecrets(ctx);
         ctx.progress(2, total, 'Opening with your vault key');
-        await openContainer(parseContainer(text), { password: secrets?.password });
+        await openContainer(parseContainer(text), { password: secrets?.password ?? backupPassword(ctx) ?? undefined });
       } catch (e) {
         if (e instanceof BackendError && (e.code === 'INTEGRITY' || e.code === 'CRYPTO')) return { ok: false };
         // Password changed since: the seal still verified above; restore will ask for the old password.

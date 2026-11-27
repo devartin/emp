@@ -46,6 +46,7 @@ pub const ALL_COMMANDS: &[&str] = &[
     "app_info",
     "app_ready",
     "app_reveal_data_dir",
+    "app_reveal_logs",
     "app_quit",
     "app_check_update",
     "app_install_update",
@@ -77,6 +78,7 @@ pub const ALL_COMMANDS: &[&str] = &[
     "security_log",
     "password_strength",
     "password_generate",
+    "vault_recovery_save_file",
     // ── Secrets
     "secret_list",
     "secret_set",
@@ -88,6 +90,7 @@ pub const ALL_COMMANDS: &[&str] = &[
     "kv_get",
     "kv_set",
     "kv_get_many",
+    "settings_detect_region",
     // ── Backup, import, export
     "backup_create",
     "backup_restore",
@@ -95,6 +98,10 @@ pub const ALL_COMMANDS: &[&str] = &[
     "snapshot_now",
     "snapshot_set_folder",
     "snapshot_verify",
+    "snapshot_status",
+    "snapshot_set_backup_password",
+    "snapshot_choose_folder",
+    "snapshot_reveal",
     "import_detect",
     "import_markdown",
     "import_notion",
@@ -227,6 +234,8 @@ pub const ALL_COMMANDS: &[&str] = &[
     "lifeapp_insight_mute",
     "lifeapp_sample_data",
     "lifeapp_checklist_tick",
+    "lifeapp_event",
+    "lifeapp_add_workbook",
     // ── Finance
     "finance_overview",
     "finance_networth_series",
@@ -247,6 +256,15 @@ pub const ALL_COMMANDS: &[&str] = &[
     "finance_forecast",
     "finance_amortization",
     "finance_goal_plan",
+    "finance_ledger",
+    "finance_txns_query",
+    "finance_txns_update",
+    "finance_txn_create",
+    "finance_txn_split",
+    "finance_reconcile",
+    "finance_goal_upsert",
+    "finance_budget_assign_many",
+    "finance_account_create",
     // ── Portfolio and tax
     "portfolio_rebuild",
     "portfolio_summary",
@@ -254,9 +272,15 @@ pub const ALL_COMMANDS: &[&str] = &[
     "portfolio_rebalance_plan",
     "portfolio_dividends",
     "portfolio_realized",
+    "portfolio_book",
+    "portfolio_trade",
     "tax_packs",
     "tax_estimate",
     "tax_quarterly_plan",
+    "tax_records",
+    "tax_doc_status",
+    "tax_payment_record",
+    "tax_deduction_add",
     // ── Markets
     "market_providers",
     "market_provider_configure",
@@ -319,7 +343,7 @@ mod tests {
                 "{c}"
             );
         }
-        assert_eq!(ALL_COMMANDS.len(), 231);
+        assert_eq!(ALL_COMMANDS.len(), 255);
     }
 
     /// The command names in SPEC §11.3 code blocks (`name(` at the start of a line).

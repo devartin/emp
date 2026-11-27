@@ -1,36 +1,19 @@
 /**
- * Sidebar (§5.8): workspace row, primary rows, Favorites, Life Apps, Pages (virtualised tree), bottom group and the
- * status footer. `SidebarFrame` handles docking, collapse (`x 0 ↔ −100%`, spring.ui), hover-peek (left 8px for 120ms
- * brings in a floating sidebar; it leaves 300ms after the pointer exits) and resizing (200–420, double-click resets).
+ * Sidebar (brief §2.1; §5.8). Top to bottom: the header (workspace menu, "+ New", Hide sidebar), Search / Home /
+ * Calendar, Favorites (only when there are any), Projects, Documents, Spreadsheets and Apps (each collapsible with
+ * its own "+" and one quiet line when empty), and the footer (Trash, Settings, the lock status).
+ *
+ * `SidebarFrame` handles docking, hide/show (a 200ms transform), the left-edge hover peek and resizing (200–420,
+ * double-click resets). Its resting position is CSS keyed by `data-state`, never the end of an animation: a hide or
+ * show that happens while the window is hidden (WebKitGTK runs no frames then) still lands in place (shellMotion.ts).
  */
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  ArrowDown,
-  ArrowUp,
-  CandlestickChart,
-  Check,
-  Eye,
-  EyeOff,
-  ChevronDown,
-  ChevronsUpDown,
-  FileDown,
-  House,
-  LayoutTemplate,
-  Lock,
-  LockOpen,
-  Plus,
-  Search,
-  Settings,
-  SquarePen,
-  Trash2,
-  Calendar,
-} from "lucide-react";
-import { m } from "motion/react";
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, Calendar, ChartLine, Check, ChevronsUpDown, Eye, EyeOff, House, Lock, LockOpen, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SquarePen, Star, Trash2 } from "lucide-react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { createPageAndOpen, openPaletteHeld, runCommand } from "@/app/commands";
+import { createPageAndOpen, createProjectAndOpen, createSheetAndOpen, openPaletteHeld, runCommand } from "@/app/commands";
 import { navigate, routesEqual, useRoute, type AppRoute } from "@/app/router";
 import { preloadRoute } from "@/app/routes";
 import { api } from "@/backend";
@@ -39,7 +22,7 @@ import { cn } from "@/lib/cn";
 import { isMac, isTauri } from "@/lib/platform";
 import { useSettings } from "@/stores/settings";
 import { notify } from "@/stores/toasts";
-import { useTree } from "@/stores/tree";
+import { appIndexOf, isProject, selectSectionRows, useTree, type AppIndex, type SidebarSection } from "@/stores/tree";
 import { SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, useUi } from "@/stores/ui";
 import { useVault } from "@/stores/vault";
 import { useWorkspace } from "@/stores/workspace";
@@ -53,20 +36,28 @@ import { Kbd } from "@/ui/Kbd";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/ui/Menu";
 import { Resizable } from "@/ui/Resizable";
 import { Tooltip } from "@/ui/Tooltip";
-import { spring } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { PageIcon } from "../PageIcon";
 import { PageContextItems, PageMenuItems, pageActions } from "../PageMenu";
 import { LockIndicator } from "../LockIndicator";
-import { lifeAppIdentity } from "./lifeAppIdentity";
-import { LazyMenu, PageTree } from "./PageTree";
+import { SIDEBAR_MS, useShellMotion } from "../shellMotion";
 import { setPaletteOrigin } from "@/features/search/origin";
+import { hubActions } from "./hubActions";
+import { lifeAppIdentity } from "./lifeAppIdentity";
+import { NewMenu } from "./NewMenu";
+import { LazyMenu, PageTree } from "./PageTree";
+import { Section, SectionEmpty } from "./Section";
 import { useTreeDrag } from "./useTreeDrag";
+
+/** The id the toggles point their `aria-controls` at. */
+export const SIDEBAR_ID = "emp-sidebar";
+
+/** Hover dwell on the left edge before the sidebar peeks in (long enough that a pass-by doesn't open it). */
+const PEEK_DWELL_MS = 160;
 
 // ───────────────────────────────────────────────────────────────────────────── frame
 
 export interface SidebarFrameProps {
-  /** Compact window (< 900px): the sidebar is always a hover-peek overlay. */
+  /** Compact window (< 900px): the sidebar is always an overlay. */
   compact: boolean;
 }
 
@@ -75,7 +66,7 @@ export function SidebarFrame({ compact }: SidebarFrameProps) {
   const width = useUi((s) => s.sidebarWidth);
   const peeking = useUi((s) => s.sidebarPeeking);
   const setPeeking = useUi((s) => s.setSidebarPeeking);
-  const reduced = useReducedMotionPref();
+  const motion = useShellMotion();
   const collapsed = collapsedPref || compact;
   const [liveWidth, setLiveWidth] = useState(width);
   const enterTimer = useRef<number | undefined>(undefined);
@@ -92,10 +83,13 @@ export function SidebarFrame({ compact }: SidebarFrameProps) {
   useEffect(() => {
     if (!collapsed) setPeeking(false);
   }, [collapsed, setPeeking]);
-  useEffect(() => () => {
-    window.clearTimeout(enterTimer.current);
-    window.clearTimeout(leaveTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(enterTimer.current);
+      window.clearTimeout(leaveTimer.current);
+    },
+    [],
+  );
 
   const scheduleLeave = () => {
     window.clearTimeout(enterTimer.current);
@@ -106,16 +100,31 @@ export function SidebarFrame({ compact }: SidebarFrameProps) {
 
   const floating = collapsed && peeking;
   const visible = !collapsed || peeking;
+  const state = !collapsed ? "open" : peeking ? "peek" : "closed";
+  // A peek slides out as the floating card it was, not as the docked sheet.
+  const [leaving, setLeaving] = useState(false);
+  const wasFloating = useRef(false);
+  // A layout effect, so the card style never drops for a painted frame between the peek ending and the slide out.
+  useLayoutEffect(() => {
+    if (wasFloating.current && !floating && collapsed && motion) {
+      setLeaving(true);
+      const t = window.setTimeout(() => setLeaving(false), SIDEBAR_MS + 40);
+      wasFloating.current = false;
+      return () => window.clearTimeout(t);
+    }
+    wasFloating.current = floating;
+    setLeaving(false);
+  }, [floating, collapsed, motion]);
 
   // A peeking sidebar closes on outside press, Escape, or navigation.
   useEffect(() => {
     if (!floating) return;
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
-      if (asideRef.current?.contains(t) || (t instanceof Element && t.closest("[data-sidebar-toggle], [role=menu], [data-radix-popper-content-wrapper]"))) return;
+      if (asideRef.current?.contains(t) || (t instanceof Element && t.closest("[data-sidebar-toggle], [role=menu], [role=dialog], [data-radix-popper-content-wrapper]"))) return;
       setPeeking(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPeeking(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && setPeeking(false);
     window.addEventListener("pointerdown", onDown, true);
     window.addEventListener("keydown", onKey);
     const off = useNav.subscribe((s, prev) => s.route !== prev.route && setPeeking(false));
@@ -134,23 +143,28 @@ export function SidebarFrame({ compact }: SidebarFrameProps) {
           aria-hidden
           onPointerEnter={() => {
             cancelLeave();
-            enterTimer.current = window.setTimeout(() => setPeeking(true), 120);
+            window.clearTimeout(enterTimer.current);
+            enterTimer.current = window.setTimeout(() => setPeeking(true), PEEK_DWELL_MS);
           }}
-          onPointerLeave={() => window.clearTimeout(enterTimer.current)}
+          onPointerLeave={() => {
+            window.clearTimeout(enterTimer.current);
+            // Leaving the edge without going into the peeking sidebar closes it again.
+            if (useUi.getState().sidebarPeeking) scheduleLeave();
+          }}
         />
       ) : null}
-      <m.aside
+      <aside
         ref={asideRef}
+        id={SIDEBAR_ID}
         className="emp-sidebar"
-        data-floating={floating ? "" : undefined}
+        data-state={state}
+        data-floating={floating || leaving ? "" : undefined}
+        data-motion={motion ? "" : undefined}
         data-region="sidebar"
         aria-label="Sidebar"
         aria-hidden={!visible || undefined}
         inert={!visible || undefined}
         style={{ width: liveWidth }}
-        initial={false}
-        animate={{ x: visible ? 0 : "-104%" }}
-        transition={reduced ? { duration: 0 } : spring.ui}
         onPointerEnter={floating ? cancelLeave : undefined}
         onPointerLeave={floating ? scheduleLeave : undefined}
       >
@@ -164,68 +178,145 @@ export function SidebarFrame({ compact }: SidebarFrameProps) {
           onResizeEnd={(w) => useUi.getState().setSidebarWidth(w)}
           aria-label="Resize sidebar"
         >
-          <m.div className="emp-sidebar-inner" initial={false} animate={{ opacity: visible ? 1 : 0 }} transition={{ duration: visible ? 0.14 : 0.1, delay: visible ? 0.03 : 0 }}>
-            <SidebarContent floating={floating} />
-          </m.div>
+          <div className="emp-sidebar-inner">
+            <SidebarContent floating={floating} compact={compact} />
+          </div>
           <span className="emp-sidebar-sep" aria-hidden />
         </Resizable>
-      </m.aside>
+      </aside>
     </>
   );
 }
 
 // ───────────────────────────────────────────────────────────────────────────── content
 
-// Memoised: the frame re-renders on every resize pointermove; the content (and its layout-animated sections, which
-// measure on render) must not.
-const SidebarContent = memo(function SidebarContent({ floating }: { floating: boolean }) {
+// Memoised: the frame re-renders on every resize pointermove; the content must not.
+const SidebarContent = memo(function SidebarContent({ floating, compact }: { floating: boolean; compact: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const getScroll = useCallback(() => scrollRef.current, []);
   const [scrolled, setScrolled] = useState(false);
-  const drag = useTreeDrag(getScroll);
+  const lifeapps = useWorkspace((s) => s.lifeapps);
+  const apps = useMemo(() => appIndexOf(lifeapps), [lifeapps]);
+  const appsRef = useRef(apps);
+  appsRef.current = apps;
+  const getApps = useCallback(() => appsRef.current, []);
+  const drag = useTreeDrag(getScroll, getApps);
   const trafficLights = isTauri && isMac && !floating;
+  const dropEnd = (section: SidebarSection) => drag.drag?.target?.zone === "end" && drag.drag.target.section === section;
+  const hasFavorites = useFavoriteCount() > 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col" style={{ paddingTop: trafficLights ? 40 : 4 }}>
-      {trafficLights ? <div className="drag-region absolute inset-x-0 top-0 h-[40px]" data-tauri-drag-region /> : null}
-      <WorkspaceRow />
-      <PrimaryRows />
+    <div className="emp-sb-frame" data-traffic-lights={trafficLights ? "" : undefined}>
+      {trafficLights ? <div className="drag-region emp-sb-traffic" data-tauri-drag-region /> : null}
+      <SidebarHeader floating={floating} compact={compact} />
+      <div className="emp-sb-top">
+        <NewMenu />
+        <PrimaryRows />
+        {/* While a row is dragged and there are no favourites yet, Favorites is a drop target laid over the rows above
+            the sections, so nothing below moves under the pointer. */}
+        {drag.drag && !hasFavorites ? <FavoritesDropZone active={!!drag.drag.favorites} /> : null}
+      </div>
       <div ref={scrollRef} className="emp-sidebar-scroll" data-scrolled={scrolled ? "" : undefined} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 2)}>
         <div className="emp-sb-body">
-          <FavoritesSection dropActive={!!drag.drag?.favorites} dragging={!!drag.drag} />
-          <LifeAppsSection />
-          <Section id="pages" title="Pages" onAdd={() => void createPageAndOpen(null)} addLabel="New page" addShortcut="mod+n">
-            <PageTree scrollEl={getScroll} drag={drag} />
-            <EmptyPagesHint />
-          </Section>
-          <div className="emp-sb-section">
-            <NavRow icon={LayoutTemplate} label="Templates" onClick={() => runCommand("templates.open")} />
-            <NavRow icon={FileDown} label="Import" onClick={() => runCommand("import.open")} />
-            <NavRow icon={Trash2} label="Trash" route={{ t: "trash" }} />
-          </div>
+          <FavoritesSection dropActive={!!drag.drag?.favorites} apps={apps} />
+          <TreeSection
+            section="projects"
+            title="Projects"
+            addLabel="New project"
+            onAdd={() => void createProjectAndOpen(null)}
+            empty="Add a project for related work"
+            emptyHint="A project keeps the documents, spreadsheets and apps for one goal together"
+            apps={apps}
+            scrollEl={getScroll}
+            drag={drag}
+            dropEnd={dropEnd("projects")}
+          />
+          <TreeSection
+            section="documents"
+            title="Documents"
+            addLabel="New document"
+            addShortcut="mod+n"
+            onAdd={() => void createPageAndOpen(null)}
+            empty="Add a document for notes"
+            emptyHint="Documents hold notes, plans and databases"
+            apps={apps}
+            scrollEl={getScroll}
+            drag={drag}
+            dropEnd={dropEnd("documents")}
+          />
+          <TreeSection
+            section="sheets"
+            title="Spreadsheets"
+            addLabel="New spreadsheet"
+            onAdd={() => void createSheetAndOpen(null)}
+            empty="Add a spreadsheet for budgets"
+            emptyHint="Spreadsheets are for budgets, numbers and lists"
+            apps={apps}
+            scrollEl={getScroll}
+            drag={drag}
+            dropEnd={dropEnd("sheets")}
+          />
+          <TreeSection
+            section="apps"
+            title="Apps"
+            addLabel="Add an app"
+            onAdd={() => navigate({ t: "lifeapps" })}
+            empty="Add an app for tasks or money"
+            emptyHint="Apps are ready-made tools: tasks, habits, money, investments and taxes"
+            apps={apps}
+            scrollEl={getScroll}
+            drag={drag}
+            dropEnd={dropEnd("apps")}
+          >
+            <NavRow icon={ChartLine} label="Markets" route={{ t: "markets" }} match={(r) => r.t === "markets"} />
+          </TreeSection>
         </div>
       </div>
       <SidebarFooter />
-      {drag.drag ? (
-        <div className="emp-drag-ghost" style={{ left: drag.drag.x + 14, top: drag.drag.y + 12 }} aria-hidden>
-          <PageIcon icon={drag.drag.meta.icon} kind={drag.drag.meta.kind} size={16} />
-          <span className="truncate">{drag.drag.meta.title || "Untitled"}</span>
-        </div>
-      ) : null}
+      {drag.drag ? <DragGhost x={drag.drag.x} y={drag.drag.y} meta={drag.drag.meta} apps={apps} /> : null}
     </div>
   );
 });
 
-function EmptyPagesHint() {
-  const count = useTree((s) => s.byId.size);
-  if (count > 0) return null;
+function DragGhost({ x, y, meta, apps }: { x: number; y: number; meta: PageMeta; apps: AppIndex }) {
+  const hub = apps.hubs.get(meta.id);
+  const app = hub ? lifeAppIdentity(hub.appId) : null;
+  const Glyph = app?.icon;
   return (
-    <button type="button" className="emp-sb-row text-tertiary" onClick={() => void createPageAndOpen(null)}>
-      <span className="ico">
-        <Plus aria-hidden />
-      </span>
-      <span className="label">New page</span>
-    </button>
+    <div className="emp-drag-ghost" style={{ left: x + 14, top: y + 12 }} aria-hidden>
+      {Glyph ? <Glyph size={16} aria-hidden /> : <PageIcon icon={meta.icon} kind={meta.kind} project={isProject(meta)} size={16} />}
+      <span className="truncate">{app ? app.name : meta.title || "Untitled"}</span>
+    </div>
+  );
+}
+
+interface TreeSectionProps {
+  section: SidebarSection;
+  title: string;
+  addLabel: string;
+  addShortcut?: string;
+  onAdd: () => void;
+  /** The one quiet line shown when the section has nothing at the top level: how to add one and what goes there (a
+   *  click adds one). */
+  empty: string;
+  /** What goes in the section, as the empty line's tooltip. */
+  emptyHint: string;
+  apps: AppIndex;
+  scrollEl: () => HTMLElement | null;
+  drag: ReturnType<typeof useTreeDrag>;
+  dropEnd: boolean;
+  /** Fixed rows after the tree (Markets under Apps). */
+  children?: ReactNode;
+}
+
+function TreeSection({ section, title, addLabel, addShortcut, onAdd, empty, emptyHint, apps, scrollEl, drag, dropEnd, children }: TreeSectionProps) {
+  const count = useTree((s) => selectSectionRows(s, section, apps).length);
+  return (
+    <Section id={section} title={title} onAdd={onAdd} addLabel={addLabel} addShortcut={addShortcut}>
+      <PageTree section={section} label={title} apps={apps} scrollEl={scrollEl} drag={drag} />
+      {count ? null : <SectionEmpty label={empty} hint={emptyHint} onClick={onAdd} section={section} drop={dropEnd} />}
+      {children}
+    </Section>
   );
 }
 
@@ -241,15 +332,16 @@ interface NavRowProps {
   match?: (r: AppRoute) => boolean;
   /** Secondary row (tertiary ink). */
   muted?: boolean;
+  className?: string;
 }
 
-function NavRow({ icon: Icon, label, route, onClick, shortcut, trailing, match, muted }: NavRowProps) {
+function NavRow({ icon: Icon, label, route, onClick, shortcut, trailing, match, muted, className }: NavRowProps) {
   const current = useRoute();
   const active = route ? (match ? match(current) : routesEqual(route, current)) : false;
   return (
     <button
       type="button"
-      className="emp-sb-row"
+      className={cn("emp-sb-row", className)}
       aria-current={active ? "page" : undefined}
       onClick={(e) => (onClick ? onClick(e) : route && navigate(route))}
       onPointerEnter={route ? () => preloadRoute(route) : undefined}
@@ -395,85 +487,40 @@ function PrimaryRows() {
   );
 }
 
-// ───────────────────────────────────────────────────────────────────────────── sections
-
-function useSectionOpen(id: string): [boolean, () => void] {
-  const key = `emp.sb.${id}`;
-  const [open, setOpen] = useState(() => {
-    try {
-      return localStorage.getItem(key) !== "0";
-    } catch {
-      return true;
-    }
-  });
-  const toggle = () =>
-    setOpen((o) => {
-      try {
-        localStorage.setItem(key, o ? "0" : "1");
-      } catch {
-        /* storage unavailable */
-      }
-      return !o;
-    });
-  return [open, toggle];
+/** How many favourites are listed (live, not in Trash). */
+function useFavoriteCount(): number {
+  const ids = useWorkspace(useShallow((s) => s.workspace?.favorites ?? []));
+  return useTree((s) => ids.reduce((n, id) => (s.byId.get(id) && !s.byId.get(id)?.deletedAt ? n + 1 : n), 0));
 }
 
-function Section({
-  id,
-  title,
-  children,
-  onAdd,
-  addLabel,
-  addShortcut,
-  className,
-  ...rest
-}: {
-  id: string;
-  title: string;
-  children: ReactNode;
-  onAdd?: () => void;
-  addLabel?: string;
-  addShortcut?: string;
-  className?: string;
-  "data-drop-favorites"?: string;
-}) {
-  const [open, toggle] = useSectionOpen(id);
-  // Expand and collapse are instant (C0): the rows are there or they are not.
+/** Favorites as a drop target while there are none yet (see SidebarContent): laid over the rows, never in the flow. */
+function FavoritesDropZone({ active }: { active: boolean }) {
   return (
-    <section className={cn("emp-sb-section", className)} aria-label={title} {...rest}>
-      <div className="emp-sb-head" data-collapsed={open ? undefined : ""}>
-        <button type="button" onClick={toggle} aria-expanded={open}>
-          {title}
-          <ChevronDown className="caret" aria-hidden />
-        </button>
-        {onAdd ? (
-          <span className="actions">
-            <Tooltip content={addLabel} shortcut={addShortcut}>
-              <button type="button" className="emp-sb-mini" aria-label={addLabel} onClick={onAdd}>
-                <Plus aria-hidden />
-              </button>
-            </Tooltip>
-          </span>
-        ) : null}
-      </div>
-      {open ? <div className="emp-sb-sec-body flex flex-col gap-px">{children}</div> : null}
-    </section>
+    <div className="emp-sb-favdrop" data-drop-favorites="" data-active={active ? "" : undefined} aria-hidden>
+      <Star aria-hidden />
+      <span>Drop here to add to Favorites</span>
+    </div>
   );
 }
 
-// Favorites — sortable (dnd-kit; the reorder is the C2 220ms ease-out) and a drop target for tree rows.
-function FavoritesSection({ dropActive, dragging }: { dropActive: boolean; dragging: boolean }) {
+// Favorites — sortable (dnd-kit; the reorder is the C2 220ms ease-out) and a drop target for tree rows. Shown only
+// when there are favourites (while there are none, a dragged row drops on FavoritesDropZone).
+function FavoritesSection({ dropActive, apps }: { dropActive: boolean; apps: AppIndex }) {
   const ids = useWorkspace(useShallow((s) => s.workspace?.favorites ?? []));
-  const metas = useTree(useShallow((s) => ids.map((id) => s.byId.get(id)).filter((m): m is PageMeta => !!m)));
+  const metas = useTree(useShallow((s) => ids.map((id) => s.byId.get(id)).filter((m): m is PageMeta => !!m && !m.deletedAt)));
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const [ctxId, setCtxId] = useState<Id | null>(null);
   const ctxMeta = ctxId ? metas.find((m) => m.id === ctxId) : undefined;
-  if (!metas.length && !dragging) return null;
+  if (!metas.length) return null;
   const onEnd = (e: DragEndEvent) => {
     const from = ids.indexOf(String(e.active.id));
     const to = e.over ? ids.indexOf(String(e.over.id)) : -1;
     if (from < 0 || to < 0 || from === to) return;
     void useWorkspace.getState().reorderFavorites(arrayMove(ids, from, to));
+  };
+  const actionsFor = (meta: PageMeta) => {
+    const hub = apps.hubs.get(meta.id);
+    return hub ? hubActions(meta, hub) : pageActions(meta);
   };
   return (
     <Section id="favorites" title="Favorites" data-drop-favorites="" className={dropActive ? "emp-sb-drop" : undefined}>
@@ -491,7 +538,7 @@ function FavoritesSection({ dropActive, dragging }: { dropActive: boolean; dragg
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onEnd}>
               <SortableContext items={metas.map((m) => m.id)} strategy={verticalListSortingStrategy}>
                 {metas.map((meta) => (
-                  <FavoriteRow key={meta.id} meta={meta} ctxOpen={ctxId === meta.id} />
+                  <FavoriteRow key={meta.id} meta={meta} ctxOpen={ctxId === meta.id} apps={apps} actions={() => actionsFor(meta)} />
                 ))}
               </SortableContext>
             </DndContext>
@@ -499,22 +546,25 @@ function FavoritesSection({ dropActive, dragging }: { dropActive: boolean; dragg
         </ContextMenuTrigger>
         {ctxMeta ? (
           <ContextMenuContent width={264}>
-            <PageContextItems actions={pageActions(ctxMeta)} />
+            <PageContextItems actions={actionsFor(ctxMeta)} />
           </ContextMenuContent>
         ) : null}
       </ContextMenu>
-      {!metas.length ? <p className="px-2 py-1.5 text-caption text-tertiary">Drop a page here to pin it</p> : null}
     </Section>
   );
 }
 
-function FavoriteRow({ meta, ctxOpen }: { meta: PageMeta; ctxOpen: boolean }) {
+function FavoriteRow({ meta, ctxOpen, apps, actions }: { meta: PageMeta; ctxOpen: boolean; apps: AppIndex; actions: () => ReturnType<typeof pageActions> }) {
   const route = useRoute();
-  const active = route.t === "page" && route.id === meta.id;
+  const hub = apps.hubs.get(meta.id);
+  const app = hub ? lifeAppIdentity(hub.appId) : null;
+  const target: AppRoute = hub ? { t: "app", instanceId: hub.instanceId } : { t: "page", id: meta.id };
+  const active = hub ? route.t === "app" && route.instanceId === hub.instanceId : (route.t === "page" || route.t === "db" || route.t === "sheet") && route.id === meta.id;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meta.id, transition: { duration: 220, easing: "var(--ease-out)" } });
   const [menuOpen, setMenuOpen] = useState(false);
   const [armed, setArmed] = useState(false);
-  const title = meta.title || "Untitled";
+  const title = app ? app.name : meta.title || "Untitled";
+  const Glyph = app?.icon;
   return (
     <div
       ref={setNodeRef}
@@ -531,83 +581,28 @@ function FavoriteRow({ meta, ctxOpen }: { meta: PageMeta; ctxOpen: boolean }) {
         transform: CSS.Translate.toString(transform),
         transition: isDragging ? "none" : transition,
       }}
-      onClick={(e) => (e.shiftKey ? useUi.getState().openPeek({ t: "page", id: meta.id }) : navigate({ t: "page", id: meta.id }))}
+      onClick={(e) => (e.shiftKey ? useUi.getState().openPeek(target) : navigate(target))}
       onKeyDown={(e) => {
-        if (e.key === "Enter") navigate({ t: "page", id: meta.id });
+        if (e.key === "Enter") navigate(target);
       }}
       onFocus={() => setArmed(true)}
       onPointerEnter={() => {
-        preloadRoute({ t: "page", id: meta.id });
+        preloadRoute(target);
         setArmed(true);
       }}
     >
-      <span className="ico">
-        <PageIcon icon={meta.icon} kind={meta.kind} size={18} />
-      </span>
+      <span className="ico">{Glyph ? <Glyph aria-hidden /> : <PageIcon icon={meta.icon} kind={meta.kind} project={isProject(meta)} size={18} />}</span>
       <span className="label">{title}</span>
       <span className="trail hover-only">
         <LazyMenu armed={armed} open={menuOpen} onOpenChange={setMenuOpen} label={`Actions for ${title}`}>
-          <PageMenuItems actions={pageActions(meta)} />
+          <PageMenuItems actions={actions()} />
         </LazyMenu>
       </span>
     </div>
   );
 }
 
-/** Markets is listed with the life apps once Portfolio is installed or a watchlist exists. */
-function useShowMarkets(hasPortfolio: boolean): boolean {
-  const [watchlist, setWatchlist] = useState(false);
-  useEffect(() => {
-    if (hasPortfolio) return;
-    let live = true;
-    api.watchlist
-      .list({})
-      .then((lists) => live && setWatchlist(lists.some((l) => l.symbols.length > 0)))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [hasPortfolio]);
-  return hasPortfolio || watchlist;
-}
-
-function LifeAppsSection() {
-  const apps = useWorkspace((s) => s.lifeapps);
-  const titles = useTree(useShallow((s) => apps.map((a) => s.byId.get(a.rootPageId)?.title ?? "")));
-  const route = useRoute();
-  const markets = useShowMarkets(apps.some((a) => a.appId === "portfolio" && !a.detached));
-  return (
-    <Section id="lifeapps" title="Life apps">
-      {apps.map((inst, i) => {
-        const id = lifeAppIdentity(inst.appId);
-        const Icon = id.icon;
-        const active = route.t === "app" && route.instanceId === inst.id;
-        const r: AppRoute = { t: "app", instanceId: inst.id };
-        return (
-          <button
-            key={inst.id}
-            type="button"
-            className="emp-sb-row"
-            aria-current={active ? "page" : undefined}
-            onClick={() => navigate(r)}
-            onPointerEnter={() => preloadRoute(r)}
-          >
-            <span className="ico">
-              <Icon aria-hidden />
-            </span>
-            <span className="label">{titles[i] || id.name}</span>
-            {inst.upgradeAvailable ? <span className="h-1.5 w-1.5 flex-none rounded-full bg-accent" aria-label="Update available" /> : null}
-          </button>
-        );
-      })}
-      {markets ? <NavRow icon={CandlestickChart} label="Markets" route={{ t: "markets" }} match={(r) => r.t === "markets"} /> : null}
-      {/* Always visible (W3C Visible Controls), not only on header hover. */}
-      <NavRow icon={Plus} label="Add a life app" route={{ t: "lifeapps" }} match={(r) => r.t === "lifeapps"} muted />
-    </Section>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────── workspace row
+// ───────────────────────────────────────────────────────────────────────────── header
 
 function WorkspaceGlyph({ ws, size = 22 }: { ws: Pick<Workspace, "name" | "icon"> | null; size?: number }) {
   // The workspace's initial (an emoji icon from an older vault is not shown: no emoji in the app's chrome).
@@ -619,7 +614,37 @@ function WorkspaceGlyph({ ws, size = 22 }: { ws: Pick<Workspace, "name" | "icon"
   );
 }
 
-function WorkspaceRow() {
+/**
+ * The header's sidebar button. Docked: "Hide sidebar". Peeking over the page: "Keep sidebar open" docks it (in a
+ * compact window, where it can only be an overlay, it closes the overlay instead).
+ */
+function SidebarToggle({ floating, compact }: { floating: boolean; compact: boolean }) {
+  if (!floating)
+    return (
+      <IconButton
+        icon={PanelLeftClose}
+        label="Hide sidebar"
+        shortcut="mod+\"
+        size="sm"
+        aria-controls={SIDEBAR_ID}
+        aria-expanded
+        onClick={() => {
+          runCommand("sidebar.toggle");
+          // The button goes with the sidebar: focus moves to its counterpart in the top bar.
+          window.setTimeout(() => document.querySelector<HTMLElement>('.emp-topbar [aria-label="Show sidebar"]')?.focus({ preventScroll: true }), 0);
+        }}
+      />
+    );
+  if (compact)
+    return <IconButton icon={PanelLeftClose} label="Close sidebar" shortcut="mod+\" size="sm" aria-controls={SIDEBAR_ID} aria-expanded onClick={() => useUi.getState().setSidebarPeeking(false)} />;
+  return <IconButton icon={PanelLeftOpen} label="Keep sidebar open" shortcut="mod+\" size="sm" aria-controls={SIDEBAR_ID} aria-expanded onClick={() => useUi.getState().setSidebarCollapsed(false)} />;
+}
+
+/**
+ * The workspace menu and the visible Hide sidebar button (brief §2.1). "+ New" sits on its own row just below
+ * (SidebarContent): beside them it left a default name like "Alex's workspace" about 60px to show itself in.
+ */
+function SidebarHeader({ floating, compact }: { floating: boolean; compact: boolean }) {
   const ws = useWorkspace((s) => s.workspace);
   const workspaces = useWorkspace((s) => s.workspaces);
   const encrypted = useVault((s) => !!s.status?.encrypted);
@@ -633,11 +658,6 @@ function WorkspaceRow() {
             <WorkspaceGlyph ws={ws} />
             <span className="name">{ws?.name ?? "Workspace"}</span>
             <ChevronsUpDown size={14} className="chev flex-none text-tertiary" aria-hidden />
-            {encrypted ? (
-              <Tooltip content="Encrypted on this device">
-                <Lock size={12} className="flex-none text-tertiary" aria-label="Encrypted" />
-              </Tooltip>
-            ) : null}
           </button>
         </MenuTrigger>
         <MenuContent width={260}>
@@ -666,7 +686,7 @@ function WorkspaceRow() {
           <MenuItem icon={SquarePen} onSelect={() => setDialog("rename")}>
             Rename workspace…
           </MenuItem>
-          <MenuItem icon={Settings} shortcut="mod+," onSelect={() => navigate({ t: "settings", section: "general" })}>
+          <MenuItem icon={Settings} shortcut="mod+," onSelect={() => runCommand("settings.open")}>
             Settings
           </MenuItem>
           {encrypted ? (
@@ -680,7 +700,9 @@ function WorkspaceRow() {
           )}
         </MenuContent>
       </Menu>
-      <IconButton icon={SquarePen} label="New page" shortcut="mod+n" size="sm" onClick={() => void createPageAndOpen(null)} />
+      <span data-sidebar-toggle="" className="flex">
+        <SidebarToggle floating={floating} compact={compact} />
+      </span>
       <WorkspaceNameDialog mode={dialog} onClose={() => setDialog(null)} current={ws?.name ?? ""} />
     </div>
   );
@@ -722,7 +744,7 @@ function WorkspaceNameDialog({ mode, onClose, current }: { mode: null | "new" | 
       onOpenChange={(o) => !o && onClose()}
       size="sm"
       title={mode === "rename" ? "Rename workspace" : "New workspace"}
-      description={mode === "new" ? "Workspaces keep separate page trees, favourites and life apps in the same vault." : undefined}
+      description={mode === "new" ? "Workspaces keep separate pages, favourites and apps on this computer." : undefined}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -748,6 +770,7 @@ function WorkspaceNameDialog({ mode, onClose, current }: { mode: null | "new" | 
 
 // ───────────────────────────────────────────────────────────────────────────── footer
 
+/** Trash and Settings, then the workspace's status (where it lives, whether it is encrypted) and the lock. */
 function SidebarFooter() {
   const encrypted = useVault((s) => !!s.status?.encrypted);
   const offline = useSettings((s) => s.vault?.offline ?? false);
@@ -761,16 +784,26 @@ function SidebarFooter() {
   }, [pulse]);
   return (
     <footer className="emp-sb-footer">
-      <Tooltip content={encrypted ? "Encrypted on this device" : "Turn on encryption in Settings, Security"}>
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left text-caption text-tertiary hover:text-secondary" onClick={() => navigate({ t: "settings", section: "security" })}>
-          <span className="emp-status-dot" data-tone={offline ? "off" : undefined} data-pulse={pulsing ? "" : undefined} aria-hidden />
-          <span className="truncate">
-            {offline ? "Offline" : "Local"} · {encrypted ? "Encrypted" : "Not encrypted"}
+      <div className="emp-sb-foot-row">
+        <NavRow icon={Trash2} label="Trash" route={{ t: "trash" }} className="emp-sb-foot-link" />
+        <button type="button" className="emp-sb-row emp-sb-foot-link" onClick={() => runCommand("settings.open")}>
+          <span className="ico">
+            <Settings aria-hidden />
           </span>
+          <span className="label">Settings</span>
         </button>
-      </Tooltip>
-      <IconButton size="xs" icon={Settings} label="Settings" shortcut="mod+," onClick={() => navigate({ t: "settings", section: "general" })} />
-      <LockIndicator size="xs" />
+      </div>
+      <div className="emp-sb-status">
+        <Tooltip content={encrypted ? "Encrypted on this computer" : "Turn on encryption in Settings"}>
+          <button type="button" className="emp-sb-status-btn" onClick={() => navigate({ t: "settings", section: "security" })}>
+            <span className="emp-status-dot" data-tone={offline ? "off" : undefined} data-pulse={pulsing ? "" : undefined} aria-hidden />
+            <span className="truncate">
+              {offline ? "Offline" : "Local"} · {encrypted ? "Encrypted" : "Not encrypted"}
+            </span>
+          </button>
+        </Tooltip>
+        <LockIndicator size="xs" />
+      </div>
     </footer>
   );
 }

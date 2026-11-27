@@ -4,19 +4,29 @@
  */
 import { useMemo } from "react";
 import type { Id, RowDTO } from "@/backend/types";
-import { localDay, read } from "./cells";
+import { keyOf, localDay, read } from "./cells";
 import { useRows, type AppDb } from "./data";
 import { isExpected, type HabitDef, type HabitLogEntry } from "./engine/habitMath";
+
+/** Habit type, schedule, time-of-day and log-status option keys (the option ids of the desktop manifest). */
+export const HABIT_TYPES = ["yes_no", "count", "duration", "quantity", "avoid"] as const;
+export const HABIT_SCHEDULES = ["daily", "x_per_week", "weekdays", "every_n_days"] as const;
+export const HABIT_TIMES = ["morning", "afternoon", "evening", "anytime"] as const;
+export const LOG_STATUSES = ["done", "partial", "skipped", "missed", "frozen"] as const;
+export const TIME_LABEL: Record<(typeof HABIT_TIMES)[number], string> = { morning: "Morning", afternoon: "Afternoon", evening: "Evening", anytime: "Anytime" };
+export const TYPE_LABEL: Record<(typeof HABIT_TYPES)[number], string> = { yes_no: "Yes or no", count: "Count", duration: "Duration", quantity: "Quantity", avoid: "Avoid" };
 
 export interface Habit {
   def: HabitDef;
   row: RowDTO;
-  type: string;
+  /** Type key (`yes_no`, `count`, …). */
+  type: (typeof HABIT_TYPES)[number];
   target: number | null;
   unit: string;
   twoMin: string;
   cue: string;
-  time: string;
+  /** Time-of-day key. */
+  time: (typeof HABIT_TIMES)[number];
 }
 
 export type LogEntry = HabitLogEntry & { rowId: Id };
@@ -27,19 +37,21 @@ export function useHabitData(habitsDb: AppDb | undefined, logDb: AppDb | undefin
   const habits: Habit[] = useMemo(
     () =>
       (hRows ?? []).map((r) => {
-        const sched = read.opt(r, habitsDb?.p("habit.schedule"))?.name;
+        const sched = (keyOf(read.opt(r, habitsDb?.p("habit.schedule")), HABIT_SCHEDULES) ?? "daily") as HabitDef["schedule"];
+        const everyN = read.num(r, habitsDb?.p("habit.every_n"));
         return {
           row: r,
-          type: read.opt(r, habitsDb?.p("habit.type"))?.name ?? "Yes/no",
+          type: (keyOf(read.opt(r, habitsDb?.p("habit.type")), HABIT_TYPES) ?? "yes_no") as Habit["type"],
           target: read.num(r, habitsDb?.p("habit.target")),
           unit: read.text(r, habitsDb?.p("habit.unit")),
           twoMin: read.text(r, habitsDb?.p("habit.two_min")),
           cue: read.text(r, habitsDb?.p("habit.cue")),
-          time: read.opt(r, habitsDb?.p("habit.time"))?.name ?? "Anytime",
+          time: (keyOf(read.opt(r, habitsDb?.p("habit.time")), HABIT_TIMES) ?? "anytime") as Habit["time"],
           def: {
             id: r.id,
             name: read.text(r, habitsDb?.p("habit.name")) || "Habit",
-            schedule: sched === "X per week" ? "x_per_week" : sched === "Weekdays" ? "weekdays" : sched === "Every N days" ? "every_n_days" : "daily",
+            schedule: sched,
+            ...(everyN ? { everyN } : {}),
             perWeek: read.num(r, habitsDb?.p("habit.per_week")) ?? 3,
             active: read.bool(r, habitsDb?.p("habit.active")),
             started: read.date(r, habitsDb?.p("habit.started"))?.start?.slice(0, 10) ?? localDay(new Date(r.createdAt)),
@@ -54,7 +66,7 @@ export function useHabitData(habitsDb: AppDb | undefined, logDb: AppDb | undefin
       const d = read.date(r, logDb?.p("log.date"))?.start?.slice(0, 10);
       const h = read.rel(r, logDb?.p("log.habit"))[0];
       if (!d || !h) continue;
-      out.push({ rowId: r.id, habitId: h, date: d, status: (read.opt(r, logDb?.p("log.status"))?.name ?? "Done").toLowerCase() as HabitLogEntry["status"], value: read.num(r, logDb?.p("log.value")) });
+      out.push({ rowId: r.id, habitId: h, date: d, status: (keyOf(read.opt(r, logDb?.p("log.status")), LOG_STATUSES) ?? "done") as HabitLogEntry["status"], value: read.num(r, logDb?.p("log.value")) });
     }
     return out;
   }, [lRows, logDb]);

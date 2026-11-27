@@ -223,9 +223,11 @@ pub fn plan(
             } else {
                 past_share
             };
-            let status = if paid_by[i] >= suggested && (suggested > Decimal::ZERO || *date < today)
-            {
+            // Nothing suggested and nothing paid is "no payment needed", never "Paid $0" or "late".
+            let status = if paid_by[i] > Decimal::ZERO && paid_by[i] >= suggested {
                 PeriodStatus::Paid
+            } else if suggested.is_zero() && paid_by[i].is_zero() {
+                PeriodStatus::Upcoming
             } else if *date < today {
                 PeriodStatus::Late
             } else if (*date - today).num_days() <= DUE_SOON_DAYS {

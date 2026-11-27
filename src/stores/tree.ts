@@ -5,10 +5,14 @@
  */
 import { create } from 'zustand';
 import { api } from '@/backend';
-import type { Icon, Id, PageMeta, PageMetaPatch } from '@/backend/types';
+import type { Icon, Id, LifeAppInstance, PageFlags, PageMeta, PageMetaPatch } from '@/backend/types';
 import { generateKeyBetween } from '@/lib/fractional-index';
+import { isReducedMotion } from '@/ui/motion/useReducedEffects';
 import { notify } from './toasts';
 import { undoable } from './undo';
+
+/** Row removal in the sidebar (register: rowRemove). */
+const ROW_REMOVE_MS = 160;
 
 export interface TreeRow {
   id: Id;
@@ -16,6 +20,10 @@ export interface TreeRow {
   hasChildren: boolean;
   expanded: boolean;
   meta: PageMeta;
+  /** The page is an installed app's hub: it lists as one leaf row that opens the app (brief §2.1). */
+  hub?: AppHub;
+  /** On its way out (moved to Trash): plays the 160ms row removal before it goes. */
+  leaving?: boolean;
 }
 
 interface TreeState {
@@ -23,6 +31,8 @@ interface TreeState {
   byId: Map<Id, PageMeta>;
   children: Map<Id | null, Id[]>;
   expanded: Set<Id>;
+  /** Rows playing their removal (brief §4: row remove, 160ms) just before they leave the tree. */
+  leaving: ReadonlySet<Id>;
   /** Bumped on every structural change (cheap equality for memoised selectors). */
   version: number;
 
@@ -39,11 +49,14 @@ interface TreeState {
   reveal(id: Id): void;
   loadExpanded(): Promise<void>;
 
-  createPage(opts: { parentId: Id | null; afterId?: Id; title?: string; icon?: Icon; kind?: 'doc' | 'dashboard' }): Promise<PageMeta>;
+  createPage(opts: { parentId: Id | null; afterId?: Id; title?: string; icon?: Icon; kind?: 'doc' | 'dashboard'; flags?: Partial<PageFlags> }): Promise<PageMeta>;
   updateMeta(id: Id, patch: PageMetaPatch): Promise<void>;
   rename(id: Id, title: string): Promise<void>;
-  /** Optimistic move with cycle check; undoable. */
-  move(id: Id, parentId: Id | null, pos?: { beforeId?: Id; afterId?: Id }): Promise<void>;
+  /**
+   * Optimistic move with cycle check; undoable. `opts.toast` shows "toast · Undo", whose Undo reverts this move
+   * (wherever it sits in the stack), not the most recent command.
+   */
+  move(id: Id, parentId: Id | null, pos?: { beforeId?: Id; afterId?: Id }, opts?: { toast?: string }): Promise<void>;
   /** Move to Trash with a "· Undo" toast. */
   trash(ids: Id[]): Promise<void>;
   duplicate(id: Id, deep?: boolean): Promise<PageMeta | null>;
@@ -98,6 +111,7 @@ export const useTree = create<TreeState>()((set, get) => {
     byId: new Map(),
     children: new Map(),
     expanded: new Set(),
+    leaving: new Set(),
     version: 0,
 
     load(workspaceId, pages) {
@@ -144,7 +158,7 @@ export const useTree = create<TreeState>()((set, get) => {
       commit(byId);
     },
 
-    reset: () => set({ workspaceId: null, byId: new Map(), children: new Map(), expanded: new Set(), version: 0 }),
+    reset: () => set({ workspaceId: null, byId: new Map(), children: new Map(), expanded: new Set(), leaving: new Set(), version: 0 }),
 
     toggle(id) {
       get().setExpanded(id, !get().expanded.has(id));
@@ -182,10 +196,10 @@ export const useTree = create<TreeState>()((set, get) => {
       }
     },
 
-    async createPage({ parentId, afterId, title, icon, kind = 'doc' }) {
+    async createPage({ parentId, afterId, title, icon, kind = 'doc', flags }) {
       const workspaceId = get().workspaceId;
       if (!workspaceId) throw new Error('No workspace open');
-      const { meta } = await api.page.create({ workspaceId, parentId, kind, title, icon, afterId });
+      const { meta } = await api.page.create({ workspaceId, parentId, kind, title, icon, afterId, ...(flags ? { flags } : {}) });
       get().upsert([meta]);
       if (parentId) get().setExpanded(parentId, true);
       return meta;
@@ -217,7 +231,7 @@ export const useTree = create<TreeState>()((set, get) => {
 
     rename: (id, title) => get().updateMeta(id, { title }),
 
-    async move(id, parentId, pos = {}) {
+    async move(id, parentId, pos = {}, opts = {}) {
       const { byId, children } = get();
       const meta = byId.get(id);
       if (!meta) return;
@@ -269,12 +283,15 @@ export const useTree = create<TreeState>()((set, get) => {
       };
 
       try {
-        await undoable({
-          label: 'Move page',
-          do: () => doMove(parentId, pos, sortKey),
-          undo: () =>
-            doMove(prevParent, prevAfter ? { afterId: prevAfter } : prevBefore ? { beforeId: prevBefore } : {}),
-        });
+        await undoable(
+          {
+            label: 'Move page',
+            do: () => doMove(parentId, pos, sortKey),
+            undo: () =>
+              doMove(prevParent, prevAfter ? { afterId: prevAfter } : prevBefore ? { beforeId: prevBefore } : {}),
+          },
+          { toast: opts.toast },
+        );
       } catch (e) {
         notify.fromError(e, "Couldn't move the page");
       }
@@ -295,6 +312,13 @@ export const useTree = create<TreeState>()((set, get) => {
       const snapshot = Array.from(hidden)
         .map((id) => byId.get(id))
         .filter((m): m is PageMeta => !!m);
+      // The rows fade out (160ms + 4px, register: rowRemove) before they go; at once under reduced motion or while
+      // the window is hidden.
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && !isReducedMotion()) {
+        set((s) => ({ leaving: new Set(hidden), version: s.version + 1 }));
+        await new Promise((r) => setTimeout(r, ROW_REMOVE_MS));
+      }
+      set({ leaving: new Set() });
       get().remove(Array.from(hidden));
       try {
         await undoable(
@@ -391,4 +415,135 @@ export function selectAncestors(s: Pick<TreeState, 'byId'>, id: Id): PageMeta[] 
 
 export function selectPathTitles(s: Pick<TreeState, 'byId'>, id: Id): string[] {
   return selectAncestors(s, id).map((p) => p.title || 'Untitled');
+}
+
+// ───────────────────────────────────────────────────────────────────────────── sidebar sections (brief §2.1)
+
+/** The sidebar's page sections. Favorites is a separate list of ids. */
+export type SidebarSection = 'projects' | 'documents' | 'sheets' | 'apps';
+
+/** An installed (not detached) app instance, as the sidebar sees its hub page. */
+export interface AppHub {
+  instanceId: Id;
+  appId: string;
+}
+
+/**
+ * Which pages belong to installed apps. Built from `workspace.lifeapps`: `hubs` maps each live (not detached) app's
+ * hub page to its instance; `live` holds the live instance ids (pages with one of these `appInstanceId`s are the
+ * app's generated pages, which never list on their own). `key` changes whenever either does (row-cache key).
+ */
+export interface AppIndex {
+  hubs: ReadonlyMap<Id, AppHub>;
+  live: ReadonlySet<Id>;
+  key: string;
+}
+
+export const EMPTY_APPS: AppIndex = { hubs: new Map(), live: new Set(), key: '' };
+
+export function appIndexOf(lifeapps: readonly Pick<LifeAppInstance, 'id' | 'appId' | 'rootPageId' | 'detached'>[]): AppIndex {
+  const hubs = new Map<Id, AppHub>();
+  const live = new Set<Id>();
+  const parts: string[] = [];
+  for (const i of lifeapps) {
+    if (i.detached) continue;
+    hubs.set(i.rootPageId, { instanceId: i.id, appId: i.appId });
+    live.add(i.id);
+    parts.push(`${i.id}:${i.rootPageId}`);
+  }
+  return { hubs, live, key: parts.join(',') };
+}
+
+/** A project: a document page with `flags.project` (brief §2.2). */
+export function isProject(meta: Pick<PageMeta, 'kind' | 'flags'>): boolean {
+  return meta.kind === 'doc' && meta.flags.project === true;
+}
+
+/** Generated by a live app (and not its hub): reached from the app, never listed in the sidebar by itself. */
+export function isAppOwned(meta: Pick<PageMeta, 'id' | 'appInstanceId'>, apps: AppIndex): boolean {
+  return !!meta.appInstanceId && apps.live.has(meta.appInstanceId) && !apps.hubs.has(meta.id);
+}
+
+/**
+ * The section a **top-level** page lists in, or null when it doesn't list at the top level (templates, trashed
+ * pages, an app's generated pages). Below the top level children nest under their parent whatever their kind.
+ *
+ *   apps        a live app's hub page (one row; detached hubs are ordinary pages)
+ *   projects    `flags.project`
+ *   sheets      spreadsheets
+ *   documents   everything else: documents, databases, dashboards that no app owns
+ */
+export function rootSectionOf(meta: PageMeta, apps: AppIndex): SidebarSection | null {
+  if (!isTreeVisible(meta)) return null;
+  if (apps.hubs.has(meta.id)) return 'apps';
+  if (isAppOwned(meta, apps)) return null;
+  if (isProject(meta)) return 'projects';
+  if (meta.kind === 'sheet') return 'sheets';
+  return 'documents';
+}
+
+const sectionCache = new Map<string, { version: number; apps: string; rows: TreeRow[] }>();
+
+/**
+ * The flattened visible rows of one sidebar section: the top-level pages of that section (`rootSectionOf`), then
+ * their expanded children at any depth (only `isTreeVisible` applies below the top level). App hubs are leaves
+ * wherever they are, so an app's generated pages never list. Memoised per (section, version, apps.key) with its own
+ * cache key, so each section's selector is cheap to call from a store selector.
+ */
+export function selectSectionRows(s: Pick<TreeState, 'byId' | 'children' | 'expanded' | 'version'> & { leaving?: ReadonlySet<Id> }, section: SidebarSection, apps: AppIndex = EMPTY_APPS): TreeRow[] {
+  const hit = sectionCache.get(section);
+  if (hit && hit.version === s.version && hit.apps === apps.key) return hit.rows;
+  const rows: TreeRow[] = [];
+  const seen = new Set<Id>();
+  const visibleKids = (id: Id) =>
+    (s.children.get(id) ?? []).filter((c) => {
+      const m = s.byId.get(c);
+      return !!m && isTreeVisible(m);
+    });
+  const push = (meta: PageMeta, depth: number) => {
+    if (seen.has(meta.id)) return;
+    seen.add(meta.id);
+    const hub = apps.hubs.get(meta.id);
+    const leaving = s.leaving?.has(meta.id) || undefined;
+    if (hub) {
+      rows.push({ id: meta.id, depth, hasChildren: false, expanded: false, meta, hub, leaving });
+      return;
+    }
+    const kids = visibleKids(meta.id);
+    const expanded = s.expanded.has(meta.id);
+    rows.push({ id: meta.id, depth, hasChildren: kids.length > 0, expanded, meta, leaving });
+    if (expanded) for (const k of kids) push(s.byId.get(k) as PageMeta, depth + 1);
+  };
+  for (const id of s.children.get(null) ?? []) {
+    const meta = s.byId.get(id);
+    if (meta && rootSectionOf(meta, apps) === section) push(meta, 0);
+  }
+  sectionCache.set(section, { version: s.version, apps: apps.key, rows });
+  return rows;
+}
+
+/** Every live project, in tree order (top-level ones first, then nested ones). */
+export function selectProjects(s: Pick<TreeState, 'byId' | 'children'>): PageMeta[] {
+  const out: PageMeta[] = [];
+  const nested: PageMeta[] = [];
+  const walk = (parent: Id | null, depth: number) => {
+    for (const id of s.children.get(parent) ?? []) {
+      const m = s.byId.get(id);
+      if (!m || !isTreeVisible(m)) continue;
+      if (isProject(m)) (depth === 0 ? out : nested).push(m);
+      walk(id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return [...out, ...nested];
+}
+
+/** The nearest project at or above `id` (the page itself when it is a project). */
+export function projectOf(s: Pick<TreeState, 'byId'>, id: Id): PageMeta | null {
+  const seen = new Set<Id>();
+  for (let cur = s.byId.get(id); cur && !seen.has(cur.id); cur = cur.parentId ? s.byId.get(cur.parentId) : undefined) {
+    seen.add(cur.id);
+    if (isProject(cur)) return cur;
+  }
+  return null;
 }

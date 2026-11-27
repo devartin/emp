@@ -652,11 +652,43 @@ pub struct Watchlist {
     pub symbols: Vec<WatchSymbol>,
 }
 
+/// Id of the starter watchlist (kept when the user edits it, so it is saved under the same id).
+pub const STARTER_WATCHLIST_ID: &str = "starter-watchlist";
+
+/// Real, widely quoted symbols the keyless providers price (Yahoo, Stooq, CoinGecko, Frankfurter): broad US index
+/// funds, two large companies, Bitcoin and the euro. Indices themselves have no `TICKER:MIC` key, so the Markets
+/// strip uses the funds that track them.
+pub const STARTER_SYMBOLS: &[&str] = &[
+    "SPY:ARCX",
+    "QQQ:XNAS",
+    "AAPL:XNAS",
+    "MSFT:XNAS",
+    "BTC:CRYPTO",
+    "EURUSD:FX",
+];
+
+/// The watchlist a workspace starts with until the user saves their own (nothing is stored until then).
+fn starter_watchlist() -> Watchlist {
+    Watchlist {
+        id: STARTER_WATCHLIST_ID.to_owned(),
+        name: "Watchlist".to_owned(),
+        symbols: STARTER_SYMBOLS
+            .iter()
+            .map(|k| WatchSymbol {
+                key: (*k).to_owned(),
+                alert_above: None,
+                alert_below: None,
+                alert_pct: None,
+            })
+            .collect(),
+    }
+}
+
 fn load_watchlists(store: &Store) -> ApiResult<Vec<Watchlist>> {
-    Ok(store
-        .kv_get_any(CONFIG_NS, WATCHLISTS_KEY)?
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default())
+    Ok(match store.kv_get_any(CONFIG_NS, WATCHLISTS_KEY)? {
+        Some(v) => serde_json::from_value(v).unwrap_or_default(),
+        None => vec![starter_watchlist()],
+    })
 }
 
 /// `watchlist_list({}) → { id, name, symbols }[]`.
@@ -1169,6 +1201,17 @@ mod tests {
         assert_eq!(s.get("EUR", "USD", Some("2026-11-26")), Some(1.25));
         assert_eq!(s.get("EUR", "EUR", None), Some(1.0));
         assert_eq!(s.get("EUR", "JPY", None), None);
+    }
+
+    #[test]
+    fn starter_watchlist_uses_real_parseable_symbols() {
+        let w = starter_watchlist();
+        assert!(validate::id("id", &w.id).is_ok());
+        assert_eq!(w.symbols.len(), STARTER_SYMBOLS.len());
+        for s in &w.symbols {
+            assert!(symbol_key("key", &s.key).is_ok(), "{}", s.key);
+            assert!(!s.key.starts_with("EMP"), "no demo tickers on desktop");
+        }
     }
 
     #[test]

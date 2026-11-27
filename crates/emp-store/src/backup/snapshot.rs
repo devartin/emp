@@ -19,6 +19,10 @@ use crate::{Progress, Result, Store, StoreError};
 
 /// Copy buffer size.
 const BUF: usize = 64 * 1024;
+/// Store-internal kv namespace (never reachable from the webview) holding the chosen snapshot folder.
+const SNAPSHOT_NS: &str = "snapshots";
+/// Key of the chosen snapshot folder (an absolute path string).
+const SNAPSHOT_FOLDER_KEY: &str = "folder";
 
 /// `snapshot_list` entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -370,7 +374,7 @@ impl Store {
         let now = self.now();
         let schema = crate::db::migrate::LATEST_VERSION;
         let id = format!("{now}-v{schema}");
-        let dir = self.inner.paths.snapshots();
+        let (dir, _) = self.snapshot_target()?;
         crate::vault::create_private_dir(&dir)?;
         self.backup_write(
             &dir.join(format!("{id}.empsnap")),
@@ -390,48 +394,123 @@ impl Store {
         Ok(id)
     }
 
-    /// `snapshot_list`, newest first.
+    /// The folder snapshots are written to when the user chose one (`<chosen>/Ultranote snapshots <id>/`), or
+    /// `None` for the vault's own `snapshots/` directory.
+    pub fn snapshot_folder(&self) -> Result<Option<PathBuf>> {
+        Ok(self
+            .kv_get_any(SNAPSHOT_NS, SNAPSHOT_FOLDER_KEY)?
+            .and_then(|v| v.as_str().map(PathBuf::from))
+            .filter(|p| p.is_absolute()))
+    }
+
+    /// Chooses where snapshots go. `Some(folder)` must be an existing, writable directory the user picked (the app
+    /// gets it from the native folder dialog); snapshots then go to a subfolder named after this vault, so one folder
+    /// can serve several workspaces. `None` goes back to the vault directory. Existing snapshots stay where they are
+    /// and keep being listed. Returns the snapshot directory in use.
+    pub fn set_snapshot_folder(&self, folder: Option<&Path>) -> Result<PathBuf> {
+        self.session()?;
+        let Some(folder) = folder else {
+            delete_kv(self)?;
+            return Ok(self.inner.paths.snapshots());
+        };
+        if !folder.is_absolute() || !folder.is_dir() {
+            return Err(StoreError::invalid_field(
+                "folder",
+                "choose an existing folder",
+            ));
+        }
+        let hex = self.inner.vault_id.to_hex();
+        let dir = folder.join(format!(
+            "Ultranote snapshots {}",
+            hex.get(..8).unwrap_or(&hex)
+        ));
+        crate::vault::create_private_dir(&dir)?;
+        // Prove the folder takes files before relying on it (read-only mounts, permission problems).
+        let probe = dir.join(format!(".write-test-{}", new_id()));
+        crate::vault::create_private_file(&probe)?;
+        let _ = std::fs::remove_file(&probe);
+        let path = dir
+            .to_str()
+            .ok_or_else(|| {
+                StoreError::invalid_field("folder", "the folder name is not valid Unicode")
+            })?
+            .to_owned();
+        self.kv_set_any(
+            SNAPSHOT_NS,
+            SNAPSHOT_FOLDER_KEY,
+            serde_json::Value::String(path),
+            None,
+        )?;
+        Ok(dir)
+    }
+
+    /// Where the next snapshot is written, and whether that is the chosen folder. A chosen folder that is not
+    /// reachable right now (an unplugged drive, an unmounted share) falls back to the vault directory, so automatic
+    /// snapshots keep happening.
+    pub fn snapshot_target(&self) -> Result<(PathBuf, bool)> {
+        match self.snapshot_folder()? {
+            Some(dir) if dir.is_dir() => Ok((dir, true)),
+            Some(dir) if dir.parent().is_some_and(Path::is_dir) => Ok((dir, true)),
+            _ => Ok((self.inner.paths.snapshots(), false)),
+        }
+    }
+
+    /// Snapshot directories with their `location` label: the vault directory, then the chosen folder.
+    fn snapshot_dirs(&self) -> Result<Vec<(PathBuf, &'static str)>> {
+        let local = self.inner.paths.snapshots();
+        let mut dirs = vec![(local.clone(), "local")];
+        if let Some(folder) = self.snapshot_folder()?
+            && folder != local
+        {
+            dirs.push((folder, "folder"));
+        }
+        Ok(dirs)
+    }
+
+    /// `snapshot_list`, newest first, across the vault directory and the chosen folder.
     pub fn snapshot_list(&self) -> Result<Vec<SnapshotInfo>> {
         self.session()?;
-        let dir = self.inner.paths.snapshots();
         let mut out = Vec::new();
-        if !dir.exists() {
-            return Ok(out);
-        }
-        for e in std::fs::read_dir(&dir)? {
-            let p = e?.path();
-            if p.extension().and_then(|x| x.to_str()) != Some("empsnap") {
+        for (dir, location) in self.snapshot_dirs()? {
+            if !dir.is_dir() {
                 continue;
             }
-            let Some(stem) = p.file_stem().and_then(|x| x.to_str()) else {
-                continue;
-            };
-            let Some((at, ver)) = stem.split_once("-v") else {
-                continue;
-            };
-            let (Ok(at), Ok(ver)) = (at.parse::<i64>(), ver.parse::<i64>()) else {
-                continue;
-            };
-            let mut bytes = std::fs::metadata(&p)?.len();
-            let bd = blobs_dir(&p);
-            if bd.is_dir() {
-                for b in std::fs::read_dir(&bd)? {
-                    bytes += b?.metadata()?.len();
+            for e in std::fs::read_dir(&dir)? {
+                let p = e?.path();
+                if p.extension().and_then(|x| x.to_str()) != Some("empsnap") {
+                    continue;
                 }
+                let Some(stem) = p.file_stem().and_then(|x| x.to_str()) else {
+                    continue;
+                };
+                let Some((at, ver)) = stem.split_once("-v") else {
+                    continue;
+                };
+                let (Ok(at), Ok(ver)) = (at.parse::<i64>(), ver.parse::<i64>()) else {
+                    continue;
+                };
+                let mut bytes = std::fs::metadata(&p)?.len();
+                let bd = blobs_dir(&p);
+                if bd.is_dir() {
+                    for b in std::fs::read_dir(&bd)? {
+                        bytes += b?.metadata()?.len();
+                    }
+                }
+                out.push(SnapshotInfo {
+                    id: stem.to_owned(),
+                    at,
+                    bytes,
+                    schema_version: ver,
+                    location: location.into(),
+                });
             }
-            out.push(SnapshotInfo {
-                id: stem.to_owned(),
-                at,
-                bytes,
-                schema_version: ver,
-                location: "local".into(),
-            });
         }
         out.sort_by_key(|s| std::cmp::Reverse(s.at));
+        out.dedup_by(|a, b| a.id == b.id);
         Ok(out)
     }
 
-    /// Path of a snapshot by id.
+    /// Path of a snapshot by id (the chosen folder first, then the vault directory).
     pub fn snapshot_path(&self, id: &str) -> Result<PathBuf> {
         if id.is_empty()
             || !id
@@ -440,11 +519,13 @@ impl Store {
         {
             return Err(StoreError::invalid_field("id", "invalid snapshot id"));
         }
-        let p = self.inner.paths.snapshots().join(format!("{id}.empsnap"));
-        if !p.is_file() {
-            return Err(StoreError::NotFound("snapshot"));
+        for (dir, _) in self.snapshot_dirs()?.into_iter().rev() {
+            let p = dir.join(format!("{id}.empsnap"));
+            if p.is_file() {
+                return Ok(p);
+            }
         }
-        Ok(p)
+        Err(StoreError::NotFound("snapshot"))
     }
 
     /// Deletes snapshots outside the retention policy. Returns how many were removed.
@@ -456,7 +537,9 @@ impl Store {
             .collect();
         let del = retention_plan(&list, daily, weekly, monthly);
         for id in &del {
-            let p = self.inner.paths.snapshots().join(format!("{id}.empsnap"));
+            let Ok(p) = self.snapshot_path(id) else {
+                continue;
+            };
             let _ = std::fs::remove_dir_all(blobs_dir(&p));
             let _ = std::fs::remove_file(&p);
         }
@@ -478,6 +561,10 @@ impl Store {
             Err(e) => Err(e),
         }
     }
+}
+
+fn delete_kv(store: &Store) -> Result<()> {
+    crate::repo::kv::delete_internal(store, SNAPSHOT_NS, SNAPSHOT_FOLDER_KEY)
 }
 
 /// `<file>.blobs/` beside a snapshot.

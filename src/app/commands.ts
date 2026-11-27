@@ -10,13 +10,14 @@ import { usePrivacy } from '@/stores/privacy';
 import { useSettings } from '@/stores/settings';
 import { notify } from '@/stores/toasts';
 import { useTree } from '@/stores/tree';
-import { useUi } from '@/stores/ui';
+import { isCompactWindow, useUi } from '@/stores/ui';
 import { useUndo } from '@/stores/undo';
 import { useVault } from '@/stores/vault';
 import { useWorkspace } from '@/stores/workspace';
 import { switchThemeWithReveal } from '@/ui/motion/themeTransition';
 import { openFinanceImport } from '@/features/finance/ImportWizard/request';
 import { holdKeys } from '@/features/search/keyBuffer';
+import { openMoveToProject } from '@/features/projects/dialogs';
 import { navigate, routePageId, type AppRoute } from './router';
 
 export type CommandSection = 'Navigation' | 'Create' | 'Page' | 'View' | 'Privacy & security' | 'Go to' | 'Help' | string;
@@ -103,6 +104,10 @@ export function runCommand(id: string): boolean {
 
 const inShell = () => useVault.getState().phase === 'shell';
 const currentPageId = (): Id | null => routePageId(useNav.getState().route);
+const currentMeta = () => {
+  const id = currentPageId();
+  return id ? useTree.getState().byId.get(id) : undefined;
+};
 
 export async function openTodayNote(): Promise<void> {
   const meta = await api.daily.noteOpen({ date: isoDay() });
@@ -116,6 +121,13 @@ export async function createPageAndOpen(parentId: Id | null = null): Promise<voi
   navigate({ t: 'page', id: meta.id });
 }
 
+/** A new project (brief §2.2: a document with `flags.project`), opened on its project view. */
+export async function createProjectAndOpen(parentId: Id | null = null): Promise<void> {
+  const meta = await useTree.getState().createPage({ parentId, flags: { project: true } });
+  navigate({ t: 'page', id: meta.id });
+  focusWhenReady('.emp-page textarea.emp-title');
+}
+
 /** Focus the first element matching `selector` once the new route has rendered it (gives up after 2 s). */
 function focusWhenReady(selector: string): void {
   const t0 = performance.now();
@@ -127,21 +139,24 @@ function focusWhenReady(selector: string): void {
   requestAnimationFrame(tick);
 }
 
-/** A full-page database, opened with its title focused. */
-export async function createDatabaseAndOpen(): Promise<void> {
+/** A full-page database (at the top level or inside `parentId`), opened with its title focused. */
+export async function createDatabaseAndOpen(parentId: Id | null = null): Promise<void> {
   const ws = useWorkspace.getState().workspace;
   if (!ws) return;
-  const res = await api.db.create({ workspaceId: ws.id, parentId: null, title: '', inline: false });
+  const res = await api.db.create({ workspaceId: ws.id, parentId, title: '', inline: false });
   useTree.getState().upsert([res.page]);
+  if (parentId) useTree.getState().setExpanded(parentId, true);
   navigate({ t: 'db', id: res.page.id });
   focusWhenReady('.edb-page-title');
 }
 
-export async function createSheetAndOpen(): Promise<void> {
+/** A new spreadsheet (at the top level or inside `parentId`). */
+export async function createSheetAndOpen(parentId: Id | null = null): Promise<void> {
   const ws = useWorkspace.getState().workspace;
   if (!ws) return;
-  const res = await api.sheet.workbookCreate({ workspaceId: ws.id, parentId: null, title: 'Untitled sheet' });
+  const res = await api.sheet.workbookCreate({ workspaceId: ws.id, parentId, title: 'Untitled spreadsheet' });
   useTree.getState().upsert([res.page]);
+  if (parentId) useTree.getState().setExpanded(parentId, true);
   navigate({ t: 'sheet', id: res.page.id });
 }
 
@@ -154,20 +169,58 @@ export function openPaletteHeld(mode: 'all' | 'pages' | 'commands' = 'all', quer
 
 const app = (appId: string) => useWorkspace.getState().lifeapps.find((i) => i.appId === appId && !i.detached);
 
-function regions(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('[data-region]')).filter((el) => el.offsetParent !== null);
+/**
+ * F6 regions (sidebar → top bar → content → panel), in document order. A hidden sidebar is inert and aria-hidden, so
+ * it is skipped whether it is collapsed or the window is compact; anything not rendered is skipped too.
+ */
+export function focusRegions(root: ParentNode = document): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>('[data-region]')).filter((el) => {
+    if (el.closest('[inert], [aria-hidden="true"]')) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+  });
+}
+
+const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [contenteditable="true"], [tabindex="0"]';
+
+/** Where focus lands in a region: the region itself when it takes focus (content), else its first enabled control. */
+export function regionFocusTarget(region: HTMLElement): HTMLElement {
+  if (region.hasAttribute('tabindex')) return region;
+  const current = region.querySelector<HTMLElement>('[aria-current="page"][tabindex="0"], [aria-selected="true"][tabindex="0"]');
+  if (current) return current;
+  const first = Array.from(region.querySelectorAll<HTMLElement>(FOCUSABLE)).find((el) => !el.closest('[inert], [aria-hidden="true"]') && el.getClientRects().length > 0);
+  if (first) return first;
+  region.setAttribute('tabindex', '-1');
+  return region;
 }
 
 function cycleRegion(dir: 1 | -1) {
-  const list = regions();
+  const list = focusRegions();
   if (!list.length) return;
   const i = list.findIndex((el) => el.contains(document.activeElement));
-  const next = list[(i + dir + list.length) % list.length];
-  const focusable = next.querySelector<HTMLElement>('[tabindex="0"], button, a[href], input, [contenteditable="true"]');
-  (focusable ?? next).focus();
+  const n = list.length;
+  const next = i < 0 ? (dir > 0 ? 0 : n - 1) : (i + dir + n) % n;
+  regionFocusTarget(list[next]).focus({ preventScroll: true });
 }
 
 const go = (route: AppRoute) => () => navigate(route);
+
+/**
+ * ⌘\ and the palette command: hides or shows the docked sidebar; in a compact window (< 900px, where the sidebar is
+ * only an overlay) it opens or closes the overlay instead.
+ */
+function toggleSidebarFromAnywhere() {
+  const ui = useUi.getState();
+  if (isCompactWindow()) ui.setSidebarPeeking(!ui.sidebarPeeking);
+  else ui.toggleSidebar();
+}
+
+/** The top bar's "Show sidebar": docks it again (never a toggle), or opens the overlay in a compact window. */
+export function showSidebar() {
+  const ui = useUi.getState();
+  if (isCompactWindow()) ui.setSidebarPeeking(!ui.sidebarPeeking);
+  else ui.setSidebarCollapsed(false);
+}
 
 function togglePalette(mode: 'all' | 'pages' | 'commands') {
   const ui = useUi.getState();
@@ -183,7 +236,8 @@ export function registerAppCommands(): () => void {
     { id: 'palette.commands', title: 'Run a command', section: 'Navigation', shortcut: 'mod+shift+p', hidden: true, run: () => togglePalette('commands'), when: inShell },
 
     // Create
-    { id: 'page.new', title: 'New page', section: 'Create', icon: 'file-plus', keywords: ['create', 'add', 'document'], shortcut: 'mod+n', when: inShell, run: () => createPageAndOpen(null) },
+    { id: 'page.new', title: 'New document', section: 'Create', icon: 'file-plus', keywords: ['create', 'add', 'page', 'note'], shortcut: 'mod+n', when: inShell, run: () => createPageAndOpen(null) },
+    { id: 'project.new', title: 'New project', section: 'Create', icon: 'folder-kanban', keywords: ['create', 'add', 'group', 'folder'], when: inShell, run: () => createProjectAndOpen(null) },
     {
       id: 'page.newChild',
       title: 'New sub-page here',
@@ -193,8 +247,8 @@ export function registerAppCommands(): () => void {
       when: () => inShell() && useNav.getState().route.t === 'page',
       run: () => createPageAndOpen(currentPageId()),
     },
-    { id: 'db.new', title: 'New database', section: 'Create', icon: 'database', keywords: ['table', 'tracker', 'create'], when: inShell, run: createDatabaseAndOpen },
-    { id: 'sheet.new', title: 'New sheet', section: 'Create', icon: 'sheet', keywords: ['spreadsheet', 'workbook', 'excel', 'create'], when: inShell, run: createSheetAndOpen },
+    { id: 'db.new', title: 'New database', section: 'Create', icon: 'database', keywords: ['table', 'tracker', 'create'], when: inShell, run: () => createDatabaseAndOpen(null) },
+    { id: 'sheet.new', title: 'New spreadsheet', section: 'Create', icon: 'sheet', keywords: ['sheet', 'workbook', 'excel', 'create'], when: inShell, run: () => createSheetAndOpen(null) },
     { id: 'task.add', title: 'Add task', section: 'Create', icon: 'list-todo', keywords: ['todo', 'to-do', 'remind'], when: inShell, run: () => openPaletteHeld('all', 't ') },
     {
       id: 'txn.add',
@@ -252,7 +306,7 @@ export function registerAppCommands(): () => void {
     { id: 'go.home', title: 'Home', section: 'Go to', icon: 'house', keywords: ['dashboard', 'start'], when: inShell, run: go({ t: 'home' }) },
     { id: 'go.calendar', title: 'Calendar', section: 'Go to', icon: 'calendar', keywords: ['events', 'schedule'], when: inShell, run: go({ t: 'calendar' }) },
     { id: 'go.markets', title: 'Markets', section: 'Go to', icon: 'candlestick-chart', keywords: ['stocks', 'quotes', 'watchlist'], when: inShell, run: go({ t: 'markets' }) },
-    { id: 'go.lifeapps', title: 'Life apps', section: 'Go to', icon: 'layout-grid', keywords: ['apps', 'gallery', 'add a life app', 'money', 'habits'], when: inShell, run: go({ t: 'lifeapps' }) },
+    { id: 'go.lifeapps', title: 'Apps', section: 'Go to', icon: 'layout-grid', keywords: ['life apps', 'gallery', 'add an app', 'money', 'habits', 'tasks'], when: inShell, run: go({ t: 'lifeapps' }) },
     { id: 'go.trash', title: 'Trash', section: 'Go to', icon: 'trash-2', keywords: ['deleted', 'restore'], when: inShell, run: go({ t: 'trash' }) },
     { id: 'settings.open', title: 'Settings', section: 'Go to', icon: 'settings', keywords: ['preferences', 'options'], shortcut: 'mod+,', when: inShell, run: go({ t: 'settings', section: 'general' }) },
     { id: 'settings.security', title: 'Security center', section: 'Privacy & security', icon: 'shield-check', keywords: ['encryption', 'password', 'recovery', 'backup'], when: inShell, run: go({ t: 'settings', section: 'security' }) },
@@ -326,8 +380,52 @@ export function registerAppCommands(): () => void {
       },
     },
 
+    // Projects (brief §2.2)
+    {
+      id: 'project.turnInto',
+      title: 'Turn into project',
+      section: 'Page',
+      icon: 'folder-kanban',
+      keywords: ['project', 'group'],
+      when: () => {
+        const m = currentMeta();
+        return inShell() && !!m && m.kind === 'doc' && !m.flags.project;
+      },
+      run: async () => {
+        const m = currentMeta();
+        if (m) await (await import('@/features/projects/actions')).setProject(m, true);
+      },
+    },
+    {
+      id: 'project.turnBack',
+      title: 'Turn back into a document',
+      section: 'Page',
+      icon: 'file-text',
+      keywords: ['project', 'document'],
+      when: () => {
+        const m = currentMeta();
+        return inShell() && !!m && m.kind === 'doc' && !!m.flags.project;
+      },
+      run: async () => {
+        const m = currentMeta();
+        if (m) await (await import('@/features/projects/actions')).setProject(m, false);
+      },
+    },
+    {
+      id: 'project.moveTo',
+      title: 'Move to project…',
+      section: 'Page',
+      icon: 'folder-input',
+      keywords: ['project', 'move'],
+      when: () => inShell() && !!currentMeta(),
+      run: () => {
+        const m = currentMeta();
+        if (m) openMoveToProject(m.id);
+      },
+    },
+
     // View
-    { id: 'sidebar.toggle', title: 'Toggle sidebar', section: 'View', icon: 'panel-left', shortcut: 'mod+\\', when: inShell, run: () => useUi.getState().toggleSidebar() },
+    { id: 'sidebar.toggle', title: 'Hide or show the sidebar', section: 'View', icon: 'panel-left', keywords: ['toggle', 'collapse', 'navigation'], shortcut: 'mod+\\', when: inShell, run: () => toggleSidebarFromAnywhere() },
     { id: 'panel.toggle', title: 'Toggle right panel', section: 'View', icon: 'panel-right', keywords: ['outline', 'info'], when: inShell, run: () => useUi.getState().toggleRightPanel() },
     {
       id: 'theme.toggle',

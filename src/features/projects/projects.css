@@ -1,0 +1,280 @@
+/* Projects (brief §2.2): the contents between a project's header and its notes, and the project pickers. Ink only,
+   ruled not boxed, monochrome glyphs, tabular nothing (there are no figures here). Tokens only. */
+
+.emp-project {
+  display: contents;
+}
+.emp-project-slot {
+  position: relative;
+}
+.emp-project-contents {
+  margin-top: 22px;
+}
+
+/* "Contents · 3 documents · 1 app ……… + Add" */
+.emp-project-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.emp-project-head h2,
+.emp-project-notes-head {
+  margin: 0;
+  font-size: 1rem;
+  line-height: calc(20 / 14);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.emp-project-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(13rem / 14);
+  color: var(--text-tertiary);
+}
+.emp-project-add {
+  margin-left: auto;
+  align-self: center;
+}
+
+/* A group: a 12/500 label with its count, then 36px ruled rows. */
+.emp-project-group {
+  margin-top: 16px;
+}
+.emp-project-group h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 2px;
+  padding: 0 4px 6px;
+  font-size: calc(12rem / 14);
+  line-height: calc(16 / 12);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.emp-project-group h3 .count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-disabled);
+}
+.emp-project-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.emp-project-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.emp-project-row:hover,
+.emp-project-row:focus-within,
+.emp-project-row[data-menu-open] {
+  background: var(--state-hover);
+}
+.emp-project-open {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-list);
+  padding: 0 4px;
+  text-align: left;
+  color: var(--text-primary);
+  outline: none;
+}
+.emp-project-open:active {
+  background: var(--state-active);
+}
+.emp-project-open:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: -1.5px;
+}
+.emp-project-open .glyph {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+}
+.emp-project-open .glyph svg {
+  width: 16px;
+  height: 16px;
+}
+.emp-project-open .title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(14rem / 14);
+  font-weight: 500;
+}
+.emp-project-open .edited {
+  flex: none;
+  font-size: calc(12rem / 14);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.emp-project-more {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0 4px 0 2px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.emp-project-more svg {
+  width: 15px;
+  height: 15px;
+}
+.emp-project-row:is(:hover, :focus-within, [data-menu-open]) .emp-project-more {
+  opacity: 1;
+}
+.emp-project-more:hover {
+  background: var(--state-active);
+  color: var(--text-primary);
+}
+.emp-project-more:focus-visible {
+  opacity: 1;
+  outline: 1.5px solid var(--ring);
+  outline-offset: -1px;
+}
+.emp-project-notes-head {
+  margin-top: 28px;
+  padding-bottom: 2px;
+}
+
+/* Empty project: one sentence and the four add buttons. */
+.emp-project-empty {
+  padding: 14px 0 6px;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.emp-project-empty p {
+  margin: 0 0 12px;
+  font-size: calc(14rem / 14);
+  line-height: calc(20 / 14);
+  color: var(--text-secondary);
+}
+.emp-project-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.emp-project-empty-move {
+  margin-top: 8px;
+}
+
+/* Pickers: a search field over a ruled list of 36px rows. */
+.emp-pick-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.emp-pick-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(380px, 52vh);
+  overflow-y: auto;
+  border-top: 1px solid var(--border-subtle);
+  scrollbar-width: thin;
+}
+.emp-pick-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-list);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  color: var(--text-primary);
+  font-size: calc(14rem / 14);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+button.emp-pick-row:hover:not(:disabled) {
+  background: var(--state-hover);
+}
+button.emp-pick-row:active:not(:disabled) {
+  background: var(--state-active);
+}
+button.emp-pick-row:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: -1.5px;
+}
+button.emp-pick-row:disabled {
+  cursor: default;
+  color: var(--text-tertiary);
+}
+.emp-pick-row .glyph {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+}
+.emp-pick-row .glyph svg {
+  width: 16px;
+  height: 16px;
+}
+.emp-pick-row .title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.emp-pick-row .title .sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: calc(12rem / 14);
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+.emp-pick-row .meta {
+  flex: none;
+  font-size: calc(12rem / 14);
+  color: var(--text-tertiary);
+}
+/* "Add an app…" before its list arrives: placeholder rows as tall as the app rows, so nothing jumps. */
+.emp-pick-row[data-loading] {
+  min-height: 46px;
+}
+.emp-pick-row[data-done] .glyph {
+  color: var(--text-primary);
+}
+.emp-pick-empty {
+  margin: 0;
+  padding: 4px 6px;
+  font-size: calc(13rem / 14);
+  color: var(--text-tertiary);
+}
+
+:root[data-motion="reduced"] .emp-project-row,
+:root[data-motion="reduced"] .emp-project-more,
+:root[data-motion="reduced"] .emp-pick-row {
+  transition: none;
+}

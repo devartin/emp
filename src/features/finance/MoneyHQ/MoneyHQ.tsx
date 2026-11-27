@@ -5,6 +5,7 @@
  * Accounts. The import wizard (the one finance import entry, see ImportWizard/request.ts) and the rules editor open
  * as sheets from the header.
  */
+import { appName } from "@/features/lifeapps/identity";
 import { ChevronLeft, ChevronRight, FileUp, ListFilter, Wallet } from "lucide-react";
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "@/backend";
@@ -85,7 +86,7 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
   const [txnFilter, setTxnFilter] = useState<string | null>(null);
   const ledger = useLedger(instanceId);
   const overview = useAsync(() => api.finance.overview({ instanceId, month }), [instanceId, month]);
-  useDbChanged([ledger.schemas.txns?.database.id, ledger.schemas.recurring?.database.id, ledger.schemas.goals?.database.id, ledger.schemas.accounts?.database.id], overview.reload, 260);
+  useDbChanged(ledger.dbIds, overview.reload, 260);
 
   // Old routes: the Net worth tab now lives in Accounts.
   useEffect(() => {
@@ -131,7 +132,7 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
 
   // `review.count` when the Reviewed property exists, else `uncat.count` (definitions.ts). Unknown until loaded.
   const loaded = !ledger.loading;
-  const toReview = ledger.hasReviewed ? ledger.txns.filter((t) => t.reviewed === false).length : null;
+  const toReview = ledger.hasReviewed ? ledger.counts.toReview : null;
   const uncategorized = overview.data?.uncategorized ?? null;
   const tabCount = toReview ?? uncategorized ?? 0;
   const tabs: TabItem<MoneyTab>[] = [
@@ -154,10 +155,10 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
   // Facts only, and only once known: zero parts are omitted (never "All caught up" before the data arrives).
   const status = [toReview ? `${toReview} to review` : null, uncategorized ? `${uncategorized} uncategorised` : null].filter(Boolean).join(" · ");
 
-  if (ledger.error && !ledger.loading && !ledger.schemas.txns) {
+  if (ledger.error && !ledger.loading && !ledger.dbs.transactions) {
     return (
-      <HubPage icon={Wallet} tone="jade" title="Money HQ">
-        <Quiet title="Money HQ's databases are missing" body="Restore them from Trash, or run the setup again from Life apps." action={<Button variant="primary" onClick={() => navigate({ t: "lifeapps", appId: "money-hq" })}>Open life apps</Button>} />
+      <HubPage icon={Wallet} tone="jade" title={appName("money-hq")}>
+        <Quiet title="This app's databases are missing" body="Restore them from Trash, or set the app up again from the app gallery." action={<Button variant="primary" onClick={() => navigate({ t: "lifeapps", appId: "money-hq" })}>Open the app gallery</Button>} />
       </HubPage>
     );
   }
@@ -168,7 +169,7 @@ export default function MoneyHQ({ instanceId, tab }: MoneyHQProps) {
         <HubPage
           icon={Wallet}
           tone="jade"
-          title="Money HQ"
+          title={appName("money-hq")}
           subtitle={
             <>
               {monthSwitcher}

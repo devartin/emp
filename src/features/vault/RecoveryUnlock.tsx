@@ -76,11 +76,17 @@ export function RecoveryUnlock({ lockoutUntil, onLockout }: { lockoutUntil: numb
     } catch (e) {
       const retry = isApiError(e) ? e.details?.retryAfterMs : undefined;
       if (retry) onLockout(retry);
-      if (hasCode(e, "CRYPTO")) {
+      const field = isApiError(e) ? e.details?.field : undefined;
+      if (hasCode(e, "CRYPTO", "BAD_PASSWORD") || (hasCode(e, "INVALID") && field !== "newPassword")) {
+        // Wrong words, or the words of a key that was replaced since ("stale" words): the same plain answer.
         setWordsError(true);
-        setError("Those words don't match this workspace's recovery key. Check the order and spelling.");
-      } else if (hasCode(e, "RATE_LIMITED")) setError("Too many attempts. Wait a moment, then try again.");
-      else setError(errorMessage(e) || "Couldn't unlock with the recovery key");
+        setError("Those words don't match this workspace's current recovery key. Check the order and spelling. If you made a new key, use the newest one.");
+      } else if (hasCode(e, "RATE_LIMITED")) setError("Too many tries. Wait a moment, then try again.");
+      else if (hasCode(e, "INVALID")) setError(errorMessage(e) || "Choose a stronger new password");
+      else {
+        const msg = errorMessage(e);
+        setError(msg ? msg.charAt(0).toUpperCase() + msg.slice(1) : "Couldn't unlock with the recovery key");
+      }
     }
   };
 

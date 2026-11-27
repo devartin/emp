@@ -1,95 +1,71 @@
 /**
- * First run (PROGRAMME-v3 K4; Flow r2 §2.6): three screens, five with encryption, then the picked life apps are built
- * for real and the app opens on Home.
+ * First run (1.0 brief §2.5): two screens, then Home.
  *
- *   welcome (name, how you start) → track (pick life apps) → protect → [password → recovery] → building → Home
+ *   welcome  (optional first name; "What would you like to use it for?" cards)
+ *   private  ("Keep it private?": Lock with a password → password + confirm → the recovery key; or Not now)
+ *   → Home, where the picked apps build in the background with real progress (setup.ts)
  */
 import type { AutoLock } from "@/backend/types";
 
-export type StepId = "welcome" | "track" | "protect" | "password" | "recovery" | "building";
+export type StepId = "welcome" | "private";
 
-/** How the person starts: from nothing, with pages from another app, or with a bank file. */
-export type StartWith = "fresh" | "pages" | "money";
-
-export interface TrackOption {
-  appId: string;
+/** One "What would you like to use it for?" card. `appId` is the app it builds; Notes is always included. */
+export interface UseCard {
+  key: string;
+  appId: string | null;
   label: string;
   detail: string;
 }
 
-/** The six v1 life apps (§16), in the order people usually start with them. Each one is built with defaults. */
-export const TRACK_OPTIONS: TrackOption[] = [
-  { appId: "life-os", label: "Tasks and projects", detail: "Life OS" },
-  { appId: "habits", label: "Habits and routines", detail: "Habits" },
-  { appId: "money-hq", label: "Spending and budget", detail: "Money HQ" },
-  { appId: "portfolio", label: "Investments", detail: "Portfolio" },
-  { appId: "tax-organizer", label: "Taxes", detail: "Tax Organizer" },
-  { appId: "spreadsheet-studio", label: "Spreadsheets", detail: "Spreadsheet Studio" },
+/** The cards in order. Display names follow the brief's word table (§1). */
+export const USE_CARDS: UseCard[] = [
+  { key: "notes", appId: null, label: "Notes and documents", detail: "Write and plan" },
+  { key: "tasks", appId: "life-os", label: "Tasks", detail: "To-dos and lists" },
+  { key: "habits", appId: "habits", label: "Habits", detail: "Streaks and check-ins" },
+  { key: "money", appId: "money-hq", label: "Money", detail: "Budget and spending" },
+  { key: "investments", appId: "portfolio", label: "Investments", detail: "Holdings and returns" },
+  { key: "taxes", appId: "tax-organizer", label: "Taxes", detail: "Documents and deductions" },
+  { key: "spreadsheets", appId: "spreadsheet-studio", label: "Spreadsheets", detail: "Calculators and models" },
 ];
 
-export const DEFAULT_PICKS = ["life-os"];
+/** Auto-lock for a new encrypted workspace: 15 idle minutes, sleep and screen lock (changeable in Settings). */
+export const DEFAULT_AUTO_LOCK: AutoLock = {
+  idleMinutes: 15,
+  onSleep: true,
+  onScreenLock: true,
+  onBlurMinutes: null,
+  maxSessionHours: null,
+};
 
-export type AutoLockChoice = "5" | "15" | "30" | "60" | "sleep";
-
-export function autoLockFor(choice: AutoLockChoice): AutoLock {
-  return {
-    idleMinutes: choice === "sleep" ? null : Number(choice),
-    onSleep: true,
-    onScreenLock: true,
-    onBlurMinutes: null,
-    maxSessionHours: null,
-  };
-}
+export type PrivacyChoice = "password" | "none";
 
 export interface Draft {
   name: string;
-  start: StartWith;
-  encrypt: boolean | null;
+  /** App ids to build, in card order. */
+  picks: string[];
+  privacy: PrivacyChoice | null;
   password: string;
   confirm: string;
-  autoLock: AutoLockChoice;
   recoveryWords: string[] | null;
-  recoveryConfirmed: boolean;
+  /** "I've saved my recovery key". */
+  recoverySaved: boolean;
   vaultCreated: boolean;
-  /** Life app ids to build. */
-  picks: string[];
 }
 
 export const INITIAL_DRAFT: Draft = {
   name: "",
-  start: "fresh",
-  encrypt: true,
+  picks: [],
+  privacy: null,
   password: "",
   confirm: "",
-  autoLock: "15",
   recoveryWords: null,
-  recoveryConfirmed: false,
+  recoverySaved: false,
   vaultCreated: false,
-  picks: DEFAULT_PICKS,
 };
 
-/** The apps to build: the picks, plus Money HQ when the person starts with a bank file (it imports into Money HQ). */
-export function appsFor(d: Pick<Draft, "picks" | "start">): string[] {
-  const out = TRACK_OPTIONS.map((o) => o.appId).filter((id) => d.picks.includes(id));
-  if (d.start === "money" && !out.includes("money-hq")) out.unshift("money-hq");
-  return out;
+/** The apps to build, in card order. */
+export function appsFor(d: Pick<Draft, "picks">): string[] {
+  return USE_CARDS.flatMap((c) => (c.appId && d.picks.includes(c.appId) ? [c.appId] : []));
 }
 
-/** The three screens the step index names. Password and recovery key belong to Protect; the build is not a step. */
-export const SCREENS = ["Welcome", "Track", "Protect"] as const;
-
-/** Which of the three screens a step belongs to (−1 for the build). */
-export function screenOf(step: StepId): number {
-  if (step === "welcome") return 0;
-  if (step === "track") return 1;
-  if (step === "building") return -1;
-  return 2;
-}
-
-/** Visible steps for the current draft (building is the progress screen, not a question). */
-export function stepsFor(d: Draft): StepId[] {
-  const s: StepId[] = ["welcome", "track", "protect"];
-  if (d.encrypt) s.push("password", "recovery");
-  s.push("building");
-  return s;
-}
+export const STEPS: StepId[] = ["welcome", "private"];

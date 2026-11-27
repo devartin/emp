@@ -11,12 +11,14 @@
 import { AnimatePresence, m } from "motion/react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { markAppReady } from "@/app/boot";
+import { reportReady } from "@/app/boot";
+import { backendMode } from "@/backend";
 import { AppErrorBoundary } from "@/features/shell/ErrorBoundary";
 import LockScreen from "@/features/vault/LockScreen";
 import Onboarding from "@/features/vault/Onboarding/Onboarding";
 import { AppMark } from "@/features/vault/AppMark";
 import { useSettings } from "@/stores/settings";
+import { useUi } from "@/stores/ui";
 import { useVault, type AppPhase } from "@/stores/vault";
 import { Button } from "@/ui/Button";
 import { Skeleton } from "@/ui/Skeleton";
@@ -89,6 +91,11 @@ function PhaseOutlet() {
   }
   const shellReady = useShellReady(phase);
   const shown: AppPhase = phase === "shell" && !shellReady ? from.current : phase;
+  useEffect(() => {
+    // Whichever screen commits first — first run, the lock screen, the shell or the error page — reports ready,
+    // which shows the (initially hidden) desktop window (1.0 brief §5).
+    if (shown !== "booting") reportReady();
+  }, [shown]);
   return (
     <div className="emp-app-root">
       <AnimatePresence initial={false}>
@@ -102,19 +109,49 @@ function PhaseOutlet() {
   );
 }
 
+/** Longest the shell waits for the hidden desktop window to get its real size (see `useViewportKnown`). */
+const VIEWPORT_WAIT_MS = 400;
+
+/**
+ * False while the desktop window is still hidden and its viewport is 0 × 0 (WebKitGTK gives a hidden window no
+ * size). The shell decides once, at its first render, whether the window is narrow enough to float the sidebar
+ * (`(max-width: 899px)`); measured at width 0 it would start without a sidebar, and the media query's change event
+ * when the window then appears can be missed (audit #3: no sidebar on 1 relaunch in 8). So the shell's first
+ * render waits for the window to have a size: the window is shown by this phase's `app_ready`, and the skeleton
+ * (which looks like the shell) is what appears first. Never waits in the browser preview or once the window has a
+ * size (unlock, first run), and never longer than VIEWPORT_WAIT_MS.
+ */
+function useViewportKnown(): boolean {
+  const [known, setKnown] = useState(() => backendMode !== "tauri" || window.innerWidth > 0);
+  useEffect(() => {
+    if (known) return;
+    const done = () => {
+      if (window.innerWidth > 0) setKnown(true);
+    };
+    window.addEventListener("resize", done);
+    document.addEventListener("visibilitychange", done);
+    const poll = window.setInterval(done, 16);
+    const cap = window.setTimeout(() => setKnown(true), VIEWPORT_WAIT_MS);
+    done();
+    return () => {
+      window.removeEventListener("resize", done);
+      document.removeEventListener("visibilitychange", done);
+      window.clearInterval(poll);
+      window.clearTimeout(cap);
+    };
+  }, [known]);
+  return known;
+}
+
 function ShellPhase({ from }: { from: AppPhase }) {
   const reduced = useReducedMotionPref();
+  const sized = useViewportKnown();
   const fromOnboarding = from === "onboarding";
   const fromLock = from === "lock";
   const animated = fromOnboarding || fromLock;
   // Unlock: the shell is the moment's exit (opacity only, ≤ 200ms); first run ends on an ordinary crossfade.
   const dur = fromLock ? (reduced ? motionSeconds("vaultUnlock", true) : REGISTER.vaultUnlock.out / 1000) : motionSeconds("dialog", reduced) || 0.12;
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    // First shell frame is on screen: report boot marks (§3.9 app_ready).
-    const raf = requestAnimationFrame(() => markAppReady());
-    return () => cancelAnimationFrame(raf);
-  }, []);
   return (
     <m.div
       ref={ref}
@@ -124,18 +161,17 @@ function ShellPhase({ from }: { from: AppPhase }) {
       animate={{ opacity: 1, transition: { duration: dur, ease: ease.out } }}
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
     >
-      <Suspense fallback={<ShellSkeleton />}>
-        <Shell />
-      </Suspense>
+      <Suspense fallback={<ShellSkeleton />}>{sized ? <Shell /> : <ShellSkeleton />}</Suspense>
     </m.div>
   );
 }
 
-/** Shown only if boot takes longer than a frame or two; the window itself paints the theme background first. */
+/** Shown only if boot takes longer than a frame or two; the window itself paints the theme canvas first, and the
+ * splash is the same canvas, so nothing steps in colour before the first screen. */
 function BootSplash() {
   return (
     <m.div
-      className="emp-phase flex items-center justify-center bg-window"
+      className="emp-phase flex items-center justify-center bg-canvas"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { delay: 0.35, duration: 0.24 } }}
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
@@ -165,10 +201,14 @@ function BootError() {
 
 /** Suspense fallback while the shell chunk downloads (normally preloaded during the KDF, so rarely seen). */
 function ShellSkeleton() {
-  const width = 248;
+  // The sidebar as the shell will show it (brief §2.1): hidden stays hidden, and the remembered width. A hidden
+  // desktop window reports width 0; that is "not known yet", not a narrow window, so the sidebar is drawn.
+  const sb = useUi.getState();
+  const vw = window.innerWidth;
+  const width = sb.sidebarCollapsed || (vw > 0 && vw < 900) ? 0 : sb.sidebarWidth;
   return (
     <div className="flex h-screen w-full bg-canvas" aria-busy aria-label="Opening your workspace">
-      <div className="flex flex-none flex-col gap-3 border-r border-subtle bg-window px-3 pt-4" style={{ width }}>
+      <div className="flex flex-none flex-col gap-3 border-r border-subtle bg-window px-3 pt-4" style={{ width }} hidden={!width}>
         <div className="flex items-center gap-2 px-1">
           <Skeleton width={22} height={22} radius={6} />
           <Skeleton width={110} height={12} />

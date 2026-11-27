@@ -33,3 +33,17 @@ error capture, and the flows in `lib/flows.mjs` for first run.
 
 `webkitSession()` opens the browser build in WebKitGTK's MiniBrowser instead, for checks against the mock backend in
 the desktop engine.
+
+### First run and sessions (`lib/flows.mjs`)
+
+- `onboardPlain(s, u, { name, apps, tasks })` finishes the two first-run screens with "Not now" and returns on Home once
+  the picked apps have built (`apps` are card labels such as `'Money'`, app ids, or the 0.3.x labels; Tasks is picked
+  unless `tasks: false`). `onboardEncrypted(s, u, { password, saveTo })` locks with a password and returns the 24
+  recovery words; with `saveTo` it saves the key through the native save dialog first (xdotool).
+- `endSession(s)` ends the WebDriver session **and** kills the app if it outlived its window. A leftover instance holds
+  the single-instance lock, and every later launch on the same D-Bus session hands over to it and exits (the WebDriver
+  session then hangs for minutes). Running specs next to other people? Start your own bus
+  (`dbus-daemon --session --fork --print-address=1`) and export its address.
+- `waitBoot` also calls `holdDevReloads(s)`: against the dev-server binary, every saved source file makes Vite reload
+  the open page and restart the spec halfway; this keeps the page on the code it booted with (no effect on a release
+  build). Call it again after the app reloads itself (a lock does).

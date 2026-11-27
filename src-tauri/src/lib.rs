@@ -44,8 +44,42 @@ use crate::events::MAIN_WINDOW;
 use crate::grants::{GrantMode, GrantPurpose};
 use crate::state::AppState;
 
-/// How long to wait for `app_ready` before showing the window anyway.
-pub const SHOW_FALLBACK: std::time::Duration = std::time::Duration::from_secs(8);
+/// How long to wait for `app_ready` before showing the window anyway. Every phase (first run, lock screen, shell)
+/// reports ready within a few hundred milliseconds of its first render, so this only covers a frontend that failed.
+pub const SHOW_FALLBACK: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The window background for a theme setting: the theme canvas (`--bg-canvas` in `src/styles/tokens.css`, which
+/// `index.html` also paints before the app loads and every first screen fills), so the native window never flashes
+/// white, nor steps from another grey, before the webview's first frame. `None` for "system": the OS theme is only
+/// known once the window exists.
+#[must_use]
+pub fn window_background(theme: &str) -> Option<tauri::window::Color> {
+    match theme {
+        "light" => Some(tauri::window::Color(0xfd, 0xfd, 0xfc, 0xff)),
+        "dark" => Some(tauri::window::Color(0x1a, 0x1a, 0x19, 0xff)),
+        "midnight" => Some(tauri::window::Color(0, 0, 0, 0xff)),
+        _ => None,
+    }
+}
+
+/// The background for the OS theme (used when the theme setting is "system").
+#[must_use]
+pub fn system_background(theme: tauri::Theme) -> tauri::window::Color {
+    match theme {
+        tauri::Theme::Dark => tauri::window::Color(0x1a, 0x1a, 0x19, 0xff),
+        _ => tauri::window::Color(0xfd, 0xfd, 0xfc, 0xff),
+    }
+}
+
+/// The persisted theme setting: from the vault's device settings, or the pending ones before a vault exists.
+fn boot_theme(app: &tauri::App) -> String {
+    let state = app.state::<AppState>();
+    state
+        .store_opt()
+        .and_then(|s| s.device_settings().ok())
+        .unwrap_or_else(|| state.pending_device_settings_resolved())
+        .theme
+}
 
 /// The origin of the isolation iframe for a build's random isolation schema.
 #[must_use]
@@ -104,7 +138,12 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
     };
     let nav_app = app.handle().clone();
     let dev_origin = app.config().build.dev_url.clone();
-    let builder = WebviewWindowBuilder::from_config(app.handle(), &config)?
+    let theme = boot_theme(app);
+    let mut builder = WebviewWindowBuilder::from_config(app.handle(), &config)?;
+    if let Some(color) = window_background(&theme) {
+        builder = builder.background_color(color);
+    }
+    let builder = builder
         .on_navigation(move |url| {
             if navigation::is_app_url(url, dev_origin.as_ref()) {
                 return true;
@@ -130,7 +169,12 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
         });
     #[cfg(windows)]
     let builder = builder.decorations(false);
-    builder.build()?;
+    let window = builder.build()?;
+    if window_background(&theme).is_none()
+        && let Ok(os) = window.theme()
+    {
+        let _ = window.set_background_color(Some(system_background(os)));
+    }
     Ok(())
 }
 
@@ -207,6 +251,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(state);
     create_main_window(app)?;
     background::start(app.handle().clone());
+    commands::lifeapp::start_upkeep(app.handle());
     system_events::start(app.handle());
     // The window starts hidden and is shown by `app_ready`; show it anyway if the frontend never reports ready.
     let handle = app.handle().clone();
@@ -283,6 +328,7 @@ pub fn run() {
             commands::app::app_info,
             commands::app::app_ready,
             commands::app::app_reveal_data_dir,
+            commands::app::app_reveal_logs,
             commands::app::app_quit,
             commands::app::app_check_update,
             commands::app::app_install_update,
@@ -314,6 +360,7 @@ pub fn run() {
             commands::vault::security_log,
             commands::vault::password_strength,
             commands::vault::password_generate,
+            commands::vault::vault_recovery_save_file,
             // ── Secrets
             commands::secrets::secret_list,
             commands::secrets::secret_set,
@@ -325,6 +372,7 @@ pub fn run() {
             commands::settings::kv_get,
             commands::settings::kv_set,
             commands::settings::kv_get_many,
+            commands::settings::settings_detect_region,
             // ── Backup and snapshots
             commands::backup::backup_create,
             commands::backup::backup_restore,
@@ -332,6 +380,10 @@ pub fn run() {
             commands::backup::snapshot_now,
             commands::backup::snapshot_set_folder,
             commands::backup::snapshot_verify,
+            commands::backup::snapshot_status,
+            commands::backup::snapshot_set_backup_password,
+            commands::backup::snapshot_choose_folder,
+            commands::backup::snapshot_reveal,
             // ── Workspaces
             commands::workspaces::workspace_list,
             commands::workspaces::workspace_create,
@@ -488,6 +540,8 @@ pub fn run() {
             commands::lifeapp::lifeapp_insight_mute,
             commands::lifeapp::lifeapp_sample_data,
             commands::lifeapp::lifeapp_checklist_tick,
+            commands::lifeapp::lifeapp_event,
+            commands::lifeapp::lifeapp_add_workbook,
             // ── Finance
             commands::finance::finance_overview,
             commands::finance::finance_networth_series,
@@ -508,10 +562,23 @@ pub fn run() {
             commands::finance::finance_forecast,
             commands::finance::finance_amortization,
             commands::finance::finance_goal_plan,
+            commands::finance::finance_ledger,
+            commands::finance::finance_txns_query,
+            commands::finance::finance_txns_update,
+            commands::finance::finance_txn_create,
+            commands::finance::finance_txn_split,
+            commands::finance::finance_reconcile,
+            commands::finance::finance_goal_upsert,
+            commands::finance::finance_budget_assign_many,
+            commands::finance::finance_account_create,
             // ── Tax
             commands::tax::tax_packs,
             commands::tax::tax_estimate,
             commands::tax::tax_quarterly_plan,
+            commands::tax::tax_records,
+            commands::tax::tax_doc_status,
+            commands::tax::tax_payment_record,
+            commands::tax::tax_deduction_add,
             // ── Portfolio
             commands::portfolio::portfolio_rebuild,
             commands::portfolio::portfolio_summary,
@@ -519,6 +586,8 @@ pub fn run() {
             commands::portfolio::portfolio_rebalance_plan,
             commands::portfolio::portfolio_dividends,
             commands::portfolio::portfolio_realized,
+            commands::portfolio::portfolio_book,
+            commands::portfolio::portfolio_trade,
             // ── Export
             commands::export::export_pages,
             commands::export::export_everything,
@@ -587,6 +656,39 @@ mod tests {
         assert!(s.contains("frame-src isolation-x:"), "{s}");
         assert!(s.contains("child-src 'none'"), "{s}");
         assert!(!s.contains("frame-src 'none'"), "{s}");
+    }
+
+    #[test]
+    fn window_background_matches_the_boot_paint() {
+        // index.html paints the theme canvas (html{background:#fdfdfc} / dark #1a1a19 / midnight #000) before the
+        // app loads; tokens.css defines the same `--bg-canvas`.
+        let html =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../index.html")).unwrap();
+        let tokens = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../src/styles/tokens.css"
+        ))
+        .unwrap();
+        for (theme, hex) in [
+            ("light", "#fdfdfc"),
+            ("dark", "#1a1a19"),
+            ("midnight", "#000"),
+        ] {
+            assert!(html.contains(hex), "{theme} {hex}");
+            assert!(
+                tokens.contains(&format!("--bg-canvas: {hex}")),
+                "{theme} {hex}"
+            );
+            assert!(window_background(theme).is_some(), "{theme}");
+        }
+        let tauri::window::Color(r, g, b, a) = window_background("dark").unwrap();
+        assert_eq!((r, g, b, a), (0x1a, 0x1a, 0x19, 0xff));
+        let tauri::window::Color(r, g, b, _) = window_background("light").unwrap();
+        assert_eq!((r, g, b), (0xfd, 0xfd, 0xfc));
+        assert!(window_background("system").is_none());
+        let tauri::window::Color(r, ..) = system_background(tauri::Theme::Light);
+        assert_eq!(r, 0xfd);
+        assert!(SHOW_FALLBACK <= std::time::Duration::from_secs(2));
     }
 
     #[test]

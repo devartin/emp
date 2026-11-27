@@ -1,20 +1,25 @@
-/** Identity of the v1 life apps (§16): name and monochrome Lucide glyph for sidebar rows and breadcrumbs (no tiles). */
+/**
+ * Identity of the v1 apps (§16) for sidebar rows and breadcrumbs: the display name from the one app identity map
+ * (`@/features/lifeapps/identity`, 1.0 brief §1: Tasks, Money, Investments, Taxes, …) and a monochrome Lucide glyph
+ * (no tiles). Older workspaces show the new names: nothing here reads a stored page title.
+ */
 import { CandlestickChart, HeartPulse, Kanban, ReceiptText, LayoutGrid, Sheet, Wallet, type LucideIcon } from "lucide-react";
+import { appName } from "@/features/lifeapps/identity";
 
 export interface LifeAppIdentity {
   name: string;
   icon: LucideIcon;
 }
 
-const IDS: Record<string, LifeAppIdentity> = {
-  "money-hq": { name: "Money HQ", icon: Wallet },
-  portfolio: { name: "Portfolio", icon: CandlestickChart },
-  "tax-organizer": { name: "Tax Organizer", icon: ReceiptText },
-  "spreadsheet-studio": { name: "Spreadsheet Studio", icon: Sheet },
-  "life-os": { name: "Life OS", icon: Kanban },
-  habits: { name: "Habits", icon: HeartPulse },
+const ICONS: Record<string, LucideIcon> = {
+  "money-hq": Wallet,
+  portfolio: CandlestickChart,
+  "tax-organizer": ReceiptText,
+  "spreadsheet-studio": Sheet,
+  "life-os": Kanban,
+  habits: HeartPulse,
 };
 
 export function lifeAppIdentity(appId: string): LifeAppIdentity {
-  return IDS[appId] ?? { name: appId.replace(/(^|-)(\w)/g, (_m, s: string, c: string) => (s ? " " : "") + c.toUpperCase()), icon: LayoutGrid };
+  return { name: appName(appId), icon: ICONS[appId] ?? LayoutGrid };
 }

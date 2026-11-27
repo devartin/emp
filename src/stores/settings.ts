@@ -2,6 +2,10 @@
  * Settings (§11.3 Settings and kv, D-23). Device settings are the source of truth for appearance; every change is
  * mirrored into the boot cache (`localStorage['emp.boot']`, via lib/bootPrefs) and the `<html data-*>` attributes.
  * Vault settings arrive after unlock.
+ *
+ * After the first unlock of a session the store asks Rust to detect the region (`settings_detect_region`, apply:
+ * saved once per workspace while locale, time zone, week start and clock are still the built-in defaults, 1.0 brief
+ * §2.5), and starts the daily update check when "Check automatically" is on.
  */
 import { create } from 'zustand';
 import { api } from '@/backend';
@@ -15,6 +19,7 @@ import {
 } from '@/lib/bootPrefs';
 import { setDatePrefs } from '@/lib/dates';
 import { setFormatLocale } from '@/lib/format';
+import { cancelUpdateCheck, scheduleUpdateCheck } from '@/features/settings/updates';
 import { notify } from './toasts';
 
 interface SettingsState {
@@ -38,8 +43,8 @@ interface SettingsState {
 export function applyDeviceSettings(d: DeviceSettings): void {
   if (typeof document === 'undefined') return;
   updateBootPrefs({ theme: d.theme, accent: d.accent, motion: d.motion, density: d.density, textSize: d.textSize });
+  // `d.effects` stays in the IPC shape for older workspaces but no longer drives anything (no glass in 1.0).
   applyAppearance({
-    effects: d.effects,
     contrast: d.contrast,
     numberColors: d.numberColors,
     readableFont: d.readableFont,
@@ -51,6 +56,29 @@ export function applyDeviceSettings(d: DeviceSettings): void {
 function applyVaultSettings(v: VaultSettings): void {
   setDatePrefs({ dateFormat: v.dateFormat, clock: v.clock, weekStart: v.weekStart });
   setFormatLocale(v.locale);
+}
+
+let regionAsked = false;
+
+/** The webview reports the OS language and time zone; Rust prefers its own OS time zone and derives the rest. */
+async function detectRegionOnce(): Promise<VaultSettings | null> {
+  if (regionAsked) return null;
+  regionAsked = true;
+  try {
+    const locale = typeof navigator !== 'undefined' ? (navigator.languages?.[0] ?? navigator.language) : undefined;
+    let timeZone: string | undefined;
+    try {
+      timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+      timeZone = undefined;
+    }
+    const r = await api.settings.detectRegion({ ...(locale ? { locale } : {}), ...(timeZone ? { timeZone } : {}), apply: true });
+    if (!r.applied) return null;
+    return (await api.settings.get()).vault ?? null;
+  } catch {
+    regionAsked = false;
+    return null;
+  }
 }
 
 export const useSettings = create<SettingsState>()((set, get) => ({
@@ -67,6 +95,14 @@ export const useSettings = create<SettingsState>()((set, get) => ({
     applyDeviceSettings(bundle.device);
     if (bundle.vault) applyVaultSettings(bundle.vault);
     set({ device: bundle.device, vault: bundle.vault ?? null, appInfo: info, loaded: true });
+    if (bundle.vault) {
+      const detected = await detectRegionOnce();
+      if (detected) {
+        applyVaultSettings(detected);
+        set({ vault: detected });
+      }
+      scheduleUpdateCheck(() => get().device?.updates === 'check');
+    }
   },
 
   async setDevice(patch) {
@@ -79,6 +115,8 @@ export const useSettings = create<SettingsState>()((set, get) => ({
       const saved = await api.settings.setDevice({ patch });
       set({ device: saved });
       applyDeviceSettings(saved);
+      if (patch.updates === 'check' && get().vault) scheduleUpdateCheck(() => get().device?.updates === 'check');
+      if (patch.updates === 'off') cancelUpdateCheck();
     } catch (e) {
       set({ device: prev });
       applyDeviceSettings(prev);
@@ -110,7 +148,10 @@ export const useSettings = create<SettingsState>()((set, get) => ({
     await get().setDevice({ theme: current === 'light' ? 'dark' : 'light' });
   },
 
-  resetVault: () => set({ vault: null }),
+  resetVault: () => {
+    cancelUpdateCheck();
+    set({ vault: null });
+  },
 }));
 
 // ── selectors

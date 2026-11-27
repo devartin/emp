@@ -20,7 +20,7 @@ import { ticker, useWatchlists, useWatchlistsLoaded } from "./data";
 import { QuoteRow } from "./QuoteTile";
 import { SymbolSearch } from "./SymbolSearch";
 
-export function WatchlistPanel({ selected, onSelect }: { selected?: SymbolKey; onSelect: (s: SymbolKey) => void }) {
+export function WatchlistPanel({ selected, onSelect, unavailable }: { selected?: SymbolKey; onSelect: (s: SymbolKey) => void; unavailable?: boolean }) {
   const lists = useWatchlistsLoaded();
   const loaded = useWatchlists((s) => s.loaded);
   const [active, setActive] = useState<string | null>(null);
@@ -57,6 +57,7 @@ export function WatchlistPanel({ selected, onSelect }: { selected?: SymbolKey; o
               <m.div key={s.key} layout="position" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }} transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}>
                 <QuoteRow
                   symbol={s.key}
+                  unavailable={unavailable}
                   selected={s.key === selected}
                   onClick={() => onSelect(s.key)}
                   trailing={

@@ -131,21 +131,19 @@ export const SHEET_TITLES: Record<string, string> = {
   loan: 'Loan calculator',
   budget: 'Budget sheet',
   decision: 'Decision matrix',
-  project_budget: 'Project budget',
+  project: 'Project budget',
   timesheet: 'Timesheet',
   inventory: 'Inventory',
   split: 'Split expenses',
-  savings: 'Savings growth',
-  blank: 'Workbook',
+  compound: 'Savings & compound interest',
+  blank: 'Spreadsheet',
 };
 
-export function templateTitle(m: LifeAppManifest, t: Template, answers: Record<string, unknown>, today?: string): string {
+export function templateTitle(m: LifeAppManifest, t: Template, answers: Record<string, unknown>): string {
   const spec = (t.spec ?? {}) as TemplateSpec;
-  if (m.id === 'spreadsheet-studio' && t.key === 'workbook') return SHEET_TITLES[String(answers.intent ?? 'blank')] ?? 'Workbook';
-  if (m.id === 'tax-organizer' && t.key === 'hub') {
-    const j = isObj(answers.jurisdiction) ? answers.jurisdiction : {};
-    return `Tax year ${Number(j.year ?? (today ? Number(today.slice(0, 4)) : 2026))}`;
-  }
+  if (m.id === 'spreadsheet-studio' && t.key === 'workbook') return SHEET_TITLES[String(answers.intent ?? 'blank')] ?? 'Spreadsheet';
+  // The Taxes hub is called "Taxes" (1.0 brief §1), as in the desktop manifest.
+  if (m.id === 'tax-organizer' && t.key === 'hub') return 'Taxes';
   return spec.title ?? t.key;
 }
 
@@ -168,7 +166,7 @@ export function buildPlan(m: LifeAppManifest, user: Record<string, unknown>, mod
     if (!test(t.when, scope)) continue;
     const kind = KIND_MAP[t.kind];
     const enabled = !(t.optional && disabledKeys.includes(t.key));
-    const item: GenerationPlanItem = { key: t.key, kind, title: templateTitle(m, t, answers, today), optional: t.optional, enabled };
+    const item: GenerationPlanItem = { key: t.key, kind, title: templateTitle(m, t, answers), optional: t.optional, enabled };
     if (t.parentKey) item.parentKey = t.parentKey;
     const n = templateCount(t, scope);
     if (n !== undefined) item.count = n;

@@ -61,6 +61,8 @@ export interface PageFlags {
   locked?: boolean;
   template?: boolean;
   inline?: boolean;
+  /** A project: a doc page whose children are its contents (Ultranote 1.0 brief §2.2). Absent means not a project. */
+  project?: boolean;
 }
 
 export interface PageMeta {
@@ -180,8 +182,14 @@ export interface AppInfo {
 
 export interface UpdateCheck {
   available: boolean;
+  /** The running version. */
+  current: string;
+  /** Latest published version (no leading `v`); absent when nothing is published. */
   version?: string;
+  /** Release notes excerpt (Markdown), only when an update is available. */
   notes?: string;
+  /** Release page on github.com. */
+  url?: string;
 }
 
 export type FilePickPurpose = 'import' | 'attach' | 'restore' | 'image';
@@ -354,6 +362,18 @@ export interface SettingsBundle {
 
 export type KvNamespace = `ui.${string}`;
 
+/** `settings_detect_region` result (1.0 brief §2.4–2.5). */
+export interface RegionInfo {
+  locale: string;
+  timezone: string;
+  weekStart: 0 | 1 | 6;
+  clock: 12 | 24;
+  dateFormat: 'full' | 'mdy' | 'dmy' | 'ymd';
+  currency?: string;
+  /** This call saved the values into the vault settings. */
+  applied: boolean;
+}
+
 // ───────────────────────────────────────────────────────────────────────────── Backup, import, export
 
 export interface SnapshotInfo {
@@ -362,6 +382,21 @@ export interface SnapshotInfo {
   bytes: number;
   schemaVersion: number;
   location: 'local' | 'folder';
+}
+
+/** `snapshot_status` (1.0): what Settings › Backups needs beyond the vault settings. */
+export interface SnapshotStatus {
+  encrypted: boolean;
+  /** Unencrypted workspace with a backup password: automatic snapshots can run. */
+  backupPasswordSet: boolean;
+  /** Snapshots will run: enabled, and encrypted or with a backup password. */
+  automatic: boolean;
+  /** Where new snapshots are written. */
+  folderPath: string;
+  /** A folder the user chose (false: Ultranote's data folder). */
+  customFolder: boolean;
+  /** The chosen folder can't be reached right now; snapshots go to the data folder until it is back. */
+  folderUnavailable: boolean;
 }
 
 export type ImportKind =
@@ -1543,3 +1578,162 @@ export interface EventMap {
 }
 
 export type EventName = keyof EventMap;
+
+// ───────────────────────────────────────────────────────────────────────────── Money, Investments and Taxes views
+// ULTRANOTE-1.0 §5: compact, pre-computed views from the backend (Rust computes them over a cached ledger; the
+// mock in TypeScript). Money is a decimal string; select/status values are option keys, never option ids.
+
+export interface LedgerAccount {
+  id: Id;
+  name: string;
+  /** `acct.type` key: checking, savings, credit_card, student_loan, auto_loan, mortgage, personal_loan, investment, cash, other_asset, other_liability. */
+  type: string;
+  institution: string;
+  /** ISO code as entered; "" means the base currency. */
+  currency: string;
+  /** Opening balance as counted (liabilities negative). */
+  opening: string;
+  apr: number | null;
+  minPayment: string;
+  limit: string | null;
+  onBudget: boolean;
+  lowThreshold: string | null;
+  reconciled: string | null;
+  closed: boolean;
+  /** Balance as of today (future-dated rows excluded). */
+  balance: string;
+  /** Opening plus cleared and reconciled rows, as of today. */
+  cleared: string;
+  /** End-of-day balances of the last 90 days, oldest first (chart data). */
+  history: number[];
+}
+
+export interface LedgerCategory {
+  id: Id;
+  name: string;
+  group: string;
+  color: string;
+  icon: string;
+  essential: boolean;
+  rollover: boolean;
+  target: string;
+  isIncome: boolean;
+}
+
+export interface LedgerRecurring {
+  id: Id;
+  name: string;
+  amount: string;
+  rrule: string;
+  dtstart: string;
+  accountId: Id | null;
+  categoryId: Id | null;
+  /** bill, income, subscription, transfer, savings */
+  kind: string;
+  autopay: boolean;
+  variable: boolean;
+  prevAmount: string | null;
+  cancelUrl: string;
+}
+
+export interface LedgerGoal {
+  id: Id;
+  name: string;
+  /** emergency, sinking, savings */
+  kind: string;
+  target: string;
+  date: string | null;
+  saved: string;
+  accountId: Id | null;
+  /** high, medium, low */
+  priority: string;
+  icon: string;
+}
+
+export type ClearedState = 'uncleared' | 'cleared' | 'reconciled';
+
+export interface LedgerTxn {
+  id: Id;
+  rev: Rev;
+  date: string;
+  payee: string;
+  raw: string;
+  memo: string;
+  amount: string;
+  accountId: Id | null;
+  categoryId: Id | null;
+  transferId: Id | null;
+  /** The account on the other side of a transfer. */
+  transferAccountId: Id | null;
+  splitParent: Id | null;
+  cleared: ClearedState;
+  /** `txn.reviewed`; null when the Transactions database has no Reviewed property. */
+  reviewed: boolean | null;
+  /** manual, import, rule, or "" */
+  source: string;
+  tags: string[];
+  splits: LedgerTxn[];
+}
+
+export interface FinanceLedger {
+  /** Fingerprint of the data the view was built from. */
+  rev: string;
+  currency: string;
+  today: string;
+  dbs: { accounts: Id | null; categories: Id | null; transactions: Id | null; recurring: Id | null; goals: Id | null; budgets: Id | null; payees: Id | null };
+  hasReviewed: boolean;
+  accounts: LedgerAccount[];
+  categories: LedgerCategory[];
+  recurring: LedgerRecurring[];
+  goals: LedgerGoal[];
+  /** The latest top-level transactions (newest first). */
+  recent: LedgerTxn[];
+  counts: { txns: number; toReview: number | null; uncategorized: number };
+}
+
+export type FinanceTxnFilter = 'all' | 'review' | 'uncategorized' | 'transfers' | 'income';
+
+export interface FinanceTxnPage {
+  rows: LedgerTxn[];
+  /** Rows matching the filter. */
+  total: number;
+  /** Money in / out of the matching rows, transfers excluded (both ≥ 0). */
+  inflow: string;
+  outflow: string;
+  counts: { all: number; review: number | null; uncategorized: number };
+}
+
+export type TaxTreatmentKey = 'taxable' | 'deferred' | 'free';
+
+export interface PortfolioBook {
+  currency: string;
+  dbs: { accounts: Id | null; securities: Id | null; transactions: Id | null; targets: Id | null };
+  accounts: { id: Id; name: string; type: string; tax: TaxTreatmentKey }[];
+  securities: { id: Id; symbol: SymbolKey; name: string; assetClass: string }[];
+  /** Open FIFO lots. */
+  lots: { symbol: SymbolKey; accountId: Id; accountName: string; taxTreatment: TaxTreatmentKey; acquired: string; qty: string; costPerUnit: string; basis: string }[];
+  /** Dividends and interest. */
+  income: { id: Id; date: string; symbol: SymbolKey; accountId: Id; amount: string; kind: string; reinvested: boolean; taxTreatment: TaxTreatmentKey }[];
+  /** The latest investment transactions (newest first). */
+  txns: { id: Id; date: string; type: string; symbol: SymbolKey; name: string; accountId: Id; qty: string | null; price: string | null; amount: string | null; fees: string }[];
+  warnings: string[];
+}
+
+export type PortfolioTradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'reinvest' | 'fee';
+
+export type TaxDocStatus = 'expected' | 'received' | 'reviewed' | 'sent_to_preparer' | 'n_a';
+
+export interface TaxRecords {
+  currency: string;
+  dbs: { documents: Id | null; deductions: Id | null; payments: Id | null };
+  receiptField: 'checkbox' | 'files' | null;
+  docs: { id: Id; name: string; issuer: string; purpose: string; expected: string | null; status: TaxDocStatus; notes: string }[];
+  deductions: { id: Id; desc: string; date: string | null; key: string; categoryName: string; kind: string | null; amount: string; pct: number; deductible: string; payee: string; receipt: boolean; year: number | null }[];
+  payments: { id: Id; period: string; due: string | null; amount: string; paidOn: string | null; method: string }[];
+  /** Itemisable deductions of the year, `amount × pct` summed by engine kind. */
+  itemized: { kind: string; amount: string }[];
+  /** Estimated payments made (rows with a paid date). */
+  paidEstimated: string;
+  /** Portfolio's realised gains and taxable-account dividends of the year. */
+  pulled: { label: string; kind: TaxInput['incomes'][number]['kind']; amount: string; source: string }[];
+}

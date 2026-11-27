@@ -4,6 +4,7 @@
  */
 import type { FinanceOverview, Forecast, Id, Insight } from "@/backend/types";
 import { daysBetween, fmtMoney, fmtPct, num, todayIso, fmtWhole } from "../shared/format";
+import { isSavingGroup } from "../shared/figures";
 import type { Account, Ledger } from "./ledger";
 
 export function localInsights(instanceId: Id, ov: FinanceOverview | undefined, l: Ledger, fc: Forecast | undefined): Insight[] {
@@ -19,7 +20,7 @@ export function localInsights(instanceId: Id, ov: FinanceOverview | undefined, l
     const assigned = num(b.assigned.amount);
     const spent = -num(b.activity.amount);
     const avail = num(b.available.amount);
-    if (b.group === "Savings & Debt") continue;
+    if (isSavingGroup(b.group)) continue;
     if (avail < -0.005 && spent > 0) {
       add({ ruleId: "cat-over", severity: "warn", title: `${b.name} is overspent by ${fmtMoney(-avail)}`, body: "Cover it from a category with money left so the month still balances.", math: [{ label: "Assigned", value: fmtMoney(assigned) }, { label: "Spent", value: fmtMoney(spent) }, { label: "Available", value: fmtMoney(avail) }], actions: [{ label: "Open budget", route: tab("budget") }] });
     } else if (assigned > 0 && spent / assigned >= 0.9 && daysLeft >= 10) {

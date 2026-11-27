@@ -22,7 +22,7 @@ const KIND: Record<GenerationPlanItem["kind"], { label: string; icon: typeof Fil
   dashboard: { label: "Dashboards", icon: LayoutDashboard },
   page: { label: "Pages", icon: FileText },
   database: { label: "Databases", icon: Database },
-  sheet: { label: "Workbooks", icon: SheetIcon },
+  sheet: { label: "Spreadsheets", icon: SheetIcon },
   view: { label: "Views", icon: Eye },
   reminder: { label: "Reminders", icon: Bell },
   recurring: { label: "Recurring", icon: Repeat },
@@ -182,7 +182,7 @@ function miniContent(appId: string, a: Record<string, unknown>, currency: string
       const income = Array.isArray(a.income) ? (a.income as string[]) : [];
       return {
         key: `${j.year}-${income.join()}`,
-        title: `Tax year ${j.year ?? new Date().getFullYear()}`,
+        title: `Taxes ${j.year ?? new Date().getFullYear()}`,
         node: (
           <>
             <div className="grid grid-cols-2 gap-1.5">
@@ -203,7 +203,7 @@ function miniContent(appId: string, a: Record<string, unknown>, currency: string
       const tabs: Record<string, string[]> = { loan: ["Inputs", "Schedule", "Scenarios"], budget: ["Overview", "Budget", "Transactions"], decision: ["Decision"], project_budget: ["Budget"], timesheet: ["Timesheet"], inventory: ["Inventory"], split: ["Expenses", "Balances"], savings: ["Growth"], blank: ["Inputs", "Calculations", "Output", "Checks"] };
       return {
         key: intent,
-        title: SHEET_TITLES[intent] ?? "Workbook",
+        title: SHEET_TITLES[intent] ?? "Spreadsheet",
         node: (
           <>
             <div className="la-mini-grid" aria-hidden>

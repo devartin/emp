@@ -17,8 +17,11 @@
  *     `'auto'` carry no entries, so neither the cash-gift deduction nor `itemizedWouldBe` applies.
  *   - Itemised charitable gifts count only above 0.5% of AGI from 2026 (same source).
  */
-import type { TaxEstimate, TaxInput, TaxPackInfo } from '../../types';
+import type { CellValue, Id, TaxDocStatus, TaxEstimate, TaxInput, TaxPackInfo, TaxRecords } from '../../types';
 import type { MockCtx, MockHandlers } from '../ctx';
+import { TAX_DEDUCTION_CATEGORIES, taxDeductionCategory } from '../../taxDeductions';
+import { taxSets } from '../seed/finance';
+import { liveRows, type DbApi, type DbRecord, type PropRecord } from './db';
 import usFederal2026 from '../../../../crates/emp-finance/packs/tax/us-federal-2026.json';
 import genericPack from '../../../../crates/emp-finance/packs/tax/generic.json';
 
@@ -376,7 +379,197 @@ export function estimate(input: TaxInput, today: string): TaxEstimate {
   };
 }
 
+// ───────────────────────────────────────────────────────────────────────────── records (Rust `tax_records` & co.)
+
+const DOC_KEYS: Record<string, string[]> = { expected: [], received: [], reviewed: [], sent_to_preparer: ['sent'], n_a: ['na'] };
+const PAY_KEYS: Record<string, string[]> = { online: ['direct_pay', 'eftps'], check: [], withholding: [] };
+const normKey = (x: string) => x.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+interface TaxDbs {
+  documents?: DbRecord;
+  deductions?: DbRecord;
+  payments?: DbRecord;
+}
+
+function taxDbs(ctx: MockCtx, instanceId: Id): TaxDbs {
+  const all = ctx.db.table<DbRecord>('db_databases').filter((d) => !ctx.pages.get(d.id)?.deletedAt);
+  const own = all.filter((d) => d.appInstanceId === instanceId);
+  const set = taxSets(ctx).find((s) => s.instanceId === instanceId);
+  const pick = (id: Id | undefined, role: string) => (id ? all.find((d) => d.id === id) : undefined) ?? own.find((d) => !!d.roles[role]);
+  if (!set && !own.length) ctx.fail('NOT_FOUND', 'Taxes is not set up yet');
+  return { documents: pick(set?.dbs.documents, 'taxdoc.status'), deductions: pick(set?.dbs.deductions, 'taxded.amount'), payments: pick(set?.dbs.payments, 'taxpay.due') };
+}
+
+function options(ctx: MockCtx, propId: Id | undefined): { id: string; name: string }[] {
+  if (!propId) return [];
+  return ((ctx.db.table<PropRecord>('db_properties').get(propId)?.config.options as { id: string; name: string }[] | undefined) ?? []);
+}
+
+function keyOf(ctx: MockCtx, propId: Id | undefined, id: string | null, known: Record<string, string[]>): string | null {
+  if (!id) return null;
+  if (id in known) return id;
+  for (const [k, aliases] of Object.entries(known)) if (aliases.includes(id)) return k;
+  const name = options(ctx, propId).find((o) => o.id === id)?.name ?? id;
+  return normKey(name);
+}
+
+function optionForKey(ctx: MockCtx, propId: Id | undefined, key: string, known: Record<string, string[]>): string | null {
+  return options(ctx, propId).find((o) => keyOf(ctx, propId, o.id, known) === key)?.id ?? null;
+}
+
+const cellText = (v: CellValue | undefined): string => (v && v.t === 'text' ? v.v.map((x) => x.text).join('') : '');
+const cellDate = (v: CellValue | undefined): string | null => (v && v.t === 'date' && v.v ? v.v.start.slice(0, 10) : null);
+const cellCents = (v: CellValue | undefined): number => (v && v.t === 'money' && v.v !== null ? Math.round(Number(v.v) * 100) || 0 : 0);
+const cellSel = (v: CellValue | undefined): string | null => (v && (v.t === 'select' || v.t === 'status') ? v.v : null);
+const cellNum = (v: CellValue | undefined): number | null => (v && v.t === 'number' ? v.v : null);
+const c2 = (cents: number) => {
+  const neg = cents < 0;
+  const a = Math.abs(Math.round(cents));
+  return `${neg ? '-' : ''}${Math.floor(a / 100)}.${String(a % 100).padStart(2, '0')}`;
+};
+
+/** `taxded.pct` as a fraction; above 1 is a whole percentage. */
+function share(v: number | null): number {
+  if (v == null || !Number.isFinite(v) || v < 0) return 1;
+  return v > 1 ? Math.min(v / 100, 1) : v;
+}
+
+function taxRecords(ctx: MockCtx, instanceId: Id, year: number): TaxRecords {
+  const t = taxDbs(ctx, instanceId);
+  const docs: TaxRecords['docs'] = [];
+  if (t.documents) {
+    const R = t.documents.roles;
+    for (const r of liveRows(ctx, t.documents.id)) {
+      docs.push({ id: r.id, name: cellText(r.values[t.documents.primaryPropId]), issuer: cellText(r.values[R['taxdoc.issuer']]), purpose: cellText(r.values[R['taxdoc.for']]), expected: cellDate(r.values[R['taxdoc.expected']]), status: (keyOf(ctx, R['taxdoc.status'], cellSel(r.values[R['taxdoc.status']]), DOC_KEYS) ?? 'expected') as TaxDocStatus, notes: cellText(r.values[R['taxdoc.notes']]) });
+    }
+  }
+  const deductions: TaxRecords['deductions'] = [];
+  const itemized = new Map<string, number>();
+  let receiptField: TaxRecords['receiptField'] = null;
+  if (t.deductions) {
+    const R = t.deductions.roles;
+    const rp = R['taxded.receipt'] ? ctx.db.table<PropRecord>('db_properties').get(R['taxded.receipt']) : undefined;
+    receiptField = rp ? (rp.type === 'checkbox' ? 'checkbox' : 'files') : null;
+    for (const r of liveRows(ctx, t.deductions.id)) {
+      const id = cellSel(r.values[R['taxded.category']]);
+      const name = options(ctx, R['taxded.category']).find((o) => o.id === id)?.name ?? 'Other';
+      const cat = taxDeductionCategory({ id, name });
+      const key = cat?.key ?? 'other';
+      const kind = cat && 'kind' in cat ? cat.kind : null;
+      const cents = cellCents(r.values[R['taxded.amount']]);
+      const pct = share(cellNum(r.values[R['taxded.pct']]));
+      const ded = Math.round(cents * pct);
+      const date = cellDate(r.values[R['taxded.date']]);
+      const rowYear = cellNum(r.values[R['taxded.year']]);
+      const inYear = (rowYear ?? (date ? Number(date.slice(0, 4)) : year)) === year;
+      if (kind && inYear) itemized.set(kind, (itemized.get(kind) ?? 0) + ded);
+      const rv = r.values[R['taxded.receipt']];
+      deductions.push({ id: r.id, desc: cellText(r.values[t.deductions.primaryPropId]), date, key, categoryName: name, kind, amount: c2(cents), pct, deductible: c2(ded), payee: cellText(r.values[R['taxded.payee']]), receipt: !!rv && ((rv.t === 'check' && rv.v) || (rv.t === 'files' && rv.v.length > 0)), year: rowYear });
+    }
+    deductions.sort((a, b) => ((a.date ?? '') < (b.date ?? '') ? 1 : (a.date ?? '') > (b.date ?? '') ? -1 : 0));
+  }
+  const payments: TaxRecords['payments'] = [];
+  let paid = 0;
+  if (t.payments) {
+    const R = t.payments.roles;
+    for (const r of liveRows(ctx, t.payments.id)) {
+      const cents = cellCents(r.values[R['taxpay.amount']]);
+      const on = cellDate(r.values[R['taxpay.date']]);
+      if (on) paid += cents;
+      payments.push({ id: r.id, period: cellText(r.values[t.payments.primaryPropId]), due: cellDate(r.values[R['taxpay.due']]), amount: c2(cents), paidOn: on, method: keyOf(ctx, R['taxpay.method'], cellSel(r.values[R['taxpay.method']]), PAY_KEYS) ?? '' });
+    }
+    payments.sort((a, b) => (a.period < b.period ? -1 : a.period > b.period ? 1 : 0));
+  }
+  // Portfolio's figures for the year (realised gains and dividends in taxable accounts), like Rust.
+  const pulled: TaxRecords['pulled'] = [];
+  const pf = ctx.services.get<(id: Id | null, year: number) => { stcg: number; ltcg: number; dividends: number }>('portfolio.taxYear');
+  let fig: { stcg: number; ltcg: number; dividends: number } | null = null;
+  try {
+    fig = pf ? pf(null, year) : null;
+  } catch {
+    fig = null;
+  }
+  if (fig) {
+    const realised = 'Investments · realised this year';
+    if (fig.stcg) pulled.push({ label: 'Short-term gains', kind: 'stcg', amount: c2(fig.stcg), source: realised });
+    if (fig.ltcg) pulled.push({ label: 'Long-term gains', kind: 'ltcg', amount: c2(fig.ltcg), source: realised });
+    if (fig.dividends) {
+      pulled.push({ label: 'Ordinary dividends', kind: 'ordinary_dividends', amount: c2(fig.dividends), source: 'Investments · taxable accounts, paid so far' });
+      pulled.push({ label: 'of which qualified', kind: 'qualified_dividends', amount: c2(Math.round(fig.dividends * 0.9)), source: 'Investments · common for broad funds (≈90%)' });
+    }
+  }
+  return {
+    currency: 'USD',
+    dbs: { documents: t.documents?.id ?? null, deductions: t.deductions?.id ?? null, payments: t.payments?.id ?? null },
+    receiptField,
+    docs,
+    deductions,
+    payments,
+    itemized: [...itemized.entries()].filter(([, v]) => v !== 0).sort(([a], [b]) => (a < b ? -1 : 1)).map(([kind, v]) => ({ kind, amount: c2(v) })),
+    paidEstimated: c2(paid),
+    pulled,
+  };
+}
+
 export const handlers: MockHandlers = {
+  tax_records: (req, ctx) => taxRecords(ctx, req.instanceId, req.year),
+
+  tax_doc_status: (req, ctx) => {
+    if (!(req.status in DOC_KEYS)) ctx.fail('INVALID', 'unknown document status', { field: 'status' });
+    const t = taxDbs(ctx, req.instanceId);
+    if (!t.documents) return ctx.fail('NOT_FOUND', 'document checklist not found');
+    if (!liveRows(ctx, t.documents.id).some((r) => r.id === req.id)) ctx.fail('NOT_FOUND', 'document not found');
+    const p = t.documents.roles['taxdoc.status'];
+    const o = optionForKey(ctx, p, req.status, DOC_KEYS);
+    if (!o) ctx.fail('INVALID', 'the Status column has no option for this', { field: 'status' });
+    ctx.services.get<DbApi>('db.api')?.updateRows(ctx, [{ id: req.id, values: { [p]: { t: 'status', v: o } } }]);
+  },
+
+  tax_payment_record: (req, ctx) => {
+    const amount = Number(req.amount);
+    if (!Number.isFinite(amount) || amount <= 0) ctx.fail('INVALID', 'must be more than zero', { field: 'amount' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.date ?? '')) ctx.fail('INVALID', 'must be a date (YYYY-MM-DD)', { field: 'date' });
+    const method = req.method ?? 'online';
+    if (!(method in PAY_KEYS)) ctx.fail('INVALID', 'must be online, check or withholding', { field: 'method' });
+    const t = taxDbs(ctx, req.instanceId);
+    if (!t.payments) return ctx.fail('NOT_FOUND', 'estimated payments database not found');
+    const R = t.payments.roles;
+    const values: Record<Id, CellValue> = { [R['taxpay.amount']]: { t: 'money', v: c2(Math.round(amount * 100)), cur: 'USD' }, [R['taxpay.date']]: { t: 'date', v: { start: req.date, time: false } } };
+    const o = optionForKey(ctx, R['taxpay.method'], method, PAY_KEYS);
+    if (o && R['taxpay.method']) values[R['taxpay.method']] = { t: 'select', v: o };
+    const api = ctx.services.get<DbApi>('db.api')!;
+    const existing = liveRows(ctx, t.payments.id).find((r) => cellText(r.values[t.payments!.primaryPropId]).trim() === req.period.trim());
+    if (existing) {
+      api.updateRows(ctx, [{ id: existing.id, values }]);
+      return { id: existing.id };
+    }
+    return { id: api.createRow(ctx, t.payments.id, { values: { ...values, [t.payments.primaryPropId]: { t: 'text', v: [{ text: req.period.trim() }] } } }).id };
+  },
+
+  tax_deduction_add: (req, ctx) => {
+    const amount = Number(req.amount);
+    if (!Number.isFinite(amount) || amount <= 0) ctx.fail('INVALID', 'must be more than zero', { field: 'amount' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.date ?? '')) ctx.fail('INVALID', 'must be a date (YYYY-MM-DD)', { field: 'date' });
+    if (!TAX_DEDUCTION_CATEGORIES.some((c) => c.key === req.category)) ctx.fail('INVALID', 'unknown category', { field: 'category' });
+    if (!req.desc?.trim()) ctx.fail('INVALID', 'must not be empty', { field: 'desc' });
+    const t = taxDbs(ctx, req.instanceId);
+    if (!t.deductions) return ctx.fail('NOT_FOUND', 'deductions database not found');
+    const R = t.deductions.roles;
+    const opt = options(ctx, R['taxded.category']).find((o) => taxDeductionCategory(o)?.key === req.category);
+    const rp = R['taxded.receipt'] ? ctx.db.table<PropRecord>('db_properties').get(R['taxded.receipt']) : undefined;
+    const values: Record<Id, CellValue> = {
+      [t.deductions.primaryPropId]: { t: 'text', v: [{ text: req.desc.trim() }] },
+      [R['taxded.date']]: { t: 'date', v: { start: req.date, time: false } },
+      ...(opt ? { [R['taxded.category']]: { t: 'select', v: opt.id } as CellValue } : {}),
+      [R['taxded.amount']]: { t: 'money', v: c2(Math.round(amount * 100)), cur: 'USD' },
+      [R['taxded.pct']]: { t: 'number', v: 1 },
+      ...(req.payee?.trim() ? { [R['taxded.payee']]: { t: 'text', v: [{ text: req.payee.trim() }] } as CellValue } : {}),
+      ...(rp?.type === 'checkbox' && req.receipt !== undefined ? { [R['taxded.receipt']]: { t: 'check', v: req.receipt } as CellValue } : {}),
+      ...(R['taxded.year'] ? { [R['taxded.year']]: { t: 'number', v: req.year } as CellValue } : {}),
+    };
+    return { id: ctx.services.get<DbApi>('db.api')!.createRow(ctx, t.deductions.id, { values }).id };
+  },
+
   tax_packs: (_req, ctx) => {
     const today = ctx.clock.today();
     const year = Number(today.slice(0, 4));
@@ -436,8 +629,10 @@ export const handlers: MockHandlers = {
       const paid = paidBy.get(x.id) ?? 0;
       const isRemaining = remaining.some((r) => r.id === x.id);
       const days = Math.round((new Date(`${x.due}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86_400_000);
-      const status: 'upcoming' | 'due_soon' | 'paid' | 'late' = paid > 0 ? 'paid' : days < 0 ? 'late' : days <= 21 ? 'due_soon' : 'upcoming';
-      return { period: x.id, date: x.due, suggested: (isRemaining ? each : 0).toFixed(2), paid: paid.toFixed(2), status };
+      const suggested = isRemaining ? each : 0;
+      // Like Rust `plan`: nothing suggested and nothing paid is "no payment needed", never "late" or "Paid $0".
+      const status: 'upcoming' | 'due_soon' | 'paid' | 'late' = paid > 0 && paid >= suggested ? 'paid' : suggested === 0 && paid === 0 ? 'upcoming' : days < 0 ? 'late' : days <= 21 ? 'due_soon' : 'upcoming';
+      return { period: x.id, date: x.due, suggested: suggested.toFixed(2), paid: paid.toFixed(2), status };
     });
     return { due, method: req.method, note };
   },

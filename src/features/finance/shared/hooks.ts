@@ -1,14 +1,12 @@
 /**
- * Data hooks shared by the finance hubs. Server state lives in component state fed by commands and refreshed by
- * `db:changed` events (§13.1 — no TanStack Query). Life-app databases are located by semantic role (§15.0), so the
- * hubs never depend on database titles.
+ * Data hooks shared by the finance hubs. Server state lives in component state fed by commands (the backend's
+ * compact views: `finance_ledger`, `portfolio_book`, `tax_records`, …) and refreshed by `db:changed` events
+ * (§13.1 — no TanStack Query). The hubs never read whole databases or generated option ids.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { api, errorMessage, listen } from "@/backend";
-import type { CellValue, DbSchema, Id, RowDTO } from "@/backend/types";
-import { useTree } from "@/stores/tree";
+import { errorMessage, listen } from "@/backend";
+import type { Id } from "@/backend/types";
 import { isReducedMotion } from "@/ui/motion/useReducedEffects";
-import { baseCurrency } from "./currency";
 
 export interface AsyncState<T> {
   data: T | undefined;
@@ -70,137 +68,6 @@ export function useDbChanged(dbIds: (Id | undefined)[], onChange: () => void, de
       if (t) clearTimeout(t);
     };
   }, [key, delay]);
-}
-
-const schemaCache = new Map<Id, Promise<DbSchema>>();
-
-export function getSchema(id: Id, fresh = false): Promise<DbSchema> {
-  if (fresh || !schemaCache.has(id)) {
-    const p = api.db.getSchema({ id });
-    p.catch(() => schemaCache.delete(id));
-    schemaCache.set(id, p);
-  }
-  return schemaCache.get(id)!;
-}
-
-/**
- * Find the instance's databases by role: `{ txns: 'txn.amount', accounts: 'acct.type' }` → schemas.
- * Prefers databases linked to the instance; falls back to any database carrying the role.
- */
-export function useRoleDbs<K extends string>(instanceId: Id, roles: Record<K, string>): { schemas: Partial<Record<K, DbSchema>>; ready: boolean; error: string | null } {
-  const dbPages = useTree(
-    useCallback(
-      (s: ReturnType<typeof useTree.getState>) => {
-        const out: string[] = [];
-        for (const p of s.byId.values()) if (p.kind === "database" && !p.deletedAt) out.push(`${p.id}:${p.appInstanceId ?? ""}`);
-        return out.sort().join("|");
-      },
-      [],
-    ),
-  );
-  const rolesKey = JSON.stringify(roles);
-  const [state, setState] = useState<{ schemas: Partial<Record<K, DbSchema>>; ready: boolean; error: string | null }>({ schemas: {}, ready: false, error: null });
-  useEffect(() => {
-    let live = true;
-    const entries = dbPages ? dbPages.split("|").map((x) => x.split(":") as [Id, string]) : [];
-    const ranked = [...entries.filter(([, inst]) => inst === instanceId), ...entries.filter(([, inst]) => inst !== instanceId)];
-    const want = Object.entries(roles) as [K, string][];
-    (async () => {
-      const out: Partial<Record<K, DbSchema>> = {};
-      const score: Partial<Record<K, number>> = {};
-      for (const [id, inst] of ranked) {
-        const missing = want.filter(([k]) => !out[k]);
-        if (!missing.length) break;
-        let sch: DbSchema;
-        try {
-          sch = await getSchema(id);
-        } catch {
-          continue;
-        }
-        for (const [k, role] of missing) {
-          if (!sch.database.roles[role]) continue;
-          const sc = (inst === instanceId ? 1000 : 0) + Object.keys(sch.database.roles).length;
-          if (score[k] === undefined || sc > (score[k] as number)) {
-            out[k] = sch;
-            score[k] = sc;
-          }
-        }
-      }
-      if (live) setState({ schemas: out, ready: true, error: want.some(([k]) => !out[k]) ? "Some of this app's databases are missing." : null });
-    })();
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbPages, instanceId, rolesKey]);
-  return state;
-}
-
-/** Every row of a database (paged by 500, §11.1 query windows). */
-export async function queryAll(databaseId: Id, override?: Parameters<typeof api.db.query>[0]["override"]): Promise<RowDTO[]> {
-  const out: RowDTO[] = [];
-  for (let offset = 0; offset < 20_000; offset += 500) {
-    const res = await api.db.query({ databaseId, override, window: { offset, limit: 500 }, reqId: Date.now() + offset });
-    if ("notModified" in res) break;
-    out.push(...res.rows);
-    if (out.length >= res.total || !res.rows.length) break;
-  }
-  return out;
-}
-
-// ── cell readers
-
-export const cell = {
-  text(v: CellValue | undefined): string {
-    if (!v) return "";
-    if (v.t === "text") return v.v.map((x) => x.text).join("");
-    if (v.t === "url" || v.t === "email" || v.t === "phone") return v.v ?? "";
-    if (v.t === "computed") return v.v.display;
-    return "";
-  },
-  money(v: CellValue | undefined): string | null {
-    return v && v.t === "money" ? v.v : null;
-  },
-  num(v: CellValue | undefined): number | null {
-    return v && v.t === "number" ? v.v : null;
-  },
-  date(v: CellValue | undefined): string | null {
-    return v && v.t === "date" && v.v ? v.v.start.slice(0, 10) : null;
-  },
-  rel(v: CellValue | undefined): Id | null {
-    return v && v.t === "relation" ? (v.v[0] ?? null) : null;
-  },
-  sel(v: CellValue | undefined): string | null {
-    return v && (v.t === "select" || v.t === "status") ? v.v : null;
-  },
-  multi(v: CellValue | undefined): string[] {
-    return v && v.t === "multi" ? v.v : [];
-  },
-  check(v: CellValue | undefined): boolean {
-    return !!(v && v.t === "check" && v.v);
-  },
-  ticker(v: CellValue | undefined): string | null {
-    return v && v.t === "ticker" ? v.v : null;
-  },
-};
-
-export const V = {
-  text: (s: string): CellValue => ({ t: "text", v: s ? [{ text: s }] : [] }),
-  money: (amount: string, cur = baseCurrency()): CellValue => ({ t: "money", v: amount, cur }),
-  num: (n: number | null): CellValue => ({ t: "number", v: n }),
-  date: (d: string): CellValue => ({ t: "date", v: { start: d, time: false } }),
-  rel: (ids: Id[]): CellValue => ({ t: "relation", v: ids }),
-  sel: (id: string | null): CellValue => ({ t: "select", v: id }),
-  status: (id: string | null): CellValue => ({ t: "status", v: id }),
-  check: (b: boolean): CellValue => ({ t: "check", v: b }),
-};
-
-/** Select option label/colour for a property. */
-export function optionOf(schema: DbSchema | undefined, propId: Id | undefined, optId: string | null): { name: string; color: string } | null {
-  if (!schema || !propId || !optId) return null;
-  const p = schema.properties.find((x) => x.id === propId);
-  const o = ((p?.config.options as { id: string; name: string; color: string }[] | undefined) ?? []).find((x) => x.id === optId);
-  return o ? { name: o.name, color: o.color } : null;
 }
 
 /** Re-render every `ms` (relative times, countdowns). */

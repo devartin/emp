@@ -1,9 +1,10 @@
 /**
- * Life-app gallery (§6.5 entry point "Add a life app"): a ruled list, one row per app — glyph, name, one-line
- * description and one verb (Open or Set up). No hero art, tiles, pills or time estimates (PROGRAMME-v3 K1/K2).
- * `#/lifeapps/<appId>` opens that app's wizard directly (palette, onboarding hand-off).
+ * App gallery (§6.5 entry point "Add an app"): a ruled list, one row per app — glyph, name, one-line description and
+ * one verb (Open or Set up), plus Markets, which needs no setup. No hero art, tiles, pills or time estimates
+ * (PROGRAMME-v3 K1/K2). Names come from the app identity map (1.0 brief §1). `#/lifeapps/<appId>` opens that app's
+ * wizard directly (palette, onboarding hand-off).
  */
-import { Settings2 } from "lucide-react";
+import { CandlestickChart, Settings2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/backend";
 import type { LifeAppSummary } from "@/backend/types";
@@ -50,8 +51,8 @@ export default function Gallery({ appId }: GalleryProps) {
   return (
     <div className="la-gallery">
       <header className="la-gallery-head">
-        <h1>Life apps</h1>
-        <p>Each app sets up the pages and databases for one area of your life. Everything stays on this device.</p>
+        <h1>Apps</h1>
+        <p>Each app sets up the pages and lists for one part of your life. Everything stays on this device.</p>
       </header>
 
       {pending.length ? (
@@ -64,7 +65,7 @@ export default function Gallery({ appId }: GalleryProps) {
       ) : null}
 
       {!apps ? (
-        <ul className="la-list" aria-label="Loading life apps">
+        <ul className="la-list" aria-label="Loading apps">
           {Array.from({ length: 6 }, (_, k) => (
             <li key={k} className="la-list-row">
               <Skeleton width="40%" height={16} />
@@ -76,16 +77,17 @@ export default function Gallery({ appId }: GalleryProps) {
           {apps.map((a) => {
             const inst = installedId(a.id);
             const Icon = identity(a.id).icon;
+            const name = identity(a.id).name;
             return (
               <li key={a.id} className="la-list-row">
                 <Icon size={16} strokeWidth={1.75} className="la-list-glyph" aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <div className="la-list-name">{a.title}</div>
+                  <div className="la-list-name">{name}</div>
                   <p className="la-list-desc">{a.tagline}</p>
                 </div>
                 {inst ? (
                   <>
-                    <IconButton size="sm" variant="ghost" label={`Tune up ${a.title}`} icon={Settings2} onClick={() => openWizard(a.id, { tuneup: inst })} />
+                    <IconButton size="sm" variant="ghost" label={`Tune up ${name}`} icon={Settings2} onClick={() => openWizard(a.id, { tuneup: inst })} />
                     <Button size="sm" variant="secondary" onClick={() => navigate({ t: "app", instanceId: inst })}>
                       Open
                     </Button>
@@ -98,10 +100,20 @@ export default function Gallery({ appId }: GalleryProps) {
               </li>
             );
           })}
+          <li className="la-list-row">
+            <CandlestickChart size={16} strokeWidth={1.75} className="la-list-glyph" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <div className="la-list-name">Markets</div>
+              <p className="la-list-desc">Prices, charts and watchlists. Nothing to set up.</p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => navigate({ t: "markets" })}>
+              Open
+            </Button>
+          </li>
         </ul>
       )}
 
-      <p className="la-gallery-foot">Life apps only create content in this workspace. Nothing is sent anywhere unless you connect a service.</p>
+      <p className="la-gallery-foot">Apps only create content in this workspace. Nothing is sent anywhere unless you connect a service.</p>
       <WizardSheet />
     </div>
   );

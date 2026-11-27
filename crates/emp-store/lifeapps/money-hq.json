@@ -472,7 +472,7 @@
       }
     },
     {
-      "id": "review",
+      "id": "finish",
       "kind": "review",
       "title": "Review and create",
       "quick": true,

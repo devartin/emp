@@ -1,6 +1,8 @@
 /**
- * Spreadsheet Studio hub (§16.5): start a workbook from a well-built template (a tune-up that adds a workbook), import
- * a file or a Google Sheet, and pick up recent workbooks from anywhere in the workspace.
+ * Spreadsheet Studio hub (§16.5): start a spreadsheet from a well-built template (`lifeapp_add_workbook`: a new,
+ * ordinary spreadsheet next to the hub on every click), import a file or a Google Sheet, and pick up recent
+ * spreadsheets from anywhere in the workspace. The template list is the manifest's `intent` step (the same on both
+ * backends); this file only adds the thumbnails and one-line descriptions.
  */
 import { FileSpreadsheet, FileUp, Sheet as SheetIcon } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -21,9 +23,7 @@ import { Switch } from "@/ui/Switch";
 import { PageIcon } from "@/features/shell/PageIcon";
 import { GoogleSetupSheet } from "@/features/integrations/GoogleSetupSheet";
 import { AppHeader } from "../AppHeader";
-import { useMetrics } from "../data";
-import { SHEET_INTENTS } from "../engine/manifests";
-import { SHEET_TITLES } from "../engine/plan";
+import { useManifest, useMetrics } from "../data";
 import { iconByName, identity } from "../identity";
 
 /** A tiny abstract thumbnail per template: header row, input cells, an output cell. */
@@ -31,12 +31,25 @@ const THUMBS: Record<string, { in: number[]; out: number[] }> = {
   loan: { in: [6, 7, 8], out: [24] },
   budget: { in: [6, 11, 16], out: [19, 24] },
   decision: { in: [6, 7, 8, 11, 12, 13], out: [9, 14] },
-  project_budget: { in: [7, 12, 17], out: [23] },
+  project: { in: [7, 12, 17], out: [23] },
   timesheet: { in: [6, 7, 11, 12, 16, 17], out: [24] },
   inventory: { in: [7, 8, 12, 13], out: [14, 24] },
   split: { in: [7, 12, 17], out: [21, 22] },
-  savings: { in: [6, 11], out: [9, 14, 19, 24] },
+  compound: { in: [6, 11], out: [9, 14, 19, 24] },
   blank: { in: [6, 11], out: [24] },
+};
+
+/** Presentation of each template (`intent` value): icon and one line. */
+const ABOUT: Record<string, { icon: string; description: string }> = {
+  loan: { icon: "landmark", description: "Payment, amortization schedule and extra payments." },
+  budget: { icon: "wallet", description: "Income and spending, budget against actual." },
+  decision: { icon: "scale", description: "Weighted scores and a clear winner." },
+  project: { icon: "hammer", description: "Line items, estimates against actuals, contingency." },
+  timesheet: { icon: "clock", description: "Hours with breaks, weekly totals and overtime." },
+  inventory: { icon: "package", description: "Stock value and reorder alerts." },
+  split: { icon: "split", description: "Who paid, and what each person owes or gets back." },
+  compound: { icon: "sprout", description: "Growth over time with an inflation-adjusted column." },
+  blank: { icon: "table-2", description: "Inputs, Calculations, Output and Checks sheets." },
 };
 
 export default function Studio({ instance }: { instance: LifeAppInstance }) {
@@ -49,6 +62,11 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
   const ws = useWorkspace((s) => s.workspace);
   const color = identity("spreadsheet-studio").color;
   const { metrics } = useMetrics(instance.id, ["workbook_count"]);
+  const manifest = useManifest(instance.appId);
+  const templates = useMemo(
+    () => (manifest?.steps.find((st) => st.id === "intent")?.options ?? []).filter((o) => o.value !== "import" && ABOUT[o.value]),
+    [manifest],
+  );
   const byId = useTree((s) => s.byId);
   const recent = useMemo(() => {
     const out = [];
@@ -70,13 +88,11 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
   const create = async (intent: string) => {
     setCreating(intent);
     try {
-      const job = await api.lifeapp.tuneupApply({ instanceId: instance.id, answers: { intent }, acceptConflicts: [] });
-      const res = await job.result;
-      const id = res.changed[0];
-      notify.success(`${SHEET_TITLES[intent] ?? "Workbook"} created`, { description: "Inputs are tinted; formulas and checks are ready." });
-      if (id) navigate({ t: "page", id });
+      const meta = await api.lifeapp.addWorkbook({ instanceId: instance.id, intent });
+      notify.success(`${meta.title} created`, { description: "Inputs are tinted; formulas and checks are ready." });
+      navigate({ t: "page", id: meta.id });
     } catch (e) {
-      notify.fromError(e, "Couldn’t create the workbook");
+      notify.fromError(e, "Couldn’t create the spreadsheet");
     } finally {
       setCreating(null);
     }
@@ -114,8 +130,11 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
     <div className="la-hub">
       <AppHeader
         instance={instance}
-        title="Spreadsheet Studio"
-        subtitle={`Calculators and trackers built to be audited · ${Number(metrics?.workbook_count?.value ?? recent.length)} workbooks`}
+        title={identity("spreadsheet-studio").name}
+        subtitle={(() => {
+          const n = Number(metrics?.workbook_count?.value ?? recent.length);
+          return `Calculators and trackers built to be checked · ${n} ${n === 1 ? "spreadsheet" : "spreadsheets"}`;
+        })()}
         actions={
           <>
             <Button size="sm" variant="ghost" icon={FileUp} onClick={() => useUi.getState().setImportOpen(true)}>
@@ -133,8 +152,12 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
             <section>
               <h2 className="la-section-title">Start from a template <span className="la-dim">· inputs, checks and a legend included</span></h2>
               <div className="st-grid">
-                {SHEET_INTENTS.map((t) => {
-                  const Icon = iconByName(t.icon) ?? SheetIcon;
+                {!manifest
+                  ? Array.from({ length: 6 }, (_, i) => <div key={i} className="st-tpl panel" aria-hidden />)
+                  : null}
+                {templates.map((t) => {
+                  const about = ABOUT[t.value];
+                  const Icon = iconByName(about.icon) ?? SheetIcon;
                   const th = THUMBS[t.value] ?? THUMBS.blank;
                   return (
                     <button key={t.value} type="button" className="st-tpl panel" aria-busy={creating === t.value || undefined} onClick={() => void create(t.value)} disabled={!!creating}>
@@ -149,7 +172,7 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
                           {creating === t.value ? <Spinner size={14} /> : <Icon size={14} className="text-tertiary" aria-hidden />}
                           <span className="text-body-sm font-semibold text-primary">{t.label}</span>
                         </div>
-                        <span className="text-caption text-tertiary">{t.description}</span>
+                        <span className="text-caption text-tertiary">{about.description}</span>
                       </div>
                     </button>
                   );
@@ -157,7 +180,7 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
               </div>
             </section>
             <section>
-              <h2 className="la-section-title">Recent workbooks</h2>
+              <h2 className="la-section-title">Recent spreadsheets</h2>
               <Card pad="md">
                 {recent.length ? (
                   <ul className="flex flex-col">
@@ -175,18 +198,18 @@ export default function Studio({ instance }: { instance: LifeAppInstance }) {
                     ))}
                   </ul>
                 ) : (
-                  <p className="py-6 text-center text-body-sm text-tertiary">Your workbooks will show up here.</p>
+                  <p className="py-6 text-center text-body-sm text-tertiary">Your spreadsheets will show up here.</p>
                 )}
               </Card>
             </section>
           </div>
           <div className="flex min-w-0 flex-col gap-5">
-            <Card title="How these workbooks are built">
+            <Card title="How these spreadsheets are built">
               <ul className="flex flex-col gap-2.5 text-body-sm text-secondary">
                 <li className="flex gap-2.5"><span className="st-legend" style={{ background: `color-mix(in oklab, ${color} 26%, transparent)`, boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--app) 30%, transparent)" }} />Tinted cells are inputs. Change these.</li>
-                <li className="flex gap-2.5"><span className="st-legend" style={{ background: `linear-gradient(180deg, color-mix(in oklab, ${color} 70%, white), ${color})` }} /><span><strong className="font-semibold text-primary">Bold</strong> cells are outputs.</span></li>
-                <li className="flex gap-2.5"><span className="st-legend bg-gain-soft" style={{ boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--gain) 35%, transparent)" }} />Checks turn green when the model adds up.</li>
-                <li className="flex gap-2.5"><span className="st-legend well" data-static="" />Constants live in named ranges; headers are frozen; dates are ISO.</li>
+                <li className="flex gap-2.5"><span className="st-legend" style={{ background: color }} /><span><strong className="font-semibold text-primary">Bold</strong> cells are the answers.</span></li>
+                <li className="flex gap-2.5"><span className="st-legend bg-gain-soft" style={{ boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--gain) 35%, transparent)" }} />The Checks tab shows whether the numbers add up.</li>
+                <li className="flex gap-2.5"><span className="st-legend well" data-static="" />Header rows stay in view as you scroll.</li>
               </ul>
             </Card>
           </div>

@@ -6,7 +6,6 @@
  * The inline snippet in index.html performs the same resolution before first paint; keep the two in sync.
  */
 import { crossfadeColors } from "@/ui/motion/themeTransition";
-import { isLinux } from "./platform";
 
 export type ThemePref = "system" | "light" | "dark" | "midnight";
 export type ResolvedTheme = "light" | "dark" | "midnight";
@@ -14,7 +13,6 @@ export type AccentName = "graphite" | "iris" | "ocean" | "jade" | "amber" | "rub
 export type MotionPref = "system" | "reduced" | "full";
 export type Density = "comfortable" | "compact";
 export type TextSize = "s" | "m" | "l";
-export type EffectsPref = "auto" | "full" | "reduced";
 export type ContrastPref = "system" | "more";
 export type NumberColors = "standard" | "cvd" | "eastasian" | "mono";
 
@@ -81,17 +79,12 @@ export function resolveMotion(pref: MotionPref): "full" | "reduced" {
   return pref;
 }
 
-export function resolveEffects(pref: EffectsPref): "full" | "reduced" {
-  if (pref === "auto") return mq("(prefers-reduced-transparency: reduce)") ? "reduced" : "full";
-  return pref;
-}
-
 /**
- * Backdrop blur is the one effect WebKitGTK can't afford, so Linux turns glass opaque (`data-glass="off"`) but keeps
- * the rest of the material (grain, edge light, specular, sheen). Everywhere else glass follows `data-effects`.
+ * Decorative effects (`data-effects`: highlight sweeps, pulsing dots, particles). Ultranote 1.0 has no effects
+ * setting (brief §2.4; there is no glass any more): they follow reduce motion and the OS "reduce transparency".
  */
-export function resolveGlass(): "on" | "off" {
-  return isLinux ? "off" : "on";
+export function resolveEffects(motion: MotionPref): "full" | "reduced" {
+  return resolveMotion(motion) === "reduced" || mq("(prefers-reduced-transparency: reduce)") ? "reduced" : "full";
 }
 
 export function resolveContrast(pref: ContrastPref): "normal" | "more" {
@@ -105,10 +98,7 @@ export function motionConfigValue(pref: MotionPref): "user" | "always" | "never"
 }
 
 let current: BootPrefs = DEFAULT_BOOT;
-let effectsPref: EffectsPref = "auto";
 let contrastPref: ContrastPref = "system";
-/** Set by the frame monitor (§4.4); cleared when it recovers. */
-let degraded = false;
 
 function setAttr(name: string, value: string) {
   const el = document.documentElement;
@@ -126,6 +116,7 @@ export function applyBootPrefs(p: BootPrefs): void {
   setAttr("data-theme", resolveTheme(p.theme));
   setAttr("data-accent", p.accent);
   setAttr("data-motion", resolveMotion(p.motion));
+  setAttr("data-effects", resolveEffects(p.motion));
   setAttr("data-density", p.density);
   setAttr("data-text-size", p.textSize);
   document.documentElement.style.colorScheme = resolveTheme(p.theme) === "light" ? "light" : "dark";
@@ -133,34 +124,17 @@ export function applyBootPrefs(p: BootPrefs): void {
 
 /** Device-setting attributes that are not part of the boot cache. */
 export function applyAppearance(opts: {
-  effects?: EffectsPref;
   contrast?: ContrastPref;
   numberColors?: NumberColors;
   readableFont?: boolean;
   letterSpacing?: boolean;
 }): void {
-  if (opts.effects) effectsPref = opts.effects;
   if (opts.contrast) contrastPref = opts.contrast;
-  setAttr("data-effects", degraded && effectsPref === "auto" ? "reduced" : resolveEffects(effectsPref));
-  setAttr("data-glass", resolveGlass());
+  setAttr("data-effects", resolveEffects(current.motion));
   setAttr("data-contrast", resolveContrast(contrastPref));
   if (opts.numberColors) setAttr("data-numbers", opts.numberColors);
   if (opts.readableFont !== undefined) setAttr("data-readable", opts.readableFont ? "on" : "off");
   if (opts.letterSpacing !== undefined) setAttr("data-letter-spacing", opts.letterSpacing ? "wide" : "normal");
-}
-
-/** Force effects to reduced at runtime (frame-drop monitor, §4.4) while the preference is `auto`. */
-export function degradeEffects(): void {
-  if (effectsPref !== "auto") return;
-  degraded = true;
-  setAttr("data-effects", "reduced");
-}
-
-/** Undo a frame-monitor degrade (the monitor re-arms after sustained smooth frames) while the pref is `auto`. */
-export function restoreEffects(): void {
-  if (!degraded) return;
-  degraded = false;
-  if (effectsPref === "auto") setAttr("data-effects", resolveEffects("auto"));
 }
 
 export function getBootPrefs(): BootPrefs {

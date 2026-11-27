@@ -67,6 +67,36 @@ export function optionId(p: Property | undefined, name: string): Id | null {
   return opts.find((o) => o.name.toLowerCase() === name.toLowerCase())?.id ?? null;
 }
 
+/** Normalises an option name like Rust's `norm` (`Yes / no` → `yes_no`, `X per week` → `x_per_week`). */
+export function normKey(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/**
+ * Whether an option is the manifest option `key`. Rule (1.0, both backends): an app-generated option's id IS its
+ * manifest key (`done`, `p1`, `yes_no`), so a renamed option still matches. The normalised-name fallback covers
+ * browser-preview data whose option ids are random.
+ */
+export function optIs(o: { id: Id; name: string } | null | undefined, key: string): boolean {
+  return !!o && (o.id === key || normKey(o.name) === key);
+}
+
+/** The option of `p` that is manifest key `key` (id, else normalised name), for writes. */
+export function optionFor(p: Property | undefined, key: string): Id | null {
+  if (!p) return null;
+  const opts = (p.config.options as { id: Id; name: string }[] | undefined) ?? [];
+  return (opts.find((o) => o.id === key) ?? opts.find((o) => normKey(o.name) === key))?.id ?? null;
+}
+
+/** The first of `keys` that option `o` is, else `null`. */
+export function keyOf(o: { id: Id; name: string } | null | undefined, keys: readonly string[]): string | null {
+  return keys.find((k) => optIs(o, k)) ?? null;
+}
+
 /** 'YYYY-MM-DD' in local time. */
 export function localDay(d: Date = new Date()): string {
   const y = d.getFullYear();

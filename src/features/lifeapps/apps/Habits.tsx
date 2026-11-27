@@ -3,8 +3,10 @@
  * click to check in, right-click (or the menu key) to log an amount. Habits shows 12×12 heatmaps and streaks; Stats
  * the trends. Streaks honour the grace mode (§15.8). Home shows today's count and links here (PROGRAMME-v3 K4).
  * The work leads: no KPI row, rings or flame pills; numbers are plain text and appear only once the data has loaded.
+ * Options are matched by manifest key (`yes_no`, `x_per_week`, `done`), the option id on both backends. The Habits tab
+ * adds a habit in one line; the desktop backend keeps the streak columns of the Habits database current.
  */
-import { BarChart3, Check, Grid3x3, ListChecks } from "lucide-react";
+import { BarChart3, Check, Grid3x3, ListChecks, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { Id, LifeAppInstance } from "@/backend/types";
@@ -19,15 +21,17 @@ import { Checkbox } from "@/ui/Checkbox";
 import { Card } from "@/ui/Card";
 import { EmptyState } from "@/ui/EmptyState";
 import { NumberField } from "@/ui/NumberField";
+import { Segmented } from "@/ui/Segmented";
 import { Popover, PopoverAnchor, PopoverContent } from "@/ui/Popover";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
 import { AppHeader } from "../AppHeader";
-import { localDay, optionId, write } from "../cells";
-import { useAppDatabases, useStableNow } from "../data";
+import { localDay, optionFor, write } from "../cells";
+import { useAppDatabases, useStableNow, type AppDb } from "../data";
 import { addDays, heatCells, isExpected, streakStats, type GraceMode, type HabitLogEntry, type StreakStats } from "../engine/habitMath";
 import { Glyph } from "../Glyph";
-import { dueOn, isDoneEntry, useHabitData, type Habit } from "../habitData";
+import { HABIT_TIMES, TIME_LABEL, TYPE_LABEL, dueOn, isDoneEntry, useHabitData, type Habit } from "../habitData";
+import { identity } from "../identity";
 import { InsightsFeed } from "../Insights";
 
 type Tab = "checkin" | "habits" | "stats";
@@ -55,7 +59,7 @@ function CheckRow({ h, entry, onToggle, onValue }: { h: Habit; entry?: HabitLogE
   const done = !!entry && (entry.status === "done" || entry.status === "partial");
   const [valueOpen, setValueOpen] = useState(false);
   const [val, setVal] = useState<number | null>(h.target);
-  const wantsValue = h.type !== "Yes/no" && h.type !== "Avoid";
+  const wantsValue = h.type !== "yes_no" && h.type !== "avoid";
   const sub = done && entry?.value ? `${entry.value.toLocaleString()} ${h.unit}`.trim() : h.target && wantsValue ? `${h.target.toLocaleString()} ${h.unit}`.trim() : h.cue;
   return (
     <Popover open={valueOpen} onOpenChange={setValueOpen}>
@@ -164,8 +168,8 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
         await api.db.rowsDelete({ ids: [existing.rowId] });
         return;
       }
-      const status = value !== undefined && h.target && value < h.target ? "Partial" : "Done";
-      const sid = optionId(statusProp, status);
+      const status = value !== undefined && h.target && value < h.target ? "partial" : "done";
+      const sid = optionFor(statusProp, status);
       const values: Record<Id, ReturnType<typeof write.text>> = {};
       const title = logDb.schema.properties.find((p) => p.id === logDb.schema.database.primaryPropId);
       if (title) values[title.id] = write.text(`${h.def.name} · ${today}`);
@@ -173,7 +177,7 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
       if (date) values[date.id] = write.date(today);
       const habit = logDb.p("log.habit");
       if (habit) values[habit.id] = write.rel([h.def.id]);
-      if (statusProp && sid) values[statusProp.id] = write.select(sid);
+      if (statusProp && sid) values[statusProp.id] = statusProp.type === "status" ? write.status(sid) : write.select(sid);
       const v = logDb.p("log.value");
       if (v && value !== undefined) values[v.id] = write.num(value);
       if (existing) {
@@ -193,7 +197,7 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
     <div className="la-hub">
       <AppHeader<Tab>
         instance={instance}
-        title="Habits"
+        title={identity("habits").name}
         subtitle={loading ? undefined : dueToday.length ? `${doneToday} of ${dueToday.length} done today · ${Math.round(week * 100)}% of this week’s check-ins` : "Nothing due today"}
         tabs={[
           { value: "checkin", label: "Check-in", icon: ListChecks },
@@ -211,7 +215,7 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
             <div className="flex min-w-0 flex-col gap-5">
               <div className="flex items-baseline justify-between">
                 <h2 className="text-title text-primary">Check-in</h2>
-                <span className="text-caption text-tertiary">Click to check in{dueToday.some((h) => h.type !== "Yes/no" && h.type !== "Avoid") ? " · right-click to log an amount" : ""}</span>
+                <span className="text-caption text-tertiary">Click to check in{dueToday.some((h) => h.type !== "yes_no" && h.type !== "avoid") ? " · right-click to log an amount" : ""}</span>
               </div>
               {loading ? (
                 <div className="flex flex-col gap-2">
@@ -221,12 +225,12 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
                 </div>
               ) : dueToday.length ? (
                 <div className="hb-today">
-                  {["Morning", "Afternoon", "Evening", "Anytime"].map((slot) => {
+                  {HABIT_TIMES.map((slot) => {
                     const list = dueToday.filter((h) => h.time === slot);
                     if (!list.length) return null;
                     return (
                       <div key={slot} className="flex flex-col gap-1.5">
-                        <span className="mt-2 text-caption text-tertiary">{slot}</span>
+                        <span className="mt-2 text-caption text-tertiary">{TIME_LABEL[slot]}</span>
                         {list.map((h) => (
                           <CheckRow key={h.def.id} h={h} entry={todayEntry(h.def.id)} onToggle={(x) => void toggle(x)} onValue={(x, v) => void toggle(x, v)} />
                         ))}
@@ -234,8 +238,13 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
                     );
                   })}
                 </div>
-              ) : (
+              ) : active.length ? (
                 <p className="py-6 text-body-sm text-tertiary">Nothing due today. Weekly habits keep their streaks.</p>
+              ) : (
+                <div className="flex flex-col gap-3 py-2">
+                  <p className="text-body-sm text-secondary">No habits yet. Add one to start checking in.</p>
+                  {habitsDb ? <NewHabit db={habitsDb} today={today} /> : null}
+                </div>
               )}
             </div>
             <section className="flex min-w-0 flex-col">
@@ -247,6 +256,8 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
           loading ? (
             <Skeleton height={300} radius={16} />
           ) : (
+            <div className="flex flex-col gap-4">
+            {habitsDb ? <NewHabit db={habitsDb} today={today} /> : null}
             <div className="hb-grid">
               {active.map((h) => {
                 const s = stats.get(h.def.id)!;
@@ -257,7 +268,7 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-body font-semibold text-primary">{h.def.name}</div>
                         <div className="text-caption text-tertiary">
-                          {h.def.schedule === "x_per_week" ? `${h.def.perWeek}× a week` : h.def.schedule === "weekdays" ? "Weekdays" : "Every day"} · {h.time.toLowerCase()}
+                          {h.def.schedule === "x_per_week" ? `${h.def.perWeek}× a week` : h.def.schedule === "weekdays" ? "Weekdays" : h.def.schedule === "every_n_days" ? `Every ${h.def.everyN ?? 2} days` : "Every day"} · {TIME_LABEL[h.time].toLowerCase()}
                         </div>
                       </div>
                       <Streak n={s.current} />
@@ -274,7 +285,7 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
                           <span>best streak</span>
                         </div>
                         <div className="hb-stat">
-                          <b>{h.target ? `${h.target.toLocaleString()} ${h.unit}`.trim() : h.type}</b>
+                          <b>{h.target ? `${h.target.toLocaleString()} ${h.unit}`.trim() : TYPE_LABEL[h.type]}</b>
                           <span>{h.cue || "target"}</span>
                         </div>
                         <Button size="sm" variant="secondary" active={!!todayEntry(h.def.id)} aria-pressed={!!todayEntry(h.def.id)} icon={todayEntry(h.def.id) ? Check : undefined} onClick={() => void toggle(h)}>
@@ -286,11 +297,79 @@ export default function Habits({ instance, tab: tabProp }: { instance: LifeAppIn
                 );
               })}
             </div>
+            </div>
           )
         ) : (
           <StatsTab habits={active} entries={entries} stats={stats} today={today} />
         )}
       </div>
+    </div>
+  );
+}
+
+const NEW_SCHEDULES = [
+  { value: "daily", label: "Every day" },
+  { value: "weekdays", label: "Weekdays" },
+  { value: "x_per_week", label: "3× a week" },
+] as const;
+
+/** One-line "add a habit": a name and how often (a yes-or-no habit, active from today). */
+function NewHabit({ db, today }: { db: AppDb; today: string }) {
+  const [name, setName] = useState("");
+  const [schedule, setSchedule] = useState<(typeof NEW_SCHEDULES)[number]["value"]>("daily");
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    const title = name.trim();
+    const nameProp = db.p("habit.name");
+    if (!title || !nameProp) return;
+    setBusy(true);
+    try {
+      const values: Record<Id, ReturnType<typeof write.text>> = { [nameProp.id]: write.text(title) };
+      const sel = (role: string, key: string) => {
+        const p = db.p(role);
+        const id = optionFor(p, key);
+        if (p && id) values[p.id] = write.select(id);
+      };
+      sel("habit.type", "yes_no");
+      sel("habit.schedule", schedule);
+      sel("habit.time", "anytime");
+      const perWeek = db.p("habit.per_week");
+      if (perWeek && schedule === "x_per_week") values[perWeek.id] = write.num(3);
+      const active = db.p("habit.active");
+      if (active) values[active.id] = write.check(true);
+      const started = db.p("habit.started");
+      if (started) values[started.id] = write.date(today);
+      await api.db.rowCreate({ databaseId: db.id, values });
+      setName("");
+      notify.success(`${title} added`);
+    } catch (e) {
+      notify.fromError(e, "Couldn’t add the habit");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="lo-quickadd well min-w-[260px] flex-1">
+        <Plus size={16} className="lo-plus flex-none text-tertiary" aria-hidden />
+        <input
+          value={name}
+          onChange={(e) => setName(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void add();
+            }
+          }}
+          placeholder="New habit, e.g. Read 10 pages"
+          aria-label="New habit"
+          disabled={busy}
+        />
+        <Button size="sm" variant="primary" disabled={!name.trim() || busy} onClick={add} kbd="↵">
+          Add
+        </Button>
+      </div>
+      <Segmented value={schedule} onValueChange={setSchedule} options={NEW_SCHEDULES.map((o) => ({ value: o.value, label: o.label }))} aria-label="How often" />
     </div>
   );
 }

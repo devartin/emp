@@ -2,14 +2,16 @@
  * Page actions shared by the sidebar row context menu, its `…` button and the top bar's page menu. One list of
  * descriptors, rendered with either the dropdown or the context-menu parts (same skin, §5.6).
  */
-import { Copy, CornerUpLeft, FilePlus2, Link, PanelRight, Pencil, Star, StarOff, Trash2 } from "lucide-react";
+import { Copy, CornerUpLeft, FilePlus2, FileText, FolderInput, FolderKanban, Link, PanelRight, Pencil, Star, StarOff, Trash2 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { navigate } from "@/app/router";
 import type { Id, PageMeta } from "@/backend/types";
 import { notify } from "@/stores/toasts";
-import { useTree } from "@/stores/tree";
+import { appIndexOf, isAppOwned, useTree } from "@/stores/tree";
 import { useUi } from "@/stores/ui";
 import { useWorkspace } from "@/stores/workspace";
+import { setProject } from "@/features/projects/actions";
+import { openMoveToProject } from "@/features/projects/dialogs";
 import { ContextMenuItem, ContextMenuSeparator } from "@/ui/ContextMenu";
 import { MenuItem, MenuSeparator } from "@/ui/Menu";
 import type { IconComponent } from "@/ui/Button";
@@ -81,6 +83,19 @@ export function pageActions(meta: PageMeta, opts: { onRename?: () => void; curre
       label: "Move to top level",
       run: () => useTree.getState().move(meta.id, null),
     });
+  }
+  // Projects (brief §2.2): any document can become a project and back; any page can move into one. Not a page an app
+  // generated (it is reached from the app, which moves as one row) and not a template; an app's hub moves but stays an app.
+  const apps = appIndexOf(ws.lifeapps);
+  if (!isAppOwned(meta, apps) && !meta.flags.template) {
+    if (meta.kind === "doc" && !apps.hubs.has(meta.id)) {
+      out.push(
+        meta.flags.project
+          ? { kind: "item", id: "project-off", icon: FileText, label: "Turn back into a document", run: () => setProject(meta, false) }
+          : { kind: "item", id: "project-on", icon: FolderKanban, label: "Turn into project", run: () => setProject(meta, true) },
+      );
+    }
+    out.push({ kind: "item", id: "move-project", icon: FolderInput, label: "Move to project…", run: () => openMoveToProject(meta.id) });
   }
   out.push({ kind: "sep", id: "s2" });
   out.push({

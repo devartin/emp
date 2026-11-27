@@ -7,9 +7,9 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowLeftRight, Check, ChevronDown, CornerDownRight, MoreHorizontal, Plus, Search, Split, Trash2, Wand2, X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { api, runJob } from "@/backend";
-import type { Id } from "@/backend/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api, errorMessage, runJob } from "@/backend";
+import type { FinanceTxnFilter, FinanceTxnPage, Id } from "@/backend/types";
 import { cn } from "@/lib/cn";
 import { notify } from "@/stores/toasts";
 import { Amount } from "@/ui/Amount";
@@ -28,12 +28,84 @@ import { Select } from "@/ui/Select";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
 import { dayLabel, fmtMoney, num, toMoney, todayIso, weekdayLabel } from "../shared/format";
-import { useFlip } from "../shared/hooks";
+import { useDbChanged, useFlip } from "../shared/hooks";
 import { disclose, Glyph, Quiet } from "../shared/ui";
-import { useLedgerCtx, type Category, type Txn } from "./ledger";
+import { toTxn, useLedgerCtx, type Category, type Txn, type TxnPatch } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 
-type Filter = "all" | "review" | "uncategorized" | "transfers" | "income";
+type Filter = FinanceTxnFilter;
+
+/** Rows per `finance_txns_query` window; more load as the list scrolls. */
+const PAGE = 200;
+
+interface TxnPage {
+  rows: Txn[];
+  total: number;
+  inflow: string;
+  outflow: string;
+  counts: FinanceTxnPage["counts"];
+}
+
+/**
+ * The Transactions tab's rows: a filtered, searched window from the backend (`finance_txns_query`, newest first,
+ * exact totals), grown page by page as the list scrolls, refreshed when the instance's databases change.
+ */
+function useTxnPage(instanceId: Id, dbIds: Id[], filter: Filter, accountId: string, search: string) {
+  const [page, setPage] = useState<TxnPage | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const want = useRef(PAGE);
+  const seq = useRef(0);
+  const key = JSON.stringify([filter, accountId, search]);
+  const load = useCallback(
+    async (limit: number) => {
+      const id = ++seq.current;
+      setLoading(true);
+      try {
+        const res = await api.finance.txnsQuery({ instanceId, filter, ...(accountId !== "all" ? { accountId } : {}), ...(search ? { search } : {}), offset: 0, limit: Math.min(limit, 1000) });
+        if (id !== seq.current) return;
+        setPage({ rows: res.rows.map(toTxn), total: res.total, inflow: res.inflow, outflow: res.outflow, counts: res.counts });
+        setError(null);
+      } catch (e) {
+        if (id === seq.current) setError(errorMessage(e) || "Couldn't load the transactions");
+      } finally {
+        if (id === seq.current) setLoading(false);
+      }
+    },
+    [instanceId, filter, accountId, search],
+  );
+  useEffect(() => {
+    want.current = PAGE;
+    void load(PAGE);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, instanceId]);
+  useDbChanged(dbIds, () => void load(want.current), 200);
+  const loadMore = useCallback(() => {
+    if (!page || loading || page.rows.length >= page.total || want.current >= 1000 + page.rows.length) return;
+    want.current = page.rows.length + PAGE;
+    // Windows past the first 1,000 rows page on from the offset.
+    if (want.current > 1000) {
+      const id = ++seq.current;
+      setLoading(true);
+      void api.finance
+        .txnsQuery({ instanceId, filter, ...(accountId !== "all" ? { accountId } : {}), ...(search ? { search } : {}), offset: page.rows.length, limit: PAGE })
+        .then((res) => {
+          if (id !== seq.current) return;
+          setPage((p) => (p ? { ...p, rows: [...p.rows, ...res.rows.map(toTxn)], total: res.total } : p));
+        })
+        .catch((e) => id === seq.current && setError(errorMessage(e) || "Couldn't load more"))
+        .finally(() => id === seq.current && setLoading(false));
+      return;
+    }
+    void load(want.current);
+  }, [page, loading, load, instanceId, filter, accountId, search]);
+  /** Optimistic edit of loaded rows (the change event reconciles). */
+  const patch = useCallback((updates: ({ id: Id } & TxnPatch)[]) => {
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    setPage((p) => (p ? { ...p, rows: p.rows.map((t) => (byId.has(t.id) ? { ...t, ...byId.get(t.id) } : t)) } : p));
+  }, []);
+  return { page, error, loading, loadMore, patch, reload: () => void load(want.current) };
+}
 
 /** A plain key press outside text fields and menus (bound hints, N-FL4). */
 function isPlainKey(e: KeyboardEvent, key: string): boolean {
@@ -47,11 +119,17 @@ export default function Transactions() {
   const l = useLedgerCtx();
   const { instanceId, txnFilter, clearTxnFilter, reloadOverview } = useMoney();
   const [q, setQ] = useState("");
-  // `review.count` (definitions.ts): rows not yet reviewed, when the Transactions database has the Reviewed property.
-  const reviewCount = l.hasReviewed ? l.txns.filter((t) => t.reviewed === false).length : 0;
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(q.trim()), 160);
+    return () => clearTimeout(t);
+  }, [q]);
   // Lands on the To review lane while it has rows (K4), unless a link asked for another filter.
-  const [filter, setFilter] = useState<Filter>(() => (txnFilter === "uncategorized" || txnFilter === "review" ? txnFilter : l.hasReviewed && reviewCount > 0 ? "review" : "all"));
+  const [filter, setFilter] = useState<Filter>(() => (txnFilter === "uncategorized" || txnFilter === "review" ? txnFilter : l.hasReviewed && (l.counts.toReview ?? 0) > 0 ? "review" : "all"));
   const [account, setAccount] = useState<string>("all");
+  const txq = useTxnPage(instanceId, l.dbIds, filter, account, search);
+  // `review.count` (definitions.ts): rows not yet reviewed, when the Transactions database has the Reviewed property.
+  const reviewCount = txq.page?.counts.review ?? l.counts.toReview ?? 0;
   const [selected, setSelected] = useState<Set<Id>>(new Set());
   const [splitting, setSplitting] = useState<Txn | null>(null);
   const [adding, setAdding] = useState(false);
@@ -61,30 +139,13 @@ export default function Transactions() {
     if (txnFilter) clearTxnFilter();
   }, [txnFilter, clearTxnFilter]);
 
-  const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return l.txns.filter((t) => {
-      if (account !== "all" && t.accountId !== account) return false;
-      if (filter === "uncategorized" && (t.categoryId || t.transferId || t.splits.length)) return false;
-      if (filter === "review" && t.reviewed !== false) return false;
-      if (filter === "transfers" && !t.transferId) return false;
-      if (filter === "income" && !(t.amount > 0 && !t.transferId)) return false;
-      if (!needle) return true;
-      const cat = t.categoryId ? l.cat.get(t.categoryId)?.name ?? "" : "";
-      return t.payee.toLowerCase().includes(needle) || t.raw.toLowerCase().includes(needle) || t.memo.toLowerCase().includes(needle) || cat.toLowerCase().includes(needle) || String(Math.abs(t.amount).toFixed(2)).includes(needle);
-    });
-  }, [l.txns, l.cat, q, filter, account]);
-
-  const totals = useMemo(() => {
-    let inflow = 0;
-    let outflow = 0;
-    for (const t of rows) {
-      if (t.transferId) continue;
-      if (t.amount > 0) inflow += t.amount;
-      else outflow += t.amount;
-    }
-    return { inflow, outflow };
-  }, [rows]);
+  const rows = useMemo(() => txq.page?.rows ?? [], [txq.page]);
+  const total = txq.page?.total ?? 0;
+  const totals = { inflow: num(txq.page?.inflow ?? "0"), outflow: num(txq.page?.outflow ?? "0") };
+  const edit = (updates: ({ id: Id } & TxnPatch)[]) => {
+    txq.patch(updates);
+    return l.updateTxns(updates);
+  };
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // the ledger glides down/up as the rule suggestion appears/leaves (no height animation)
@@ -100,9 +161,14 @@ export default function Transactions() {
     glideTimer.current = window.setTimeout(() => el.removeAttribute("data-glide"), 360);
   };
   const virt = useVirtualizer({ count: rows.length, getScrollElement: () => scrollRef.current, estimateSize: () => 52, overscan: 8 });
+  const lastIndex = virt.getVirtualItems().at(-1)?.index ?? 0;
+  useEffect(() => {
+    if (rows.length && lastIndex >= rows.length - 12 && rows.length < total) txq.loadMore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastIndex, rows.length, total]);
 
   const categorize = (t: Txn, categoryId: Id | null) => {
-    void l.updateTxn(t.id, { categoryId }).then(reloadOverview);
+    void edit([{ id: t.id, categoryId }]).then(reloadOverview);
     if (!categoryId) return;
     const key = t.payee.toLowerCase();
     const prev = history.current.get(key);
@@ -145,7 +211,7 @@ export default function Transactions() {
       return n;
     });
 
-  const uncategorizedCount = l.txns.filter((t) => !t.categoryId && !t.transferId && !t.splits.length).length;
+  const uncategorizedCount = txq.page?.counts.uncategorized ?? l.counts.uncategorized;
 
   // The "N" hint on Add is bound (N-FL4): N opens quick add while this tab is showing.
   useEffect(() => {
@@ -213,8 +279,10 @@ export default function Transactions() {
           <span className="fh-txn-amt">Amount</span>
           <span className="w-8" />
         </div>
-        <div ref={scrollRef} className="fh-txn-scroll" role="grid" aria-rowcount={rows.length} aria-label="Transactions">
-          {l.loading && !l.txns.length ? (
+        <div ref={scrollRef} className="fh-txn-scroll" role="grid" aria-rowcount={total} aria-label="Transactions">
+          {txq.error && !txq.page ? (
+            <Quiet title="Couldn't load the transactions" body={txq.error} action={<Button size="sm" onClick={txq.reload}>Try again</Button>} />
+          ) : !txq.page ? (
             <div className="p-4 flex flex-col gap-4">
               {Array.from({ length: 10 }, (_, k) => (
                 <Skeleton key={k} height={14} width={`${70 + ((k * 13) % 30)}%`} />
@@ -239,7 +307,7 @@ export default function Transactions() {
                       onCategorize={(c) => categorize(t, c)}
                       onSplit={() => setSplitting(t)}
                       onDelete={() => void l.deleteTxns([t.id])}
-                      onCleared={() => void l.updateTxn(t.id, { cleared: t.cleared === "uncleared" ? "cleared" : "uncleared" })}
+                      onCleared={() => void edit([{ id: t.id, cleared: t.cleared === "uncleared" ? "cleared" : "uncleared" }]).then(reloadOverview)}
                     />
                   </div>
                 );
@@ -249,7 +317,7 @@ export default function Transactions() {
         </div>
         <div className="fh-txn-foot">
           <span className="text-tertiary">
-            {rows.length.toLocaleString()} {rows.length === 1 ? "transaction" : "transactions"}
+            {total.toLocaleString()} {total === 1 ? "transaction" : "transactions"}
           </span>
           <span className="ml-auto inline-flex items-center gap-4 tabular">
             <span>
@@ -271,9 +339,8 @@ export default function Transactions() {
               categories={l.categories}
               value={null}
               onChange={(c) => {
-                for (const id of selected) void l.updateTxn(id, { categoryId: c });
+                void edit([...selected].map((id) => ({ id, categoryId: c }))).then(reloadOverview);
                 setSelected(new Set());
-                setTimeout(reloadOverview, 300);
               }}
               trigger={
                 <Button size="xs" variant="secondary" iconRight={ChevronDown}>
@@ -287,7 +354,7 @@ export default function Transactions() {
                 variant="secondary"
                 icon={Check}
                 onClick={() => {
-                  for (const id of selected) void l.updateTxn(id, { reviewed: true });
+                  void edit([...selected].map((id) => ({ id, reviewed: true })));
                   setSelected(new Set());
                 }}
               >
@@ -315,8 +382,7 @@ function TxnRow({ t, newDay, selected, onToggle, onDisclose, onCategorize, onSpl
   const [open, setOpen] = useState(false);
   const cat = t.categoryId ? l.cat.get(t.categoryId) : undefined;
   const acct = t.accountId ? l.acct.get(t.accountId) : undefined;
-  const transferTo = t.transferId ? l.txns.find((x) => x.id === t.transferId) ?? null : null;
-  const twinAcct = transferTo?.accountId ? l.acct.get(transferTo.accountId) : undefined;
+  const twinAcct = t.transferAccountId ? l.acct.get(t.transferAccountId) : undefined;
   return (
     <div className={cn("fh-txn", selected && "is-selected", newDay && "is-newday")} role="row" aria-selected={selected}>
       <div className="fh-txn-main">
@@ -568,9 +634,13 @@ function AddDialog({ onClose }: { onClose: () => void }) {
   const [account, setAccount] = useState<string | null>(l.accounts.find((a) => a.type === "checking")?.id ?? l.accounts[0]?.id ?? null);
   const [category, setCategory] = useState<string | null>(null);
   const valid = payee.trim() && amount && num(amount) > 0 && account && /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const [busy, setBusy] = useState(false);
   const save = async () => {
-    if (!valid) return;
-    await l.addTxn({ date, payee: payee.trim(), amount: (outflow ? -1 : 1) * num(amount), accountId: account!, categoryId: category });
+    if (!valid || busy) return;
+    setBusy(true);
+    const ok = await l.addTxn({ date, payee: payee.trim(), amount: (outflow ? -1 : 1) * num(amount), accountId: account!, categoryId: category });
+    setBusy(false);
+    if (!ok) return;
     reloadOverview();
     notify.success("Transaction added");
     onClose();
@@ -586,7 +656,7 @@ function AddDialog({ onClose }: { onClose: () => void }) {
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" disabled={!valid} onClick={save} kbd="↵">
+          <Button variant="primary" disabled={!valid} loading={busy} onClick={save} kbd="↵">
             Add
           </Button>
         </>

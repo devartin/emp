@@ -51,6 +51,14 @@ const OPS: Record<"text" | "number" | "account", { value: RuleCondition["op"]; l
 
 type Draft = Omit<Rule, "id" | "timesApplied"> & { id?: Id; timesApplied?: number };
 
+/**
+ * The `finance_rule_upsert` input of a rule: only the fields the command takes (`id` optional, never
+ * `timesApplied`, which Rust's `deny_unknown_fields` rejects).
+ */
+export function ruleInput(r: Draft | Rule): Parameters<typeof api.finance.ruleUpsert>[0]["rule"] {
+  return { ...(r.id ? { id: r.id } : {}), name: r.name, priority: r.priority, when: r.when, then: r.then, continue: r.continue };
+}
+
 export default function RulesEditor({ instanceId, open, onOpenChange }: { instanceId: Id; open: boolean; onOpenChange: (o: boolean) => void }) {
   const l = useLedgerCtx();
   const rules = useAsync(() => api.finance.rulesList({ instanceId }), [instanceId]);
@@ -78,7 +86,7 @@ export default function RulesEditor({ instanceId, open, onOpenChange }: { instan
     if (!draft) return;
     setBusy("save");
     try {
-      const saved = await api.finance.ruleUpsert({ instanceId, rule: draft });
+      const saved = await api.finance.ruleUpsert({ instanceId, rule: ruleInput(draft) });
       notify.success("Rule saved");
       rules.reload();
       setSel(saved.id);
@@ -96,8 +104,7 @@ export default function RulesEditor({ instanceId, open, onOpenChange }: { instan
       rules.reload();
       setSel(null);
       notify.undo("Rule deleted", async () => {
-        const { id: _i, timesApplied: _t, ...rest } = snapshot;
-        await api.finance.ruleUpsert({ instanceId, rule: rest });
+        await api.finance.ruleUpsert({ instanceId, rule: ruleInput({ ...snapshot, id: undefined }) });
         rules.reload();
       });
     } catch (e) {
@@ -108,8 +115,12 @@ export default function RulesEditor({ instanceId, open, onOpenChange }: { instan
     const i = list.indexOf(r);
     const other = list[i + dir];
     if (!other) return;
-    await api.finance.ruleUpsert({ instanceId, rule: { ...r, priority: other.priority } });
-    await api.finance.ruleUpsert({ instanceId, rule: { ...other, priority: r.priority === other.priority ? r.priority + dir : r.priority } });
+    try {
+      await api.finance.ruleUpsert({ instanceId, rule: ruleInput({ ...r, priority: other.priority }) });
+      await api.finance.ruleUpsert({ instanceId, rule: ruleInput({ ...other, priority: r.priority === other.priority ? r.priority + dir : r.priority }) });
+    } catch (e) {
+      notify.fromError(e, "Couldn't reorder the rules");
+    }
     rules.reload();
   };
   const test = async () => {

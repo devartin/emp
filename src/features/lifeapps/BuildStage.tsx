@@ -24,7 +24,7 @@ const KIND: Record<GenerationPlanItem["kind"], { label: string; plural: string; 
   dashboard: { label: "Dashboard", plural: "dashboards", icon: LayoutDashboard },
   page: { label: "Page", plural: "pages", icon: FileText },
   database: { label: "Database", plural: "databases", icon: Database },
-  sheet: { label: "Workbook", plural: "workbooks", icon: SheetIcon },
+  sheet: { label: "Spreadsheet", plural: "spreadsheets", icon: SheetIcon },
   goal: { label: "Goal", plural: "goals", icon: Target },
   view: { label: "View", plural: "views", icon: Eye },
   rule: { label: "Rule", plural: "rules", icon: Wand2 },

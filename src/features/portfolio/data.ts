@@ -1,111 +1,93 @@
-/** Portfolio client data: summary/performance via commands; lots and transactions read by role for display. */
+/**
+ * Portfolio client data (ULTRANOTE-1.0 §5): summary and performance via commands; accounts, securities, open FIFO
+ * lots, income and recent transactions from the backend's compact book (`portfolio_book`), with option keys and
+ * exact lot figures — no whole databases over IPC, no lot replay in TypeScript.
+ */
 import { useMemo } from "react";
 import { api } from "@/backend";
-import type { DbSchema, Id, RowDTO } from "@/backend/types";
-import { cell, queryAll, useAsync, useDbChanged, useRoleDbs } from "../finance/shared/hooks";
+import type { Id, PortfolioBook as BookView, TaxTreatmentKey } from "@/backend/types";
+import { useAsync, useDbChanged } from "../finance/shared/hooks";
 import { num } from "../finance/shared/format";
 
-const ROLES = { accounts: "iacct.type", securities: "sec.ticker", txns: "inv.type", targets: "alloc.target" } as const;
-
-export interface InvTxn {
-  id: Id;
-  date: string;
-  type: string;
-  secId: Id | null;
-  qty: number;
-  price: number;
-  amount: number;
-  fees: number;
-  accountId: Id | null;
-}
 export interface OpenLot {
   accountId: Id;
   accountName: string;
-  taxTreatment: string;
+  taxTreatment: TaxTreatmentKey;
   acquired: string;
   qty: number;
   costPerUnit: number;
-}
-export interface PortfolioBook {
-  schemas: Partial<Record<keyof typeof ROLES, DbSchema>>;
-  secByKey: Map<string, { id: Id; name: string; cls: string; er: number }>;
-  accounts: Map<Id, { name: string; type: string; tax: string }>;
-  txns: InvTxn[];
-  lotsFor: (symbol: string) => OpenLot[];
-  loading: boolean;
+  /** Exact remaining cost basis of the lot. */
+  basis: number;
 }
 
-export function usePortfolioBook(instanceId: Id): PortfolioBook {
-  const { schemas, ready } = useRoleDbs(instanceId, ROLES);
-  const ids = [schemas.accounts?.database.id, schemas.securities?.database.id, schemas.txns?.database.id];
-  const rows = useAsync(
-    async () => {
-      const [a, s, x] = await Promise.all(ids.map((id) => (id ? queryAll(id) : Promise.resolve([] as RowDTO[]))));
-      return { a, s, x };
-    },
-    [ids.join("|")],
-    { enabled: ready },
-  );
-  useDbChanged(ids, rows.reload);
+export interface IncomeRow {
+  id: Id;
+  date: string;
+  symbol: string;
+  accountId: Id;
+  amount: number;
+  /** `dividend` or `interest`. */
+  kind: string;
+  reinvested: boolean;
+  taxTreatment: TaxTreatmentKey;
+}
+
+export interface BookTxn {
+  id: Id;
+  date: string;
+  /** buy, sell, dividend, reinvest, fee, split, transfer_in, transfer_out, return_of_capital, interest */
+  type: string;
+  symbol: string;
+  name: string;
+  accountId: Id;
+  qty: number | null;
+  price: number | null;
+  amount: number | null;
+  fees: number;
+}
+
+export interface PortfolioBook {
+  dbs: BookView["dbs"];
+  secByKey: Map<string, { id: Id; name: string; cls: string }>;
+  accounts: Map<Id, { name: string; type: string; tax: TaxTreatmentKey }>;
+  accountList: { id: Id; name: string; type: string; tax: TaxTreatmentKey }[];
+  income: IncomeRow[];
+  txns: BookTxn[];
+  lotsFor: (symbol: string) => OpenLot[];
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+const nul = (s: string | null): number | null => (s === null ? null : num(s));
+
+export function usePortfolioBook(instanceId: Id | undefined): PortfolioBook {
+  const st = useAsync(() => (instanceId ? api.portfolio.book({ instanceId }) : Promise.resolve(null)), [instanceId]);
+  const ids = st.data ? (Object.values(st.data.dbs).filter(Boolean) as Id[]) : [];
+  useDbChanged(ids, st.reload);
   return useMemo(() => {
-    const A = schemas.accounts;
-    const S = schemas.securities;
-    const X = schemas.txns;
-    const accounts = new Map<Id, { name: string; type: string; tax: string }>();
-    for (const r of rows.data?.a ?? []) accounts.set(r.id, { name: cell.text(r.values[A!.database.primaryPropId]), type: cell.sel(r.values[A!.database.roles["iacct.type"]]) ?? "taxable", tax: cell.sel(r.values[A!.database.roles["iacct.tax"]]) ?? "taxable" });
-    const secById = new Map<Id, { key: string; name: string; cls: string; er: number }>();
-    const secByKey = new Map<string, { id: Id; name: string; cls: string; er: number }>();
-    const clsProp = S?.properties.find((p) => p.id === S.database.roles["sec.class"]);
-    const clsName = (id: string | null) => ((clsProp?.config.options as { id: string; name: string }[] | undefined) ?? []).find((o) => o.id === id)?.name ?? "Other";
-    for (const r of rows.data?.s ?? []) {
-      const key = cell.ticker(r.values[S!.database.roles["sec.ticker"]]) ?? "";
-      const v = { id: r.id, key, name: cell.text(r.values[S!.database.primaryPropId]), cls: clsName(cell.sel(r.values[S!.database.roles["sec.class"]])), er: cell.num(r.values[S!.database.roles["sec.expense_ratio"]]) ?? 0 };
-      secById.set(r.id, v);
-      if (key) secByKey.set(key, v);
+    const v = st.data;
+    const lots = new Map<string, OpenLot[]>();
+    for (const l of v?.lots ?? []) {
+      const list = lots.get(l.symbol) ?? [];
+      list.push({ accountId: l.accountId, accountName: l.accountName, taxTreatment: l.taxTreatment, acquired: l.acquired, qty: num(l.qty), costPerUnit: num(l.costPerUnit), basis: num(l.basis) });
+      lots.set(l.symbol, list);
     }
-    const R = X?.database.roles ?? {};
-    const txns: InvTxn[] = (rows.data?.x ?? [])
-      .map((r) => ({
-        id: r.id,
-        date: cell.date(r.values[R["inv.date"]]) ?? "",
-        type: cell.sel(r.values[R["inv.type"]]) ?? "buy",
-        secId: cell.rel(r.values[R["inv.security"]]),
-        qty: cell.num(r.values[R["inv.qty"]]) ?? 0,
-        price: num(cell.money(r.values[R["inv.price"]])),
-        amount: num(cell.money(r.values[R["inv.amount"]])),
-        fees: num(cell.money(r.values[R["inv.fees"]])),
-        accountId: cell.rel(r.values[R["inv.account"]]),
-      }))
-      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-    const lotsFor = (symbol: string): OpenLot[] => {
-      const sec = secByKey.get(symbol);
-      if (!sec) return [];
-      const open: (OpenLot & { qty: number })[] = [];
-      for (const t of txns) {
-        if (t.secId !== sec.id || !t.accountId) continue;
-        const acct = accounts.get(t.accountId);
-        if (t.type === "buy" || t.type === "reinvest" || t.type === "transfer_in") {
-          if (t.qty > 0) open.push({ accountId: t.accountId, accountName: acct?.name ?? "", taxTreatment: acct?.tax ?? "taxable", acquired: t.date, qty: t.qty, costPerUnit: Math.abs(t.amount) / t.qty });
-        } else if (t.type === "sell" || t.type === "transfer_out") {
-          let left = t.qty;
-          for (const lot of open) {
-            if (lot.accountId !== t.accountId || lot.qty <= 1e-9) continue;
-            const take = Math.min(lot.qty, left);
-            lot.qty -= take;
-            left -= take;
-            if (left <= 1e-9) break;
-          }
-        } else if (t.type === "split" && t.qty > 0) {
-          for (const lot of open) if (lot.accountId === t.accountId) {
-            lot.qty *= t.qty;
-            lot.costPerUnit /= t.qty;
-          }
-        }
-      }
-      return open.filter((l) => l.qty > 1e-6);
+    for (const list of lots.values()) list.sort((a, b) => (a.acquired < b.acquired ? -1 : a.acquired > b.acquired ? 1 : 0));
+    const accountList = v?.accounts ?? [];
+    return {
+      dbs: v?.dbs ?? { accounts: null, securities: null, transactions: null, targets: null },
+      secByKey: new Map((v?.securities ?? []).map((s) => [s.symbol, { id: s.id, name: s.name, cls: s.assetClass }])),
+      accounts: new Map(accountList.map((a) => [a.id, { name: a.name, type: a.type, tax: a.tax }])),
+      accountList,
+      income: (v?.income ?? []).map((i) => ({ ...i, amount: num(i.amount) })),
+      txns: (v?.txns ?? []).map((t) => ({ ...t, qty: nul(t.qty), price: nul(t.price), amount: nul(t.amount), fees: num(t.fees) })),
+      lotsFor: (symbol: string) => lots.get(symbol) ?? [],
+      loading: st.loading && !v,
+      error: st.error,
+      reload: st.reload,
     };
-    return { schemas, secByKey, accounts, txns, lotsFor, loading: !ready || (rows.loading && !rows.data) };
-  }, [schemas, rows.data, rows.loading, ready]);
+  }, [st.data, st.loading, st.error, st.reload]);
 }
 
 export function usePortfolioSummary(instanceId: Id) {
@@ -114,3 +96,16 @@ export function usePortfolioSummary(instanceId: Id) {
 }
 
 export const CLASS_ORDER = ["US equity", "Intl developed", "Emerging", "Bonds", "Inflation-linked", "REIT", "Cash", "Crypto", "Other"];
+
+/** Asset-class keys for a new security (`portfolio_trade.assetClass`) with their labels. */
+export const ASSET_CLASS_OPTIONS = [
+  { value: "us_equity", label: "US equity" },
+  { value: "intl_developed", label: "Intl developed" },
+  { value: "emerging", label: "Emerging" },
+  { value: "bonds", label: "Bonds" },
+  { value: "inflation_linked", label: "Inflation-linked" },
+  { value: "reit", label: "REIT" },
+  { value: "cash", label: "Cash" },
+  { value: "crypto", label: "Crypto" },
+  { value: "other", label: "Other" },
+];

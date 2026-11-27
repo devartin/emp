@@ -140,6 +140,24 @@ export function useAppDatabases(instanceId: Id | null | undefined): { dbs: AppDb
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   useEffect(() => load(), [load]);
+  // A schema change (a property added or a role set, e.g. by the vault-open upgrade of an older install) reloads.
+  const dbsRef = useRef(dbs);
+  dbsRef.current = dbs;
+  useEffect(() => {
+    if (!ids.length) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const off = listen("db:changed", (e) => {
+      const known = dbsRef.current?.find((d) => d.id === e.databaseId);
+      if (!known || known.schema.database.schemaRev === e.schemaRev) return;
+      if (t) clearTimeout(t);
+      t = setTimeout(load, 80);
+    });
+    return () => {
+      off();
+      if (t) clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, load]);
   const byRole = useCallback((role: string) => dbs?.find((d) => d.schema.properties.some((p) => p.role === role) || role in (d.schema.database.roles ?? {})), [dbs]);
   return { dbs, byRole, refresh: load };
 }

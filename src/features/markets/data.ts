@@ -1,7 +1,7 @@
 /** Market data helpers: symbol metadata cache, bars → OHLCV, ranges, watchlist store. */
 import { useEffect, useState } from "react";
 import { create } from "zustand";
-import { api } from "@/backend";
+import { api, backendMode } from "@/backend";
 import type { MarketSearchResult, SymbolKey, Watchlist, WatchlistSymbol } from "@/backend/types";
 import type { Ohlcv } from "@/charts/Candles";
 import { notify } from "@/stores/toasts";
@@ -46,6 +46,46 @@ export function useSymbolInfo(key: SymbolKey | null | undefined): MarketSearchRe
     };
   }, [key]);
   return info;
+}
+
+/**
+ * The Markets index strip. On desktop: real symbols the keyless providers price (index funds stand in for the
+ * indices, which have no `TICKER:MIC` key). The browser preview's mock serves fictional demo instruments instead.
+ */
+export const DEFAULT_STRIP: SymbolKey[] = backendMode === "tauri" ? ["SPY:ARCX", "QQQ:XNAS", "BTC:CRYPTO", "EURUSD:FX"] : ["EMP500:INDEX", "EMPT100:INDEX", "BTC:CRYPTO", "EURUSD:FX"];
+
+/** Symbols for a new watchlist (e.g. the editor's watchlist block): real ones on desktop, demo ones in the preview. */
+export const STARTER_WATCHLIST: SymbolKey[] = backendMode === "tauri" ? ["SPY:ARCX", "AAPL:XNAS", "MSFT:XNAS"] : ["EMPX:XNAS", "NOVA:XNAS", "ORBT:XNYS"];
+
+export type MarketAvailability = "checking" | "ok" | "offline" | "unavailable";
+
+/**
+ * Whether prices can be loaded at all: one `market_quotes` probe for `symbols` (the backend waits up to ~8 s for
+ * uncached symbols and returns what it got). No quote at all means offline mode is on or no provider answered; the
+ * probe repeats every minute until prices arrive, and `retry` runs it now.
+ */
+export function useMarketAvailability(symbols: SymbolKey[], offlineMode: boolean): { status: MarketAvailability; retry: () => void } {
+  const [status, setStatus] = useState<MarketAvailability>("checking");
+  const [tick, setTick] = useState(0);
+  const key = symbols.join("|");
+  useEffect(() => {
+    let live = true;
+    if (!key) return;
+    setStatus((s) => (s === "ok" ? s : "checking"));
+    api.market
+      .quotes({ symbols: key.split("|") })
+      .then((q) => live && setStatus(q.length ? "ok" : offlineMode ? "offline" : "unavailable"))
+      .catch(() => live && setStatus(offlineMode ? "offline" : "unavailable"));
+    return () => {
+      live = false;
+    };
+  }, [key, offlineMode, tick]);
+  useEffect(() => {
+    if (status !== "offline" && status !== "unavailable") return;
+    const h = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(h);
+  }, [status]);
+  return { status, retry: () => setTick((n) => n + 1) };
 }
 
 /** Display names for the fictional demo indices; the symbol keys (EMP500, EMPT100) are stable data ids. */

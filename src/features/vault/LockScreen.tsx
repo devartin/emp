@@ -21,11 +21,17 @@ import { RecoveryUnlock } from "./RecoveryUnlock";
 import { readLockIdentity } from "./identity";
 import "./vault.css";
 
-function captionFor(reason: string | null, idleMinutes: number | null): string {
+/**
+ * Why the lock screen is showing. The reason survives the desktop reload that follows a lock (boot.ts keeps it in
+ * sessionStorage); a fresh launch has no reason and says nothing about locking automatically.
+ */
+export function captionFor(reason: string | null, idleMinutes: number | null): string {
   const idle = idleMinutes === null ? null : idleMinutes >= 60 ? `${idleMinutes / 60} hour${idleMinutes === 60 ? "" : "s"}` : `${idleMinutes} minute${idleMinutes === 1 ? "" : "s"}`;
   switch (reason) {
     case "manual":
-      return "Locked by you";
+      return "You locked Ultranote";
+    case "idle":
+      return idle ? `Locked automatically after ${idle} without use` : "Locked automatically";
     case "sleep":
       return "Locked when your computer went to sleep";
     case "screen":
@@ -37,8 +43,15 @@ function captionFor(reason: string | null, idleMinutes: number | null): string {
     case "panic":
       return "Locked";
     default:
-      return idle ? `Locked automatically after ${idle}` : "Your workspace is encrypted";
+      return "Your workspace is encrypted";
   }
+}
+
+/** A sentence for an unlock that failed for a reason other than a wrong password or a lockout. */
+function friendlyUnlockError(e: unknown): string {
+  const msg = errorMessage(e);
+  if (!msg) return "Ultranote couldn't unlock. Try again.";
+  return /^[a-z]/.test(msg) ? msg.charAt(0).toUpperCase() + msg.slice(1) : msg;
 }
 
 function useCountdown(untilMs: number): number {
@@ -98,6 +111,8 @@ export default function LockScreen() {
     if (wait === 0 && lockoutUntil) inputRef.current?.focus();
   }, [wait, lockoutUntil]);
 
+  const attempts = status?.failedAttempts ?? 0;
+
   const submit = async () => {
     if (!password || unlocking || wait > 0) return;
     setError(null);
@@ -110,7 +125,8 @@ export default function LockScreen() {
       const retry = isApiError(e) ? e.details?.retryAfterMs : undefined;
       if (retry) setLockoutUntil(Date.now() + retry);
       if (hasCode(e, "BAD_PASSWORD")) {
-        setError("Incorrect password");
+        const tries = Math.max(attempts + 1, useVault.getState().status?.failedAttempts ?? 0);
+        setError(tries >= 3 ? `That password isn't right. After 5 tries you'll wait a little before trying again.` : "That password isn't right. Try again.");
         setPassword("");
         setMarkStage("jolt");
         setMarkKey((n) => n + 1);
@@ -118,13 +134,12 @@ export default function LockScreen() {
       } else if (hasCode(e, "RATE_LIMITED")) {
         setError(null);
       } else {
-        setError(errorMessage(e) || "Couldn't unlock");
+        setError(friendlyUnlockError(e));
       }
       window.requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
-  const attempts = status?.failedAttempts ?? 0;
   const name = identity.workspaceName || "Ultranote";
 
   return (
@@ -196,7 +211,7 @@ export default function LockScreen() {
                     autoFocus
                     disabled={wait > 0}
                     error={error}
-                    helper={!error && attempts >= 3 && wait === 0 ? `${attempts} incorrect attempts. Waits get longer after 5.` : undefined}
+                    helper={!error && attempts >= 3 && wait === 0 ? `${attempts} wrong tries so far. After 5, each wait gets a little longer.` : undefined}
                   />
                 </m.div>
                 <m.div className="w-full" variants={rise(reduced)}>

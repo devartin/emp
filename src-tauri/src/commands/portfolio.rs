@@ -6,6 +6,7 @@
 //! rebalancing, dividends and realised gains. `portfolio_rebuild` writes the lots back into the *Lots* database.
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, LazyLock};
 
 use chrono::{Datelike, NaiveDate};
 use emp_finance::Decimal;
@@ -22,13 +23,15 @@ use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, State, Webview};
 
 use super::finance::{
-    InstanceDb, MoneyDto, amount, date, dec, fin_err, load_instance, local_today, norm, rel, text,
+    InstanceDb, MoneyDto, OptionKeys, amount, date, dec, fin_err, instance_layout, load_instance,
+    local_today, norm, option_cell, option_for_key, option_key, rel, text,
 };
 use super::job_sink;
 use crate::error::{ApiError, ApiResult};
 use crate::jobs::JobRef;
 use crate::state::{AppState, blocking};
 use crate::validate;
+use parking_lot::Mutex;
 
 /// Symbols valued per request.
 pub const MAX_SYMBOLS: usize = 200;
@@ -54,6 +57,100 @@ pub struct PortfolioData {
     pub lots_db: Option<InstanceDb>,
     /// Security row id → symbol key.
     pub symbol_of: HashMap<String, String>,
+    /// Investment accounts in database order.
+    pub accounts: Vec<PfAccount>,
+    /// Database ids by key (`inv_accounts`, `securities`, `investments`, `allocation`, `lots`).
+    pub db_ids: BTreeMap<String, String>,
+}
+
+/// An investment account.
+#[derive(Clone, Debug)]
+pub struct PfAccount {
+    /// Row id.
+    pub id: String,
+    /// Name.
+    pub name: String,
+    /// Account type key (`taxable`, `roth_ira`, `401k`, …).
+    pub kind: String,
+    /// Tax treatment.
+    pub treatment: TaxTreatment,
+}
+
+/// Investment account types.
+pub const IACCT_TYPES: OptionKeys = &[
+    ("401k", &["401(k)"]),
+    ("403b", &["403(b)"]),
+    ("ira", &["Traditional IRA", "IRA"]),
+    ("roth_ira", &["Roth IRA"]),
+    ("hsa", &["HSA"]),
+    ("taxable", &["Taxable brokerage", "Brokerage"]),
+    ("529", &["529 plan"]),
+    ("crypto", &[]),
+    ("pension", &[]),
+    ("other", &[]),
+];
+/// Tax treatments.
+pub const TREATMENTS: OptionKeys = &[
+    ("taxable", &[]),
+    ("deferred", &["Tax-deferred", "Tax deferred"]),
+    ("free", &["Tax-free", "Tax free"]),
+];
+/// Asset classes.
+pub const ASSET_CLASSES: OptionKeys = &[
+    ("us_equity", &["US stocks"]),
+    ("intl_developed", &["International"]),
+    ("emerging", &["Emerging markets"]),
+    ("bonds", &[]),
+    ("inflation_linked", &[]),
+    ("reit", &[]),
+    ("cash", &[]),
+    ("crypto", &[]),
+    ("other", &[]),
+];
+/// Investment transaction types.
+pub const INV_TYPES: OptionKeys = &[
+    ("buy", &[]),
+    ("sell", &[]),
+    ("dividend", &[]),
+    ("reinvest", &["Reinvested dividend"]),
+    ("fee", &[]),
+    ("split", &[]),
+    ("transfer_in", &[]),
+    ("transfer_out", &[]),
+    ("return_of_capital", &[]),
+    ("interest", &[]),
+];
+
+/// Revision fingerprint of a Portfolio instance (see `Ledger::load`).
+type PfKey = (Vec<(String, String, i64, i64)>, String);
+
+/// Cached Portfolio data by instance id.
+type PfCache = HashMap<String, (PfKey, Arc<PortfolioData>)>;
+
+/// Portfolio data built this session, by instance id; valid while the instance's databases are unchanged.
+static PORTFOLIOS: LazyLock<Mutex<PfCache>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Drops every cached Portfolio (vault lock).
+pub fn clear_portfolio_cache() {
+    PORTFOLIOS.lock().clear();
+}
+
+fn treatment_of_key(k: &str) -> TaxTreatment {
+    match k {
+        "deferred" => TaxTreatment::Deferred,
+        "free" => TaxTreatment::Free,
+        _ => TaxTreatment::Taxable,
+    }
+}
+
+/// The key of a tax treatment.
+#[must_use]
+pub fn treatment_key(t: TaxTreatment) -> &'static str {
+    match t {
+        TaxTreatment::Taxable => "taxable",
+        TaxTreatment::Deferred => "deferred",
+        TaxTreatment::Free => "free",
+    }
 }
 
 fn inv_type(name: &str) -> Option<InvTxnType> {
@@ -84,14 +181,51 @@ pub fn symbol_key(raw: &str) -> Option<String> {
 }
 
 impl PortfolioData {
-    /// Loads the Portfolio instance `instance_id`.
-    pub fn load(store: &Store, instance_id: &str) -> ApiResult<Self> {
-        let (_, mut dbs) = load_instance(store, instance_id)?;
+    /// The Portfolio instance `instance_id`, from the session cache while its databases are unchanged.
+    pub fn load(store: &Store, instance_id: &str) -> ApiResult<Arc<Self>> {
+        let lay = instance_layout(store, instance_id)?;
+        let currency = store
+            .vault_settings()
+            .map(|v| v.base_currency)
+            .unwrap_or_else(|_| "USD".into());
+        let key: PfKey = (
+            lay.dbs
+                .iter()
+                .map(|(k, s, _)| {
+                    (
+                        k.clone(),
+                        s.database.id.clone(),
+                        s.database.data_rev,
+                        s.database.schema_rev,
+                    )
+                })
+                .collect(),
+            currency.clone(),
+        );
+        if let Some((k, d)) = PORTFOLIOS.lock().get(instance_id)
+            && *k == key
+        {
+            return Ok(Arc::clone(d));
+        }
+        let (_, dbs) = load_instance(store, instance_id)?;
+        let d = Arc::new(Self::build(dbs, currency));
+        let mut cache = PORTFOLIOS.lock();
+        if cache.len() >= 8 && !cache.contains_key(instance_id) {
+            cache.clear();
+        }
+        cache.insert(instance_id.to_owned(), (key, Arc::clone(&d)));
+        Ok(d)
+    }
+
+    /// Builds the Portfolio inputs from loaded databases.
+    #[must_use]
+    pub fn build(mut dbs: BTreeMap<String, InstanceDb>, currency: String) -> Self {
         let mut p = PortfolioData {
-            currency: store
-                .vault_settings()
-                .map(|v| v.base_currency)
-                .unwrap_or_else(|_| "USD".into()),
+            currency,
+            db_ids: dbs
+                .iter()
+                .map(|(k, d)| (k.clone(), d.id().to_owned()))
+                .collect(),
             ..PortfolioData::default()
         };
         if let Some(d) = dbs.get("securities") {
@@ -120,12 +254,20 @@ impl PortfolioData {
             let tt = d.keyed("tax_treatment", &["Tax treatment"]);
             let ty = d.keyed("type", &["Type"]);
             for r in &d.rows {
-                let t = d
-                    .option_name(r, tt)
-                    .map(|n| treatment(Some(&n)))
+                let t = option_key(r, tt, TREATMENTS)
+                    .map(|k| treatment_of_key(&k))
+                    .or_else(|| d.option_name(r, tt).map(|n| treatment(Some(&n))))
                     .or_else(|| treatment_of_type(d.option_name(r, ty).as_deref()))
                     .unwrap_or_default();
                 p.treatment.insert(r.id.clone(), t);
+                p.accounts.push(PfAccount {
+                    id: r.id.clone(),
+                    name: Some(d.title(r))
+                        .filter(|n| !n.trim().is_empty())
+                        .unwrap_or_else(|| "Account".into()),
+                    kind: option_key(r, ty, IACCT_TYPES).unwrap_or_else(|| "taxable".into()),
+                    treatment: t,
+                });
             }
         }
         if let Some(d) = dbs.get("investments") {
@@ -199,7 +341,7 @@ impl PortfolioData {
             }
         }
         p.lots_db = dbs.remove("lots");
-        Ok(p)
+        p
     }
 
     /// Rebuilds the lot book (FIFO, US long-term threshold).
@@ -250,7 +392,7 @@ async fn load_with_quotes(
     app: &AppHandle,
     instance_id: &str,
 ) -> ApiResult<(
-    PortfolioData,
+    Arc<PortfolioData>,
     LotBook,
     HashMap<String, PriceQuote>,
     NaiveDate,
@@ -773,6 +915,9 @@ pub struct RebalanceReq {
     allow_taxable_sells: bool,
     min_trade: String,
     fractional: bool,
+    /// The investment account that receives the new cash (default: the first taxable account, else the first).
+    #[serde(default)]
+    cash_account_id: Option<String>,
 }
 
 /// `portfolio_rebalance_plan({ instanceId, newCash, allowTaxableSells, minTrade, fractional }) → { trades, after,
@@ -782,7 +927,23 @@ pub async fn portfolio_rebalance_plan(app: AppHandle, req: RebalanceReq) -> ApiR
     validate::id("instanceId", &req.instance_id)?;
     let new_cash = dec("newCash", &req.new_cash)?;
     let min_trade = dec("minTrade", &req.min_trade)?;
+    validate::opt_id("cashAccountId", req.cash_account_id.as_deref())?;
     let (data, book, prices, _, _) = load_with_quotes(&app, &req.instance_id).await?;
+    let cash_account = match &req.cash_account_id {
+        Some(id) if data.accounts.iter().any(|a| &a.id == id) => Some(id.clone()),
+        Some(_) => {
+            return Err(ApiError::invalid(
+                "cashAccountId",
+                "unknown investment account",
+            ));
+        }
+        None => data
+            .accounts
+            .iter()
+            .find(|a| a.treatment == TaxTreatment::Taxable)
+            .or(data.accounts.first())
+            .map(|a| a.id.clone()),
+    };
     let mut by: BTreeMap<(String, String), Vec<emp_finance::portfolio::lots::Lot>> =
         BTreeMap::new();
     for l in &book.lots {
@@ -793,7 +954,13 @@ pub async fn portfolio_rebalance_plan(app: AppHandle, req: RebalanceReq) -> ApiR
     let positions: Vec<_> = by
         .into_iter()
         .filter_map(|((account_id, symbol), lots)| {
-            let price = prices.get(&symbol).map(|p| p.price)?;
+            // Without a quote (offline), a position is valued at its average cost, as `portfolio_summary` does.
+            let qty: Decimal = lots.iter().map(|l| l.qty).sum();
+            let basis: Decimal = lots.iter().map(|l| l.basis).sum();
+            let price = prices
+                .get(&symbol)
+                .map(|p| p.price)
+                .or_else(|| (qty > Decimal::ZERO).then(|| basis / qty))?;
             Some(emp_finance::portfolio::rebalance::RebalancePosition {
                 asset_class: data
                     .securities
@@ -809,7 +976,7 @@ pub async fn portfolio_rebalance_plan(app: AppHandle, req: RebalanceReq) -> ApiR
         .collect();
     let opts = emp_finance::portfolio::rebalance::RebalanceOptions {
         new_cash,
-        cash_account: None,
+        cash_account,
         allow_taxable_sells: req.allow_taxable_sells,
         min_trade,
         fractional: req.fractional,
@@ -894,6 +1061,535 @@ pub async fn portfolio_realized(app: AppHandle, req: YearReq) -> ApiResult<Value
             })
             .collect();
         Ok(json!({ "lots": lots, "totals": { "short": short.round_dp(2).to_string(), "long": long.round_dp(2).to_string() } }))
+    })
+    .await
+}
+
+// ───────────────────────────────────────────────────────────────────────────── book view and trades (ULTRANOTE-1.0 §5)
+
+/// Investment transactions listed by [`portfolio_book`] (newest first).
+pub const MAX_BOOK_TXNS: usize = 500;
+
+/// `PortfolioBook.dbs`.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookDbsDto {
+    accounts: Option<String>,
+    securities: Option<String>,
+    transactions: Option<String>,
+    targets: Option<String>,
+}
+
+/// An investment account of the book.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookAccountDto {
+    id: String,
+    name: String,
+    #[serde(rename = "type")]
+    kind: String,
+    tax: &'static str,
+}
+
+/// A security of the book.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookSecurityDto {
+    id: String,
+    symbol: String,
+    name: String,
+    asset_class: String,
+}
+
+/// An open tax lot.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookLotDto {
+    symbol: String,
+    account_id: String,
+    account_name: String,
+    tax_treatment: &'static str,
+    acquired: String,
+    qty: String,
+    cost_per_unit: String,
+    basis: String,
+}
+
+/// A dividend or interest payment.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookIncomeDto {
+    id: String,
+    date: String,
+    symbol: String,
+    account_id: String,
+    amount: String,
+    kind: String,
+    reinvested: bool,
+    tax_treatment: &'static str,
+}
+
+/// An investment transaction.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookTxnDto {
+    id: String,
+    date: String,
+    #[serde(rename = "type")]
+    kind: String,
+    symbol: String,
+    name: String,
+    account_id: String,
+    qty: Option<String>,
+    price: Option<String>,
+    amount: Option<String>,
+    fees: String,
+}
+
+/// `portfolio_book` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookDto {
+    currency: String,
+    dbs: BookDbsDto,
+    accounts: Vec<BookAccountDto>,
+    securities: Vec<BookSecurityDto>,
+    lots: Vec<BookLotDto>,
+    income: Vec<BookIncomeDto>,
+    txns: Vec<BookTxnDto>,
+    warnings: Vec<String>,
+}
+
+fn kind_key(k: InvTxnType) -> String {
+    serde_json::to_value(k)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
+fn dp(d: Decimal, places: u32) -> String {
+    d.round_dp(places).normalize().to_string()
+}
+
+/// Money with exactly two decimals ("2000.00"), as the browser mock's `centsToStr`.
+fn m2(d: Decimal) -> String {
+    let mut d = d.round_dp(2);
+    d.rescale(2);
+    d.to_string()
+}
+
+/// `portfolio_book` over loaded data (pure): accounts, securities, open FIFO lots, income and the latest
+/// transactions — what the Holdings, holding page, rebalance and Taxes views read instead of whole databases.
+#[must_use]
+pub fn book_view(data: &PortfolioData) -> BookDto {
+    let book = data.book();
+    let acct: HashMap<&str, &PfAccount> =
+        data.accounts.iter().map(|a| (a.id.as_str(), a)).collect();
+    let tax = |id: &str| treatment_key(data.treatment.get(id).copied().unwrap_or_default());
+    let sec_name = |k: &str| {
+        data.securities
+            .get(k)
+            .map(|s| s.name.clone())
+            .unwrap_or_default()
+    };
+    let mut securities: Vec<BookSecurityDto> = data
+        .symbol_of
+        .iter()
+        .filter_map(|(id, key)| {
+            let s = data.securities.get(key)?;
+            Some(BookSecurityDto {
+                id: id.clone(),
+                symbol: key.clone(),
+                name: s.name.clone(),
+                asset_class: s.asset_class.clone(),
+            })
+        })
+        .collect();
+    securities.sort_by(|a, b| a.symbol.cmp(&b.symbol));
+    BookDto {
+        currency: data.currency.clone(),
+        dbs: BookDbsDto {
+            accounts: data.db_ids.get("inv_accounts").cloned(),
+            securities: data.db_ids.get("securities").cloned(),
+            transactions: data.db_ids.get("investments").cloned(),
+            targets: data.db_ids.get("allocation").cloned(),
+        },
+        accounts: data
+            .accounts
+            .iter()
+            .map(|a| BookAccountDto {
+                id: a.id.clone(),
+                name: a.name.clone(),
+                kind: a.kind.clone(),
+                tax: treatment_key(a.treatment),
+            })
+            .collect(),
+        securities,
+        lots: book
+            .lots
+            .iter()
+            .filter(|l| l.qty > Decimal::ZERO)
+            .map(|l| BookLotDto {
+                symbol: l.security.clone(),
+                account_id: l.account_id.clone(),
+                account_name: acct
+                    .get(l.account_id.as_str())
+                    .map(|a| a.name.clone())
+                    .unwrap_or_default(),
+                tax_treatment: tax(&l.account_id),
+                acquired: l.acquired.to_string(),
+                qty: dp(l.qty, 8),
+                cost_per_unit: dp(l.unit_basis(), 4),
+                basis: m2(l.basis),
+            })
+            .collect(),
+        income: book
+            .income
+            .iter()
+            .map(|i| BookIncomeDto {
+                id: i.txn_id.clone(),
+                date: i.date.to_string(),
+                symbol: i.security.clone(),
+                account_id: i.account_id.clone(),
+                amount: m2(i.amount),
+                kind: kind_key(i.kind),
+                reinvested: i.reinvested,
+                tax_treatment: tax(&i.account_id),
+            })
+            .collect(),
+        txns: data
+            .txns
+            .iter()
+            .rev()
+            .take(MAX_BOOK_TXNS)
+            .map(|t| BookTxnDto {
+                id: t.id.clone(),
+                date: t.date.to_string(),
+                kind: kind_key(t.kind),
+                symbol: t.security.clone(),
+                name: sec_name(&t.security),
+                account_id: t.account_id.clone(),
+                qty: t.qty.or(t.ratio).map(|q| dp(q, 8)),
+                price: t.price.map(|p| dp(p, 4)),
+                amount: t.amount.map(m2),
+                fees: m2(t.fees),
+            })
+            .collect(),
+        warnings: book.warnings,
+    }
+}
+
+/// `portfolio_book({ instanceId }) → PortfolioBook`.
+#[tauri::command]
+pub async fn portfolio_book(app: AppHandle, req: InstanceReq) -> ApiResult<BookDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        let data = PortfolioData::load(&store, &req.instance_id)?;
+        Ok(book_view(&data))
+    })
+    .await
+}
+
+/// `portfolio_trade` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TradeReq {
+    instance_id: String,
+    date: String,
+    /// `buy`, `sell`, `dividend`, `interest`, `reinvest` or `fee`.
+    #[serde(rename = "type")]
+    kind: String,
+    /// Ticker (`VTI`, `VTI:ARCX`); optional for interest and fees.
+    #[serde(default)]
+    symbol: Option<String>,
+    /// Name for a new security.
+    #[serde(default)]
+    name: Option<String>,
+    /// Asset-class key for a new security (default `us_equity`).
+    #[serde(default)]
+    asset_class: Option<String>,
+    /// Investment account (default: the first one, created as "Brokerage" when there is none).
+    #[serde(default)]
+    account_id: Option<String>,
+    #[serde(default)]
+    qty: Option<String>,
+    #[serde(default)]
+    price: Option<String>,
+    /// Cash amount (dividends, interest, fees; trades default to quantity × price).
+    #[serde(default)]
+    amount: Option<String>,
+    #[serde(default)]
+    fees: Option<String>,
+}
+
+/// `portfolio_trade` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TradeDto {
+    /// The transaction row.
+    pub id: String,
+    /// The account it went into.
+    pub account_id: String,
+    /// The security row (none for interest and fees without a ticker).
+    pub security_id: Option<String>,
+}
+
+fn money_cell(d: Decimal, cur: &str) -> CellValue {
+    CellValue::Money {
+        v: Some(d.round_dp(4).normalize().to_string()),
+        cur: cur.to_owned(),
+    }
+}
+
+/// `portfolio_trade` (testable body).
+pub fn trade(store: &Store, req: &TradeReq) -> ApiResult<TradeDto> {
+    let kind = req.kind.as_str();
+    if !["buy", "sell", "dividend", "interest", "reinvest", "fee"].contains(&kind) {
+        return Err(ApiError::invalid(
+            "type",
+            "must be buy, sell, dividend, interest, reinvest or fee",
+        ));
+    }
+    let day = validate::ymd("date", &req.date)?;
+    let opt_dec = |field: &str, v: &Option<String>| -> ApiResult<Option<Decimal>> {
+        v.as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| dec(field, s))
+            .transpose()
+    };
+    let qty = opt_dec("qty", &req.qty)?;
+    let price = opt_dec("price", &req.price)?;
+    let cash = opt_dec("amount", &req.amount)?;
+    let fees = opt_dec("fees", &req.fees)?.unwrap_or_default();
+    if fees < Decimal::ZERO {
+        return Err(ApiError::invalid("fees", "must not be negative"));
+    }
+    let trades = matches!(kind, "buy" | "sell" | "reinvest");
+    if trades && !qty.is_some_and(|q| q > Decimal::ZERO) {
+        return Err(ApiError::invalid("qty", "enter how many shares"));
+    }
+    if trades && !price.is_some_and(|p| p >= Decimal::ZERO) {
+        return Err(ApiError::invalid("price", "enter the price per share"));
+    }
+    if !trades && !cash.is_some_and(|a| a > Decimal::ZERO) {
+        return Err(ApiError::invalid("amount", "enter the amount"));
+    }
+    let symbol = req
+        .symbol
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let key = match symbol {
+        Some(s) => {
+            Some(symbol_key(s).ok_or_else(|| ApiError::invalid("symbol", "not a ticker symbol"))?)
+        }
+        None if matches!(kind, "interest" | "fee") => None,
+        None => return Err(ApiError::invalid("symbol", "enter a ticker symbol")),
+    };
+    let data = PortfolioData::load(store, &req.instance_id)?;
+    let (_, dbs) = load_instance(store, &req.instance_id)?;
+    let cur = data.currency.clone();
+    let inv = dbs
+        .get("investments")
+        .ok_or_else(|| ApiError::not_found("investment transactions database"))?;
+    // The account.
+    let account_id = match &req.account_id {
+        Some(id) => {
+            if !data.accounts.iter().any(|a| &a.id == id) {
+                return Err(ApiError::invalid("accountId", "unknown investment account"));
+            }
+            id.clone()
+        }
+        None => match data.accounts.first() {
+            Some(a) => a.id.clone(),
+            None => {
+                let d = dbs
+                    .get("inv_accounts")
+                    .ok_or_else(|| ApiError::not_found("investment accounts database"))?;
+                let mut v = BTreeMap::new();
+                v.insert(d.title_id().to_owned(), CellValue::text("Brokerage"));
+                if let Some(p) = d.keyed("type", &["Type"])
+                    && let Some(o) = option_for_key(p, "taxable", IACCT_TYPES)
+                {
+                    v.insert(p.id.clone(), option_cell(p, o));
+                }
+                if let Some(p) = d.keyed("tax_treatment", &["Tax treatment"])
+                    && let Some(o) = option_for_key(p, "taxable", TREATMENTS)
+                {
+                    v.insert(p.id.clone(), option_cell(p, o));
+                }
+                store
+                    .db_rows_insert_bulk(d.id(), vec![v], None)?
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| ApiError::internal("account not created"))?
+            }
+        },
+    };
+    // Selling more than is held would leave the lots inconsistent.
+    if kind == "sell"
+        && let (Some(k), Some(q)) = (&key, qty)
+    {
+        let held = data
+            .book()
+            .positions()
+            .get(&(account_id.clone(), k.clone()))
+            .copied()
+            .unwrap_or_default();
+        if q > held {
+            return Err(ApiError::invalid(
+                "qty",
+                format!("this account holds {} shares", held.normalize()),
+            ));
+        }
+    }
+    // The security.
+    let security_id = match &key {
+        None => None,
+        Some(k) => match data.symbol_of.iter().find(|(_, v)| *v == k) {
+            Some((id, _)) => Some(id.clone()),
+            None => {
+                let d = dbs
+                    .get("securities")
+                    .ok_or_else(|| ApiError::not_found("securities database"))?;
+                let raw = symbol.unwrap_or_default().to_uppercase();
+                let mut v = BTreeMap::new();
+                let name = req
+                    .name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or(&raw)
+                    .to_owned();
+                validate::title("name", &name)?;
+                v.insert(d.title_id().to_owned(), CellValue::text(&name));
+                if let Some(p) = d.col_id("sec.ticker", &["Ticker"]) {
+                    v.insert(
+                        p,
+                        CellValue::Ticker {
+                            v: Some(raw.clone()),
+                        },
+                    );
+                }
+                let class = req.asset_class.as_deref().unwrap_or("us_equity");
+                if let Some(p) = d.col("sec.class", &["Asset class"])
+                    && let Some(o) = option_for_key(p, class, ASSET_CLASSES)
+                {
+                    v.insert(p.id.clone(), option_cell(p, o));
+                }
+                store
+                    .db_rows_insert_bulk(d.id(), vec![v], None)?
+                    .into_iter()
+                    .next()
+            }
+        },
+    };
+    let c = |role: &str, n: &str| inv.col_id(role, &[n]);
+    let mut v = BTreeMap::new();
+    let label = key
+        .as_deref()
+        .map(|k| k.split(':').next().unwrap_or(k).to_owned())
+        .unwrap_or_else(|| "cash".into());
+    let verb = match kind {
+        "buy" => "Buy",
+        "sell" => "Sell",
+        "dividend" => "Dividend",
+        "interest" => "Interest",
+        "reinvest" => "Reinvest",
+        _ => "Fee",
+    };
+    v.insert(
+        inv.title_id().to_owned(),
+        CellValue::text(&format!("{verb} {label}")),
+    );
+    if let Some(p) = c("inv.date", "Date") {
+        v.insert(
+            p,
+            CellValue::Date {
+                v: Some(emp_store::dbmodel::DateValue {
+                    start: day.to_string(),
+                    end: None,
+                    time: false,
+                    tz: None,
+                }),
+            },
+        );
+    }
+    if let Some(p) = inv.col("inv.type", &["Type"]) {
+        let o = option_for_key(p, kind, INV_TYPES)
+            .ok_or_else(|| ApiError::invalid("type", "the Type column has no option for this"))?;
+        v.insert(p.id.clone(), option_cell(p, o));
+    }
+    if let (Some(p), Some(sid)) = (c("inv.security", "Security"), &security_id) {
+        v.insert(
+            p,
+            CellValue::Relation {
+                v: vec![sid.clone()],
+            },
+        );
+    }
+    if let Some(p) = c("inv.account", "Account") {
+        v.insert(
+            p,
+            CellValue::Relation {
+                v: vec![account_id.clone()],
+            },
+        );
+    }
+    if let (Some(p), Some(q)) = (c("inv.qty", "Quantity"), qty) {
+        v.insert(p, CellValue::Number { v: Some(to_f64(q)) });
+    }
+    if let (Some(p), Some(x)) = (c("inv.price", "Price"), price) {
+        v.insert(p, money_cell(x, &cur));
+    }
+    let gross = if trades {
+        cash.unwrap_or_else(|| qty.unwrap_or_default() * price.unwrap_or_default())
+    } else {
+        cash.unwrap_or_default()
+    };
+    if let Some(p) = c("inv.amount", "Amount") {
+        v.insert(p, money_cell(gross, &cur));
+    }
+    if let Some(p) = c("inv.fees", "Fees") {
+        v.insert(p, money_cell(fees, &cur));
+    }
+    let id = store
+        .db_rows_insert_bulk(inv.id(), vec![v], None)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::internal("transaction not created"))?;
+    // Keep the Lots database in step with the transactions.
+    let data = PortfolioData::load(store, &req.instance_id)?;
+    if let Some(db) = &data.lots_db {
+        let book = data.book();
+        write_lots(store, db, &data, &book, local_today(store))?;
+    }
+    Ok(TradeDto {
+        id,
+        account_id,
+        security_id,
+    })
+}
+
+/// `portfolio_trade({ instanceId, date, type, symbol?, name?, assetClass?, accountId?, qty?, price?, amount?, fees? })
+/// → { id, accountId, securityId }`: records a buy, sell, dividend, interest, reinvestment or fee (adding the
+/// security, and a "Brokerage" account when there is none) and refreshes the Lots database.
+#[tauri::command]
+pub async fn portfolio_trade(app: AppHandle, req: TradeReq) -> ApiResult<TradeDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::opt_id("accountId", req.account_id.as_deref())?;
+    if let Some(s) = &req.symbol {
+        validate::bounded("symbol", s, 40)?;
+    }
+    if let Some(c) = &req.asset_class
+        && !ASSET_CLASSES.iter().any(|(k, _)| k == c)
+    {
+        return Err(ApiError::invalid("assetClass", "unknown asset class"));
+    }
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        trade(&store, &req)
     })
     .await
 }
@@ -1026,5 +1722,121 @@ mod tests {
                 book.lots.len()
             );
         }
+    }
+
+    fn empty_portfolio(store: &Store) -> String {
+        let ws = store.workspace_list().unwrap().remove(0).id;
+        let req: emp_store::LifeappInstall = serde_json::from_value(json!({
+            "appId": "portfolio", "answers": {}, "mode": "quick", "disabledKeys": [], "workspaceId": ws, "sampleData": false
+        }))
+        .unwrap();
+        store
+            .lifeapp_install(&req, &emp_store::NoProgress)
+            .unwrap()
+            .instance_id
+    }
+
+    fn trade_req(v: Value) -> TradeReq {
+        serde_json::from_value(v).unwrap()
+    }
+
+    #[test]
+    fn trades_build_lots_income_and_realised_gains() {
+        let (_dir, store) = super::super::finance::test_support::temp_store();
+        let inst = empty_portfolio(&store);
+        let buy = trade(
+            &store,
+            &trade_req(json!({ "instanceId": inst, "date": "2026-01-15", "type": "buy", "symbol": "VTI", "name": "Total market", "qty": "10", "price": "200" })),
+        )
+        .unwrap();
+        assert!(buy.security_id.is_some());
+        let b = book_view(&PortfolioData::load(&store, &inst).unwrap());
+        assert_eq!(b.lots.len(), 1);
+        assert_eq!(
+            (
+                b.lots[0].qty.as_str(),
+                b.lots[0].basis.as_str(),
+                b.lots[0].cost_per_unit.as_str()
+            ),
+            ("10", "2000.00", "200")
+        );
+        assert_eq!(b.securities[0].asset_class, "US equity");
+        assert!(b.accounts.iter().any(|a| a.id == buy.account_id));
+
+        trade(&store, &trade_req(json!({ "instanceId": inst, "date": "2026-03-20", "type": "dividend", "symbol": "VTI", "amount": "30", "accountId": buy.account_id }))).unwrap();
+        trade(&store, &trade_req(json!({ "instanceId": inst, "date": "2026-06-15", "type": "sell", "symbol": "VTI", "qty": "4", "price": "250", "accountId": buy.account_id }))).unwrap();
+        let err = trade(&store, &trade_req(json!({ "instanceId": inst, "date": "2026-07-01", "type": "sell", "symbol": "VTI", "qty": "7", "price": "250", "accountId": buy.account_id }))).unwrap_err();
+        assert!(err.message.contains("holds 6"), "{}", err.message);
+        assert!(trade(&store, &trade_req(json!({ "instanceId": inst, "date": "2026-07-01", "type": "buy", "symbol": "VTI", "price": "250" }))).is_err(), "a buy needs shares");
+
+        let data = PortfolioData::load(&store, &inst).unwrap();
+        let b = book_view(&data);
+        assert_eq!(
+            (b.lots[0].qty.as_str(), b.lots[0].basis.as_str()),
+            ("6", "1200.00")
+        );
+        assert_eq!(b.income.len(), 1);
+        assert_eq!(
+            (b.income[0].amount.as_str(), b.income[0].tax_treatment),
+            ("30.00", "taxable")
+        );
+        assert_eq!(b.txns.len(), 3);
+        assert_eq!(b.txns[0].kind, "sell", "newest first");
+        let book = data.book();
+        assert_eq!(book.realized.len(), 1);
+        assert_eq!(book.realized[0].gain, Decimal::from(200), "4 × (250 − 200)");
+        assert_eq!(
+            book.realized[0].term,
+            emp_finance::portfolio::lots::Term::Short
+        );
+        // The Lots database follows the trades.
+        let lots_db = data.lots_db.as_ref().unwrap();
+        assert_eq!(
+            super::super::db::all_rows(&store, lots_db.id(), None)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn xirr_and_twr_match_hand_calculations() {
+        // 10 shares at 100 on 2025-01-01; 10 more at 110 on 2025-07-02 (value had risen 10%); 121 a share on
+        // 2026-01-01. Each half-period gains 10%, so TWR = 1.1 × 1.1 − 1 = 21%.
+        let txns = vec![
+            txn("1", "2025-01-01", InvTxnType::Buy, "10", "100"),
+            txn("2", "2025-07-02", InvTxnType::Buy, "10", "110"),
+        ];
+        let flows = emp_finance::portfolio::perf::contributions(&txns);
+        assert_eq!(
+            flows,
+            vec![(d("2025-01-01"), 1000.0), (d("2025-07-02"), 1100.0)]
+        );
+        let values = vec![
+            (d("2025-01-01"), 1000.0),
+            (d("2025-07-02"), 2200.0),
+            (d("2026-01-01"), 2420.0),
+        ];
+        let twr = emp_finance::portfolio::perf::twr(&values, &flows);
+        assert!(
+            (twr.twr.last().unwrap() - 0.21).abs() < 1e-9,
+            "{:?}",
+            twr.twr
+        );
+        // XIRR: the rate r with −1000 − 1100/(1+r)^(182/365) + 2420/(1+r)^(365/365) = 0.
+        let r = emp_finance::portfolio::perf::portfolio_xirr(&flows, None, 2420.0, d("2026-01-01"))
+            .unwrap();
+        let npv = -1000.0 - 1100.0 / (1.0 + r).powf(182.0 / 365.0) + 2420.0 / (1.0 + r);
+        assert!(npv.abs() < 1e-6, "r = {r}, npv = {npv}");
+        assert!((r - 0.2098).abs() < 0.0005, "r = {r}");
+        // One buy held a year at +10%: XIRR = TWR = 10%.
+        let one = emp_finance::portfolio::perf::portfolio_xirr(
+            &[(d("2025-01-01"), 1000.0)],
+            None,
+            1100.0,
+            d("2026-01-01"),
+        )
+        .unwrap();
+        assert!((one - 0.10).abs() < 1e-6, "{one}");
     }
 }

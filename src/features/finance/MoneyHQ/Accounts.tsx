@@ -3,7 +3,8 @@
  * utilisation, APRs and reconciliation against a statement balance. Investment accounts are valued by Portfolio
  * when it is installed (§16.8). Net worth history lives at the foot of this tab (PROGRAMME-v3 K4).
  */
-import { ExternalLink, Scale } from "lucide-react";
+import { appName } from "@/features/lifeapps/identity";
+import { ExternalLink, Plus, Scale } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import type { Id } from "@/backend/types";
 import { Sparkline } from "@/charts/Sparkline";
@@ -19,11 +20,12 @@ import { daysBetween, fmtMoney, fmtPct, num, toMoney, todayIso, fmtWhole } from 
 import { Figure } from "../shared/Figure";
 import { baseCurrency } from "../shared/currency";
 import { ACCOUNT_GLYPH, Glyph, Section } from "../shared/ui";
-import { ACCOUNT_TYPE_LABEL, DEBT_TYPES, useLedgerCtx, type Account } from "./ledger";
+import { ACCOUNT_TYPE_LABEL, DEBT_TYPES, sumCents, useLedgerCtx, type Account } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 
 const NetWorth = lazy(() => import("./NetWorth"));
 const ReconcileDialog = lazy(() => import("./ReconcileDialog"));
+const AddAccount = lazy(() => import("./AddAccount"));
 
 const GROUPS: { key: string; title: string; types: string[] }[] = [
   { key: "cash", title: "Cash", types: ["checking", "savings", "cash"] },
@@ -34,30 +36,12 @@ const GROUPS: { key: string; title: string; types: string[] }[] = [
 
 export default function Accounts() {
   const l = useLedgerCtx();
-  const { reloadOverview, overview } = useMoney();
+  const { reloadOverview, overview, instanceId } = useMoney();
   const pfInstance = useWorkspace((s) => s.lifeapps.find((i) => i.appId === "portfolio")?.id);
   const [reconciling, setReconciling] = useState<Account | null>(null);
-  const history = useMemo(() => {
-    // 90-day daily balances per account, walking back from today's balance.
-    const today = todayIso();
-    const out = new Map<Id, number[]>();
-    for (const a of l.accounts) {
-      const days: number[] = [];
-      let bal = a.balance;
-      const txs = l.txns.filter((t) => t.accountId === a.id);
-      let k = 0;
-      for (let d = 0; d < 90; d++) {
-        const day = shift(today, -d);
-        days.push(bal);
-        while (k < txs.length && txs[k].date >= day) {
-          bal -= txs[k].amount;
-          k++;
-        }
-      }
-      out.set(a.id, days.reverse());
-    }
-    return out;
-  }, [l.accounts, l.txns]);
+  const [adding, setAdding] = useState(false);
+  // 90-day daily balances per account, computed by the backend (`finance_ledger`).
+  const history = useMemo(() => new Map<Id, number[]>(l.accounts.map((a) => [a.id, a.history])), [l.accounts]);
   // One source of truth: the tiles are the backend's net-worth figures (`finance_overview`), never re-derived here.
   // Investment accounts are replaced by Portfolio's market value when the backend counted it (`investments`), shown
   // once on the first open investment account — the same rule the backend applies (see FinanceOverview.netWorth).
@@ -86,11 +70,16 @@ export default function Accounts() {
         <SummaryTile id="networth" label="Net worth" value={netWorth} currency={base} emphasis inputs={nwInputs} note={foreignNote} />
       </div>
       {foreignNote ? <p className="text-caption text-tertiary -mt-2">{foreignNote}</p> : null}
+      <div className="flex items-center justify-end -mb-2">
+        <Button size="sm" variant="secondary" icon={Plus} onClick={() => setAdding(true)}>
+          Add account
+        </Button>
+      </div>
       <div className="flex flex-col gap-4">
         {GROUPS.map((g) => {
           const list = l.accounts.filter((a) => g.types.includes(a.type) && !a.closed);
           if (!list.length) return null;
-          const total = list.reduce((s, a) => s + (valueOf(a) ?? 0), 0);
+          const total = sumCents(list.map((a) => valueOf(a) ?? 0));
           return (
             <Section key={g.key} title={g.title} actions={<span className="text-body-sm font-semibold tabular"><Sensitive>{fmtMoney(total)}</Sensitive></span>} pad={false}>
               <div className="pb-2">
@@ -106,9 +95,9 @@ export default function Accounts() {
           <Section title="Investments" actions={<span className="text-body-sm font-semibold tabular"><Sensitive>{fmtMoney(pfValue)}</Sensitive></span>} pad={false}>
             <div className="fh-acct">
               <Glyph name={ACCOUNT_GLYPH.investment} color="blue" size={36} />
-              <div className="min-w-0 flex-1 text-body font-medium">Portfolio</div>
+              <div className="min-w-0 flex-1 text-body font-medium">{appName("portfolio")}</div>
               <Button size="xs" variant="ghost" iconRight={ExternalLink} onClick={() => pfInstance && navigate({ t: "app", instanceId: pfInstance })}>
-                Valued by Portfolio
+                Valued by {appName("portfolio")}
               </Button>
               <Amount value={toMoney(pfValue)} className="text-body font-semibold w-[130px]" align="end" />
             </div>
@@ -120,6 +109,11 @@ export default function Accounts() {
           <NetWorth />
         </Suspense>
       </div>
+      {adding ? (
+        <Suspense fallback={null}>
+          <AddAccount instanceId={instanceId} onClose={() => setAdding(false)} onCreated={() => { l.reload(); reloadOverview(); }} />
+        </Suspense>
+      ) : null}
       {reconciling ? (
         <Suspense fallback={null}>
           <ReconcileDialog
@@ -135,12 +129,6 @@ export default function Accounts() {
       ) : null}
     </div>
   );
-}
-
-function shift(day: string, n: number): string {
-  const d = new Date(`${day}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function SummaryTile({ id, label, value, currency, emphasis, inputs, note }: { id: "assets" | "debts" | "networth"; label: string; value: number | null; currency: string; emphasis?: boolean; inputs?: { label: string; value: string }[]; note?: string }) {
@@ -198,7 +186,7 @@ function AccountRow({ a, value, spark, viaPortfolio, pfInstance, onReconcile }: 
           </Tooltip>
         ) : viaPortfolio ? (
           <Button size="xs" variant="ghost" iconRight={ExternalLink} onClick={() => pfInstance && navigate({ t: "app", instanceId: pfInstance })}>
-            Valued by Portfolio
+            Valued by {appName("portfolio")}
           </Button>
         ) : a.onBudget ? (
           <span className="text-caption text-tertiary" style={{ fontWeight: 400 }}>

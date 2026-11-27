@@ -187,6 +187,9 @@ pub struct InstancePayload {
     /// Pack used for `pack.*`.
     #[serde(default)]
     pub pack_id: Option<String>,
+    /// Vault-open upgrade level applied ([`crate::lifeapps::upkeep::UPGRADE_LEVEL`]; 0 = installed before 1.0).
+    #[serde(default)]
+    pub upgraded: u32,
 }
 
 fn quick() -> Mode {
@@ -235,16 +238,20 @@ fn loc(id: &str, rev: i64) -> RecordLoc {
     )
 }
 
-struct InstanceRow {
-    id: String,
-    workspace_id: String,
-    app_id: String,
-    installed_at: i64,
-    rev: i64,
-    payload: InstancePayload,
+pub(crate) struct InstanceRow {
+    pub(crate) id: String,
+    pub(crate) workspace_id: String,
+    pub(crate) app_id: String,
+    pub(crate) installed_at: i64,
+    pub(crate) rev: i64,
+    pub(crate) payload: InstancePayload,
 }
 
-fn load_instance(conn: &Connection, codec: &Codec, id: &str) -> Result<Option<InstanceRow>> {
+pub(crate) fn load_instance(
+    conn: &Connection,
+    codec: &Codec,
+    id: &str,
+) -> Result<Option<InstanceRow>> {
     let raw: Option<(String, String, i64, i64, i64, Vec<u8>)> = conn
         .prepare_cached("SELECT workspace_id, app_id, installed_at, rev, enc, payload FROM lifeapp_instances WHERE id = ?1")?
         .query_row([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))
@@ -262,7 +269,11 @@ fn load_instance(conn: &Connection, codec: &Codec, id: &str) -> Result<Option<In
     .transpose()
 }
 
-fn list_instances(conn: &Connection, codec: &Codec, ws: Option<&str>) -> Result<Vec<InstanceRow>> {
+pub(crate) fn list_instances(
+    conn: &Connection,
+    codec: &Codec,
+    ws: Option<&str>,
+) -> Result<Vec<InstanceRow>> {
     let mut st = conn.prepare_cached(
         "SELECT id, workspace_id FROM lifeapp_instances ORDER BY installed_at, id",
     )?;
@@ -283,7 +294,7 @@ fn list_instances(conn: &Connection, codec: &Codec, ws: Option<&str>) -> Result<
     Ok(out)
 }
 
-fn save_instance(
+pub(crate) fn save_instance(
     tx: &Connection,
     codec: &Codec,
     row: &InstanceRow,
@@ -298,7 +309,7 @@ fn save_instance(
     Ok(())
 }
 
-fn manifest_of(app_id: &str) -> Result<&'static LifeAppManifest> {
+pub(crate) fn manifest_of(app_id: &str) -> Result<&'static LifeAppManifest> {
     la::manifest(app_id).ok_or(StoreError::NotFound("life app"))
 }
 
@@ -381,7 +392,7 @@ fn derive_pack(pack: &Value, answers: &Map<String, Value>) -> Value {
 
 /// The pack of an instance: `answers` are the user's answers; the pack is derived from them after defaults and
 /// recommendations are applied (quick mode leaves most steps unanswered).
-fn pack_for(
+pub(crate) fn pack_for(
     m: &LifeAppManifest,
     user: &Map<String, Value>,
     mode: Mode,
@@ -494,7 +505,7 @@ fn wb_write_rows(tx: &Connection, codec: &Codec, w: &WbRec) -> Result<()> {
     Ok(())
 }
 
-fn wb_insert(
+pub(crate) fn wb_insert(
     tx: &Connection,
     codec: &Codec,
     w: &WbRec,
@@ -547,16 +558,19 @@ fn schedules_of(b: &Build) -> BTreeMap<String, StoredSchedule> {
         .collect()
 }
 
-/// Writes a whole build (fresh install). Returns created page ids.
+/// Writes a whole build (fresh install) with its hub under `root_parent` (top level when `None`). Returns created
+/// page ids.
 fn write_build(
     tx: &Connection,
     codec: &Codec,
     ws: &str,
     b: &Build,
+    root_parent: Option<&str>,
     now: i64,
 ) -> Result<Vec<String>> {
-    // Sort keys: the hub goes after the workspace's last root page; children in manifest order.
-    let root_key = position_key(tx, ws, None, None, None, None)?;
+    // Sort keys: the hub goes after the last page of its parent (or the workspace's last root page); children in
+    // manifest order.
+    let root_key = position_key(tx, ws, root_parent, None, None, None)?;
     let mut keys: BTreeMap<String, String> = BTreeMap::new();
     for children in b.children.values() {
         for (id, k) in children
@@ -566,8 +580,9 @@ fn write_build(
             keys.insert(id.clone(), k);
         }
     }
+    let root_id = b.key_map.get(&b.root_key).cloned();
     let key_of = |id: &str, parent: Option<&String>| -> String {
-        if parent.is_none() {
+        if parent.is_none() || root_id.as_deref() == Some(id) {
             root_key.clone()
         } else {
             keys.get(id).cloned().unwrap_or_else(|| "V".into())
@@ -605,7 +620,7 @@ fn write_build(
 
 // ───────────────────────────────────────────────────────────────────────────── on-disk fingerprints
 
-fn disk_fingerprint(
+pub(crate) fn disk_fingerprint(
     tx: &Connection,
     codec: &Codec,
     b: &Build,
@@ -792,7 +807,7 @@ fn diff(tx: &Connection, codec: &Codec, inst: &InstancePayload, b: &Build) -> Re
 pub type RecommendResult = Recommendation;
 
 impl Store {
-    fn build_ctx(&self, instance_id: &str, pack: Option<Value>) -> Result<BuildCtx> {
+    pub(crate) fn build_ctx(&self, instance_id: &str, pack: Option<Value>) -> Result<BuildCtx> {
         let vs = self.vault_settings()?;
         Ok(BuildCtx {
             instance_id: instance_id.to_owned(),
@@ -883,7 +898,33 @@ impl Store {
         req: &LifeappInstall,
         progress: &dyn Progress,
     ) -> Result<InstallResult> {
+        self.lifeapp_install_in(req, None, progress)
+    }
+
+    /// The attached (not detached) instance of `app_id` in `workspace_id`, if any. One instance per app and
+    /// workspace is the rule (Ultranote 1.0 brief §2.2); [`Self::lifeapp_install_in`] refuses a second one.
+    pub fn lifeapp_installed(&self, workspace_id: &str, app_id: &str) -> Result<Option<String>> {
+        let s = self.session()?;
+        let rows = self.read(|c| list_instances(c, &s.codec, Some(workspace_id)))?;
+        Ok(rows
+            .into_iter()
+            .find(|r| r.app_id == app_id && !r.payload.detached)
+            .map(|r| r.id))
+    }
+
+    /// [`Self::lifeapp_install`] with the hub page created under `parent_id` (a live `doc` page of the same
+    /// workspace, e.g. a project) instead of at the top level. A second attached instance of the same app in the
+    /// workspace is refused with `CONFLICT` (the IPC layer words it "… is already set up").
+    pub fn lifeapp_install_in(
+        &self,
+        req: &LifeappInstall,
+        parent_id: Option<&str>,
+        progress: &dyn Progress,
+    ) -> Result<InstallResult> {
         let m = manifest_of(&req.app_id)?;
+        if self.lifeapp_installed(&req.workspace_id, &m.id)?.is_some() {
+            return Err(StoreError::Conflict { current_rev: 0 });
+        }
         let s = self.session()?;
         let instance_id = new_id();
         let (pack_id, pack) = pack_for(m, &req.answers, req.mode, self.local_today()?);
@@ -938,27 +979,66 @@ impl Store {
             schedules: schedules_of(&b),
             sample_rows,
             pack_id,
+            upgraded: crate::lifeapps::upkeep::UPGRADE_LEVEL,
         };
         let now = self.now();
         let ws = req.workspace_id.clone();
         let app_id = m.id.clone();
         let (iid, sess) = (instance_id.clone(), Arc::clone(&s));
-        let b2 = b.clone();
+        let mut b2 = b.clone();
+        let parent = parent_id.map(str::to_owned);
+        if let Some(p) = &parent
+            && let Some(root) = b2.pages.iter_mut().find(|p| p.key == b2.root_key)
+        {
+            root.parent_id = Some(p.clone());
+        }
         let (created, metas) = self.write(move |tx| {
             let codec = &sess.codec;
             let ok: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = ?1)", [&ws], |r| r.get(0))?;
             if !ok {
                 return Err(StoreError::NotFound("workspace"));
             }
-            let created = write_build(tx, codec, &ws, &b2, now)?;
+            if let Some(pid) = &parent {
+                let row = load_page(tx, pid)?.ok_or(StoreError::NotFound("parent page"))?;
+                if row.deleted_at.is_some() || row.workspace_id != ws {
+                    return Err(StoreError::NotFound("parent page"));
+                }
+                if row.kind != "doc" {
+                    return Err(StoreError::invalid_field("parentId", "apps can only be added to documents and projects"));
+                }
+                let app_parent = decode_page(codec, &row)?.app_instance_id.is_some();
+                if app_parent {
+                    return Err(StoreError::invalid_field("parentId", "apps can't be added inside another app"));
+                }
+            }
+            // One attached instance per app and workspace, checked again inside the write.
+            for other in list_instances(tx, codec, Some(&ws))? {
+                if other.app_id == app_id && !other.payload.detached {
+                    return Err(StoreError::Conflict { current_rev: 0 });
+                }
+            }
+            let created = write_build(tx, codec, &ws, &b2, parent.as_deref(), now)?;
             let e = codec.encode(&loc(&iid, 1), &payload)?;
             tx.prepare_cached("INSERT INTO lifeapp_instances (id, workspace_id, app_id, installed_at, rev, enc, payload) VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6)")?
                 .execute(params![iid, ws, app_id, now, e.enc, e.payload])?;
             let metas: Vec<PageMeta> = created.iter().filter_map(|id| load_meta(tx, codec, id).ok().flatten()).collect();
-            Ok((created, metas))
+            let parent_meta = match &parent {
+                Some(pid) => load_meta(tx, codec, pid)?,
+                None => None,
+            };
+            Ok((created, (metas, parent_meta)))
         })?;
+        let (metas, parent_meta) = metas;
         progress.progress(2, 3, "Indexing");
         self.after_write(&s, &b, &metas);
+        if let Some(pm) = parent_meta {
+            // The parent gained a child: re-announce it so trees update its disclosure.
+            self.emit(StoreEvent::TreeChanged {
+                workspace_id: pm.workspace_id.clone(),
+                upserted: vec![pm],
+                removed: Vec::new(),
+            });
+        }
         progress.progress(3, 3, "Done");
         Ok(InstallResult {
             instance_id,
@@ -967,7 +1047,7 @@ impl Store {
         })
     }
 
-    fn after_write(&self, s: &Arc<Session>, b: &Build, metas: &[PageMeta]) {
+    pub(crate) fn after_write(&self, s: &Arc<Session>, b: &Build, metas: &[PageMeta]) {
         for meta in metas {
             let doc = b.pages.iter().find(|p| p.id == meta.id).map(|p| &p.doc);
             self.index_page(s, meta, doc);
@@ -1041,12 +1121,12 @@ impl Store {
         Ok(self.instance(&s, instance_id)?.payload.answers)
     }
 
-    fn instance(&self, s: &Arc<Session>, id: &str) -> Result<InstanceRow> {
+    pub(crate) fn instance(&self, s: &Arc<Session>, id: &str) -> Result<InstanceRow> {
         self.read(|c| load_instance(c, &s.codec, id))?
             .ok_or(StoreError::NotFound("life app instance"))
     }
 
-    fn rebuild(
+    pub(crate) fn rebuild(
         &self,
         inst: &InstanceRow,
         answers: &Map<String, Value>,
@@ -1426,12 +1506,12 @@ impl Store {
         Ok(())
     }
 
-    fn invalidate_metrics(&self, instance_id: &str) {
+    pub(crate) fn invalidate_metrics(&self, instance_id: &str) {
         METRIC_CACHE.lock().retain(|e| e.instance != instance_id);
     }
 
     /// Loads everything metric functions read for an instance.
-    fn metric_data(
+    pub(crate) fn metric_data(
         &self,
         s: &Arc<Session>,
         inst: &InstanceRow,
@@ -1534,6 +1614,19 @@ impl Store {
             }
             Ok((dbs, others))
         })?;
+        let workbook_count: u32 = if m.id == "spreadsheet-studio" {
+            let ws = inst.workspace_id.clone();
+            self.read(move |c| {
+                Ok(c.query_row(
+                    "SELECT COUNT(*) FROM pages WHERE workspace_id = ?1 AND kind = 'sheet' AND deleted_at IS NULL",
+                    [&ws],
+                    |r| r.get(0),
+                )?)
+            })?
+        } else {
+            0
+        };
+        signature.push_str(&format!("|sheets:{workbook_count}"));
         let mut lint = BTreeMap::new();
         for t in m
             .templates
@@ -1562,6 +1655,7 @@ impl Store {
                 dbs,
                 others,
                 lint,
+                workbook_count,
             },
             signature,
         ))
@@ -1640,7 +1734,7 @@ impl Store {
         Ok(())
     }
 
-    fn tick(&self, s: &Arc<Session>, instance_id: &str, items: &[String]) -> Result<()> {
+    pub(crate) fn tick(&self, s: &Arc<Session>, instance_id: &str, items: &[String]) -> Result<()> {
         let now = self.now();
         let (sess, iid, items) = (Arc::clone(s), instance_id.to_owned(), items.to_vec());
         self.write(move |tx| {

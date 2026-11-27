@@ -4,7 +4,8 @@
  * performance (TWR vs benchmark, realised gains), dividends, the rebalance planner and the IPS.
  * `tab = "holding:<SYMBOL>"` opens a holding page.
  */
-import { CandlestickChart, ChevronRight, RefreshCw } from "lucide-react";
+import { appName } from "@/features/lifeapps/identity";
+import { CandlestickChart, ChevronRight, Plus, RefreshCw } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { Id, Insight, PerfRange, PortfolioSummary } from "@/backend/types";
@@ -26,12 +27,12 @@ import { DivergingBars } from "../finance/shared/charts";
 import { Figure } from "../finance/shared/Figure";
 import { figureLabel, periodReturn, portfolioParts, rangeYears } from "../finance/shared/definitions";
 import { fmtPct, fmtPp, fmtPrice, fmtQty, num, toMoney, fmtWhole } from "../finance/shared/format";
-import { useAsync, useScrubIdx, useScrubStore, type ScrubStore } from "../finance/shared/hooks";
+import { useAsync, useDbChanged, useScrubIdx, useScrubStore, type ScrubStore } from "../finance/shared/hooks";
 import { Disclaimer, HubPage, InsightCard, Quiet, Section, Signed } from "../finance/shared/ui";
 import { baseCurrency } from "../finance/shared/currency";
 import { HeroMoney, MetricCard } from "../finance/MoneyHQ/widgets";
 import { ticker } from "../markets/data";
-import { CLASS_ORDER, usePortfolioSummary } from "./data";
+import { CLASS_ORDER, usePortfolioBook, usePortfolioSummary } from "./data";
 import "./portfolio.css";
 
 const HoldingPage = lazy(() => import("./HoldingPage"));
@@ -40,6 +41,7 @@ const IPS = lazy(() => import("./IPS"));
 const Performance = lazy(() => import("./Performance"));
 const Dividends = lazy(() => import("./Dividends"));
 const Holdings = lazy(() => import("./Holdings"));
+const TradeDialog = lazy(() => import("./TradeDialog"));
 
 export interface PortfolioDashboardProps {
   instanceId: Id;
@@ -53,7 +55,11 @@ export default function PortfolioDashboard({ instanceId, tab }: PortfolioDashboa
   const holding = tab?.startsWith("holding:") ? tab.slice(8) : null;
   const current = (TABS.includes(tab as PTab) ? tab : "overview") as PTab;
   const summary = usePortfolioSummary(instanceId);
+  const book = usePortfolioBook(instanceId);
+  // The summary follows the book: a trade (here, in the database or elsewhere) refreshes both.
+  useDbChanged(Object.values(book.dbs).filter(Boolean) as Id[], summary.reload, 300);
   const go = (t: PTab) => navigate({ t: "app", instanceId, tab: t === "overview" ? undefined : t });
+  const [trading, setTrading] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
   const rebuild = async () => {
     setRebuilding(true);
@@ -87,12 +93,15 @@ export default function PortfolioDashboard({ instanceId, tab }: PortfolioDashboa
     <HubPage
       icon={CandlestickChart}
       tone="ocean"
-      title="Portfolio"
+      title={appName("portfolio")}
       subtitle={summary.data ? <>As of {new Date(summary.data.asOf).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · {summary.data.holdings.length} holdings across your accounts</> : "Loading positions…"}
       actions={
         <>
           <Button size="sm" variant="ghost" icon={RefreshCw} loading={rebuilding} onClick={rebuild}>
             Rebuild lots
+          </Button>
+          <Button size="sm" variant="primary" icon={Plus} onClick={() => setTrading(true)}>
+            Add trade
           </Button>
           <Button size="sm" variant="secondary" iconRight={ChevronRight} onClick={() => navigate({ t: "markets" })}>
             Markets
@@ -105,12 +114,22 @@ export default function PortfolioDashboard({ instanceId, tab }: PortfolioDashboa
       footer={<Disclaimer>Example starting points, not recommendations. Ultranote never places trades. Only ticker symbols leave this device, never quantities, cost basis, account names or balances.</Disclaimer>}
     >
       <Suspense fallback={<Skeleton height={420} radius={10} />}>
-        {current === "overview" ? <Overview instanceId={instanceId} summary={summary.data} go={go} /> : null}
-        {current === "holdings" ? <Holdings instanceId={instanceId} summary={summary.data} /> : null}
-        {current === "performance" ? <Performance instanceId={instanceId} summary={summary.data} /> : null}
-        {current === "dividends" ? <Dividends instanceId={instanceId} summary={summary.data} /> : null}
-        {current === "rebalance" ? <RebalancePlanner instanceId={instanceId} summary={summary.data} /> : null}
+        {current !== "ips" && summary.data && !summary.data.holdings.length && !book.txns.length ? (
+          // Nothing held yet: one clear next step instead of empty charts and drift alarms.
+          <Quiet icon={CandlestickChart} title="No investments yet" body="Add your first buy to see holdings, allocation and returns. Only ticker symbols leave this device." action={<Button variant="primary" icon={Plus} onClick={() => setTrading(true)}>Add trade</Button>} />
+        ) : (
+          <>
+            {current === "overview" ? <Overview instanceId={instanceId} summary={summary.data} go={go} /> : null}
+            {current === "holdings" ? <Holdings instanceId={instanceId} summary={summary.data} /> : null}
+            {current === "performance" ? <Performance instanceId={instanceId} summary={summary.data} /> : null}
+            {current === "dividends" ? <Dividends instanceId={instanceId} summary={summary.data} /> : null}
+            {current === "rebalance" ? <RebalancePlanner instanceId={instanceId} summary={summary.data} /> : null}
+          </>
+        )}
         {current === "ips" ? <IPS instanceId={instanceId} summary={summary.data} /> : null}
+      </Suspense>
+      <Suspense fallback={null}>
+        {trading ? <TradeDialog instanceId={instanceId} book={book} onClose={() => setTrading(false)} onDone={() => { summary.reload(); book.reload(); }} /> : null}
       </Suspense>
     </HubPage>
   );
@@ -219,6 +238,7 @@ function ValueHero({ instanceId, summary: s }: { instanceId: Id; summary?: Portf
           tooltip={false}
           hero
           loading={perf.loading && !perf.data}
+          empty={perf.data && perf.data.t.length < 2 ? "No price history for this range yet. It fills in when market data can be reached." : undefined}
           summaryLabel="Portfolio value versus contributions"
         />
       </div>

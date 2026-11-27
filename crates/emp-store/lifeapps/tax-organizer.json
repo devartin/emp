@@ -293,7 +293,7 @@
       "step": 1
     },
     {
-      "id": "review",
+      "id": "finish",
       "kind": "review",
       "title": "Review and create",
       "quick": true,

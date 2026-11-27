@@ -1,13 +1,16 @@
 /**
  * Markets (§17.2): index strip, watchlists with live quotes, a symbol page with the price chart, key stats,
- * 52-week range, your position (from Portfolio) and alerts. Only ticker symbols ever leave the device.
+ * 52-week range, your position (from Investments) and alerts. Only ticker symbols ever leave the device. Desktop
+ * defaults are real symbols; when no price can be loaded (offline mode, no connection, no provider) the page says
+ * so and offers to try again instead of showing placeholders forever.
  */
-import { Bell, CandlestickChart, Plus, ShieldCheck } from "lucide-react";
+import { Bell, CandlestickChart, CloudOff, Plus, RotateCw, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { SymbolKey } from "@/backend/types";
 import { navigate } from "@/app/router";
 import { useQuote } from "@/stores/market";
+import { useSettings } from "@/stores/settings";
 import { useWorkspace } from "@/stores/workspace";
 import { Badge } from "@/ui/Badge";
 import { Button } from "@/ui/Button";
@@ -24,7 +27,7 @@ import { useAsync } from "../finance/shared/hooks";
 import { FreshnessBadge, HubPage, MarketStateChip } from "../finance/shared/ui";
 import "./markets.css";
 import PriceChart from "./CandleChart";
-import { ticker, useBars, useSymbolInfo, useWatchlists, useWatchlistsLoaded } from "./data";
+import { DEFAULT_STRIP, ticker, useBars, useMarketAvailability, useSymbolInfo, useWatchlists, useWatchlistsLoaded, type MarketAvailability } from "./data";
 import { QuoteTile } from "./QuoteTile";
 import { SymbolSearch } from "./SymbolSearch";
 import { AlertDialog, WatchlistPanel } from "./Watchlist";
@@ -33,13 +36,13 @@ export interface MarketsPageProps {
   symbol?: SymbolKey;
 }
 
-const INDICES: SymbolKey[] = ["EMP500:INDEX", "EMPT100:INDEX", "BTC:CRYPTO", "EURUSD:FX"];
-
 export default function MarketsPage({ symbol }: MarketsPageProps) {
   const lists = useWatchlistsLoaded();
-  const fallback = lists[0]?.symbols[0]?.key ?? "EMPX:XNAS";
+  const fallback = lists[0]?.symbols[0]?.key ?? DEFAULT_STRIP[0];
   const selected = symbol ?? fallback;
-  const bench = useQuote("EMP500:INDEX");
+  const bench = useQuote(DEFAULT_STRIP[0]);
+  const offlineMode = useSettings((s) => s.vault?.offline ?? false);
+  const { status, retry } = useMarketAvailability(DEFAULT_STRIP, offlineMode);
   const select = (s: SymbolKey) => navigate({ t: "markets", symbol: s }, { replace: true });
   return (
     <HubPage
@@ -56,26 +59,54 @@ export default function MarketsPage({ symbol }: MarketsPageProps) {
         </footer>
       }
     >
+      {status === "offline" || status === "unavailable" ? <Unavailable status={status} onRetry={retry} /> : null}
       <div className="mk-indices">
-        {INDICES.map((s) => (
+        {DEFAULT_STRIP.map((s) => (
           <div key={s}>
-            <QuoteTile symbol={s} onClick={() => select(s)} selected={s === selected} />
+            <QuoteTile symbol={s} onClick={() => select(s)} selected={s === selected} unavailable={status === "offline" || status === "unavailable"} />
           </div>
         ))}
       </div>
       <div className="fh-grid">
         <div className="fh-span-4">
-          <WatchlistPanel selected={selected} onSelect={select} />
+          <WatchlistPanel selected={selected} onSelect={select} unavailable={status === "offline" || status === "unavailable"} />
         </div>
         <div className="fh-span-8">
-          <SymbolDetail key={selected} symbol={selected} />
+          <SymbolDetail key={selected} symbol={selected} status={status} />
         </div>
       </div>
     </HubPage>
   );
 }
 
-function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
+/** The one message when prices can't be loaded (never an endless placeholder). */
+function Unavailable({ status, onRetry }: { status: MarketAvailability; onRetry: () => void }) {
+  return (
+    <div className="mk-unavailable fh-card" role="status">
+      <CloudOff size={18} className="flex-none text-tertiary" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <div className="text-body font-medium text-primary">{status === "offline" ? "Offline mode is on" : "Prices aren’t available right now"}</div>
+        <p className="text-body-sm text-secondary">
+          {status === "offline"
+            ? "Ultranote isn’t connecting to the internet, so there are no new prices. Turn off offline mode in Settings, Privacy & security."
+            : "Ultranote couldn’t reach the price providers. Check your internet connection, or add a provider key in Settings, Connections."}
+        </p>
+      </div>
+      {status === "offline" ? (
+        <Button size="sm" variant="secondary" onClick={() => navigate({ t: "settings", section: "privacy" })}>
+          Open settings
+        </Button>
+      ) : (
+        <Button size="sm" variant="secondary" icon={RotateCw} onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function SymbolDetail({ symbol, status }: { symbol: SymbolKey; status: MarketAvailability }) {
+  const down = status === "offline" || status === "unavailable";
   const q = useQuote(symbol);
   const info = useSymbolInfo(symbol);
   const lists = useWatchlists((s) => s.lists);
@@ -83,7 +114,7 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
   const year = useBars(symbol, "1y");
   const hi52 = year.bars.length ? Math.max(...year.bars.map((b) => b.high)) : null;
   const lo52 = year.bars.length ? Math.min(...year.bars.map((b) => b.low)) : null;
-  const pfInstance = useWorkspace((s) => s.lifeapps.find((i) => i.appId === "portfolio")?.id);
+  const pfInstance = useWorkspace((s) => s.lifeapps.find((i) => i.appId === "portfolio" && !i.detached)?.id);
   const pf = useAsync(() => (pfInstance ? api.portfolio.summary({ instanceId: pfInstance }) : Promise.resolve(null)), [pfInstance]);
   const holding = pf.data?.holdings.find((h) => h.symbol === symbol);
   const inList = lists.find((l) => l.symbols.some((s) => s.key === symbol));
@@ -111,6 +142,8 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
                 {/* One delta: the arrow carries the direction; the move is set at the price's own decimals. */}
                 <Delta text={fmtPriceMove(q.change, q.price, q.currency)} percent={q.changePct} digits={2} label="today" />
               </>
+            ) : down ? (
+              <span className="text-body text-tertiary">No price available</span>
             ) : (
               <Skeleton width={200} height={34} />
             )}
@@ -175,7 +208,7 @@ function SymbolDetail({ symbol }: { symbol: SymbolKey }) {
               <Sensitive>{fmtQty(holding.qty)} sh · {fmtWhole(holding.value.amount, { currency: holding.value.currency })}</Sensitive>
             </span>
             <Delta money={toMoney(Math.round(Number(holding.gain.amount)), holding.gain.currency)} percent={holding.gainPct} arrow={false} className="text-body-sm" label="unrealised" />
-            <span className="text-caption text-tertiary">{fmtPct(holding.weight, 1)} of the portfolio · open in Portfolio</span>
+            <span className="text-caption text-tertiary">{fmtPct(holding.weight, 1)} of your investments</span>
           </span>
         </button>
       ) : null}

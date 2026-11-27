@@ -2,7 +2,7 @@
  * Renders a page `Icon` (§11.2): emoji, lucide (optionally tinted with a block colour or the accent) or an uploaded
  * asset. Pages without an icon get a kind-specific default glyph in tertiary colour.
  */
-import { Database, FileText, LayoutDashboard, LayoutGrid, Sheet } from "lucide-react";
+import { Database, FileText, FolderKanban, LayoutDashboard, LayoutGrid, Sheet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/backend";
 import type { Icon, Id, PageKind } from "@/backend/types";
@@ -59,6 +59,8 @@ export interface PageIconProps {
   /** Glyph box size in px (sidebar 18, breadcrumbs 16, headers 20+). */
   size?: number;
   className?: string;
+  /** A project (brief §2.2): without an icon of its own it shows the project glyph. */
+  project?: boolean;
 }
 
 /**
@@ -67,7 +69,7 @@ export interface PageIconProps {
  * the sidebar, breadcrumbs or tabs. The lookup is the shell's boot set plus the lazily loaded kit registry, so the
  * boot chunk stays small; a named glyph that is still loading keeps its box empty rather than flash the kind glyph.
  */
-export function PageIcon({ icon, kind = "doc", size = 18, className }: PageIconProps) {
+export function PageIcon({ icon, kind = "doc", size = 18, className, project }: PageIconProps) {
   const box = { width: size, height: size };
   const want = requestedGlyph(icon);
   const Named = useLucide(want ?? undefined);
@@ -82,7 +84,7 @@ export function PageIcon({ icon, kind = "doc", size = 18, className }: PageIconP
   const waiting = !!want && !Named && iconSetPending();
   return (
     <span className={cn("emp-page-icon inline-flex flex-none items-center justify-center", className)} style={box} aria-hidden>
-      {waiting ? null : <PageGlyphWith icon={Named ? icon : null} context="row" size={px} fallback="file" lookup={lookup} kindFallback={KIND_ICON[kind] ?? FileText} />}
+      {waiting ? null : <PageGlyphWith icon={Named ? icon : null} context="row" size={px} fallback="file" lookup={lookup} kindFallback={project ? FolderKanban : (KIND_ICON[kind] ?? FileText)} />}
     </span>
   );
 }

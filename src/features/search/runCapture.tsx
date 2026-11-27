@@ -1,5 +1,5 @@
 /**
- * Commit a capture and confirm it: "Added to Life OS · Fri, Nov 27 · View" with Undo. Shared by ⌘K and Home's
+ * Commit a capture and confirm it: "Added to Tasks · Fri, Nov 27 · View" with Undo. Shared by ⌘K and Home's
  * capture field, so both behave the same.
  */
 import { navigate } from "@/app/router";

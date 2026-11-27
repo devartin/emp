@@ -42,6 +42,9 @@ hex = "0.4"
 url = "2"
 idna = "1"
 getrandom = "0.2"
+# Already in the tree (chrono's `clock` feature / tauri): OS time zone for region detection, release version compare.
+iana-time-zone = "0.1"
+semver = "1"
 emp-crypto.workspace = true
 emp-store.workspace = true
 emp-sheets.workspace = true

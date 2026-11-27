@@ -44,8 +44,9 @@ export const handlers: MockHandlers = {
     checkKey(req.key);
     if (JSON.stringify(req.value ?? null).length > MAX_VALUE) throw new BackendError('TOO_LARGE', 'Value too large');
     kvWrite(ctx, req.ns, req.key, req.value);
-    // Getting Started items the UI reports (try `/`, open ⌘K, try ⌘⇧H …).
+    // Getting Started items the UI reports (open ⌘K, try ⌘⇧H …); the slash menu recording a block is "try /".
     if (req.ns === 'ui.gettingStarted' && req.value) ctx.events.internal('gettingStarted:tick', { item: req.key });
+    if (req.ns === 'ui.editor' && req.key === 'slashRecent' && req.value) ctx.events.internal('gettingStarted:tick', { item: 'try_slash' });
   },
   kv_get_many: (req, ctx) => {
     checkNs(req.ns);

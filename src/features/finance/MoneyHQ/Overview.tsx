@@ -97,7 +97,7 @@ function NetWorthHero() {
   const l = useLedgerCtx();
   const [range, setRange] = useState<Range>("1y");
   const s = useAsync(() => api.finance.networthSeries({ instanceId, range }), [instanceId, range]);
-  useDbChanged([l.schemas.txns?.database.id], s.reload, 400);
+  useDbChanged(l.dbIds, s.reload, 400);
   const data = useMemo<NwPoint[]>(() => (s.data ? s.data.t.map((t, i) => ({ t, net: s.data!.net[i], assets: s.data!.assets[i], liabilities: s.data!.liabilities[i] })) : []), [s.data]);
   const long = range === "3y" || range === "5y";
   // The scrub index lives outside this component's state: only the readouts re-render while scrubbing, not the chart.
@@ -415,11 +415,16 @@ function SpendingDonut() {
   const last = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
   const to = `${month}-${String(last).padStart(2, "0")}`;
   const s = useAsync(() => api.finance.spendingBreakdown({ instanceId, from, to, by: "category" }), [instanceId, month]);
-  useDbChanged([l.schemas.txns?.database.id], s.reload, 400);
+  useDbChanged(l.dbIds, s.reload, 400);
   const rows = s.data ?? [];
   // `spending.all` — "All spending" (definitions.ts allSpending): the breakdown's total, uncategorised included.
   const total = allSpending(rows);
-  const prev = rows.reduce((a, x) => a + (x.deltaPct !== undefined ? num(x.amount) / (1 + x.deltaPct) : num(x.amount)), 0);
+  // Last month's all-spending total, from its own breakdown (not reconstructed from per-category changes).
+  const prevMonth = addMonths(month, -1);
+  const prevLast = new Date(Number(prevMonth.slice(0, 4)), Number(prevMonth.slice(5, 7)), 0).getDate();
+  const ps = useAsync(() => api.finance.spendingBreakdown({ instanceId, from: `${prevMonth}-01`, to: `${prevMonth}-${String(prevLast).padStart(2, "0")}`, by: "category" }), [instanceId, prevMonth]);
+  useDbChanged(l.dbIds, ps.reload, 400);
+  const prev = ps.data ? allSpending(ps.data) : 0;
   const slices = useMemo(() => {
     const sorted = rows.map((x) => ({ id: x.key, label: x.label, value: num(x.amount) })).sort((a, b) => b.value - a.value);
     const top = sorted.slice(0, 6);
@@ -486,7 +491,7 @@ function CashFlow() {
   const t = useChartTheme();
   const [month, setMonth] = useState(() => addMonths(todayIso().slice(0, 7), -1));
   const s = useAsync(() => api.finance.cashflowSankey({ instanceId, month }), [instanceId, month]);
-  useDbChanged([l.schemas.txns?.database.id], s.reload, 400);
+  useDbChanged(l.dbIds, s.reload, 400);
   const data = useMemo(() => (s.data ? simplifySankey(s.data) : undefined), [s.data]);
   const nodes = useMemo(() => {
     if (!data) return [];
@@ -543,7 +548,12 @@ function CashFlow() {
         />
       }
     >
-      <Sankey nodes={nodes} links={data?.links ?? []} height={400} loading={s.loading && !s.data} summaryLabel={`Cash flow, ${monthLabel(month)}`} />
+      {s.data && !data?.links.length ? (
+        // Nothing to draw: say why rather than show an empty chart.
+        <Quiet title={`No money in or out to chart for ${monthLabel(month)}`} body="Income and spending appear here once transactions in this month have categories." />
+      ) : (
+        <Sankey nodes={nodes} links={data?.links ?? []} height={400} loading={s.loading && !s.data} summaryLabel={`Cash flow, ${monthLabel(month)}`} />
+      )}
     </Section>
   );
 }
@@ -596,7 +606,7 @@ function simplifySankey(d: SankeyData): SankeyData {
 function Recent() {
   const l = useLedgerCtx();
   const { go } = useMoney();
-  const recent = l.txns.slice(0, 7);
+  const recent = l.recent.slice(0, 7);
   return (
     <Section
       title="Recent transactions"
@@ -607,7 +617,7 @@ function Recent() {
       }
     >
       <div className="-mx-3 -my-1">
-        {l.loading && !l.txns.length
+        {l.loading && !l.recent.length
           ? Array.from({ length: 6 }, (_, k) => (
               <div key={k} className="flex items-center gap-3 px-3 py-2.5">
                 <Skeleton width={24} height={24} radius={6} />
@@ -627,7 +637,8 @@ function Recent() {
 function Upcoming() {
   const { overview: ov, go } = useMoney();
   const l = useLedgerCtx();
-  const total = ov?.upcoming.filter((u) => u.due <= addDays7()).reduce((a, u) => a + num(u.amount.amount), 0) ?? 0;
+  // Bills only: money going out in the next 7 days (scheduled income is not netted against it).
+  const total = (ov?.upcoming.filter((u) => u.due <= addDays7() && num(u.amount.amount) < 0).reduce((a, u) => a + Math.round(num(u.amount.amount) * 100), 0) ?? 0) / 100;
   return (
     <Section
       title="Upcoming bills"

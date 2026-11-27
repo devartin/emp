@@ -34,6 +34,8 @@ export interface Commands {
   app_info: C<Empty, T.AppInfo>;
   app_ready: C<{ marks: Record<string, number> }, void>;
   app_reveal_data_dir: C<Empty, void>;
+  /** Opens `<data>/logs` in the file manager (Settings › About). */
+  app_reveal_logs: C<Empty, void>;
   app_quit: C<Empty, void>;
   app_check_update: C<Empty, T.UpdateCheck>;
   app_install_update: J<Empty, void>;
@@ -66,6 +68,8 @@ export interface Commands {
   security_log: C<{ limit: number }, T.SecurityLogEntry[]>;
   password_strength: C<{ password: string }, T.PasswordStrength>;
   password_generate: C<Empty, T.GeneratedPassphrase>;
+  /** Native save dialog, then writes the recovery key as a text file (1.0 brief §2.5). `saved: false` = cancelled. */
+  vault_recovery_save_file: C<{ words: string[] }, { saved: boolean; fileName?: string }>;
 
   // ── Secrets
   secret_list: C<Empty, T.SecretInfo[]>;
@@ -82,6 +86,12 @@ export interface Commands {
   kv_get: C<{ ns: T.KvNamespace; key: string }, unknown | null>;
   kv_set: C<{ ns: T.KvNamespace; key: string; value: unknown }, void>;
   kv_get_many: C<{ ns: T.KvNamespace; keys: string[] }, Record<string, unknown>>;
+  /**
+   * Region from the OS (time zone) and the webview/OS locale; week start, clock and currency follow the region.
+   * Works locked and before a vault exists. `apply` (unlocked) saves it once per vault while locale, time zone,
+   * week start and clock still hold the built-in defaults (1.0 brief §2.5). The settings store calls it on load.
+   */
+  settings_detect_region: C<{ locale?: string; timeZone?: string; apply?: boolean }, T.RegionInfo>;
 
   // ── Backup, import, export
   backup_create: J<{ grantId: Id; password?: string }, { bytes: number }>;
@@ -90,6 +100,12 @@ export interface Commands {
   snapshot_now: J<Empty, { id: string }>;
   snapshot_set_folder: C<{ grantId: Id | null }, void>;
   snapshot_verify: J<{ id: string }, { ok: boolean }>;
+  snapshot_status: C<Empty, T.SnapshotStatus>;
+  /** Unencrypted workspaces only: the password automatic snapshots are sealed with (≥ 10 chars); `null` removes it. */
+  snapshot_set_backup_password: C<{ password: string | null }, T.SnapshotStatus>;
+  /** Native folder dialog (Rust); `null` when cancelled. */
+  snapshot_choose_folder: C<Empty, T.SnapshotStatus | null>;
+  snapshot_reveal: C<Empty, void>;
   import_detect: C<{ grantId: Id }, T.ImportDetectResult>;
   import_markdown: J<{ grantId: Id; workspaceId: Id; parentId: Id | null }, { pages: number; warnings: string[] }>;
   import_notion: J<{ grantId: Id; workspaceId: Id; parentId: Id | null }, T.NotionImportResult>;
@@ -123,6 +139,8 @@ export interface Commands {
       afterId?: Id;
       templatePageId?: Id;
       doc?: T.TipTapDoc;
+      /** Initial flags, e.g. `{ project: true }` (brief §3). */
+      flags?: Partial<T.PageFlags>;
     },
     { meta: T.PageMeta; docRev: Rev }
   >;
@@ -327,6 +345,8 @@ export interface Commands {
       disabledKeys: string[];
       workspaceId: Id;
       sampleData: boolean;
+      /** Create the hub inside this document or project (1.0 brief §3; a live doc page of the workspace). */
+      parentId?: Id;
     },
     { instanceId: Id; rootPageId: Id; created: Id[] }
   >;
@@ -343,6 +363,10 @@ export interface Commands {
   lifeapp_insight_mute: C<{ instanceId: Id; ruleId: string; until: Ts | null }, void>;
   lifeapp_sample_data: C<{ instanceId: Id; on: boolean }, { rows: number }>;
   lifeapp_checklist_tick: C<{ instanceId: Id; itemId: string }, void>;
+  /** UI-only checklist events (`ips.signed`, `tax.status_confirmed`, `sheet.exported`, …); returns what was ticked. */
+  lifeapp_event: C<{ event: string; data?: Record<string, unknown> }, { instanceId: Id; itemId: string }[]>;
+  /** A new spreadsheet from a Spreadsheet Studio template (`intent` = a value of its `intent` step, not `import`). */
+  lifeapp_add_workbook: C<{ instanceId: Id; intent: string }, T.PageMeta>;
 
   // ── Finance
   finance_overview: C<{ instanceId: Id; month: string }, T.FinanceOverview>;
@@ -368,7 +392,8 @@ export interface Commands {
       overrides: Record<number, { categoryId?: Id; payee?: string }>;
       saveProfileAs?: string;
     },
-    { inserted: number; skipped: number; transfersLinked: number }
+    /** `openingBalance`: set when the first statement into an empty account gave its opening balance. */
+    { inserted: number; skipped: number; transfersLinked: number; openingBalance?: string }
   >;
   finance_rules_list: C<{ instanceId: Id }, T.Rule[]>;
   finance_rule_upsert: C<{ instanceId: Id; rule: Omit<T.Rule, 'id' | 'timesApplied'> & { id?: Id } }, T.Rule>;
@@ -398,17 +423,67 @@ export interface Commands {
     { target: string; by: string; current: string; annualYieldPct: string },
     { monthlyRequired: string; onTrack: boolean }
   >;
+  finance_ledger: C<{ instanceId: Id }, T.FinanceLedger>;
+  finance_txns_query: C<
+    { instanceId: Id; filter?: T.FinanceTxnFilter; accountId?: Id; search?: string; offset: number; limit: number },
+    T.FinanceTxnPage
+  >;
+  finance_txns_update: C<
+    {
+      instanceId: Id;
+      updates: { id: Id; categoryId?: Id | null; memo?: string; date?: string; amount?: string; cleared?: T.ClearedState; reviewed?: boolean }[];
+    },
+    { updated: number }
+  >;
+  finance_txn_create: C<
+    { instanceId: Id; date: string; payee: string; amount: string; accountId: Id; categoryId?: Id; memo?: string },
+    { id: Id }
+  >;
+  finance_txn_split: C<{ instanceId: Id; parentId: Id; parts: { categoryId: Id; amount: string }[] }, { parts: number }>;
+  finance_reconcile: C<
+    { instanceId: Id; accountId: Id; asOf: string; commit: boolean },
+    { cleared: string; count: number; reconciled: string | null }
+  >;
+  finance_goal_upsert: C<
+    { instanceId: Id; id?: Id; name?: string; target?: string; date?: string | null; kind?: 'emergency' | 'sinking' | 'savings'; saved?: string },
+    { id: Id }
+  >;
+  finance_budget_assign_many: C<
+    { instanceId: Id; month: string; items: { categoryId: Id; amount: string }[] },
+    { toBeAssigned: string; categories: { categoryId: Id; available: string }[] }
+  >;
+  finance_account_create: C<
+    { instanceId: Id; name: string; type: string; opening?: string; institution?: string; apr?: number; limit?: string; minPayment?: string; onBudget?: boolean },
+    { id: Id }
+  >;
 
   // ── Portfolio and tax
   portfolio_rebuild: J<{ instanceId: Id }, { lots: number; realizedEvents: number }>;
   portfolio_summary: C<{ instanceId: Id }, T.PortfolioSummary>;
   portfolio_performance: C<{ instanceId: Id; range: T.PerfRange; benchmark?: T.SymbolKey }, T.PortfolioPerformance>;
   portfolio_rebalance_plan: C<
-    { instanceId: Id; newCash: string; allowTaxableSells: boolean; minTrade: string; fractional: boolean },
+    { instanceId: Id; newCash: string; allowTaxableSells: boolean; minTrade: string; fractional: boolean; cashAccountId?: Id },
     T.RebalancePlan
   >;
   portfolio_dividends: C<{ instanceId: Id; year: number }, T.DividendMonth[]>;
   portfolio_realized: C<{ instanceId: Id; year: number }, T.RealizedReport>;
+  portfolio_book: C<{ instanceId: Id }, T.PortfolioBook>;
+  portfolio_trade: C<
+    {
+      instanceId: Id;
+      date: string;
+      type: T.PortfolioTradeType;
+      symbol?: string;
+      name?: string;
+      assetClass?: string;
+      accountId?: Id;
+      qty?: string;
+      price?: string;
+      amount?: string;
+      fees?: string;
+    },
+    { id: Id; accountId: Id; securityId: Id | null }
+  >;
   tax_packs: C<Empty, T.TaxPackInfo[]>;
   tax_estimate: C<T.TaxInput, T.TaxEstimate>;
   tax_quarterly_plan: C<
@@ -422,6 +497,16 @@ export interface Commands {
       paid: { date: string; amount: string }[];
     },
     T.QuarterlyPlan
+  >;
+  tax_records: C<{ instanceId: Id; year: number }, T.TaxRecords>;
+  tax_doc_status: C<{ instanceId: Id; id: Id; status: T.TaxDocStatus }, void>;
+  tax_payment_record: C<
+    { instanceId: Id; period: string; amount: string; date: string; method?: 'online' | 'check' | 'withholding' },
+    { id: Id }
+  >;
+  tax_deduction_add: C<
+    { instanceId: Id; desc: string; date: string; category: string; amount: string; payee?: string; receipt?: boolean; year: number },
+    { id: Id }
   >;
 
   // ── Markets
@@ -507,6 +592,7 @@ export const COMMAND_FLAGS: { readonly [K in CommandName]: CommandFlags & (Comma
   app_info: pre,
   app_ready: pre,
   app_reveal_data_dir: pre,
+  app_reveal_logs: pre,
   app_quit: pre,
   app_check_update: pre,
   app_install_update: { job: true, preUnlock: true },
@@ -538,6 +624,7 @@ export const COMMAND_FLAGS: { readonly [K in CommandName]: CommandFlags & (Comma
   security_log: none,
   password_strength: pre,
   password_generate: pre,
+  vault_recovery_save_file: none,
 
   secret_list: none,
   secret_set: none,
@@ -549,6 +636,7 @@ export const COMMAND_FLAGS: { readonly [K in CommandName]: CommandFlags & (Comma
   kv_get: none,
   kv_set: none,
   kv_get_many: none,
+  settings_detect_region: pre,
 
   backup_create: job,
   backup_restore: { job: true, preUnlock: true },
@@ -556,6 +644,10 @@ export const COMMAND_FLAGS: { readonly [K in CommandName]: CommandFlags & (Comma
   snapshot_now: job,
   snapshot_set_folder: none,
   snapshot_verify: job,
+  snapshot_status: none,
+  snapshot_set_backup_password: none,
+  snapshot_choose_folder: none,
+  snapshot_reveal: none,
   import_detect: none,
   import_markdown: job,
   import_notion: job,
@@ -688,6 +780,8 @@ export const COMMAND_FLAGS: { readonly [K in CommandName]: CommandFlags & (Comma
   lifeapp_insight_mute: none,
   lifeapp_sample_data: none,
   lifeapp_checklist_tick: none,
+  lifeapp_event: none,
+  lifeapp_add_workbook: none,
 
   finance_overview: none,
   finance_networth_series: none,
@@ -708,6 +802,15 @@ export const COMMAND_FLAGS: { readonly [K in CommandName]: CommandFlags & (Comma
   finance_forecast: none,
   finance_amortization: none,
   finance_goal_plan: none,
+  finance_ledger: none,
+  finance_txns_query: none,
+  finance_txns_update: none,
+  finance_txn_create: none,
+  finance_txn_split: none,
+  finance_reconcile: none,
+  finance_goal_upsert: none,
+  finance_budget_assign_many: none,
+  finance_account_create: none,
 
   portfolio_rebuild: job,
   portfolio_summary: none,
@@ -715,9 +818,15 @@ export const COMMAND_FLAGS: { readonly [K in CommandName]: CommandFlags & (Comma
   portfolio_rebalance_plan: none,
   portfolio_dividends: none,
   portfolio_realized: none,
+  portfolio_book: none,
+  portfolio_trade: none,
   tax_packs: none,
   tax_estimate: none,
   tax_quarterly_plan: none,
+  tax_records: none,
+  tax_doc_status: none,
+  tax_payment_record: none,
+  tax_deduction_add: none,
 
   market_providers: none,
   market_provider_configure: none,

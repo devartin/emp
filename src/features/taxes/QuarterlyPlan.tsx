@@ -30,7 +30,9 @@ export function useQuarterly() {
   const tx = useTax();
   const p = tx.profile;
   const est = tx.estimate;
-  const paid = tx.payments.filter((x) => x.paidOn && x.amount).map((x) => ({ date: x.paidOn!, amount: x.amount.toFixed(2) }));
+  // A payment recorded on a period's row counts toward that period even when it was paid after the due date (the
+  // backends allocate by date, and the IRS applies a late payment to the earliest unpaid installment).
+  const paid = tx.payments.filter((x) => x.paidOn && x.amount).map((x) => ({ date: x.due && x.paidOn! > x.due ? x.due : x.paidOn!, amount: x.amount.toFixed(2) }));
   return useAsync(
     () => (p && est ? api.tax.quarterlyPlan({ packId: p.packId, year: p.year, method: p.method, estimate: est, priorYearTax: p.priorYearTax, priorYearAgi: p.priorYearAgi, paid }) : Promise.resolve(null as Plan | null)),
     [p?.method, p?.priorYearTax, p?.priorYearAgi, JSON.stringify(est?.totalTax), JSON.stringify(paid)],

@@ -9,7 +9,7 @@ import { api, listen } from "@/backend";
 import type { CalendarEvent, FinanceOverview, Id, PageMeta, TipTapDoc, TipTapNode } from "@/backend/types";
 import { useTree } from "@/stores/tree";
 import { useWorkspace } from "@/stores/workspace";
-import { localDay } from "@/features/lifeapps/cells";
+import { localDay, optionId } from "@/features/lifeapps/cells";
 import { useAppDatabases } from "@/features/lifeapps/data";
 import { dueOn, useHabitData } from "@/features/lifeapps/habitData";
 import { isIncomeGroup, isSavingGroup, spendingBudget } from "@/features/finance/shared/figures";
@@ -187,7 +187,7 @@ export interface MoneyGlance {
   /** Rows to review: `reviewed = false` when the template has that role, else uncategorised rows. */
   toReview: number;
   reviewLabel: "to review" | "to categorise";
-  /** Days since the newest imported row, if any row was imported. */
+  /** Days since the last import (when the newest imported row was created, not the statement's dates). */
   importedDaysAgo: number | null;
   /** At most one alert: an over-budget category or a bill due within 3 days. */
   alert: { text: string; amount: number; tab: string } | null;
@@ -217,20 +217,21 @@ export function useMoneyGlance(today: string): MoneyGlance | null | undefined {
     const n = ++seq.current;
     const reviewed = txns.p("txn.reviewed");
     const source = txns.p("txn.source");
-    const date = txns.p("txn.date");
     const count = reviewed
       ? api.db.query({ databaseId: txns.id, override: { filter: { prop: reviewed.id, op: "unchecked" } }, window: { offset: 0, limit: 1 }, reqId: n }).then((r) => ("notModified" in r ? null : r.total))
       : Promise.resolve(null);
-    const last =
-      source && date
-        ? api.db
-            .query({ databaseId: txns.id, override: { filter: { prop: source.id, op: "eq", value: "import" }, sorts: [{ prop: date.id, dir: "desc" }] }, window: { offset: 0, limit: 1 }, reqId: n })
-            .then((r) => {
-              if ("notModified" in r || !r.rows[0]) return null;
-              const v = r.rows[0].values[date.id];
-              return v && v.t === "date" && v.v ? v.v.start.slice(0, 10) : null;
-            })
-        : Promise.resolve(null);
+    // "last import" is when rows were imported: the newest imported row by creation time. A January statement
+    // imported today was imported today, whatever its transaction dates say.
+    // The option id of "Import" (desktop ids are not the manifest keys), else the key itself (the mock).
+    const imported = source ? (optionId(source, "Import") ?? "import") : null;
+    const last = source
+      ? api.db
+          .query({ databaseId: txns.id, override: { filter: { prop: source.id, op: "eq", value: imported }, sorts: [{ prop: "$created", dir: "desc" }] }, window: { offset: 0, limit: 1 }, reqId: n })
+          .then((r) => {
+            if ("notModified" in r || !r.rows[0]) return null;
+            return localDay(new Date(r.rows[0].createdAt));
+          })
+      : Promise.resolve(null);
     Promise.all([count, last])
       .then(([review, lastImport]) => n === seq.current && setExtra({ review, lastImport }))
       .catch(() => n === seq.current && setExtra({ review: null, lastImport: null }));

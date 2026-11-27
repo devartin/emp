@@ -41,11 +41,53 @@
   box-shadow: var(--elev-3);
   overflow: hidden;
 }
+/* Hide / show (brief §2.1, §4): the resting position is this state, never the end of an animation. The transition
+   only exists while the motion gate is open (shellMotion.ts), so a change made while the window is hidden lands at
+   rest. Hidden, the sheet is off-canvas and invisible (inert + aria-hidden keep it out of focus and the a11y tree). */
+.emp-sidebar[data-state="closed"] {
+  transform: translateX(-104%);
+  visibility: hidden;
+}
+.emp-sidebar[data-motion] {
+  transition:
+    transform 200ms var(--ease-out),
+    visibility 0s linear 0s;
+}
+.emp-sidebar[data-motion][data-state="closed"] {
+  transition:
+    transform 200ms var(--ease-out),
+    visibility 0s linear 200ms;
+}
 .emp-sidebar-inner {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+}
+.emp-sidebar[data-state="closed"] .emp-sidebar-inner {
+  opacity: 0;
+}
+.emp-sidebar[data-motion] .emp-sidebar-inner {
+  transition: opacity 140ms var(--ease-out) 30ms;
+}
+.emp-sidebar[data-motion][data-state="closed"] .emp-sidebar-inner {
+  transition: opacity 100ms var(--ease-out);
+}
+.emp-sb-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding-top: 4px;
+}
+.emp-sb-frame[data-traffic-lights] {
+  padding-top: 40px;
+}
+.emp-sb-traffic {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 40px;
 }
 .emp-sidebar-sep {
   position: absolute;
@@ -144,13 +186,76 @@
   color: inherit;
   background: var(--bg-surface-2);
 }
+/* The name has the whole row but the Hide button: a default "Alexandra's workspace" shows in full at 248px. */
 .emp-ws-button .name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 1rem;
+  font-size: calc(13rem / 14);
   font-weight: 600;
+}
+.emp-ws-button .chev {
+  width: 12px;
+  height: 12px;
+  margin-left: -4px;
+}
+
+/* The rows above the sections: "+ New ▾", then Search / Home / Calendar. Favorites' drop zone lays over them while a
+   row is dragged and there are no favourites yet. */
+.emp-sb-top {
+  position: relative;
+  flex: none;
+}
+.emp-sb-newrow {
+  padding: 0 2px 1px 8px;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+/* "+ New ▾": a row like the ones under it, with a caret that turns while its menu is open. */
+.emp-sb-row.emp-sb-new .label {
+  flex: none;
+}
+.emp-sb-new .caret {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: -2px;
+  color: var(--text-tertiary);
+  transition: transform 120ms var(--ease-out);
+}
+.emp-sb-new[data-state="open"] {
+  background: var(--state-hover);
+  color: var(--text-primary);
+}
+.emp-sb-new[data-state="open"] .caret {
+  transform: rotate(180deg);
+}
+.emp-sb-favdrop {
+  position: absolute;
+  inset: 0 2px 6px 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  background: var(--bg-window);
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
+  color: var(--text-tertiary);
+  font-size: calc(13rem / 14);
+  font-weight: 500;
+  animation: emp-fade-in 120ms var(--ease-out) both;
+}
+.emp-sb-favdrop svg {
+  width: 15px;
+  height: 15px;
+}
+.emp-sb-favdrop[data-active] {
+  background: var(--state-selected);
+  outline-color: var(--text-tertiary);
+  color: var(--text-primary);
 }
 
 /* Rows (28px, compact 24) */
@@ -172,9 +277,40 @@
   width: 100%;
   text-align: left;
 }
+.emp-sb-row {
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
 .emp-sb-row:hover {
   background: var(--state-hover);
   color: var(--text-primary);
+}
+.emp-sb-row:active {
+  background: var(--state-active);
+}
+/* A row that just appeared (a new page, an expanded parent's children): 160ms fade + 4px (register: rowInsert). */
+.emp-sb-row[data-fresh] {
+  --drop: 4px;
+  animation: emp-slab-settle 160ms var(--ease-out) both;
+}
+/* A row moved to Trash fades out and lifts 4px before it goes (register: rowRemove). */
+.emp-sb-row[data-leaving] {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition:
+    opacity 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+.emp-sb-glyph {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
 }
 .emp-sb-row:focus-visible {
   outline: 1.5px solid var(--ring);
@@ -306,6 +442,9 @@
   width: 14px;
   height: 14px;
 }
+.emp-sb-chevron svg {
+  transition: transform 120ms var(--ease-out);
+}
 .emp-sb-chevron[data-open] svg {
   transform: rotate(90deg);
 }
@@ -357,42 +496,144 @@
   padding: 0 4px;
   margin-left: -4px;
   border-radius: 4px;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 .emp-sb-head > button:first-child:hover {
   color: var(--text-secondary);
   background: var(--state-hover);
 }
-.emp-sb-head .caret {
-  width: 10px;
-  height: 10px;
-  opacity: 0;
+.emp-sb-head > button:first-child:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: -1px;
 }
-.emp-sb-head:hover .caret {
+/* The caret points down when open and right when collapsed (120ms turn). It shows on hover, and always while the
+   section is collapsed so a closed section reads as closed. */
+.emp-sb-head .caret {
+  width: 11px;
+  height: 11px;
+  opacity: 0;
+  transform: rotate(90deg);
+  transition:
+    transform 120ms var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+.emp-sb-head:hover .caret,
+.emp-sb-head:focus-within .caret,
+.emp-sb-head[data-collapsed] .caret {
   opacity: 1;
 }
 .emp-sb-head[data-collapsed] .caret {
-  transform: rotate(-90deg);
+  transform: rotate(0deg);
 }
+/* "+" is always there (quiet), brighter on hover. */
 .emp-sb-head .actions {
   margin-left: auto;
   display: flex;
   gap: 2px;
+}
+.emp-sb-head .actions .emp-sb-mini {
+  color: var(--text-disabled);
+}
+.emp-sb-head:hover .actions .emp-sb-mini,
+.emp-sb-head .actions .emp-sb-mini:focus-visible {
+  color: var(--text-tertiary);
+}
+.emp-sb-head .actions .emp-sb-mini:hover {
+  color: var(--text-primary);
+}
+/* Expand / collapse: 160ms height (grid rows) + opacity (register: sectionExpand). Collapsed bodies unmount after. */
+.emp-sb-sec-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 160ms var(--ease-out),
+    opacity 160ms var(--ease-out);
+}
+.emp-sb-sec-body[data-closed],
+.emp-sb-sec-body[data-entering] {
+  grid-template-rows: 0fr;
   opacity: 0;
 }
-.emp-sb-head:hover .actions,
-.emp-sb-head:focus-within .actions {
-  opacity: 1;
+.emp-sb-sec-body[data-entering] {
+  transition: none;
+}
+.emp-sb-sec-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow: hidden;
+}
+/* An empty section: one quiet line saying how to add one and what goes there; a click adds one. At a narrow width the
+   sentence wraps instead of losing its end. */
+.emp-sb-empty {
+  height: auto;
+  min-height: var(--row-sidebar);
+  align-items: flex-start;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.emp-sb-empty .label {
+  white-space: normal;
+  overflow: visible;
+}
+.emp-sb-empty .ico {
+  color: var(--text-disabled);
+}
+.emp-sb-empty:hover .ico {
+  color: var(--text-secondary);
 }
 
-/* Footer (40px) */
+/* Footer: Trash and Settings, then the status line with the lock. */
 .emp-sb-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px 8px 8px;
+  border-top: 1px solid var(--border-subtle);
+  flex: none;
+}
+.emp-sb-foot-row {
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 42px;
-  padding: 0 8px 0 12px;
-  border-top: 1px solid var(--border-subtle);
-  flex: none;
+}
+.emp-sb-foot-row > .emp-sb-row {
+  width: auto;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.emp-sb-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding-left: 2px;
+}
+.emp-sb-status-btn {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: calc(12rem / 14);
+  color: var(--text-tertiary);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.emp-sb-status-btn:hover {
+  color: var(--text-secondary);
+}
+.emp-sb-status-btn:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: -1px;
 }
 .emp-status-dot {
   position: relative;
@@ -533,6 +774,10 @@
   flex: 1;
   min-width: 12px;
   align-self: stretch;
+}
+/* "Show sidebar" arrives with a 160ms fade + 4px (an animation's resting state is its final style). */
+.emp-sb-show[data-motion] {
+  animation: emp-sub-in 160ms var(--ease-out) both;
 }
 .emp-edited {
   font-size: calc(12rem / 14);
@@ -816,4 +1061,29 @@ button.emp-tpl-row:focus-visible {
   .emp-topbar {
     padding-left: 4px;
   }
+}
+
+/* Reduced motion (brief §4): the shell's micro-motion is instant. The sidebar's own transitions only exist behind the
+   motion gate, which is closed under reduced motion. */
+:root[data-motion="reduced"] .emp-sb-row,
+:root[data-motion="reduced"] .emp-sb-new,
+:root[data-motion="reduced"] .emp-sb-head > button:first-child,
+:root[data-motion="reduced"] .emp-sb-head .caret,
+:root[data-motion="reduced"] .emp-sb-chevron svg,
+:root[data-motion="reduced"] .emp-sb-sec-body,
+:root[data-motion="reduced"] .emp-sb-status-btn {
+  transition: none;
+}
+:root[data-motion="reduced"] .emp-sb-row[data-leaving] {
+  transition: none;
+}
+:root[data-motion="reduced"] .emp-sb-row[data-fresh],
+:root[data-motion="reduced"] .emp-sb-show[data-motion] {
+  animation: none;
+}
+:root[data-motion="reduced"] .emp-sb-new .caret {
+  transition: none;
+}
+:root[data-motion="reduced"] .emp-sb-favdrop {
+  animation: none;
 }

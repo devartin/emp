@@ -18,14 +18,23 @@ export interface AppIdentity {
   category: string;
 }
 
+/**
+ * The one app identity map (1.0 brief §1): display names come from here, never from a stored page title or the
+ * manifest, so workspaces created before 1.0 show the new names without a migration. App ids stay as they were.
+ */
 export const APP_IDENTITY: Record<string, AppIdentity> = {
-  "money-hq": { id: "money-hq", name: "Money HQ", color: "#0C7D56", icon: Wallet, category: "finance" },
-  portfolio: { id: "portfolio", name: "Portfolio", color: "#0B6BDF", icon: CandlestickChart, category: "investing" },
-  "tax-organizer": { id: "tax-organizer", name: "Tax Organizer", color: "#C77A00", icon: ReceiptText, category: "tax" },
+  "money-hq": { id: "money-hq", name: "Money", color: "#0C7D56", icon: Wallet, category: "finance" },
+  portfolio: { id: "portfolio", name: "Investments", color: "#0B6BDF", icon: CandlestickChart, category: "investing" },
+  "tax-organizer": { id: "tax-organizer", name: "Taxes", color: "#C77A00", icon: ReceiptText, category: "tax" },
   "spreadsheet-studio": { id: "spreadsheet-studio", name: "Spreadsheet Studio", color: "#5E5CE6", icon: Sheet, category: "sheets" },
-  "life-os": { id: "life-os", name: "Life OS", color: "#1F6FD1", icon: Kanban, category: "planning" },
+  "life-os": { id: "life-os", name: "Tasks", color: "#1F6FD1", icon: Kanban, category: "planning" },
   habits: { id: "habits", name: "Habits", color: "#CC3344", icon: HeartPulse, category: "health" },
 };
+
+/** Display name of an app id (see {@link APP_IDENTITY}). */
+export function appName(appId: string): string {
+  return identity(appId).name;
+}
 
 export function identity(appId: string): AppIdentity {
   return APP_IDENTITY[appId] ?? { id: appId, name: appId.replace(/(^|-)(\w)/g, (_m, s: string, c: string) => (s ? " " : "") + c.toUpperCase()), color: "#52525B", icon: CircleDot, category: "other" };

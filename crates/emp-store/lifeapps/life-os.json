@@ -199,7 +199,7 @@
       "help": "Type “call Sam tomorrow 3pm #home” and dates are understood. A global capture hotkey is not part of this version."
     },
     {
-      "id": "review",
+      "id": "finish",
       "kind": "review",
       "title": "Review and create",
       "quick": true,
@@ -1239,7 +1239,7 @@
       "actions": [
         {
           "label": "Open lists",
-          "route": "app:projects"
+          "route": "app:lists"
         }
       ]
     },

@@ -269,13 +269,13 @@ export function buildForIntent(b: BookBuilder, intent: string, opts: { structure
     case 'budget':
       buildBudget(b);
       break;
-    case 'savings':
+    case 'compound':
       buildSavings(b);
       break;
     case 'decision':
       buildDecision(b);
       break;
-    case 'project_budget':
+    case 'project':
       buildProjectBudget(b);
       break;
     case 'timesheet':

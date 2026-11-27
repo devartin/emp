@@ -119,6 +119,22 @@ pub async fn app_reveal_data_dir(
         .map_err(|_| ApiError::new(ErrorCode::Io, "Could not open the data folder"))
 }
 
+/// `app_reveal_logs({})`: opens the logs folder (`<data>/logs`) in the file manager. Logs hold no content, titles or
+/// keys (see `logging`), so they can be attached to a bug report.
+#[tauri::command]
+pub async fn app_reveal_logs(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    req: Empty,
+) -> ApiResult<()> {
+    let _ = req;
+    let dir = state.paths.logs_dir();
+    std::fs::create_dir_all(&dir)?;
+    app.opener()
+        .open_path(dir.to_string_lossy(), None::<&str>)
+        .map_err(|_| ApiError::new(ErrorCode::Io, "Could not open the logs folder"))
+}
+
 /// `app_quit({})`: persists state, locks and exits.
 #[tauri::command]
 pub async fn app_quit(app: AppHandle, req: Empty) -> ApiResult<()> {
@@ -139,38 +155,120 @@ pub async fn app_quit(app: AppHandle, req: Empty) -> ApiResult<()> {
 }
 
 /// `app_check_update` result.
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCheck {
     available: bool,
+    /// The running version.
+    current: String,
+    /// The latest published version (without a leading `v`).
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<String>,
+    /// Release notes (Markdown), shortened.
     #[serde(skip_serializing_if = "Option::is_none")]
     notes: Option<String>,
+    /// The release page on github.com.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
 }
 
-fn updates_enabled(state: &AppState) -> bool {
-    let device = match state.store_opt() {
-        Some(s) => s.device_settings().ok(),
-        None => Some(state.pending_device_settings_resolved()),
-    };
-    device.is_some_and(|d| d.updates == "check")
+/// Keyless GitHub REST endpoint of the newest published (non-draft, non-prerelease) release.
+pub const LATEST_RELEASE_API: &str =
+    "https://api.github.com/repos/devartin/ultra-note/releases/latest";
+/// Release pages a result may link to.
+pub const RELEASES_PAGE: &str = "https://github.com/devartin/ultra-note/releases";
+/// Longest release-notes excerpt returned.
+const MAX_NOTES_CHARS: usize = 600;
+
+/// The part of a GitHub release object the check reads.
+#[derive(Debug, Deserialize)]
+pub struct GithubRelease {
+    tag_name: String,
+    #[serde(default)]
+    html_url: Option<String>,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    prerelease: bool,
 }
 
-/// `app_check_update({})`: `OFFLINE` when update checks are off or offline mode is on (D-17). The updater is P1 and
-/// not part of this build, so an enabled check reports `UNSUPPORTED`.
+/// Parses `v1.2.3` / `1.2.3-beta.1` tags.
+fn parse_version(tag: &str) -> Option<semver::Version> {
+    let t = tag.trim();
+    semver::Version::parse(t.strip_prefix(['v', 'V']).unwrap_or(t)).ok()
+}
+
+/// Compares a release with the running version. Drafts, prereleases and unparsable tags are never offered; the
+/// release page link must stay on this repository's releases.
+#[must_use]
+pub fn compare_release(current: &str, release: &GithubRelease) -> UpdateCheck {
+    let cur = parse_version(current);
+    let latest = parse_version(&release.tag_name);
+    let available = !release.draft
+        && !release.prerelease
+        && matches!((&cur, &latest), (Some(c), Some(l)) if l > c);
+    let url = release
+        .html_url
+        .as_deref()
+        .filter(|u| u.starts_with(&format!("{RELEASES_PAGE}/")) && !u.contains(".."))
+        .map_or_else(|| format!("{RELEASES_PAGE}/latest"), str::to_owned);
+    let notes = release
+        .body
+        .as_deref()
+        .map(str::trim)
+        .filter(|b| !b.is_empty())
+        .map(|b| {
+            let mut n: String = b.chars().take(MAX_NOTES_CHARS).collect();
+            if b.chars().count() > MAX_NOTES_CHARS {
+                n.push('…');
+            }
+            n
+        });
+    UpdateCheck {
+        available,
+        current: current.to_owned(),
+        version: latest.map(|v| v.to_string()),
+        notes: available.then_some(notes).flatten(),
+        url: Some(url),
+    }
+}
+
+/// `app_check_update({})`: asks GitHub for the latest release through NetGuard (the `updater` connector: keyless,
+/// `Ultranote/<version>` user agent, logged in the request log) and compares versions. Only the user's own action or
+/// their "Check for updates automatically" switch triggers it (D-17); `OFFLINE` while offline mode is on, and network
+/// failures come back as `NETWORK` so the UI can say so calmly. Repositories without a release answer "up to date".
 #[tauri::command]
 pub async fn app_check_update(state: State<'_, AppState>, req: Empty) -> ApiResult<UpdateCheck> {
     let _ = req;
     if state.net.is_offline() {
         return Err(ApiError::new(ErrorCode::Offline, "Offline mode is on"));
     }
-    if !updates_enabled(&state) {
-        return Err(ApiError::new(ErrorCode::Offline, "Update checks are off"));
+    let current = env!("CARGO_PKG_VERSION");
+    let url =
+        url::Url::parse(LATEST_RELEASE_API).map_err(|_| ApiError::internal("release endpoint"))?;
+    let request = emp_integrations::netguard::NetRequest::get(
+        emp_integrations::netguard::ConnectorId::Updater,
+        url,
+        "/repos/{owner}/{repo}/releases/latest",
+    )
+    .header("Accept", "application/vnd.github+json")
+    .header("X-GitHub-Api-Version", "2022-11-28")
+    .timeout(Duration::from_secs(15));
+    let resp = state.net.send(request).await?;
+    if resp.status == 404 {
+        // No published release yet.
+        return Ok(UpdateCheck {
+            available: false,
+            current: current.to_owned(),
+            version: None,
+            notes: None,
+            url: Some(format!("{RELEASES_PAGE}/latest")),
+        });
     }
-    Err(ApiError::unsupported(
-        "Automatic updates are not available in this build",
-    ))
+    let release: GithubRelease = resp.error_for_status()?.json()?;
+    Ok(compare_release(current, &release))
 }
 
 /// `app_install_update` request.
@@ -543,6 +641,62 @@ mod tests {
             extensions: vec!["*".into()],
         }];
         assert!(check_filters(&any).is_ok());
+    }
+
+    fn release(tag: &str, url: Option<&str>) -> GithubRelease {
+        GithubRelease {
+            tag_name: tag.into(),
+            html_url: url.map(str::to_owned),
+            body: Some("## Fixes\n- Faster".into()),
+            draft: false,
+            prerelease: false,
+        }
+    }
+
+    #[test]
+    fn release_comparison() {
+        let newer = compare_release(
+            "1.0.0",
+            &release(
+                "v1.2.0",
+                Some("https://github.com/devartin/ultra-note/releases/tag/v1.2.0"),
+            ),
+        );
+        assert!(newer.available);
+        assert_eq!(newer.version.as_deref(), Some("1.2.0"));
+        assert_eq!(
+            newer.url.as_deref(),
+            Some("https://github.com/devartin/ultra-note/releases/tag/v1.2.0")
+        );
+        assert!(newer.notes.as_deref().unwrap().contains("Faster"));
+        // Same, older, prerelease suffix ordering.
+        assert!(!compare_release("1.2.0", &release("v1.2.0", None)).available);
+        assert!(!compare_release("1.3.0", &release("1.2.9", None)).available);
+        assert!(compare_release("1.0.0-beta.2", &release("1.0.0", None)).available);
+        assert!(!compare_release("1.0.0", &release("1.0.0-rc.1", None)).available);
+        // Garbage tags and foreign links.
+        let odd = compare_release(
+            "1.0.0",
+            &release("nightly", Some("https://evil.example/releases/x")),
+        );
+        assert!(!odd.available);
+        assert_eq!(odd.version, None);
+        assert_eq!(
+            odd.url.as_deref(),
+            Some("https://github.com/devartin/ultra-note/releases/latest")
+        );
+        let mut pre = release("v9.0.0", None);
+        pre.prerelease = true;
+        assert!(!compare_release("1.0.0", &pre).available);
+        // Long notes are shortened; the wire shape is camelCase.
+        let mut long = release("v2.0.0", None);
+        long.body = Some("x".repeat(5000));
+        let r = compare_release("1.0.0", &long);
+        assert!(r.notes.as_deref().unwrap().chars().count() <= MAX_NOTES_CHARS + 1);
+        let wire = serde_json::to_value(&r).unwrap();
+        assert_eq!(wire["available"], true);
+        assert_eq!(wire["current"], "1.0.0");
+        assert!(wire.get("url").is_some());
     }
 
     #[test]

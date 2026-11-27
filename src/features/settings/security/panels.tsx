@@ -1,13 +1,13 @@
 /**
- * Security Center reference panels: the security log timeline, "what's visible on disk" (§9.20), the
- * order-of-magnitude password table (§9.10) and the FAQ with the approved copy (§9.22).
+ * Reference panels for Settings: the security log timeline and "what's visible on disk" (§9.20) in Privacy &
+ * security › More options, and the password-strength table (§9.10) and the encryption FAQ (§9.22) in About. The FAQ
+ * is where cipher names may appear (1.0 brief §1: only inside "How encryption works").
  */
 import {
   AlertTriangle, Archive, ArchiveRestore, Download, Eye, EyeOff, FileWarning, KeyRound, Link2, Lock, LockOpen, RotateCcw,
   ShieldCheck, ShieldOff, ShieldPlus, Stamp,
   type LucideIcon,
 } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/backend";
 import type { SecurityLogEntry } from "@/backend/types";
@@ -15,8 +15,6 @@ import { formatDate, formatTime, isToday } from "@/lib/dates";
 import { Button } from "@/ui/Button";
 import { Checkbox } from "@/ui/Checkbox";
 import { Skeleton } from "@/ui/Skeleton";
-import { ease, spring } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Group } from "../parts";
 import { useSecurityInfo } from "./score";
 
@@ -56,7 +54,6 @@ function dayLabel(at: number): string {
 export function SecurityLog() {
   const [rows, setRows] = useState<SecurityLogEntry[] | null>(null);
   const [limit, setLimit] = useState(14);
-  const reduced = useReducedMotionPref();
   useEffect(() => {
     api.security.log({ limit: 500 }).then(setRows).catch(() => setRows([]));
   }, []);
@@ -82,7 +79,7 @@ export function SecurityLog() {
 
   const total = rows?.length ?? 0;
   return (
-    <Group id="security-log" title="Security log" description="Kept on this device, encrypted with your workspace. It records event types and times only — never content." flush>
+    <Group id="security-log" title="Security log" description="Kept on this computer with your workspace. Event types and times only, never content.">
       <div className="st-log">
         {!rows ? (
           <div className="flex flex-col gap-3 p-4">
@@ -101,14 +98,7 @@ export function SecurityLog() {
                   const e = EVENTS[it.event] ?? { label: it.event.replace(/_/g, " "), icon: ShieldCheck };
                   const Icon = e.icon;
                   return (
-                    <m.li
-                      key={`${it.at}-${i}`}
-                      className="st-log-item"
-                      data-tone={e.tone}
-                      initial={reduced ? false : { opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ ...spring.gentle, delay: reduced ? 0 : Math.min(i, 8) * 0.025 }}
-                    >
+                    <li key={`${it.at}-${i}`} className="st-log-item" data-tone={e.tone}>
                       <span className="st-log-dot" aria-hidden>
                         <Icon size={13} strokeWidth={2} />
                       </span>
@@ -119,7 +109,7 @@ export function SecurityLog() {
                       <time className="st-log-time tabular" dateTime={new Date(it.at).toISOString()}>
                         {formatTime(it.at)}
                       </time>
-                    </m.li>
+                    </li>
                   );
                 })}
               </ol>
@@ -208,7 +198,7 @@ const STRENGTH: { pw: string; time: string; level: number }[] = [
 
 export function StrengthTable() {
   return (
-    <Group title="How strong is my password?" description="Time to try every possibility at a million guesses per second against the Standard profile. An order-of-magnitude estimate." flush>
+    <Group title="How strong is my password?" description="Rough time to try every possibility at a million guesses a second.">
       <table className="st-table">
         <thead>
           <tr>
@@ -258,21 +248,20 @@ const FAQ: { q: string; a: string[] }[] = [
   {
     q: "Does Ultranote connect to the internet?",
     a: [
-      "Nothing connects to the internet unless you turn on an integration. You can see every request Ultranote makes in Privacy & network.",
+      "Nothing connects to the internet unless you turn on an integration or an update check. You can see every request Ultranote makes in Settings, Privacy & security, More options.",
       "API keys and account connections are always stored encrypted.",
     ],
   },
   {
     q: "What happens if someone edits my files?",
-    a: ["Tamper-evident: Ultranote detects if encrypted items are modified outside the app. Run an integrity check any time from this page."],
+    a: ["Ultranote notices when encrypted items are changed outside the app. Run an integrity check any time from Settings, Privacy & security, More options."],
   },
 ];
 
 export function Faq() {
-  const [open, setOpen] = useState<number | null>(0);
-  const reduced = useReducedMotionPref();
+  const [open, setOpen] = useState<number | null>(null);
   return (
-    <Group title="Questions" flush>
+    <Group id="faq" title="How encryption works">
       <div className="st-faq">
         {FAQ.map((f, i) => {
           const isOpen = open === i;
@@ -282,23 +271,14 @@ export function Faq() {
                 <span>{f.q}</span>
                 <span className="st-faq-chev" aria-hidden />
               </button>
-              <AnimatePresence initial={false}>
-                {isOpen ? (
-                  <m.div
-                    key="a"
-                    className="st-faq-a"
-                    initial={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
-                    animate={reduced ? { opacity: 1 } : { height: "auto", opacity: 1, transition: { duration: 0.2, ease: ease.out } }}
-                    exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0, transition: { duration: 0.14, ease: ease.in } }}
-                  >
-                    <div className="st-faq-a-inner">
-                      {f.a.map((p) => (
-                        <p key={p}>{p}</p>
-                      ))}
-                    </div>
-                  </m.div>
-                ) : null}
-              </AnimatePresence>
+              {/* Same recipe as More options: 160ms grid rows + opacity, instant with reduced motion. */}
+              <div className="st-faq-a" data-closed={isOpen ? undefined : ""} inert={!isOpen}>
+                <div className="st-faq-a-inner">
+                  {f.a.map((p) => (
+                    <p key={p}>{p}</p>
+                  ))}
+                </div>
+              </div>
             </div>
           );
         })}

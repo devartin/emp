@@ -8,18 +8,7 @@
  * an imported file is normalised to an amount owed, `|balance|`, since banks sign card balances either way.
  * For every other account the statement balance is compared as typed.
  */
-import type { Id } from "@/backend/types";
 import { num, toMoney } from "../shared/format";
-
-/**
- * Cleared balance of an account as of a statement date: the opening balance plus every cleared or reconciled row
- * dated on or before it (the ledger's `account.cleared` definition, cut at the statement date instead of today).
- */
-export function clearedAsOf(account: { id: Id; opening: number }, txns: readonly { accountId: Id | null; date: string; amount: number; cleared: string }[], asOf: string): number {
-  let total = account.opening;
-  for (const t of txns) if (t.accountId === account.id && t.cleared !== "uncleared" && t.date <= asOf) total += t.amount;
-  return total;
-}
 
 /** What the statement field shows when it is pre-filled from an imported file's closing balance. */
 export function statementFieldFromFile(isDebt: boolean, balance: string): string {

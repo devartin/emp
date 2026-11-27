@@ -22,15 +22,18 @@ import { useAsync, useDbChanged, useFlip } from "../shared/hooks";
 import { disclose, Glyph } from "../shared/ui";
 import { Figure } from "../shared/Figure";
 import { budgetActivity, type FigureId } from "../shared/definitions";
+import { isIncomeGroup, isSavingGroup } from "../shared/figures";
 import { useLedgerCtx } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 import { HeroMoney } from "./widgets";
 
 export default function Budget() {
-  const { instanceId, month, reloadOverview } = useMoney();
+  const { instanceId, month, reloadOverview, overview } = useMoney();
+  // Zero-based and envelope budgets report "to be assigned"; the Overview omits it for the other methods.
+  const usesTba = !overview || overview.toBeAssigned !== undefined;
   const l = useLedgerCtx();
   const bm = useAsync(() => api.finance.budgetMonth({ instanceId, month }), [instanceId, month]);
-  useDbChanged([l.schemas.txns?.database.id, l.schemas.categories?.database.id], bm.reload, 300);
+  useDbChanged(l.dbIds, bm.reload, 300);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // groups below a collapsing/expanding group glide on the compositor (no height animation)
   const tableRef = useFlip<HTMLElement>(collapsed);
@@ -38,7 +41,7 @@ export default function Budget() {
     const byCat = new Map((bm.data?.categories ?? []).map((c) => [c.categoryId, c]));
     const groups = new Map<string, { id: string; name: string; icon: string; color: string; target: number; rollover: boolean; assigned: number; activity: number; available: number; carry: number }[]>();
     for (const c of l.categories) {
-      if (c.group === "Income") continue;
+      if (isIncomeGroup(c.group)) continue;
       const b = byCat.get(c.id);
       const list = groups.get(c.group) ?? [];
       list.push({ id: c.id, name: c.name, icon: c.icon, color: c.color, target: c.target, rollover: c.rollover, assigned: num(b?.assigned), activity: num(b?.activity), available: num(b?.available), carry: num(b?.rollover) });
@@ -71,18 +74,27 @@ export default function Budget() {
       notify.info("Every category already matches its target");
       return;
     }
-    for (const c of todo) await api.finance.budgetAssign({ instanceId, month, categoryId: c.id, amount: c.target.toFixed(2) });
+    try {
+      await api.finance.budgetAssignMany({ instanceId, month, items: todo.map((c) => ({ categoryId: c.id, amount: c.target.toFixed(2) })) });
+      notify.success(`Assigned ${todo.length} ${todo.length === 1 ? "category" : "categories"} to target`);
+    } catch (e) {
+      notify.fromError(e, "Couldn't assign");
+    }
     bm.reload();
     reloadOverview();
-    notify.success(`Assigned ${todo.length} ${todo.length === 1 ? "category" : "categories"} to target`);
   };
 
   const coverOverspending = async () => {
     const over = rows.flatMap(([, cs]) => cs).filter((c) => c.available < -0.004);
-    for (const c of over) await api.finance.budgetAssign({ instanceId, month, categoryId: c.id, amount: (c.assigned - c.available).toFixed(2) });
+    if (!over.length) return;
+    try {
+      await api.finance.budgetAssignMany({ instanceId, month, items: over.map((c) => ({ categoryId: c.id, amount: (Math.round(c.assigned * 100) - Math.round(c.available * 100)) / 100 + "" })) });
+      notify.success(`Covered ${over.length} overspent ${over.length === 1 ? "category" : "categories"}`);
+    } catch (e) {
+      notify.fromError(e, "Couldn't assign");
+    }
     bm.reload();
     reloadOverview();
-    if (over.length) notify.success(`Covered ${over.length} overspent ${over.length === 1 ? "category" : "categories"}`);
   };
   const overCount = rows.flatMap(([, cs]) => cs).filter((c) => c.available < -0.004).length;
 
@@ -90,6 +102,7 @@ export default function Budget() {
   return (
     <div className="flex flex-col gap-4">
       <section className="fh-card fh-budget-hero">
+        {usesTba ? (
         <div className="min-w-0">
           <div className="text-caption text-secondary" style={{ fontWeight: 500 }}>
             To be assigned · {monthLabel(month)}
@@ -112,6 +125,17 @@ export default function Budget() {
             {tba > 0.004 ? "Not in a category yet." : tba < -0.004 ? "More assigned than you have. Lower an assignment." : "All assigned."}
           </div>
         </div>
+        ) : (
+          // Budgets that are not zero-based (50/30/20, pay yourself first, tracking) have no "to be assigned": the
+          // headline is what is left to spend this month (`finance_overview.leftToSpend`, the Overview's figure).
+          <div className="min-w-0">
+            <div className="text-caption text-secondary font-medium">Left to spend · {monthLabel(month)}</div>
+            <div className="mt-1 flex items-baseline gap-3">
+              {overview ? <HeroMoney value={num(overview.leftToSpend?.amount)} currency={overview.leftToSpend?.currency ?? bm.data?.currency ?? ""} /> : <Skeleton width={180} height={36} radius={6} />}
+            </div>
+            <div className="mt-1 text-body-sm text-tertiary">Assigned to spending categories, less what they have spent.</div>
+          </div>
+        )}
         <div className="fh-budget-figs">
           <Fig label="Assigned" value={totals.assigned} />
           {/* `budget.activity` (definitions.ts): net movement in every non-income category, savings & debt payments
@@ -146,7 +170,7 @@ export default function Budget() {
           : rows.map(([group, cs]) => {
               const open = !collapsed.has(group);
               const g = cs.reduce((a, c) => ({ assigned: a.assigned + c.assigned, activity: a.activity + c.activity, available: a.available + c.available }), { assigned: 0, activity: 0, available: 0 });
-              const savings = group === "Savings & Debt";
+              const savings = isSavingGroup(group);
               return (
                 <div key={group}>
                   <button

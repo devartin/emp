@@ -5,13 +5,12 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
-import type { CellValue, DbSchema, Id, RowDTO, TaxEstimate, TaxInput, TaxPackInfo } from "@/backend/types";
-import { taxDeductionCategory } from "@/backend/taxDeductions";
+import type { CellValue, Id, TaxDocStatus, TaxEstimate, TaxInput, TaxPackInfo, TaxRecords } from "@/backend/types";
 import { useWorkspace } from "@/stores/workspace";
 import { notify } from "@/stores/toasts";
 import { fmtCompact, fmtMoney, fmtWhole, num } from "../finance/shared/format";
 import { baseCurrency } from "../finance/shared/currency";
-import { cell, queryAll, useAsync, useDbChanged, useRoleDbs, V } from "../finance/shared/hooks";
+import { useAsync, useDbChanged } from "../finance/shared/hooks";
 import { usePortfolioBook } from "../portfolio/data";
 
 export interface TaxProfile {
@@ -61,6 +60,8 @@ export interface DedRow {
   amount: number;
   /** Deductible share as a fraction (1 = 100%), as stored on both backends. */
   pct: number;
+  /** `amount × pct`, computed exactly by the backend. */
+  deductible: number;
   payee: string;
   receipt: boolean;
 }
@@ -92,13 +93,12 @@ export interface PayRow {
   paidOn: string | null;
 }
 
-const ROLES = { documents: "taxdoc.status", deductions: "taxded.amount", payments: "taxpay.due" } as const;
-
 export interface TaxData {
   year: number;
   profile: TaxProfile | null;
   setProfile: (p: Partial<TaxProfile>) => void;
-  schemas: Partial<Record<keyof typeof ROLES, DbSchema>>;
+  /** The Taxes databases (for links and change events). */
+  dbs: TaxRecords["dbs"];
   docs: DocRow[];
   deductions: DedRow[];
   payments: PayRow[];
@@ -131,20 +131,8 @@ export function taxMoney(currency: string) {
   };
 }
 
-function receiptFieldOf(s: DbSchema | undefined): TaxData["receiptField"] {
-  const t = s?.properties.find((p) => p.id === s.database.roles["taxded.receipt"])?.type;
-  return t === "checkbox" || t === "files" ? t : null;
-}
 
 export function useTaxData(instanceId: Id): TaxData {
-  const { schemas, ready } = useRoleDbs(instanceId, ROLES);
-  const ids = [schemas.documents?.database.id, schemas.deductions?.database.id, schemas.payments?.database.id];
-  const rows = useAsync(async () => {
-    const [d, x, p] = await Promise.all(ids.map((id) => (id ? queryAll(id) : Promise.resolve([] as RowDTO[]))));
-    return { d, x, p };
-  }, [ids.join("|")], { enabled: ready });
-  useDbChanged(ids, rows.reload);
-
   const [profile, setProfileState] = useState<TaxProfile | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -172,85 +160,30 @@ export function useTaxData(instanceId: Id): TaxData {
   );
 
   const year = profile?.year ?? new Date().getFullYear();
-  const parsed = useMemo(() => {
-    const D = schemas.documents;
-    const X = schemas.deductions;
-    const P = schemas.payments;
-    const opt = (s: DbSchema | undefined, role: string, id: string | null) => {
-      const p = s?.properties.find((x) => x.id === s.database.roles[role]);
-      return ((p?.config.options as { id: string; name: string }[] | undefined) ?? []).find((o) => o.id === id)?.name ?? id ?? "";
-    };
-    const docs: DocRow[] = (rows.data?.d ?? []).map((r) => ({
-      id: r.id,
-      name: cell.text(r.values[D!.database.primaryPropId]),
-      issuer: cell.text(r.values[D!.database.roles["taxdoc.issuer"]]),
-      purpose: cell.text(r.values[D!.database.roles["taxdoc.for"]]),
-      expected: cell.date(r.values[D!.database.roles["taxdoc.expected"]]),
-      status: cell.sel(r.values[D!.database.roles["taxdoc.status"]]) ?? "expected",
-      notes: cell.text(r.values[D!.database.roles["taxdoc.notes"]]),
-    }));
-    const deductions: DedRow[] = (rows.data?.x ?? [])
-      .map((r) => {
-        const c = cell.sel(r.values[X!.database.roles["taxded.category"]]) ?? "other";
-        const name = opt(X, "taxded.category", c);
-        const cat = taxDeductionCategory({ id: c, name });
-        return {
-          id: r.id,
-          desc: cell.text(r.values[X!.database.primaryPropId]),
-          date: cell.date(r.values[X!.database.roles["taxded.date"]]),
-          category: c,
-          categoryName: name,
-          key: cat?.key ?? "other",
-          kind: cat && "kind" in cat ? cat.kind : null,
-          amount: num(cell.money(r.values[X!.database.roles["taxded.amount"]])),
-          pct: deductibleShare(cell.num(r.values[X!.database.roles["taxded.pct"]])),
-          payee: cell.text(r.values[X!.database.roles["taxded.payee"]]),
-          receipt: hasReceipt(r.values[X!.database.roles["taxded.receipt"]]),
-        };
-      })
-      .sort((a, b) => ((a.date ?? "") < (b.date ?? "") ? 1 : -1));
-    const payments: PayRow[] = (rows.data?.p ?? [])
-      .map((r) => ({
-        id: r.id,
-        period: cell.text(r.values[P!.database.primaryPropId]),
-        due: cell.date(r.values[P!.database.roles["taxpay.due"]]),
-        amount: num(cell.money(r.values[P!.database.roles["taxpay.amount"]])),
-        paidOn: cell.date(r.values[P!.database.roles["taxpay.date"]]),
-      }))
-      .sort((a, b) => (a.period < b.period ? -1 : 1));
-    return { docs, deductions, payments };
-  }, [rows.data, schemas]);
-
-  // Figures pulled from Portfolio (realised gains, taxable dividends) — each needs confirmation in the estimator.
+  // The documents, deductions and payments with option keys and exact sums, plus Portfolio's figures for the year
+  // (`tax_records`): computed by the backend, not by pulling every row here.
+  const recs = useAsync(() => api.tax.records({ instanceId, year }), [instanceId, year], { enabled: !!profile });
+  const recIds = recs.data ? (Object.values(recs.data.dbs).filter(Boolean) as Id[]) : [];
   const lifeapps = useWorkspace((s) => s.lifeapps);
   const pfId = lifeapps.find((i) => i.appId === "portfolio")?.id;
-  const realized = useAsync(() => (pfId ? api.portfolio.realized({ instanceId: pfId, year }) : Promise.resolve(null)), [pfId, year]);
-  const book = usePortfolioBook(pfId ?? instanceId);
-  const pulled = useMemo(() => {
-    const out: TaxData["pulled"] = [];
-    if (realized.data) {
-      const st = num(realized.data.totals.short);
-      const lt = num(realized.data.totals.long);
-      if (st) out.push({ label: "Short-term gains", kind: "stcg", amount: st, source: "Portfolio · realised this year" });
-      if (lt) out.push({ label: "Long-term gains", kind: "ltcg", amount: lt, source: "Portfolio · realised this year" });
-    }
-    // Dividends paid into taxable accounts this year (sheltered accounts are not taxed now).
-    const taxableDivs = book.txns
-      .filter((t) => t.type === "dividend" && t.date.startsWith(String(year)) && t.accountId && book.accounts.get(t.accountId)?.tax === "taxable")
-      .reduce((a, t) => a + Math.abs(t.amount), 0);
-    if (taxableDivs) {
-      out.push({ label: "Ordinary dividends", kind: "ordinary_dividends", amount: Math.round(taxableDivs), source: "Portfolio · taxable accounts, paid so far" });
-      out.push({ label: "of which qualified", kind: "qualified_dividends", amount: Math.round(taxableDivs * 0.9), source: "Portfolio · common for broad funds (≈90%)" });
-    }
-    return out;
-  }, [realized.data, book.txns, book.accounts, year]);
+  const pfBook = usePortfolioBook(pfId);
+  // Portfolio's databases change the pulled figures too.
+  useDbChanged([...recIds, ...(Object.values(pfBook.dbs).filter(Boolean) as Id[])], recs.reload);
+
+  const parsed = useMemo(() => {
+    const r = recs.data;
+    const docs: DocRow[] = (r?.docs ?? []).map((d) => ({ id: d.id, name: d.name, issuer: d.issuer, purpose: d.purpose, expected: d.expected, status: d.status, notes: d.notes }));
+    const deductions: DedRow[] = (r?.deductions ?? []).map((d) => ({ id: d.id, desc: d.desc, date: d.date, category: d.key, categoryName: d.categoryName, key: d.key, kind: d.kind, amount: num(d.amount), pct: d.pct, deductible: num(d.deductible), payee: d.payee, receipt: d.receipt }));
+    const payments: PayRow[] = (r?.payments ?? []).map((p) => ({ id: p.id, period: p.period, due: p.due, amount: num(p.amount), paidOn: p.paidOn }));
+    return { docs, deductions, payments };
+  }, [recs.data]);
+
+  const pulled = useMemo<TaxData["pulled"]>(() => (recs.data?.pulled ?? []).map((p) => ({ label: p.label, kind: p.kind, amount: num(p.amount), source: p.source })), [recs.data]);
 
   const input = useMemo<TaxInput | null>(() => {
-    if (!profile) return null;
-    const itemized = parsed.deductions.filter((d) => d.kind !== null);
-    const medical = itemized.filter((d) => d.kind === "medical").reduce((a, d) => a + d.amount * d.pct, 0);
-    const extra = profile.pullPortfolio ? pulled.map((p) => ({ kind: p.kind, amount: p.amount.toFixed(2), source: p.source })) : [];
-    const paidEst = parsed.payments.reduce((a, p) => a + (p.paidOn ? p.amount : 0), 0);
+    if (!profile || !recs.data) return null;
+    const extra = profile.pullPortfolio ? (recs.data.pulled ?? []).map((p) => ({ kind: p.kind, amount: p.amount, source: p.source })) : [];
+    const paidEst = recs.data.paidEstimated;
     return {
       packId: profile.packId,
       year: profile.year,
@@ -259,16 +192,13 @@ export function useTaxData(instanceId: Id): TaxData {
       age65OrBlind: profile.age65OrBlind,
       incomes: [...profile.incomes, ...extra],
       adjustments: profile.adjustments,
-      deductions:
-        profile.deductions === "standard"
-          ? "standard"
-          : { itemized: [...itemized.filter((d) => d.kind !== "medical").map((d) => ({ kind: d.kind as string, amount: (d.amount * d.pct).toFixed(2) })), ...(medical ? [{ kind: "medical", amount: medical.toFixed(2) }] : [])] },
+      deductions: profile.deductions === "standard" ? "standard" : { itemized: recs.data.itemized.map((d) => ({ kind: d.kind, amount: d.amount })) },
       credits: profile.credits,
       withheld: profile.withheld,
-      estimatedPaid: String(paidEst || num(profile.estimatedPaid)),
+      estimatedPaid: num(paidEst) ? paidEst : String(num(profile.estimatedPaid)),
       custom: { unsure: profile.unsure },
     };
-  }, [profile, parsed.deductions, parsed.payments, pulled]);
+  }, [profile, recs.data]);
 
   const inputKey = JSON.stringify(input);
   const est = useAsync(() => (input ? api.tax.estimate(input) : Promise.resolve(undefined)), [inputKey], { enabled: !!input });
@@ -278,62 +208,46 @@ export function useTaxData(instanceId: Id): TaxData {
 
   const setDocStatus = useCallback(
     async (id: Id, status: string) => {
-      const D = schemas.documents;
-      if (!D) return;
-      rows.set((prev) => prev && { ...prev, d: prev.d.map((r) => (r.id === id ? { ...r, values: { ...r.values, [D.database.roles["taxdoc.status"]]: V.status(status) } } : r)) });
+      recs.set((prev) => prev && { ...prev, docs: prev.docs.map((d) => (d.id === id ? { ...d, status: status as TaxDocStatus } : d)) });
       try {
-        await api.db.rowsUpdate({ updates: [{ id, values: { [D.database.roles["taxdoc.status"]]: V.status(status) } }] });
+        await api.tax.docStatus({ instanceId, id, status: status as TaxDocStatus });
       } catch (e) {
         notify.fromError(e, "Couldn't update the document");
-        rows.reload();
+        recs.reload();
       }
     },
-    [schemas.documents, rows],
+    [instanceId, recs],
   );
   const addDeduction = useCallback<TaxData["addDeduction"]>(
     async (d) => {
-      const X = schemas.deductions;
-      if (!X) return;
-      const r = X.database.roles;
-      // `d.category` is a category key; desktop option ids are generated, so find the option by key, then name.
-      const catProp = X.properties.find((p) => p.id === r["taxded.category"]);
-      const options = (catProp?.config.options as { id: string; name: string }[] | undefined) ?? [];
-      const option = options.find((o) => taxDeductionCategory(o)?.key === d.category);
-      // A checkbox receipt (mock) takes the answer; a files receipt (desktop) is attached in the database itself.
-      const receiptProp = X.properties.find((p) => p.id === r["taxded.receipt"]);
       try {
-        await api.db.rowCreate({ databaseId: X.database.id, values: { [X.database.primaryPropId]: V.text(d.desc), [r["taxded.date"]]: V.date(d.date), ...(option ? { [r["taxded.category"]]: V.sel(option.id) } : {}), [r["taxded.amount"]]: V.money(d.amount.toFixed(2), currency), [r["taxded.pct"]]: V.num(1), [r["taxded.payee"]]: V.text(d.payee), ...(receiptProp?.type === "checkbox" ? { [r["taxded.receipt"]]: V.check(d.receipt) } : {}), [r["taxded.year"]]: V.num(year) } });
+        await api.tax.deductionAdd({ instanceId, desc: d.desc, date: d.date, category: d.category, amount: d.amount.toFixed(2), payee: d.payee, receipt: d.receipt, year });
         notify.success("Deduction logged");
-        rows.reload();
+        recs.reload();
       } catch (e) {
         notify.fromError(e, "Couldn't log the deduction");
       }
     },
-    [schemas.deductions, rows, year, currency],
+    [instanceId, recs, year],
   );
   const recordPayment = useCallback<TaxData["recordPayment"]>(
     async (period, amount, date) => {
-      const P = schemas.payments;
-      if (!P) return;
-      const r = P.database.roles;
-      const existing = parsed.payments.find((p) => p.period === period);
       try {
-        if (existing) await api.db.rowsUpdate({ updates: [{ id: existing.id, values: { [r["taxpay.amount"]]: V.money(amount.toFixed(2), currency), [r["taxpay.date"]]: V.date(date), ...(r["taxpay.method"] ? { [r["taxpay.method"]]: V.sel("direct_pay") } : {}) } }] });
-        else await api.db.rowCreate({ databaseId: P.database.id, values: { [P.database.primaryPropId]: V.text(period), [r["taxpay.amount"]]: V.money(amount.toFixed(2), currency), [r["taxpay.date"]]: V.date(date) } });
+        await api.tax.paymentRecord({ instanceId, period, amount: amount.toFixed(2), date });
         notify.success(`${period} payment recorded`);
-        rows.reload();
+        recs.reload();
       } catch (e) {
         notify.fromError(e, "Couldn't record the payment");
       }
     },
-    [schemas.payments, parsed.payments, rows, currency],
+    [instanceId, recs],
   );
 
   return {
     year,
     profile,
     setProfile,
-    schemas,
+    dbs: recs.data?.dbs ?? { documents: null, deductions: null, payments: null },
     ...parsed,
     pulled,
     input,
@@ -341,10 +255,10 @@ export function useTaxData(instanceId: Id): TaxData {
     estimating: est.loading,
     pack,
     currency,
-    reload: rows.reload,
+    reload: recs.reload,
     setDocStatus,
     addDeduction,
-    receiptField: receiptFieldOf(schemas.deductions),
+    receiptField: recs.data?.receiptField ?? null,
     recordPayment,
   };
 }
@@ -357,8 +271,9 @@ export function useTax(): TaxData {
 }
 
 export const STATUS_LABEL: Record<string, string> = { single: "Single", mfj: "Married filing jointly", mfs: "Married filing separately", hoh: "Head of household", qss: "Qualifying surviving spouse" };
-export const DOC_FLOW = ["expected", "received", "reviewed", "sent"];
-export const DOC_LABEL: Record<string, string> = { expected: "Expected", received: "Received", reviewed: "Reviewed", sent: "Sent to preparer", na: "N/A" };
+/** Document status keys (`taxdoc.status`, `TaxDocStatus`) in checklist order. */
+export const DOC_FLOW = ["expected", "received", "reviewed", "sent_to_preparer"];
+export const DOC_LABEL: Record<string, string> = { expected: "Expected", received: "Received", reviewed: "Reviewed", sent_to_preparer: "Sent to preparer", n_a: "N/A" };
 
 /**
  * `tax.due` as a short fact for the quarterly views: "$1,224 due Apr 15" when the estimate leaves a balance due at

@@ -686,10 +686,12 @@ fn account_type(name: Option<&str>) -> AccountType {
 /// Revision fingerprint of a ledger: every instance database's `(key, id, data_rev, schema_rev)` and the base currency.
 type LedgerKey = (Vec<(String, String, i64, i64)>, String);
 
+/// Cached ledgers by instance id.
+type LedgerCache = HashMap<String, (LedgerKey, Arc<Ledger>)>;
+
 /// Ledgers built this session, by instance id (the ledger cache of ULTRANOTE-1.0 §5). Each entry is valid while its
 /// databases' revisions are unchanged, so a write anywhere in the instance invalidates it; dropped on lock.
-static LEDGERS: LazyLock<Mutex<HashMap<String, (LedgerKey, Arc<Ledger>)>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static LEDGERS: LazyLock<Mutex<LedgerCache>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 /// Instances whose ledger is cached at once.
 const MAX_CACHED_LEDGERS: usize = 8;
 
@@ -819,7 +821,9 @@ impl Ledger {
             let ess = d.col_id("cat.essential", &["Essential"]);
             let roll = d.col_id("cat.rollover", &["Rollover"]);
             let color = d.keyed("color", &["Color"]);
-            let icon = d.col_id("cat.icon", &[]).or_else(|| d.keyed_id("icon", &["Icon"]));
+            let icon = d
+                .col_id("cat.icon", &[])
+                .or_else(|| d.keyed_id("icon", &["Icon"]));
             let target = d.col_id("cat.target", &["Target"]);
             for r in &d.rows {
                 l.cat_meta.insert(
@@ -872,7 +876,9 @@ impl Ledger {
             let cleared = d.col("txn.cleared", &["Cleared"]);
             let source = d.col("txn.source", &["Source"]);
             let reviewed = d.col_id("txn.reviewed", &["Reviewed"]);
-            let tags = d.col("txn.tags", &[]).or_else(|| d.keyed("tags", &["Tags"]));
+            let tags = d
+                .col("txn.tags", &[])
+                .or_else(|| d.keyed("tags", &["Tags"]));
             let mut parents = HashSet::new();
             for r in &d.rows {
                 if let Some(p) = rel(get(r, &sp)) {
@@ -2308,57 +2314,12 @@ pub async fn finance_budget_assign(app: AppHandle, req: AssignReq) -> ApiResult<
     blocking(move || {
         let state = app.state::<AppState>();
         let store = state.session()?;
-        let l = Ledger::load(&store, &req.instance_id)?;
-        if !l.categories.iter().any(|c| c.id == req.category_id) {
-            return Err(ApiError::not_found("category"));
-        }
-        let d = l.db("budgets")?;
-        let (Some(mcol), Some(ccol), Some(acol)) = (
-            d.keyed_id("month", &["Month"]),
-            d.keyed_id("category", &["Category"]),
-            d.keyed_id("assigned", &["Assigned"]),
-        ) else {
-            return Err(ApiError::invalid(
-                "instanceId",
-                "the Budgets database is missing columns",
-            ));
-        };
-        let money = CellValue::Money {
-            v: Some(value.normalize().to_string()),
-            cur: l.currency.clone(),
-        };
-        let existing = d.rows.iter().find(|r| {
-            text(r.values.get(&mcol)).trim() == m.to_string()
-                && rel(r.values.get(&ccol)).as_deref() == Some(&req.category_id)
-        });
-        match existing {
-            Some(r) => {
-                store.db_rows_update(vec![RowUpdate::one(&r.id, &acol, Some(money))])?;
-            }
-            None => {
-                let name = l
-                    .categories
-                    .iter()
-                    .find(|c| c.id == req.category_id)
-                    .map_or_else(String::new, |c| c.name.clone());
-                let mut values = BTreeMap::new();
-                values.insert(
-                    d.title_id().to_owned(),
-                    CellValue::text(&format!("{name} · {m}")),
-                );
-                values.insert(mcol.clone(), CellValue::text(&m.to_string()));
-                values.insert(
-                    ccol.clone(),
-                    CellValue::Relation {
-                        v: vec![req.category_id.clone()],
-                    },
-                );
-                values.insert(acol.clone(), money);
-                store.db_rows_insert_bulk(d.id(), vec![values], None)?;
-            }
-        }
-        let l = Ledger::load(&store, &req.instance_id)?;
-        let bm = budget_month(&store, &req.instance_id, &l, m)?;
+        let (bm, _) = assign_many(
+            &store,
+            &req.instance_id,
+            m,
+            &[(req.category_id.clone(), value)],
+        )?;
         Ok(AssignDto {
             available: s(bm
                 .category(&req.category_id)
@@ -2387,6 +2348,7 @@ static IMPORTS: LazyLock<Mutex<HashMap<String, StagedImport>>> =
 /// Drops every staged statement import (lock hygiene: the bytes are decrypted user data).
 pub fn clear_staged_imports() {
     clear_ledger_cache();
+    super::portfolio::clear_portfolio_cache();
     IMPORTS.lock().clear();
 }
 
@@ -2493,13 +2455,15 @@ pub async fn finance_import_start(
             .as_ref()
             .and_then(emp_finance::import::StatementAccount::last4);
         let open: Vec<&Account> = l.accounts.iter().filter(|a| !a.closed).collect();
-        let account_guess = last4
-            .and_then(|l4| {
-                open.iter()
-                    .find(|a| a.name.contains(&l4))
-                    .map(|a| a.id.clone())
-            })
-            .or_else(|| (open.len() == 1).then(|| open[0].id.clone()));
+        // An account whose name carries the statement's last four digits; the only account only when the statement
+        // names none (a savings statement must not land in Checking just because Checking is the only account).
+        let account_guess = match last4 {
+            Some(l4) => open
+                .iter()
+                .find(|a| a.name.contains(&l4))
+                .map(|a| a.id.clone()),
+            None => (open.len() == 1).then(|| open[0].id.clone()),
+        };
         let import_id = emp_store::model::ids::new_id();
         {
             let now = Instant::now();
@@ -2646,7 +2610,7 @@ fn run_preview(
     import_id: &str,
     mapping: &ImportMapping,
     account_id: &str,
-) -> ApiResult<(String, PreviewDto, Ledger, Option<String>)> {
+) -> ApiResult<(String, PreviewDto, Arc<Ledger>, Option<String>)> {
     let (instance_id, name, bytes, format, fingerprint) = staged_import(import_id)?;
     let l = Ledger::load(store, &instance_id)?;
     let Some(account_name) = l
@@ -2930,10 +2894,30 @@ fn commit_import(
     let mut rows = Vec::new();
     let mut pairs = Vec::new();
     let mut skipped = 0usize;
+    // The first statement into an empty account with no opening balance sets the opening balance from the file's
+    // closing balance (OFX `<LEDGERBAL>`), so the account then shows what the bank shows.
+    let fresh = !l.txns.iter().any(|t| t.account_id == account_id)
+        && l.accounts
+            .iter()
+            .any(|a| a.id == account_id && a.opening_balance.is_zero());
+    let mut through_statement = Decimal::ZERO;
+    let statement_date = preview
+        .statement
+        .as_ref()
+        .and_then(|st| st.as_of.as_deref())
+        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
     for r in &preview.rows {
         if skip.contains(&r.idx) || r.duplicate_of.is_some() {
             skipped += 1;
             continue;
+        }
+        if let (Some(sd), Ok(day), Ok(a)) = (
+            statement_date,
+            NaiveDate::parse_from_str(&r.date, "%Y-%m-%d"),
+            r.amount.parse::<Decimal>(),
+        ) && day <= sd
+        {
+            through_statement += a;
         }
         let o = overrides.get(&r.idx);
         let mut v = BTreeMap::new();
@@ -3043,6 +3027,25 @@ fn commit_import(
             store.db_rows_update(chunk.to_vec())?;
         }
     }
+    let mut opening = None;
+    if fresh
+        && statement_date.is_some()
+        && let Some(st) = &preview.statement
+        && let Ok(closing) = st.balance.parse::<Decimal>()
+        && let Some(col) = l
+            .db("accounts")?
+            .col_id("acct.opening", &["Opening balance"])
+    {
+        let value = closing - through_statement;
+        if !value.is_zero() {
+            store.db_rows_update(vec![RowUpdate::one(
+                account_id,
+                &col,
+                Some(money_cell(value, &cur)),
+            )])?;
+            opening = Some(m2(value));
+        }
+    }
     if let (Some(name), Some(fp)) = (save_profile_as, &fingerprint) {
         let profile = ImportProfile {
             id: emp_store::model::ids::new_id(),
@@ -3054,7 +3057,10 @@ fn commit_import(
     let undo_id = emp_store::model::ids::new_id();
     super::ics::save_row_undo(store, &undo_id, &ids)?;
     ctx.report(3, 3, Some("Done"));
-    let out = json!({ "inserted": ids.len(), "skipped": skipped, "transfersLinked": linked, "importId": undo_id });
+    let mut out = json!({ "inserted": ids.len(), "skipped": skipped, "transfersLinked": linked, "importId": undo_id });
+    if let Some(o) = opening {
+        out["openingBalance"] = json!(o);
+    }
     Ok((undo_id, out))
 }
 
@@ -3684,6 +3690,1552 @@ pub async fn finance_forecast(app: AppHandle, req: ForecastReq) -> ApiResult<For
                 .map(|b| {
                     json!({ "date": b.date.to_string(), "accountId": b.account_id, "amount": s(b.amount),
                             "topOutflows": b.top_outflows })
+                })
+                .collect(),
+        })
+    })
+    .await
+}
+
+// ───────────────────────────────────────────────────────────────────────────── ledger views (ULTRANOTE-1.0 §5)
+//
+// Money HQ reads compact, pre-computed views of the (cached) ledger instead of every row: balances, cleared
+// balances and history are exact decimals computed here, select/status values travel as option keys, and writes
+// take keys too (`finance_txns_update`, `finance_txn_create`, `finance_txn_split`, `finance_reconcile`,
+// `finance_goal_upsert`, `finance_budget_assign_many`), so the frontend never handles generated option ids.
+
+/// Days of daily balance history per account in [`finance_ledger`].
+pub const HISTORY_DAYS: usize = 90;
+/// Most rows per [`finance_txns_query`] window.
+pub const MAX_TXN_WINDOW: usize = 1_000;
+/// Most recent transactions in [`finance_ledger`].
+pub const RECENT_TXNS: usize = 8;
+
+/// Money with exactly two decimals ("12.50").
+fn m2(d: Decimal) -> String {
+    let mut d = d.round_dp(2);
+    d.rescale(2);
+    d.to_string()
+}
+
+/// `FinanceLedger.dbs`: the instance's database ids.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerDbsDto {
+    accounts: Option<String>,
+    categories: Option<String>,
+    transactions: Option<String>,
+    recurring: Option<String>,
+    goals: Option<String>,
+    budgets: Option<String>,
+    payees: Option<String>,
+}
+
+/// One account of [`FinanceLedgerDto`].
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerAccountDto {
+    id: String,
+    name: String,
+    #[serde(rename = "type")]
+    kind: String,
+    institution: String,
+    /// ISO code as entered; empty means the base currency.
+    currency: String,
+    opening: String,
+    apr: Option<f64>,
+    min_payment: String,
+    limit: Option<String>,
+    on_budget: bool,
+    low_threshold: Option<String>,
+    reconciled: Option<String>,
+    closed: bool,
+    /// Balance as of today (future-dated rows excluded).
+    balance: String,
+    /// Cleared balance as of today: opening plus cleared and reconciled rows.
+    cleared: String,
+    /// End-of-day balances of the last [`HISTORY_DAYS`] days, oldest first (chart data).
+    history: Vec<f64>,
+}
+
+/// One category of [`FinanceLedgerDto`].
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerCategoryDto {
+    id: String,
+    name: String,
+    group: String,
+    color: String,
+    icon: String,
+    essential: bool,
+    rollover: bool,
+    target: String,
+    is_income: bool,
+}
+
+/// One recurring item of [`FinanceLedgerDto`].
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerRecurringDto {
+    id: String,
+    name: String,
+    amount: String,
+    rrule: String,
+    dtstart: String,
+    account_id: Option<String>,
+    category_id: Option<String>,
+    kind: String,
+    autopay: bool,
+    variable: bool,
+    prev_amount: Option<String>,
+    cancel_url: String,
+}
+
+/// One goal of [`FinanceLedgerDto`].
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerGoalDto {
+    id: String,
+    name: String,
+    kind: String,
+    target: String,
+    date: Option<String>,
+    saved: String,
+    account_id: Option<String>,
+    priority: String,
+    icon: String,
+}
+
+/// One transaction (top level, with its split parts nested).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerTxnDto {
+    id: String,
+    rev: i64,
+    date: String,
+    payee: String,
+    raw: String,
+    memo: String,
+    amount: String,
+    account_id: Option<String>,
+    category_id: Option<String>,
+    transfer_id: Option<String>,
+    /// The account of the other side of a transfer.
+    transfer_account_id: Option<String>,
+    split_parent: Option<String>,
+    cleared: String,
+    reviewed: Option<bool>,
+    source: String,
+    tags: Vec<String>,
+    splits: Vec<LedgerTxnDto>,
+}
+
+/// `FinanceLedger.counts`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerCountsDto {
+    txns: usize,
+    to_review: Option<usize>,
+    uncategorized: usize,
+}
+
+/// `finance_ledger` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FinanceLedgerDto {
+    rev: String,
+    currency: String,
+    today: String,
+    dbs: LedgerDbsDto,
+    has_reviewed: bool,
+    accounts: Vec<LedgerAccountDto>,
+    categories: Vec<LedgerCategoryDto>,
+    recurring: Vec<LedgerRecurringDto>,
+    goals: Vec<LedgerGoalDto>,
+    recent: Vec<LedgerTxnDto>,
+    counts: LedgerCountsDto,
+}
+
+impl Ledger {
+    /// A transaction's cleared key; split parts take their parent's.
+    fn cleared_of(&self, t: &Txn) -> &str {
+        let id = t.split_parent.as_deref().unwrap_or(&t.id);
+        self.txn_meta
+            .get(id)
+            .or_else(|| self.txn_meta.get(&t.id))
+            .map_or("uncleared", |m| m.cleared.as_str())
+    }
+
+    /// Cleared balance of `a` as of `as_of`: opening plus counted rows (split parts, not their parent) that are
+    /// cleared or reconciled and dated on or before it — the reconcile figure.
+    #[must_use]
+    pub fn cleared_balance(&self, a: &Account, as_of: NaiveDate) -> Decimal {
+        a.opening_balance
+            + self
+                .txns
+                .iter()
+                .filter(|t| t.account_id == a.id && t.counts() && t.date <= as_of)
+                .filter(|t| self.cleared_of(t) != "uncleared")
+                .map(|t| t.amount)
+                .sum::<Decimal>()
+    }
+
+    /// Top-level transactions (split parts nested), newest first; rows with the same date keep database order.
+    fn top_level(&self) -> Vec<&Txn> {
+        let ids: HashSet<&str> = self.txns.iter().map(|t| t.id.as_str()).collect();
+        let mut top: Vec<&Txn> = self
+            .txns
+            .iter()
+            .filter(|t| t.split_parent.as_deref().is_none_or(|p| !ids.contains(p)))
+            .collect();
+        top.sort_by_key(|t| std::cmp::Reverse(t.date));
+        top
+    }
+
+    fn txn_dto(
+        &self,
+        t: &Txn,
+        parts: &HashMap<&str, Vec<&Txn>>,
+        by_id: &HashMap<&str, &Txn>,
+    ) -> LedgerTxnDto {
+        let meta = self.txn_meta.get(&t.id).cloned().unwrap_or_default();
+        LedgerTxnDto {
+            id: t.id.clone(),
+            rev: meta.rev,
+            date: t.date.to_string(),
+            payee: t.payee.clone(),
+            raw: t.raw.clone(),
+            memo: t.memo.clone(),
+            amount: m2(t.amount),
+            account_id: Some(t.account_id.clone()).filter(|s| !s.is_empty()),
+            category_id: t.category_id.clone(),
+            transfer_account_id: t
+                .transfer_id
+                .as_deref()
+                .and_then(|o| by_id.get(o))
+                .map(|o| o.account_id.clone())
+                .filter(|s| !s.is_empty()),
+            transfer_id: t.transfer_id.clone(),
+            split_parent: t.split_parent.clone(),
+            cleared: self.cleared_of(t).to_owned(),
+            reviewed: meta.reviewed,
+            source: meta.source,
+            tags: meta.tags,
+            splits: parts
+                .get(t.id.as_str())
+                .map(|v| {
+                    v.iter()
+                        .map(|c| self.txn_dto(c, &HashMap::new(), by_id))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        }
+    }
+
+    fn txn_index(&self) -> (HashMap<&str, Vec<&Txn>>, HashMap<&str, &Txn>) {
+        let mut parts: HashMap<&str, Vec<&Txn>> = HashMap::new();
+        for t in &self.txns {
+            if let Some(p) = t.split_parent.as_deref() {
+                parts.entry(p).or_default().push(t);
+            }
+        }
+        (
+            parts,
+            self.txns.iter().map(|t| (t.id.as_str(), t)).collect(),
+        )
+    }
+
+    fn has_reviewed(&self) -> bool {
+        self.dbs
+            .get("transactions")
+            .is_some_and(|d| d.col_id("txn.reviewed", &["Reviewed"]).is_some())
+    }
+
+    /// Whether a top-level row still needs a category (not a transfer, not split).
+    fn needs_category(t: &Txn) -> bool {
+        t.category_id.is_none() && !t.is_transfer() && !t.has_splits
+    }
+}
+
+/// End-of-day balances of `a` over the `days` days ending `today`, oldest first.
+fn balance_history(l: &Ledger, a: &Account, today: NaiveDate, days: usize) -> Vec<f64> {
+    let mut rows: Vec<&Txn> = l
+        .txns
+        .iter()
+        .filter(|t| t.account_id == a.id && t.counts() && t.date <= today)
+        .collect();
+    rows.sort_by_key(|t| std::cmp::Reverse(t.date));
+    let mut bal = l.balance(a, today);
+    let mut out = Vec::with_capacity(days);
+    let mut k = 0;
+    for d in 0..days {
+        let day = today - chrono::Duration::days(i64::try_from(d).unwrap_or(0));
+        out.push(emp_finance::money::to_f64(bal));
+        while k < rows.len() && rows[k].date >= day {
+            bal -= rows[k].amount;
+            k += 1;
+        }
+    }
+    out.reverse();
+    out
+}
+
+fn recurring_rows(l: &Ledger) -> Vec<LedgerRecurringDto> {
+    let Some(d) = l.dbs.get("recurring") else {
+        return Vec::new();
+    };
+    let am = d.col_id("rec.amount", &["Amount"]);
+    let sched = d.col_id("rec.schedule", &["Schedule"]);
+    let acct = d.col_id("rec.account", &["Account"]);
+    let cat = d.col_id("rec.category", &["Category"]);
+    let kind = d.col("rec.kind", &["Kind"]);
+    let auto = d.col_id("rec.autopay", &["Autopay"]);
+    let var = d
+        .col_id("rec.variable", &[])
+        .or_else(|| d.keyed_id("variable", &["Variable"]));
+    let prev = d.col_id("rec.prev_amount", &[]);
+    let cancel = d
+        .col_id("rec.cancel_url", &[])
+        .or_else(|| d.keyed_id("cancel_url", &[]));
+    let get = |r: &RowDto, c: &Option<String>| c.as_ref().and_then(|c| r.values.get(c)).cloned();
+    d.rows
+        .iter()
+        .map(|r| {
+            let (rrule, dtstart) = match get(r, &sched) {
+                Some(CellValue::Recurrence { v: Some(rv) }) => (
+                    rv.rrule.trim_start_matches("RRULE:").to_owned(),
+                    rv.dtstart.get(..10).unwrap_or_default().to_owned(),
+                ),
+                _ => ("FREQ=MONTHLY".to_owned(), String::new()),
+            };
+            LedgerRecurringDto {
+                id: r.id.clone(),
+                name: d.title(r),
+                amount: m2(amount(get(r, &am).as_ref()).unwrap_or_default()),
+                rrule,
+                dtstart,
+                account_id: rel(get(r, &acct).as_ref()),
+                category_id: rel(get(r, &cat).as_ref()),
+                kind: option_key(r, kind, REC_KINDS).unwrap_or_else(|| "bill".into()),
+                autopay: check(get(r, &auto).as_ref()),
+                variable: check(get(r, &var).as_ref()),
+                prev_amount: amount(get(r, &prev).as_ref()).map(m2),
+                cancel_url: text(get(r, &cancel).as_ref()),
+            }
+        })
+        .collect()
+}
+
+fn goal_rows(l: &Ledger) -> Vec<LedgerGoalDto> {
+    let Some(d) = l.dbs.get("goals") else {
+        return Vec::new();
+    };
+    let kind = d.col("goal.kind", &["Kind", "Type"]);
+    let target = d.col_id("goal.target", &["Target"]);
+    let date_c = d.col_id("goal.date", &["Target date"]);
+    let saved = d.col_id("goal.saved", &["Saved"]);
+    let acct = d.col_id("goal.account", &["Account"]);
+    let prio = d
+        .col("goal.priority", &[])
+        .or_else(|| d.keyed("priority", &["Priority"]));
+    let icon = d.col_id("goal.icon", &[]);
+    let get = |r: &RowDto, c: &Option<String>| c.as_ref().and_then(|c| r.values.get(c)).cloned();
+    d.rows
+        .iter()
+        .map(|r| LedgerGoalDto {
+            id: r.id.clone(),
+            name: d.title(r),
+            kind: option_key(r, kind, GOAL_KINDS).unwrap_or_else(|| "savings".into()),
+            target: m2(amount(get(r, &target).as_ref()).unwrap_or_default()),
+            date: date(get(r, &date_c).as_ref()).map(|x| x.to_string()),
+            saved: m2(amount(get(r, &saved).as_ref()).unwrap_or_default()),
+            account_id: rel(get(r, &acct).as_ref()),
+            priority: option_key(r, prio, PRIORITIES).unwrap_or_else(|| "medium".into()),
+            icon: Some(text(get(r, &icon).as_ref()))
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "target".into()),
+        })
+        .collect()
+}
+
+/// `finance_ledger` over a loaded ledger (pure).
+#[must_use]
+pub fn ledger_view(l: &Ledger, today: NaiveDate) -> FinanceLedgerDto {
+    let id_of = |k: &str| l.dbs.get(k).map(|d| d.id().to_owned());
+    let accounts = l
+        .accounts
+        .iter()
+        .map(|a| {
+            let meta = l.acct_meta.get(&a.id).cloned().unwrap_or_default();
+            LedgerAccountDto {
+                id: a.id.clone(),
+                name: Some(a.name.clone())
+                    .filter(|n| !n.trim().is_empty())
+                    .unwrap_or_else(|| "Untitled account".into()),
+                kind: meta.kind,
+                institution: meta.institution,
+                currency: if meta.currency.is_empty() {
+                    String::new()
+                } else {
+                    a.currency.code().to_owned()
+                },
+                opening: m2(a.opening_balance),
+                apr: a.apr_pct.map(emp_finance::money::to_f64),
+                min_payment: m2(a.min_payment.unwrap_or_default()),
+                limit: a.credit_limit.map(m2),
+                on_budget: a.on_budget,
+                low_threshold: a.low_threshold.map(m2),
+                reconciled: meta.reconciled.map(|d| d.to_string()),
+                closed: a.closed,
+                balance: m2(l.balance(a, today)),
+                cleared: m2(l.cleared_balance(a, today)),
+                history: balance_history(l, a, today, HISTORY_DAYS),
+            }
+        })
+        .collect();
+    let categories = l
+        .categories
+        .iter()
+        .map(|c| {
+            let meta = l.cat_meta.get(&c.id).cloned().unwrap_or_default();
+            LedgerCategoryDto {
+                id: c.id.clone(),
+                name: Some(c.name.clone())
+                    .filter(|n| !n.trim().is_empty())
+                    .unwrap_or_else(|| "Untitled".into()),
+                group: Some(c.group.clone())
+                    .filter(|g| !g.is_empty())
+                    .unwrap_or_else(|| "Everyday".into()),
+                color: meta.color,
+                icon: Some(meta.icon)
+                    .filter(|i| !i.is_empty())
+                    .unwrap_or_else(|| "circle-dollar-sign".into()),
+                essential: c.essential,
+                rollover: c.rollover,
+                target: m2(meta.target),
+                is_income: c.is_income,
+            }
+        })
+        .collect();
+    let top = l.top_level();
+    let (parts, by_id) = l.txn_index();
+    let has_reviewed = l.has_reviewed();
+    FinanceLedgerDto {
+        rev: l.rev.clone(),
+        currency: l.currency.clone(),
+        today: today.to_string(),
+        dbs: LedgerDbsDto {
+            accounts: id_of("accounts"),
+            categories: id_of("categories"),
+            transactions: id_of("transactions"),
+            recurring: id_of("recurring"),
+            goals: id_of("goals"),
+            budgets: id_of("budgets"),
+            payees: id_of("payees"),
+        },
+        has_reviewed,
+        accounts,
+        categories,
+        recurring: recurring_rows(l),
+        goals: goal_rows(l),
+        recent: top
+            .iter()
+            .take(RECENT_TXNS)
+            .map(|t| l.txn_dto(t, &parts, &by_id))
+            .collect(),
+        counts: LedgerCountsDto {
+            txns: top.len(),
+            to_review: has_reviewed.then(|| {
+                top.iter()
+                    .filter(|t| l.txn_meta.get(&t.id).and_then(|m| m.reviewed) == Some(false))
+                    .count()
+            }),
+            uncategorized: top.iter().filter(|t| Ledger::needs_category(t)).count(),
+        },
+    }
+}
+
+/// `finance_ledger({ instanceId }) → FinanceLedger`: accounts with exact balances, cleared balances and 90-day
+/// history, categories, recurring items, goals, the latest transactions and the review counts — one cached ledger
+/// build instead of every row of five databases over IPC.
+#[tauri::command]
+pub async fn finance_ledger(app: AppHandle, req: InstanceReq) -> ApiResult<FinanceLedgerDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        Ok(ledger_view(&l, local_today(&store)))
+    })
+    .await
+}
+
+/// `finance_txns_query` request.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TxnsQueryReq {
+    instance_id: String,
+    /// `all` (default), `review`, `uncategorized`, `transfers` or `income`.
+    #[serde(default)]
+    filter: Option<String>,
+    #[serde(default)]
+    account_id: Option<String>,
+    #[serde(default)]
+    search: Option<String>,
+    #[serde(default)]
+    offset: usize,
+    limit: usize,
+}
+
+/// `finance_txns_query` counts (over every top-level row, whatever the filter).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TxnsCountsDto {
+    all: usize,
+    review: Option<usize>,
+    uncategorized: usize,
+}
+
+/// `finance_txns_query` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TxnsQueryDto {
+    rows: Vec<LedgerTxnDto>,
+    /// Rows matching the filter.
+    total: usize,
+    /// Money in / out of the matching rows, transfers excluded.
+    inflow: String,
+    outflow: String,
+    counts: TxnsCountsDto,
+}
+
+/// `finance_txns_query` over a loaded ledger (pure).
+pub fn txns_query(l: &Ledger, req: &TxnsQueryReq) -> ApiResult<TxnsQueryDto> {
+    let filter = req.filter.as_deref().unwrap_or("all");
+    if !["all", "review", "uncategorized", "transfers", "income"].contains(&filter) {
+        return Err(ApiError::invalid("filter", "unknown filter"));
+    }
+    let needle = req.search.as_deref().unwrap_or("").trim().to_lowercase();
+    // An amount as typed ("-82.17", "$1,500") matches the absolute amount.
+    let amount_needle: String = needle
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    let amount_needle = (!amount_needle.is_empty()
+        && needle
+            .chars()
+            .all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '-' | '\u{2212}' | '$' | ' ')))
+    .then_some(amount_needle);
+    let (parts_of, _) = l.txn_index();
+    let cat_name: HashMap<&str, String> = l
+        .categories
+        .iter()
+        .map(|c| (c.id.as_str(), c.name.to_lowercase()))
+        .collect();
+    let top = l.top_level();
+    let reviewed = |t: &Txn| l.txn_meta.get(&t.id).and_then(|m| m.reviewed);
+    let matching: Vec<&Txn> = top
+        .iter()
+        .copied()
+        .filter(|t| req.account_id.as_deref().is_none_or(|a| t.account_id == a))
+        .filter(|t| match filter {
+            "uncategorized" => Ledger::needs_category(t),
+            "review" => reviewed(t) == Some(false),
+            "transfers" => t.is_transfer(),
+            "income" => t.amount > Decimal::ZERO && !t.is_transfer(),
+            _ => true,
+        })
+        .filter(|t| {
+            needle.is_empty()
+                || t.payee.to_lowercase().contains(&needle)
+                || t.raw.to_lowercase().contains(&needle)
+                || t.memo.to_lowercase().contains(&needle)
+                || t.category_id
+                    .as_deref()
+                    .and_then(|c| cat_name.get(c))
+                    .is_some_and(|n| n.contains(&needle))
+                // A split's parts are searched by category too.
+                || parts_of.get(t.id.as_str()).is_some_and(|ps| {
+                    ps.iter().any(|p| {
+                        p.category_id
+                            .as_deref()
+                            .and_then(|c| cat_name.get(c))
+                            .is_some_and(|n| n.contains(&needle))
+                    })
+                })
+                || m2(t.amount.abs()).contains(&needle)
+                || amount_needle
+                    .as_deref()
+                    .is_some_and(|a| m2(t.amount.abs()).contains(a))
+        })
+        .collect();
+    let (mut inflow, mut outflow) = (Decimal::ZERO, Decimal::ZERO);
+    for t in &matching {
+        if t.is_transfer() {
+            continue;
+        }
+        if t.amount > Decimal::ZERO {
+            inflow += t.amount;
+        } else {
+            outflow -= t.amount;
+        }
+    }
+    let (parts, by_id) = l.txn_index();
+    let limit = req.limit.min(MAX_TXN_WINDOW);
+    Ok(TxnsQueryDto {
+        rows: matching
+            .iter()
+            .skip(req.offset)
+            .take(limit)
+            .map(|t| l.txn_dto(t, &parts, &by_id))
+            .collect(),
+        total: matching.len(),
+        inflow: m2(inflow),
+        outflow: m2(outflow),
+        counts: TxnsCountsDto {
+            all: top.len(),
+            review: l
+                .has_reviewed()
+                .then(|| top.iter().filter(|t| reviewed(t) == Some(false)).count()),
+            uncategorized: top.iter().filter(|t| Ledger::needs_category(t)).count(),
+        },
+    })
+}
+
+/// `finance_txns_query({ instanceId, filter?, accountId?, search?, offset, limit }) → { rows, total, inflow,
+/// outflow, counts }`: the Transactions tab's filtered, searched window (newest first) with exact totals.
+#[tauri::command]
+pub async fn finance_txns_query(app: AppHandle, req: TxnsQueryReq) -> ApiResult<TxnsQueryDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::opt_id("accountId", req.account_id.as_deref())?;
+    if let Some(q) = &req.search {
+        validate::query("search", q)?;
+    }
+    validate::list_len("limit", req.limit, MAX_TXN_WINDOW)?;
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        let l = Ledger::load(&store, &req.instance_id)?;
+        txns_query(&l, &req)
+    })
+    .await
+}
+
+/// Deserialises a field that may be absent (`None`), `null` (`Some(None)`) or a value.
+fn double_opt<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<String>>, D::Error> {
+    Option::<String>::deserialize(d).map(Some)
+}
+
+/// One `finance_txns_update` patch.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TxnPatch {
+    id: String,
+    /// A category id, or `null` to clear it.
+    #[serde(default, deserialize_with = "double_opt")]
+    category_id: Option<Option<String>>,
+    #[serde(default)]
+    memo: Option<String>,
+    #[serde(default)]
+    date: Option<String>,
+    #[serde(default)]
+    amount: Option<String>,
+    /// `uncleared`, `cleared` or `reconciled`.
+    #[serde(default)]
+    cleared: Option<String>,
+    #[serde(default)]
+    reviewed: Option<bool>,
+}
+
+/// `finance_txns_update` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TxnsUpdateReq {
+    instance_id: String,
+    updates: Vec<TxnPatch>,
+}
+
+/// A `{ updated }` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatedDto {
+    updated: usize,
+}
+
+fn money_cell(d: Decimal, cur: &str) -> CellValue {
+    CellValue::Money {
+        v: Some(m2(d)),
+        cur: cur.to_owned(),
+    }
+}
+
+fn date_cell(d: NaiveDate) -> CellValue {
+    CellValue::Date {
+        v: Some(emp_store::dbmodel::DateValue {
+            start: d.to_string(),
+            end: None,
+            time: false,
+            tz: None,
+        }),
+    }
+}
+
+fn rel_cell(id: Option<&str>) -> CellValue {
+    CellValue::Relation {
+        v: id.map(|s| vec![s.to_owned()]).unwrap_or_default(),
+    }
+}
+
+impl Ledger {
+    /// The currency code of an account (the base currency for unknown accounts).
+    fn currency_of(&self, account_id: &str) -> String {
+        self.accounts
+            .iter()
+            .find(|a| a.id == account_id)
+            .map_or_else(|| self.currency.clone(), |a| a.currency.code().to_owned())
+    }
+
+    /// The option id of `role`'s property in database `db` for `key`.
+    fn option(
+        &self,
+        db: &str,
+        role: &str,
+        names: &[&str],
+        key: &str,
+        known: OptionKeys,
+    ) -> Option<(String, CellValue)> {
+        let p = self.dbs.get(db)?.col(role, names)?;
+        let id = option_for_key(p, key, known)?;
+        Some((p.id.clone(), option_cell(p, id)))
+    }
+}
+
+/// `finance_txns_update` (testable body): applies semantic patches as one batch.
+pub fn txns_update(store: &Store, instance_id: &str, updates: &[TxnPatch]) -> ApiResult<usize> {
+    let l = Ledger::load(store, instance_id)?;
+    let d = l.db("transactions")?;
+    let c = |role: &str, n: &str| d.col_id(role, &[n]);
+    let (cat, memo, dt, am, rev) = (
+        c("txn.category", "Category"),
+        c("txn.memo", "Memo"),
+        c("txn.date", "Date"),
+        c("txn.amount", "Amount"),
+        c("txn.reviewed", "Reviewed"),
+    );
+    let cats: HashSet<&str> = l.categories.iter().map(|c| c.id.as_str()).collect();
+    let (parts, _) = l.txn_index();
+    let mut out = Vec::new();
+    for u in updates {
+        let Some(t) = l.txns.iter().find(|t| t.id == u.id) else {
+            return Err(ApiError::not_found("transaction"));
+        };
+        let mut values: BTreeMap<String, Option<CellValue>> = BTreeMap::new();
+        if let Some(cid) = &u.category_id {
+            if let Some(id) = cid
+                && !cats.contains(id.as_str())
+            {
+                return Err(ApiError::invalid("categoryId", "unknown category"));
+            }
+            let p = cat
+                .clone()
+                .ok_or_else(|| ApiError::invalid("categoryId", "no Category column"))?;
+            values.insert(p, Some(rel_cell(cid.as_deref())));
+        }
+        if let Some(m) = &u.memo {
+            validate::bounded("memo", m, 10_000)?;
+            if let Some(p) = &memo {
+                values.insert(p.clone(), Some(CellValue::text(m)));
+            }
+        }
+        if let Some(s) = &u.date {
+            let day = validate::ymd("date", s)?;
+            if let Some(p) = &dt {
+                values.insert(p.clone(), Some(date_cell(day)));
+            }
+        }
+        if let Some(s) = &u.amount {
+            let v = dec("amount", s)?;
+            if let Some(p) = &am {
+                values.insert(
+                    p.clone(),
+                    Some(money_cell(v, &l.currency_of(&t.account_id))),
+                );
+            }
+        }
+        if let Some(r) = u.reviewed
+            && let Some(p) = &rev
+        {
+            values.insert(p.clone(), Some(CellValue::Check { v: r }));
+        }
+        let mut cleared_cell = None;
+        if let Some(k) = &u.cleared {
+            if !CLEARED.iter().any(|(c, _)| c == k) {
+                return Err(ApiError::invalid(
+                    "cleared",
+                    "must be uncleared, cleared or reconciled",
+                ));
+            }
+            let (p, cell) = l
+                .option("transactions", "txn.cleared", &["Cleared"], k, CLEARED)
+                .ok_or_else(|| ApiError::invalid("cleared", "no Cleared option for this value"))?;
+            values.insert(p.clone(), Some(cell.clone()));
+            cleared_cell = Some((p, cell));
+        }
+        // A split's parts share its cleared state.
+        if let Some((p, cell)) = cleared_cell {
+            for part in parts.get(t.id.as_str()).into_iter().flatten() {
+                out.push(RowUpdate::one(&part.id, &p, Some(cell.clone())));
+            }
+        }
+        if !values.is_empty() {
+            out.push(RowUpdate {
+                id: t.id.clone(),
+                values,
+                base_rev: None,
+            });
+        }
+    }
+    let n = out.len();
+    for chunk in out.chunks(1_000) {
+        store.db_rows_update(chunk.to_vec())?;
+    }
+    Ok(n)
+}
+
+/// `finance_txns_update({ instanceId, updates: [{ id, categoryId?, memo?, date?, amount?, cleared?, reviewed? }] })
+/// → { updated }`: edits transactions by meaning (`cleared` is a key), in one batch.
+#[tauri::command]
+pub async fn finance_txns_update(app: AppHandle, req: TxnsUpdateReq) -> ApiResult<UpdatedDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::list_len("updates", req.updates.len(), 1_000)?;
+    for u in &req.updates {
+        validate::id("updates.id", &u.id)?;
+        if let Some(Some(c)) = &u.category_id {
+            validate::id("updates.categoryId", c)?;
+        }
+    }
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        Ok(UpdatedDto {
+            updated: txns_update(&store, &req.instance_id, &req.updates)?,
+        })
+    })
+    .await
+}
+
+/// `finance_txn_create` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TxnCreateReq {
+    instance_id: String,
+    date: String,
+    payee: String,
+    /// Signed: outflows negative.
+    amount: String,
+    account_id: String,
+    #[serde(default)]
+    category_id: Option<String>,
+    #[serde(default)]
+    memo: Option<String>,
+}
+
+/// An `{ id }` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdDto {
+    id: String,
+}
+
+/// The payee row named `name` (case-insensitive), created when missing; `None` without a Payees database.
+fn payee_row(store: &Store, l: &Ledger, name: &str) -> ApiResult<Option<String>> {
+    let Some(d) = l.dbs.get("payees") else {
+        return Ok(None);
+    };
+    let want = name.trim().to_lowercase();
+    if let Some(r) = d
+        .rows
+        .iter()
+        .find(|r| d.title(r).trim().to_lowercase() == want)
+    {
+        return Ok(Some(r.id.clone()));
+    }
+    let mut v = BTreeMap::new();
+    v.insert(d.title_id().to_owned(), CellValue::text(name.trim()));
+    Ok(store
+        .db_rows_insert_bulk(d.id(), vec![v], None)?
+        .into_iter()
+        .next())
+}
+
+/// `finance_txn_create` (testable body).
+pub fn txn_create(store: &Store, req: &TxnCreateReq) -> ApiResult<String> {
+    let day = validate::ymd("date", &req.date)?;
+    let value = dec("amount", &req.amount)?;
+    let l = Ledger::load(store, &req.instance_id)?;
+    if !l.accounts.iter().any(|a| a.id == req.account_id) {
+        return Err(ApiError::invalid("accountId", "unknown account"));
+    }
+    if let Some(c) = &req.category_id
+        && !l.categories.iter().any(|x| &x.id == c)
+    {
+        return Err(ApiError::invalid("categoryId", "unknown category"));
+    }
+    let d = l.db("transactions")?;
+    let c = |role: &str, n: &str| d.col_id(role, &[n]);
+    let raw = d
+        .col_id("txn.raw", &[])
+        .unwrap_or_else(|| d.title_id().to_owned());
+    let mut v = BTreeMap::new();
+    v.insert(raw, CellValue::text(req.payee.trim()));
+    if let Some(p) = c("txn.date", "Date") {
+        v.insert(p, date_cell(day));
+    }
+    if let Some(p) = c("txn.amount", "Amount") {
+        v.insert(p, money_cell(value, &l.currency_of(&req.account_id)));
+    }
+    if let Some(p) = c("txn.account", "Account") {
+        v.insert(p, rel_cell(Some(&req.account_id)));
+    }
+    if let (Some(p), Some(cid)) = (c("txn.category", "Category"), &req.category_id) {
+        v.insert(p, rel_cell(Some(cid)));
+    }
+    if let (Some(p), Some(m)) = (
+        c("txn.memo", "Memo"),
+        req.memo.as_ref().filter(|m| !m.trim().is_empty()),
+    ) {
+        v.insert(p, CellValue::text(m.trim()));
+    }
+    if let Some((p, cell)) = l.option(
+        "transactions",
+        "txn.cleared",
+        &["Cleared"],
+        "uncleared",
+        CLEARED,
+    ) {
+        v.insert(p, cell);
+    }
+    if let Some((p, cell)) = l.option(
+        "transactions",
+        "txn.source",
+        &["Source"],
+        "manual",
+        TXN_SOURCES,
+    ) {
+        v.insert(p, cell);
+    }
+    // Entered by hand, field by field: nothing left to review.
+    if let Some(p) = c("txn.reviewed", "Reviewed") {
+        v.insert(p, CellValue::Check { v: true });
+    }
+    if let (Some(p), Some(pid)) = (c("txn.payee", "Payee"), payee_row(store, &l, &req.payee)?) {
+        v.insert(p, rel_cell(Some(&pid)));
+    }
+    store
+        .db_rows_insert_bulk(d.id(), vec![v], None)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::internal("transaction not created"))
+}
+
+/// `finance_txn_create({ instanceId, date, payee, amount, accountId, categoryId?, memo? }) → { id }`: a manual
+/// transaction (uncleared, source manual, reviewed), its payee found or added in *Payees*.
+#[tauri::command]
+pub async fn finance_txn_create(app: AppHandle, req: TxnCreateReq) -> ApiResult<IdDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::id("accountId", &req.account_id)?;
+    validate::opt_id("categoryId", req.category_id.as_deref())?;
+    validate::non_empty("payee", &req.payee, 500)?;
+    if let Some(m) = &req.memo {
+        validate::bounded("memo", m, 10_000)?;
+    }
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        Ok(IdDto {
+            id: txn_create(&store, &req)?,
+        })
+    })
+    .await
+}
+
+/// One part of `finance_txn_split`.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SplitPart {
+    category_id: String,
+    /// Signed like the parent.
+    amount: String,
+}
+
+/// `finance_txn_split` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TxnSplitReq {
+    instance_id: String,
+    parent_id: String,
+    /// Empty removes the split.
+    parts: Vec<SplitPart>,
+}
+
+/// A `{ parts }` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SplitDto {
+    parts: usize,
+}
+
+/// `finance_txn_split` (testable body).
+pub fn txn_split(store: &Store, req: &TxnSplitReq) -> ApiResult<usize> {
+    let l = Ledger::load(store, &req.instance_id)?;
+    let Some(parent) = l.txns.iter().find(|t| t.id == req.parent_id) else {
+        return Err(ApiError::not_found("transaction"));
+    };
+    if parent.split_parent.is_some() || parent.is_transfer() {
+        return Err(ApiError::invalid(
+            "parentId",
+            "this transaction cannot be split",
+        ));
+    }
+    let cats: HashSet<&str> = l.categories.iter().map(|c| c.id.as_str()).collect();
+    let mut parts = Vec::new();
+    for p in &req.parts {
+        let a = dec("parts.amount", &p.amount)?;
+        if !cats.contains(p.category_id.as_str()) {
+            return Err(ApiError::invalid("parts.categoryId", "unknown category"));
+        }
+        if a.is_zero() || a.is_sign_negative() != parent.amount.is_sign_negative() {
+            return Err(ApiError::invalid(
+                "parts.amount",
+                "each part must have the transaction's sign",
+            ));
+        }
+        parts.push((p.category_id.clone(), a));
+    }
+    if !parts.is_empty() && parts.iter().map(|(_, a)| *a).sum::<Decimal>() != parent.amount {
+        return Err(ApiError::invalid(
+            "parts",
+            "the parts must add up to the transaction",
+        ));
+    }
+    let d = l.db("transactions")?;
+    let c = |role: &str, n: &str| d.col_id(role, &[n]);
+    let old: Vec<String> = l
+        .txns
+        .iter()
+        .filter(|t| t.split_parent.as_deref() == Some(parent.id.as_str()))
+        .map(|t| t.id.clone())
+        .collect();
+    if !old.is_empty() {
+        store.db_rows_delete(&old)?;
+    }
+    if parts.is_empty() {
+        return Ok(0);
+    }
+    let raw = d
+        .col_id("txn.raw", &[])
+        .unwrap_or_else(|| d.title_id().to_owned());
+    let cur = l.currency_of(&parent.account_id);
+    let cleared = l.option(
+        "transactions",
+        "txn.cleared",
+        &["Cleared"],
+        l.cleared_of(parent),
+        CLEARED,
+    );
+    let reviewed = c("txn.reviewed", "Reviewed");
+    let rows: Vec<BTreeMap<String, CellValue>> = parts
+        .iter()
+        .map(|(cat, a)| {
+            let mut v = BTreeMap::new();
+            v.insert(raw.clone(), CellValue::text(&parent.raw));
+            if let Some(p) = c("txn.date", "Date") {
+                v.insert(p, date_cell(parent.date));
+            }
+            if let Some(p) = c("txn.amount", "Amount") {
+                v.insert(p, money_cell(*a, &cur));
+            }
+            if let Some(p) = c("txn.account", "Account") {
+                v.insert(p, rel_cell(Some(&parent.account_id)));
+            }
+            if let Some(p) = c("txn.category", "Category") {
+                v.insert(p, rel_cell(Some(cat)));
+            }
+            if let Some(p) = c("txn.split_parent", "Split parent") {
+                v.insert(p, rel_cell(Some(&parent.id)));
+            }
+            if let Some((p, cell)) = &cleared {
+                v.insert(p.clone(), cell.clone());
+            }
+            if let Some(p) = &reviewed {
+                v.insert(p.clone(), CellValue::Check { v: true });
+            }
+            v
+        })
+        .collect();
+    let n = store.db_rows_insert_bulk(d.id(), rows, None)?.len();
+    if let Some(p) = c("txn.category", "Category") {
+        store.db_rows_update(vec![RowUpdate::one(&parent.id, &p, Some(rel_cell(None)))])?;
+    }
+    Ok(n)
+}
+
+/// `finance_txn_split({ instanceId, parentId, parts: [{ categoryId, amount }] }) → { parts }`: replaces a
+/// transaction's split parts (they must add up to it exactly); no parts removes the split.
+#[tauri::command]
+pub async fn finance_txn_split(app: AppHandle, req: TxnSplitReq) -> ApiResult<SplitDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::id("parentId", &req.parent_id)?;
+    validate::list_len("parts", req.parts.len(), 100)?;
+    for p in &req.parts {
+        validate::id("parts.categoryId", &p.category_id)?;
+    }
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        Ok(SplitDto {
+            parts: txn_split(&store, &req)?,
+        })
+    })
+    .await
+}
+
+/// `finance_reconcile` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReconcileReq {
+    instance_id: String,
+    account_id: String,
+    as_of: String,
+    /// `false` previews the cleared balance; `true` also locks the cleared rows as reconciled.
+    commit: bool,
+}
+
+/// `finance_reconcile` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconcileDto {
+    /// Cleared balance as of `asOf` (ledger sign: debts negative).
+    cleared: String,
+    /// Cleared rows locked (commit) or that would be locked (preview).
+    count: usize,
+    /// The account's last reconciled date after the call.
+    reconciled: Option<String>,
+}
+
+/// `finance_reconcile` (testable body).
+pub fn reconcile(store: &Store, req: &ReconcileReq) -> ApiResult<ReconcileDto> {
+    let as_of = validate::ymd("asOf", &req.as_of)?;
+    let l = Ledger::load(store, &req.instance_id)?;
+    let Some(a) = l.accounts.iter().find(|a| a.id == req.account_id) else {
+        return Err(ApiError::invalid("accountId", "unknown account"));
+    };
+    let cleared = l.cleared_balance(a, as_of);
+    // Every row (parents and parts) of this account still only "cleared" up to the date.
+    let lock: Vec<&Txn> = l
+        .txns
+        .iter()
+        .filter(|t| t.account_id == a.id && t.date <= as_of && l.cleared_of(t) == "cleared")
+        .collect();
+    let count = lock.iter().filter(|t| t.counts()).count();
+    let mut reconciled = l.acct_meta.get(&a.id).and_then(|m| m.reconciled);
+    if req.commit {
+        if let Some((p, cell)) = l.option(
+            "transactions",
+            "txn.cleared",
+            &["Cleared"],
+            "reconciled",
+            CLEARED,
+        ) {
+            let updates: Vec<RowUpdate> = lock
+                .iter()
+                .map(|t| RowUpdate::one(&t.id, &p, Some(cell.clone())))
+                .collect();
+            for chunk in updates.chunks(1_000) {
+                store.db_rows_update(chunk.to_vec())?;
+            }
+        } else if !lock.is_empty() {
+            return Err(ApiError::invalid(
+                "accountId",
+                "the Cleared column has no Reconciled option",
+            ));
+        }
+        let d = l.db("accounts")?;
+        if let Some(p) = d
+            .col_id("acct.reconciled", &[])
+            .or_else(|| d.keyed_id("last_reconciled", &["Last reconciled"]))
+        {
+            store.db_rows_update(vec![RowUpdate::one(&a.id, &p, Some(date_cell(as_of)))])?;
+            reconciled = Some(as_of);
+        }
+    }
+    Ok(ReconcileDto {
+        cleared: m2(cleared),
+        count,
+        reconciled: reconciled.map(|d| d.to_string()),
+    })
+}
+
+/// `finance_reconcile({ instanceId, accountId, asOf, commit }) → { cleared, count, reconciled }`: the cleared
+/// balance to compare with a statement and, on commit, locks the cleared rows as reconciled and records the date.
+#[tauri::command]
+pub async fn finance_reconcile(app: AppHandle, req: ReconcileReq) -> ApiResult<ReconcileDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::id("accountId", &req.account_id)?;
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        reconcile(&store, &req)
+    })
+    .await
+}
+
+/// `finance_goal_upsert` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GoalUpsertReq {
+    instance_id: String,
+    /// Absent creates a goal.
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    target: Option<String>,
+    /// A date, or `null` to clear it.
+    #[serde(default, deserialize_with = "double_opt")]
+    date: Option<Option<String>>,
+    /// `emergency`, `sinking` or `savings`.
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    saved: Option<String>,
+}
+
+/// `finance_goal_upsert` (testable body).
+pub fn goal_upsert(store: &Store, req: &GoalUpsertReq) -> ApiResult<String> {
+    let l = Ledger::load(store, &req.instance_id)?;
+    let d = l.db("goals")?;
+    let mut v: BTreeMap<String, CellValue> = BTreeMap::new();
+    if let Some(n) = &req.name {
+        validate::non_empty("name", n, 500)?;
+        v.insert(d.title_id().to_owned(), CellValue::text(n.trim()));
+    }
+    if let (Some(t), Some(p)) = (&req.target, d.col_id("goal.target", &["Target"])) {
+        v.insert(p, money_cell(dec("target", t)?, &l.currency));
+    }
+    if let (Some(s), Some(p)) = (&req.saved, d.col_id("goal.saved", &["Saved"])) {
+        v.insert(p, money_cell(dec("saved", s)?, &l.currency));
+    }
+    let date_col = d.col_id("goal.date", &["Target date"]);
+    let mut clear_date = false;
+    match (&req.date, &date_col) {
+        (Some(Some(s)), Some(p)) => {
+            v.insert(p.clone(), date_cell(validate::ymd("date", s)?));
+        }
+        (Some(None), Some(_)) => clear_date = true,
+        _ => {}
+    }
+    if let Some(k) = &req.kind {
+        if !GOAL_KINDS.iter().any(|(g, _)| g == k) {
+            return Err(ApiError::invalid(
+                "kind",
+                "must be emergency, sinking or savings",
+            ));
+        }
+        if let Some((p, cell)) = l.option("goals", "goal.kind", &["Kind", "Type"], k, GOAL_KINDS) {
+            v.insert(p, cell);
+        }
+    }
+    match &req.id {
+        Some(id) => {
+            if !d.rows.iter().any(|r| &r.id == id) {
+                return Err(ApiError::not_found("goal"));
+            }
+            let mut values: BTreeMap<String, Option<CellValue>> =
+                v.into_iter().map(|(k, c)| (k, Some(c))).collect();
+            if let (true, Some(p)) = (clear_date, date_col) {
+                values.insert(p, None);
+            }
+            store.db_rows_update(vec![RowUpdate {
+                id: id.clone(),
+                values,
+                base_rev: None,
+            }])?;
+            Ok(id.clone())
+        }
+        None => {
+            if req.name.is_none() || req.target.is_none() {
+                return Err(ApiError::invalid(
+                    "name",
+                    "a new goal needs a name and a target",
+                ));
+            }
+            if let Some(p) = d.col_id("goal.saved", &["Saved"]) {
+                v.entry(p)
+                    .or_insert_with(|| money_cell(Decimal::ZERO, &l.currency));
+            }
+            store
+                .db_rows_insert_bulk(d.id(), vec![v], None)?
+                .into_iter()
+                .next()
+                .ok_or_else(|| ApiError::internal("goal not created"))
+        }
+    }
+}
+
+/// `finance_goal_upsert({ instanceId, id?, name?, target?, date?, kind?, saved? }) → { id }`: creates or edits a
+/// goal (`kind` is a key).
+#[tauri::command]
+pub async fn finance_goal_upsert(app: AppHandle, req: GoalUpsertReq) -> ApiResult<IdDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::opt_id("id", req.id.as_deref())?;
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        Ok(IdDto {
+            id: goal_upsert(&store, &req)?,
+        })
+    })
+    .await
+}
+
+/// `finance_account_create` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AccountCreateReq {
+    instance_id: String,
+    name: String,
+    /// `acct.type` key.
+    #[serde(rename = "type")]
+    kind: String,
+    /// Opening balance; for cards and loans the amount owed (either sign).
+    #[serde(default)]
+    opening: Option<String>,
+    #[serde(default)]
+    institution: Option<String>,
+    #[serde(default)]
+    apr: Option<f64>,
+    #[serde(default)]
+    limit: Option<String>,
+    #[serde(default)]
+    min_payment: Option<String>,
+    /// Default: on budget for checking, savings, cash and credit cards.
+    #[serde(default)]
+    on_budget: Option<bool>,
+}
+
+/// `finance_account_create` (testable body).
+pub fn account_create(store: &Store, req: &AccountCreateReq) -> ApiResult<String> {
+    if !ACCT_TYPES.iter().any(|(k, _)| *k == req.kind) {
+        return Err(ApiError::invalid("type", "unknown account type"));
+    }
+    let l = Ledger::load(store, &req.instance_id)?;
+    let d = l.db("accounts")?;
+    let mut v: BTreeMap<String, CellValue> = BTreeMap::new();
+    v.insert(d.title_id().to_owned(), CellValue::text(req.name.trim()));
+    let p = d
+        .col("acct.type", &["Type"])
+        .ok_or_else(|| ApiError::invalid("type", "the Accounts database has no Type column"))?;
+    let o = option_for_key(p, &req.kind, ACCT_TYPES)
+        .ok_or_else(|| ApiError::invalid("type", "the Type column has no option for this"))?;
+    v.insert(p.id.clone(), option_cell(p, o));
+    let money = |field: &str, s: &Option<String>| -> ApiResult<Option<Decimal>> {
+        s.as_deref()
+            .filter(|x| !x.trim().is_empty())
+            .map(|x| dec(field, x))
+            .transpose()
+    };
+    if let (Some(c), Some(x)) = (
+        d.col_id("acct.opening", &["Opening balance"]),
+        money("opening", &req.opening)?,
+    ) {
+        v.insert(c, money_cell(x, &l.currency));
+    }
+    if let (Some(c), Some(x)) = (
+        d.col_id("acct.limit", &["Credit limit"]),
+        money("limit", &req.limit)?,
+    ) {
+        v.insert(c, money_cell(x, &l.currency));
+    }
+    if let (Some(c), Some(x)) = (
+        d.col_id("acct.min_payment", &["Min payment"]),
+        money("minPayment", &req.min_payment)?,
+    ) {
+        v.insert(c, money_cell(x, &l.currency));
+    }
+    if let (Some(c), Some(x)) = (d.col_id("acct.apr", &["APR"]), req.apr) {
+        validate::finite("apr", x)?;
+        v.insert(c, CellValue::number(x));
+    }
+    if let (Some(c), Some(x)) = (
+        d.keyed_id("institution", &["Institution"]),
+        req.institution
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty()),
+    ) {
+        v.insert(c, CellValue::text(x));
+    }
+    let on_budget = req.on_budget.unwrap_or(matches!(
+        req.kind.as_str(),
+        "checking" | "savings" | "cash" | "credit_card"
+    ));
+    if let Some(c) = d.col_id("acct.on_budget", &["On budget"]) {
+        v.insert(c, CellValue::Check { v: on_budget });
+    }
+    store
+        .db_rows_insert_bulk(d.id(), vec![v], None)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::internal("account not created"))
+}
+
+/// `finance_account_create({ instanceId, name, type, opening?, institution?, apr?, limit?, minPayment?, onBudget? })
+/// → { id }`: adds an account (`type` is a key).
+#[tauri::command]
+pub async fn finance_account_create(app: AppHandle, req: AccountCreateReq) -> ApiResult<IdDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::non_empty("name", &req.name, 500)?;
+    if let Some(i) = &req.institution {
+        validate::bounded("institution", i, 500)?;
+    }
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        Ok(IdDto {
+            id: account_create(&store, &req)?,
+        })
+    })
+    .await
+}
+
+/// One `finance_budget_assign_many` item.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssignItem {
+    category_id: String,
+    amount: String,
+}
+
+/// `finance_budget_assign_many` request.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssignManyReq {
+    instance_id: String,
+    month: String,
+    items: Vec<AssignItem>,
+}
+
+/// One category of `finance_budget_assign_many`'s result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssignedDto {
+    category_id: String,
+    available: String,
+}
+
+/// `finance_budget_assign_many` result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssignManyDto {
+    to_be_assigned: String,
+    categories: Vec<AssignedDto>,
+}
+
+/// Writes budget assignments for `m` (one update batch, one insert batch) and returns the month afterwards.
+pub fn assign_many(
+    store: &Store,
+    instance_id: &str,
+    m: YearMonth,
+    items: &[(String, Decimal)],
+) -> ApiResult<(BudgetMonth, Arc<Ledger>)> {
+    let l = Ledger::load(store, instance_id)?;
+    for (cid, _) in items {
+        if !l.categories.iter().any(|c| &c.id == cid) {
+            return Err(ApiError::not_found("category"));
+        }
+    }
+    let d = l.db("budgets")?;
+    let (Some(mcol), Some(ccol), Some(acol)) = (
+        d.keyed_id("month", &["Month"]),
+        d.keyed_id("category", &["Category"]),
+        d.keyed_id("assigned", &["Assigned"]),
+    ) else {
+        return Err(ApiError::invalid(
+            "instanceId",
+            "the Budgets database is missing columns",
+        ));
+    };
+    let mut updates = Vec::new();
+    let mut inserts = Vec::new();
+    let month_s = m.to_string();
+    for (cid, value) in items {
+        let money = CellValue::Money {
+            v: Some(value.normalize().to_string()),
+            cur: l.currency.clone(),
+        };
+        let existing = d.rows.iter().find(|r| {
+            text(r.values.get(&mcol)).trim() == month_s
+                && rel(r.values.get(&ccol)).as_deref() == Some(cid)
+        });
+        match existing {
+            Some(r) => updates.push(RowUpdate::one(&r.id, &acol, Some(money))),
+            None => {
+                let name = l
+                    .categories
+                    .iter()
+                    .find(|c| &c.id == cid)
+                    .map_or_else(String::new, |c| c.name.clone());
+                let mut values = BTreeMap::new();
+                values.insert(
+                    d.title_id().to_owned(),
+                    CellValue::text(&format!("{name} · {m}")),
+                );
+                values.insert(mcol.clone(), CellValue::text(&month_s));
+                values.insert(ccol.clone(), rel_cell(Some(cid)));
+                values.insert(acol.clone(), money);
+                inserts.push(values);
+            }
+        }
+    }
+    for chunk in updates.chunks(1_000) {
+        store.db_rows_update(chunk.to_vec())?;
+    }
+    if !inserts.is_empty() {
+        store.db_rows_insert_bulk(d.id(), inserts, None)?;
+    }
+    let l = Ledger::load(store, instance_id)?;
+    let bm = budget_month(store, instance_id, &l, m)?;
+    Ok((bm, l))
+}
+
+/// `finance_budget_assign_many({ instanceId, month, items: [{ categoryId, amount }] }) → { toBeAssigned,
+/// categories: [{ categoryId, available }] }`: Fill targets and Cover overspending in one call.
+#[tauri::command]
+pub async fn finance_budget_assign_many(
+    app: AppHandle,
+    req: AssignManyReq,
+) -> ApiResult<AssignManyDto> {
+    validate::id("instanceId", &req.instance_id)?;
+    validate::list_len("items", req.items.len(), 1_000)?;
+    let m = month("month", &req.month)?;
+    let mut items = Vec::with_capacity(req.items.len());
+    for i in &req.items {
+        validate::id("items.categoryId", &i.category_id)?;
+        items.push((i.category_id.clone(), dec("items.amount", &i.amount)?));
+    }
+    blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.session()?;
+        let (bm, _) = assign_many(&store, &req.instance_id, m, &items)?;
+        Ok(AssignManyDto {
+            to_be_assigned: s(bm.to_be_assigned.unwrap_or_default()),
+            categories: items
+                .iter()
+                .map(|(cid, _)| AssignedDto {
+                    category_id: cid.clone(),
+                    available: s(bm.category(cid).map(|c| c.available).unwrap_or_default()),
                 })
                 .collect(),
         })
@@ -4677,5 +6229,473 @@ mod tests {
         let (_dir, store) = test_support::temp_store();
         let e = Ledger::load(&store, "00000000-0000-0000-0000-000000000000").unwrap_err();
         assert_eq!(e.code, ErrorCode::NotFound);
+    }
+
+    // ── ledger views and key-based writes (ULTRANOTE-1.0 §5)
+
+    fn d(s: &str) -> Decimal {
+        s.parse().unwrap()
+    }
+
+    /// A Money HQ install without sample rows: the Quick-mode Checking account and the default categories.
+    fn empty_money(store: &Store) -> String {
+        let ws = store.workspace_list().unwrap().remove(0).id;
+        let req: emp_store::LifeappInstall = serde_json::from_value(json!({
+            "appId": "money-hq", "answers": {}, "mode": "quick", "disabledKeys": [], "workspaceId": ws, "sampleData": false
+        }))
+        .unwrap();
+        store
+            .lifeapp_install(&req, &emp_store::NoProgress)
+            .unwrap()
+            .instance_id
+    }
+
+    #[test]
+    fn option_keys_survive_generated_ids_and_renames() {
+        assert_eq!(
+            key_of_option("credit_card", "Anything", ACCT_TYPES),
+            "credit_card"
+        );
+        assert_eq!(
+            key_of_option(
+                "6f1c2b1e-0000-5000-8000-000000000000",
+                "Credit card",
+                ACCT_TYPES
+            ),
+            "credit_card"
+        );
+        assert_eq!(key_of_option("x1", "Sinking fund", GOAL_KINDS), "sinking");
+        assert_eq!(
+            key_of_option("x2", "Emergency fund", GOAL_KINDS),
+            "emergency"
+        );
+        assert_eq!(key_of_option("x3", "Reconciled", CLEARED), "reconciled");
+        assert_eq!(
+            key_of_option("x4", "Something else", CLEARED),
+            "something_else"
+        );
+    }
+
+    #[test]
+    fn the_ledger_is_cached_until_a_database_changes() {
+        let (_dir, store) = test_support::temp_store();
+        clear_ledger_cache();
+        let inst = empty_money(&store);
+        let a = Ledger::load(&store, &inst).unwrap();
+        let b = Ledger::load(&store, &inst).unwrap();
+        assert!(
+            Arc::ptr_eq(&a, &b),
+            "unchanged databases reuse the cached ledger"
+        );
+        let acct = a.accounts[0].id.clone();
+        txn_create(
+            &store,
+            &TxnCreateReq {
+                instance_id: inst.clone(),
+                date: "2026-01-10".into(),
+                payee: "Corner Cafe".into(),
+                amount: "-12.50".into(),
+                account_id: acct,
+                category_id: None,
+                memo: None,
+            },
+        )
+        .unwrap();
+        let c = Ledger::load(&store, &inst).unwrap();
+        assert!(!Arc::ptr_eq(&a, &c), "a write invalidates the cache");
+        assert_eq!(c.txns.len(), a.txns.len() + 1);
+        assert_ne!(a.rev, c.rev);
+    }
+
+    #[test]
+    fn manual_transactions_clear_split_and_reconcile_by_key() {
+        let (_dir, store) = test_support::temp_store();
+        let inst = empty_money(&store);
+        let l = Ledger::load(&store, &inst).unwrap();
+        let acct = l
+            .accounts
+            .iter()
+            .find(|a| a.kind == AccountType::Checking)
+            .unwrap()
+            .id
+            .clone();
+        let cats: Vec<String> = l
+            .categories
+            .iter()
+            .filter(|c| !c.is_income)
+            .map(|c| c.id.clone())
+            .collect();
+        let new = |payee: &str, amount: &str, date: &str| {
+            txn_create(
+                &store,
+                &TxnCreateReq {
+                    instance_id: inst.clone(),
+                    date: date.into(),
+                    payee: payee.into(),
+                    amount: amount.into(),
+                    account_id: acct.clone(),
+                    category_id: Some(cats[0].clone()),
+                    memo: Some("lunch".into()),
+                },
+            )
+            .unwrap()
+        };
+        let cafe = new("Corner Cafe", "-12.50", "2026-01-10");
+        let shop = new("Hardware Store", "-100.00", "2026-01-12");
+        let l = Ledger::load(&store, &inst).unwrap();
+        let t = l.txns.iter().find(|t| t.id == cafe).unwrap();
+        assert_eq!(t.payee, "Corner Cafe", "the payee row gives the exact name");
+        assert_eq!(t.amount, d("-12.50"));
+        let m = &l.txn_meta[&cafe];
+        assert_eq!(
+            (m.cleared.as_str(), m.source.as_str(), m.reviewed),
+            ("uncleared", "manual", Some(true))
+        );
+
+        // Cleared by key.
+        let patch: Vec<TxnPatch> = serde_json::from_value(
+            json!([{ "id": cafe, "cleared": "cleared", "categoryId": null }]),
+        )
+        .unwrap();
+        assert_eq!(txns_update(&store, &inst, &patch).unwrap(), 1);
+        let l = Ledger::load(&store, &inst).unwrap();
+        assert_eq!(l.txn_meta[&cafe].cleared, "cleared");
+        assert!(
+            l.txns
+                .iter()
+                .find(|t| t.id == cafe)
+                .unwrap()
+                .category_id
+                .is_none(),
+            "null clears the category"
+        );
+        let bad: Vec<TxnPatch> =
+            serde_json::from_value(json!([{ "id": cafe, "cleared": "maybe" }])).unwrap();
+        assert!(txns_update(&store, &inst, &bad).is_err());
+
+        // Split −100 into −60 / −40: the balance is unchanged, the parts carry the categories.
+        let before = l.balance(
+            l.accounts.iter().find(|a| a.id == acct).unwrap(),
+            local_today(&store),
+        );
+        let split = |parts: Value| {
+            txn_split(
+                &store,
+                &serde_json::from_value(
+                    json!({ "instanceId": inst, "parentId": shop, "parts": parts }),
+                )
+                .unwrap(),
+            )
+        };
+        assert!(split(json!([{ "categoryId": cats[0], "amount": "-60" }, { "categoryId": cats[1], "amount": "-30" }])).is_err(), "parts must add up");
+        assert!(split(json!([{ "categoryId": cats[0], "amount": "-160" }, { "categoryId": cats[1], "amount": "60" }])).is_err(), "parts keep the sign");
+        assert_eq!(split(json!([{ "categoryId": cats[0], "amount": "-60" }, { "categoryId": cats[1], "amount": "-40" }])).unwrap(), 2);
+        let l = Ledger::load(&store, &inst).unwrap();
+        let a = l.accounts.iter().find(|a| a.id == acct).unwrap();
+        assert_eq!(l.balance(a, local_today(&store)), before);
+        let parts: Vec<&Txn> = l
+            .txns
+            .iter()
+            .filter(|t| t.split_parent.as_deref() == Some(shop.as_str()))
+            .collect();
+        assert_eq!(parts.len(), 2);
+        assert!(
+            l.txns
+                .iter()
+                .find(|t| t.id == shop)
+                .unwrap()
+                .category_id
+                .is_none()
+        );
+        let view = ledger_view(&l, local_today(&store));
+        let top = view.recent.iter().find(|t| t.id == shop).unwrap();
+        assert_eq!(top.splits.len(), 2);
+        assert_eq!(top.amount, "-100.00");
+
+        // Reconcile: only the cleared cafe row counts on Jan 31; commit locks it and records the date.
+        let opening = a.opening_balance;
+        let r = reconcile(
+            &store,
+            &serde_json::from_value(json!({ "instanceId": inst, "accountId": acct, "asOf": "2026-01-31", "commit": false })).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(r.cleared, m2(opening - d("12.50")));
+        assert_eq!(r.count, 1);
+        let r = reconcile(
+            &store,
+            &serde_json::from_value(json!({ "instanceId": inst, "accountId": acct, "asOf": "2026-01-31", "commit": true })).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(r.reconciled.as_deref(), Some("2026-01-31"));
+        let l = Ledger::load(&store, &inst).unwrap();
+        assert_eq!(l.txn_meta[&cafe].cleared, "reconciled");
+        assert_eq!(
+            l.acct_meta[&acct].reconciled,
+            Some("2026-01-31".parse().unwrap())
+        );
+        assert_eq!(l.txn_meta[&shop].cleared, "uncleared");
+    }
+
+    #[test]
+    fn the_transactions_query_filters_searches_and_totals_exactly() {
+        let (_dir, store) = test_support::temp_store();
+        let inst = empty_money(&store);
+        let acct = Ledger::load(&store, &inst).unwrap().accounts[0].id.clone();
+        for (p, a, day) in [
+            ("Payroll", "3100.00", "2026-01-02"),
+            ("Rent", "-1500.00", "2026-01-03"),
+            ("Coffee", "-0.10", "2026-01-04"),
+            ("Coffee", "-0.20", "2026-01-05"),
+        ] {
+            txn_create(
+                &store,
+                &serde_json::from_value(json!({ "instanceId": inst, "date": day, "payee": p, "amount": a, "accountId": acct })).unwrap(),
+            )
+            .unwrap();
+        }
+        let l = Ledger::load(&store, &inst).unwrap();
+        let q = |v: Value| txns_query(&l, &serde_json::from_value(v).unwrap()).unwrap();
+        let all = q(json!({ "instanceId": inst, "limit": 2 }));
+        assert_eq!((all.total, all.rows.len()), (4, 2));
+        assert_eq!(all.rows[0].payee, "Coffee");
+        assert_eq!(all.rows[0].date, "2026-01-05", "newest first");
+        assert_eq!(
+            (all.inflow.as_str(), all.outflow.as_str()),
+            ("3100.00", "1500.30")
+        );
+        let coffee = q(json!({ "instanceId": inst, "search": "coffee", "offset": 0, "limit": 10 }));
+        assert_eq!(coffee.total, 2);
+        assert_eq!(coffee.outflow, "0.30", "0.10 + 0.20 is exactly 0.30");
+        let typed = q(json!({ "instanceId": inst, "search": "-0.20", "limit": 10 }));
+        assert_eq!(typed.total, 1, "an amount typed with its sign matches");
+        assert_eq!(
+            q(json!({ "instanceId": inst, "search": "$1,500", "limit": 10 })).total,
+            1
+        );
+        let income = q(json!({ "instanceId": inst, "filter": "income", "limit": 10 }));
+        assert_eq!(income.total, 1);
+        assert_eq!(
+            q(json!({ "instanceId": inst, "filter": "uncategorized", "limit": 10 }))
+                .counts
+                .uncategorized,
+            4
+        );
+        assert!(
+            txns_query(
+                &l,
+                &serde_json::from_value(
+                    json!({ "instanceId": inst, "filter": "nope", "limit": 1 })
+                )
+                .unwrap()
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn accounts_goals_and_batch_assignments_are_written_by_key() {
+        let (_dir, store) = test_support::temp_store();
+        let inst = empty_money(&store);
+        let card = account_create(
+            &store,
+            &serde_json::from_value(json!({ "instanceId": inst, "name": "Visa", "type": "credit_card", "opening": "1500", "apr": 22.9, "limit": "5000" })).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            account_create(
+                &store,
+                &serde_json::from_value(json!({ "instanceId": inst, "name": "X", "type": "boat" }))
+                    .unwrap()
+            )
+            .is_err()
+        );
+        let l = Ledger::load(&store, &inst).unwrap();
+        let a = l.accounts.iter().find(|a| a.id == card).unwrap();
+        assert_eq!(a.kind, AccountType::CreditCard);
+        assert_eq!(
+            a.opening_balance,
+            d("-1500"),
+            "a card's opening is an amount owed"
+        );
+        assert!(a.on_budget);
+        let v = ledger_view(&l, local_today(&store));
+        let va = v.accounts.iter().find(|x| x.id == card).unwrap();
+        assert_eq!(
+            (va.kind.as_str(), va.balance.as_str(), va.limit.as_deref()),
+            ("credit_card", "-1500.00", Some("5000.00"))
+        );
+        assert_eq!(va.history.len(), HISTORY_DAYS);
+
+        let goal = goal_upsert(
+            &store,
+            &serde_json::from_value(json!({ "instanceId": inst, "name": "Holiday", "target": "1200", "kind": "sinking", "date": "2027-06-01" })).unwrap(),
+        )
+        .unwrap();
+        goal_upsert(
+            &store,
+            &serde_json::from_value(json!({ "instanceId": inst, "id": goal, "saved": "300" }))
+                .unwrap(),
+        )
+        .unwrap();
+        let l = Ledger::load(&store, &inst).unwrap();
+        let g = goal_rows(&l).into_iter().find(|g| g.id == goal).unwrap();
+        assert_eq!(
+            (
+                g.kind.as_str(),
+                g.target.as_str(),
+                g.saved.as_str(),
+                g.date.as_deref()
+            ),
+            ("sinking", "1200.00", "300.00", Some("2027-06-01"))
+        );
+
+        let cats: Vec<String> = l
+            .categories
+            .iter()
+            .filter(|c| !c.is_income)
+            .take(3)
+            .map(|c| c.id.clone())
+            .collect();
+        let m: YearMonth = "2026-11".parse().unwrap();
+        let items: Vec<(String, Decimal)> = cats.iter().map(|c| (c.clone(), d("100.25"))).collect();
+        let (bm, _) = assign_many(&store, &inst, m, &items).unwrap();
+        for c in &cats {
+            assert_eq!(bm.category(c).unwrap().assigned, d("100.25"));
+        }
+        // Again with new amounts: rows are updated, not duplicated.
+        let items: Vec<(String, Decimal)> = cats.iter().map(|c| (c.clone(), d("50"))).collect();
+        let (bm, l) = assign_many(&store, &inst, m, &items).unwrap();
+        assert_eq!(bm.category(&cats[0]).unwrap().assigned, d("50"));
+        assert_eq!(l.assignments.iter().filter(|a| a.month == m).count(), 3);
+    }
+
+    /// `cargo test -p emp-app --release -- --ignored --nocapture twenty_thousand`: Money's Overview inputs at 20k
+    /// transactions (ULTRANOTE-1.0 §5 target: Overview ≤ 300 ms). Prints cold and cached timings.
+    #[test]
+    #[ignore = "benchmark"]
+    fn twenty_thousand_transactions_bench() {
+        let (_dir, store) = test_support::temp_store();
+        clear_ledger_cache();
+        let inst = empty_money(&store);
+        let l = Ledger::load(&store, &inst).unwrap();
+        let acct = l.accounts[0].id.clone();
+        let cats: Vec<String> = l.categories.iter().map(|c| c.id.clone()).collect();
+        let d = l.db("transactions").unwrap();
+        let c = |role: &str, n: &str| d.col_id(role, &[n]).unwrap();
+        let (dt, am, ac, ca) = (
+            c("txn.date", "Date"),
+            c("txn.amount", "Amount"),
+            c("txn.account", "Account"),
+            c("txn.category", "Category"),
+        );
+        let raw = d
+            .col_id("txn.raw", &[])
+            .unwrap_or_else(|| d.title_id().to_owned());
+        let start: NaiveDate = "2021-01-01".parse().unwrap();
+        let rows: Vec<BTreeMap<String, CellValue>> = (0..20_000)
+            .map(|i| {
+                let mut v = BTreeMap::new();
+                v.insert(raw.clone(), CellValue::text(&format!("Payee {}", i % 300)));
+                v.insert(
+                    dt.clone(),
+                    date_cell(start + chrono::Duration::days(i64::from(i / 11))),
+                );
+                v.insert(
+                    am.clone(),
+                    money_cell(Decimal::new(-i64::from(i % 9000) - 100, 2), "USD"),
+                );
+                v.insert(ac.clone(), rel_cell(Some(&acct)));
+                v.insert(ca.clone(), rel_cell(Some(&cats[i as usize % cats.len()])));
+                v
+            })
+            .collect();
+        for chunk in rows.chunks(1_000) {
+            store
+                .db_rows_insert_bulk(d.id(), chunk.to_vec(), None)
+                .unwrap();
+        }
+        let today = local_today(&store);
+        let m = YearMonth::of(today);
+        clear_ledger_cache();
+        let t = Instant::now();
+        let l = Ledger::load(&store, &inst).unwrap();
+        let cold = t.elapsed();
+        let t = Instant::now();
+        let _ = Ledger::load(&store, &inst).unwrap();
+        let warm = t.elapsed();
+        let t = Instant::now();
+        let v = ledger_view(&l, today);
+        let view = t.elapsed();
+        let t = Instant::now();
+        let _ = overview(&store, &inst, m, None).unwrap();
+        let ov = t.elapsed();
+        let t = Instant::now();
+        let page = txns_query(
+            &l,
+            &serde_json::from_value(
+                json!({ "instanceId": inst, "search": "payee 7", "limit": 200 }),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let q = t.elapsed();
+        assert_eq!(v.counts.txns, 20_000);
+        assert!(page.total > 0);
+        println!(
+            "20k txns: ledger cold {cold:?}, cached {warm:?}, ledger view {view:?}, overview (cached ledger) {ov:?}, search {q:?}"
+        );
+    }
+
+    #[test]
+    fn a_first_statement_sets_the_opening_balance_from_its_closing_balance() {
+        let (_dir, store) = test_support::temp_store();
+        let inst = empty_money(&store);
+        let acct = Ledger::load(&store, &inst).unwrap().accounts[0].id.clone();
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../crates/emp-finance/tests/fixtures/checking.ofx"
+        ))
+        .unwrap();
+        let opts = ImportOptions {
+            confirmed_large: true,
+            ..ImportOptions::default()
+        };
+        let st = emp_finance::import::start(&bytes, Some("checking.ofx"), &opts).unwrap();
+        let id = emp_store::model::ids::new_id();
+        IMPORTS.lock().insert(
+            id.clone(),
+            StagedImport {
+                instance_id: inst.clone(),
+                name: "checking.ofx".into(),
+                bytes: Arc::new(bytes),
+                format: st.format,
+                fingerprint: st.header_fingerprint,
+                expires: Instant::now() + IMPORT_TTL,
+            },
+        );
+        let (_, r) = commit_import(
+            &store,
+            &crate::jobs::JobCtx::detached(),
+            &id,
+            &st.mapping_guess,
+            &acct,
+            &[],
+            &HashMap::new(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(r["inserted"], 7);
+        assert_eq!(
+            r["openingBalance"], "2000.00",
+            "5,553.63 closing − 3,553.63 of transactions"
+        );
+        let l = Ledger::load(&store, &inst).unwrap();
+        let a = l.accounts.iter().find(|a| a.id == acct).unwrap();
+        assert_eq!(l.balance(a, "2026-01-31".parse().unwrap()), d("5553.63"));
+        assert_eq!(
+            l.cleared_balance(a, "2026-01-31".parse().unwrap()),
+            d("5553.63"),
+            "OFX rows are cleared"
+        );
     }
 }

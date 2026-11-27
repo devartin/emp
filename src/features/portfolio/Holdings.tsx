@@ -24,6 +24,7 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
   if (!s) return <Skeleton height={420} radius={10} />;
   const totalCost = s.holdings.reduce((a, h) => a + num(h.costBasis.amount), 0);
   return (
+    <div className="flex flex-col gap-4">
     <Section title="All holdings" subtitle={<>Cost basis <Sensitive>{fmtWhole(totalCost)}</Sensitive> · lots matched first-in, first-out</>} pad={false}>
       <div className="overflow-x-auto">
         <table className="fh-table" style={{ minWidth: 760 }}>
@@ -44,7 +45,8 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
             const q = quotes[i];
             const isOpen = open.has(h.symbol);
             const lots = isOpen ? book.lotsFor(h.symbol) : [];
-            const price = q?.price ?? h.price ?? 0;
+            // No quote (offline, unknown symbol): no price, and gains read as unknown rather than −100%.
+            const price: number | null = q?.price ?? h.price ?? null;
             return (
               <Fragment key={h.symbol}>
                 <tr data-clickable onClick={() => setOpen((o) => { const n = new Set(o); if (n.has(h.symbol)) n.delete(h.symbol); else n.add(h.symbol); return n; })} aria-expanded={isOpen}>
@@ -66,7 +68,7 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
                   </td>
                   <td className="num"><Sensitive align="end">{fmtQty(h.qty)}</Sensitive></td>
                   <td className="num">
-                    <PriceFlash value={price} symbol={h.symbol}>{fmtPrice(price)}</PriceFlash>
+                    {price === null ? <span className="text-tertiary">—</span> : <PriceFlash value={price} symbol={h.symbol}>{fmtPrice(price)}</PriceFlash>}
                   </td>
                   <td className="num font-medium"><Sensitive align="end">{fmtWhole(q ? q.price * num(h.qty) : h.value.amount)}</Sensitive></td>
                   <td className="num text-secondary"><Sensitive align="end">{fmtWhole(h.costBasis.amount, { currency: h.costBasis.currency })}</Sensitive></td>
@@ -98,7 +100,7 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
                               </thead>
                               <tbody>
                                 {lots.slice(-12).reverse().map((l, k) => {
-                                  const gain = (price - l.costPerUnit) * l.qty;
+                                  const gain = price === null ? null : price * l.qty - l.basis;
                                   const long = daysBetween(l.acquired, todayIso()) > 365;
                                   return (
                                     <tr key={k}>
@@ -109,8 +111,8 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
                                       <td className="text-secondary">{dayLabel(l.acquired, true)}</td>
                                       <td className="num"><Sensitive align="end">{fmtQty(l.qty)}</Sensitive></td>
                                       <td className="num text-secondary">{fmtPrice(l.costPerUnit)}</td>
-                                      <td className="num"><Sensitive align="end">{fmtWhole(l.costPerUnit * l.qty)}</Sensitive></td>
-                                      <td className="num"><Signed value={gain}><Sensitive align="end">{fmtWhole(gain, { signed: true })}</Sensitive></Signed></td>
+                                      <td className="num"><Sensitive align="end">{fmtWhole(l.basis)}</Sensitive></td>
+                                      <td className="num">{gain === null ? <span className="text-tertiary">—</span> : <Signed value={gain}><Sensitive align="end">{fmtWhole(gain, { signed: true })}</Sensitive></Signed>}</td>
                                       <td>{l.taxTreatment === "taxable" ? <Badge tone={long ? "neutral" : "warning"}>{long ? "Long-term" : "Short-term"}</Badge> : <span className="text-tertiary text-caption">Sheltered</span>}</td>
                                     </tr>
                                   );
@@ -130,6 +132,49 @@ export default function Holdings({ instanceId, summary: s }: { instanceId: Id; s
         </tbody>
         </table>
       </div>
+    </Section>
+    <Activity book={book} />
+    </div>
+  );
+}
+
+const TXN_LABEL: Record<string, string> = { buy: "Buy", sell: "Sell", dividend: "Dividend", reinvest: "Reinvested dividend", fee: "Fee", split: "Split", transfer_in: "Transfer in", transfer_out: "Transfer out", return_of_capital: "Return of capital", interest: "Interest" };
+
+/** The latest investment transactions (`portfolio_book.txns`, newest first). */
+function Activity({ book }: { book: ReturnType<typeof usePortfolioBook> }) {
+  const rows = book.txns.slice(0, 20);
+  return (
+    <Section title="Recent activity" subtitle={book.txns.length > 20 ? `The 20 latest of ${book.txns.length}` : undefined} pad={false}>
+      {book.loading ? (
+        <div className="p-4"><Skeleton height={120} /></div>
+      ) : !rows.length ? (
+        <div className="px-4 py-5 text-body-sm text-tertiary">No investment transactions yet.</div>
+      ) : (
+        <table className="fh-table" aria-label="Recent investment transactions">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Holding</th>
+              <th>Account</th>
+              <th className="num">Shares</th>
+              <th className="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((t) => (
+              <tr key={t.id}>
+                <td className="text-secondary">{dayLabel(t.date, true)}</td>
+                <td>{TXN_LABEL[t.type] ?? t.type}</td>
+                <td className="font-medium">{t.symbol ? ticker(t.symbol) : "Cash"}</td>
+                <td className="text-secondary">{book.accounts.get(t.accountId)?.name ?? ""}</td>
+                <td className="num"><Sensitive align="end">{t.qty !== null ? fmtQty(t.qty) : ""}</Sensitive></td>
+                <td className="num"><Sensitive align="end">{t.amount !== null ? fmtWhole(t.amount) : ""}</Sensitive></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </Section>
   );
 }

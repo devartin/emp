@@ -19,9 +19,9 @@ import { spring } from "@/ui/motion/tokens";
 import { Sensitive } from "@/ui/Sensitive";
 import { Skeleton } from "@/ui/Skeleton";
 import { dayLabel, daysBetween, fmtPct, num, todayIso, fmtWhole } from "../shared/format";
-import { useAsync, V } from "../shared/hooks";
+import { useAsync } from "../shared/hooks";
 import { Glyph, Quiet } from "../shared/ui";
-import { useLedgerCtx, type GoalRow } from "./ledger";
+import { amountStr, useLedgerCtx, type GoalRow } from "./ledger";
 import { useMoney } from "./MoneyHQ";
 
 export default function Goals() {
@@ -46,7 +46,7 @@ export default function Goals() {
       {/* No ring (DESIGN §6.3: zero rings in Money): a labelled figure over one 4px bar. */}
       <section className="fh-card flex items-start gap-6">
         <div className="flex-1 min-w-0">
-          <div className="text-caption text-secondary font-medium">Saved toward {l.goals.length} goals</div>
+          <div className="text-caption text-secondary font-medium">Saved toward {l.goals.length} {l.goals.length === 1 ? "goal" : "goals"}</div>
           <div className="flex items-baseline gap-2 mt-1">
             <span data-sensitive="" className="emp-amount" data-role="hero">
               <RollingNumber value={totalSaved} format={(n) => fmtWhole(Math.round(n))} sensitive countUp={false} />
@@ -76,9 +76,9 @@ export default function Goals() {
           ))}
         </div>
       )}
-      {l.schemas.goals ? (
+      {l.dbs.goals ? (
         <div className="flex justify-end">
-          <Button size="sm" variant="ghost" iconRight={ExternalLink} onClick={() => navigate({ t: "db", id: l.schemas.goals!.database.id })}>
+          <Button size="sm" variant="ghost" iconRight={ExternalLink} onClick={() => navigate({ t: "db", id: l.dbs.goals! })}>
             Edit goals in their database
           </Button>
         </div>
@@ -109,8 +109,8 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
   const ratio = g.target ? s / g.target : 0;
   const left = g.date ? daysBetween(todayIso(), g.date) : null;
   const done = s >= g.target - 0.004;
-  const G = l.schemas.goals;
-  const canAdd = !done && !g.accountId && !!G?.database.roles["goal.saved"];
+  const { instanceId } = useMoney();
+  const canAdd = !done && !g.accountId && !!l.dbs.goals;
 
   // fire the celebration once the new value has landed (after the ring's settle)
   const prevDone = useRef(done);
@@ -125,11 +125,11 @@ function GoalCard({ g, saved: s, plan }: { g: GoalRow; saved: number; plan: Plan
 
   const contribute = async () => {
     const amt = num(amountRef.current);
-    if (!G || amt <= 0) return;
+    if (amt <= 0) return;
     setBusy(true);
     try {
-      const next = (s + amt).toFixed(2);
-      await api.db.rowsUpdate({ updates: [{ id: g.id, values: { [G.database.roles["goal.saved"]]: V.money(next) } }] });
+      const next = amountStr(s + amt);
+      await api.finance.goalUpsert({ instanceId, id: g.id, saved: next });
       setMoment((n) => n + 1);
       setAdding(false);
       setAmount(null);
@@ -236,24 +236,13 @@ function AddGoal({ onClose }: { onClose: () => void }) {
   const [target, setTarget] = useState<string | null>(null);
   const [date, setDate] = useState("");
   const [busy, setBusy] = useState(false);
-  const G = l.schemas.goals;
-  const valid = !!G && name.trim() && num(target) > 0;
+  const { instanceId } = useMoney();
+  const valid = !!l.dbs.goals && name.trim() && num(target) > 0;
   const save = async () => {
-    if (!valid || !G) return;
+    if (!valid) return;
     setBusy(true);
     try {
-      const r = G.database.roles;
-      await api.db.rowCreate({
-        databaseId: G.database.id,
-        values: {
-          [G.database.primaryPropId]: V.text(name.trim()),
-          [r["goal.target"]]: V.money(num(target).toFixed(2)),
-          ...(date ? { [r["goal.date"]]: V.date(date) } : {}),
-          ...(r["goal.kind"] ? { [r["goal.kind"]]: V.sel("sinking") } : {}),
-          ...(r["goal.saved"] ? { [r["goal.saved"]]: V.money("0.00") } : {}),
-          ...(r["goal.icon"] ? { [r["goal.icon"]]: V.text("target") } : {}),
-        },
-      });
+      await api.finance.goalUpsert({ instanceId, name: name.trim(), target: amountStr(num(target)), kind: "sinking", saved: "0.00", ...(date ? { date } : {}) });
       notify.success("Goal added");
       l.reload();
       onClose();

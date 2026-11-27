@@ -57,7 +57,7 @@ export async function installLifeOs(env: Env): Promise<void> {
 
   await env.step('Creating Projects');
   const projects = env.database('projects', {
-    title: 'Projects',
+    title: 'Lists',
     icon: lucide('target'),
     props: [
       P.title('Name', 'project.name'),

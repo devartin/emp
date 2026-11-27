@@ -1,6 +1,10 @@
 /* Home = the day (PROGRAMME-v3 K4, DESIGN v3 §5): one 720px column, ruled not boxed, 36px rows with a hairline
    between, no containers, no motion on arrival (C0). Tokens only. */
 .hm-page { width: 100%; max-width: 720px; margin: 0 auto; padding: 48px 24px 96px; }
+/* The body appears whole once every section has its data (HomePage useSettled): a 120 ms fade, no jumps. */
+.hm-body { opacity: 0; }
+.hm-body[data-settled] { opacity: 1; transition: opacity 120ms var(--ease-out); }
+:root[data-motion="reduced"] .hm-body[data-settled] { transition: none; }
 
 .hm-head { margin-bottom: 20px; }
 .hm-date {
@@ -49,13 +53,7 @@
 .hm-capture-input::placeholder { color: var(--text-tertiary); }
 .hm-capture-input:hover { border-color: var(--border-field-hover); }
 .hm-capture-input:focus { outline: var(--focus-width, 2px) solid var(--ring); outline-offset: 1px; border-color: var(--border-field-hover); }
-.hm-capture-hint {
-  position: absolute;
-  right: 12px;
-  pointer-events: none;
-  font-size: calc(12rem / 14);
-  color: var(--text-tertiary);
-}
+.hm-capture-hint { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--text-tertiary); }
 .hm-capture-preview {
   display: flex;
   flex-wrap: wrap;
@@ -123,9 +121,88 @@ button.hm-row:hover .hm-row-title { text-decoration: underline; text-decoration-
 .hm-num.is-over { color: var(--loss-text); }
 .hm-money-alert { margin: 2px 0 0; font-size: calc(13rem / 14); line-height: calc(20 / 13); color: var(--text-secondary); }
 
-.hm-apps-line { margin-top: 28px; font-size: calc(13rem / 14); color: var(--text-secondary); }
+/* ── new workspace (1.0 brief §2.6) ── */
+
+/* the recovery-key reminder: one quiet line on the soft warning tint, one action */
+.hm-reminder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--warning) 28%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--warning-soft);
+}
+.hm-reminder-icon { flex: none; color: var(--warning-text); }
+.hm-reminder-text { flex: 1; min-width: 0; margin: 0; font-size: calc(13rem / 14); line-height: calc(18 / 13); color: var(--text-primary); }
+.hm-reminder-text strong { font-weight: 600; }
+
+/* Start here: five hairline tiles; the press is a 0.98 scale (100 ms) */
+.hm-start { margin-top: 8px; margin-bottom: 20px; }
+.hm-start .hm-section-head { align-items: center; padding-bottom: 8px; border-bottom: 0; }
+.hm-start-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.hm-start-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: calc(13rem / 14);
+  line-height: calc(18 / 13);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 100ms var(--ease-out), transform 100ms var(--ease-out);
+}
+.hm-start-tile svg { color: var(--text-secondary); }
+.hm-start-tile:hover { background: color-mix(in oklab, var(--bg-canvas), var(--text-primary) 3%); }
+.hm-start-tile:hover svg { color: var(--text-primary); }
+.hm-start-tile:active { transform: scale(0.98); }
+.hm-start-tile:focus-visible { outline: var(--focus-width, 2px) solid var(--ring); outline-offset: 1px; }
+
+/* the apps building in the background: one ruled row each, a thin progress line while it builds */
+.hm-setup { margin-bottom: 24px; }
+.hm-setup-row { display: flex; align-items: center; gap: 12px; min-height: var(--row-list); font-size: calc(14rem / 14); color: var(--text-primary); }
+.hm-setup-row[data-state="pending"] { color: var(--text-tertiary); }
+.hm-setup-mark { flex: none; display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: var(--text-primary); }
+.hm-setup-row[data-state="error"] .hm-setup-mark { color: var(--loss-text); }
+.hm-setup-row[data-state="running"] .hm-setup-mark::before,
+.hm-setup-row[data-state="pending"] .hm-setup-mark::before { content: ""; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; opacity: 0.5; }
+.hm-setup-bar { position: relative; flex: none; width: 120px; height: 3px; border-radius: 9999px; overflow: hidden; background: var(--bg-surface-2); }
+.hm-setup-bar i { position: absolute; inset: 0; border-radius: inherit; transform-origin: left center; background: var(--text-primary); }
+
+/* Getting started: a read-only tick ring per item; the label is the action */
+.hm-checklist .hm-section-head .hm-row-meta { margin-left: auto; }
+.hm-check-mark {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 9999px;
+  color: var(--bg-canvas);
+  transition: background-color 160ms var(--ease-out), border-color 160ms var(--ease-out);
+}
+.hm-check-mark[data-done] { border-color: var(--text-primary); background: var(--text-primary); }
+.hm-check.is-done .hm-todo-title { color: var(--text-tertiary); text-decoration: line-through; text-decoration-color: var(--text-tertiary); }
+
+:root[data-motion="reduced"] .hm-start-tile,
+:root[data-motion="reduced"] .hm-check-mark { transition: none; }
+:root[data-motion="reduced"] .hm-start-tile:active { transform: none; }
 
 @media (max-width: 720px) {
   .hm-page { padding: 32px 16px 64px; }
-  .hm-capture-hint { display: none; }
+  .hm-start-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 440px) {
+  .hm-start-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

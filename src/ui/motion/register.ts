@@ -8,7 +8,7 @@
  *   C1 feedback    key press, checkbox tick + strike-through, switch, mouse-opened menus and popovers (.97 → 1),
  *                  toast in / out                               ≤ 160ms in and out; ease-out; no overshoot
  *   C2 continuity  side peek, dialog, sheet, drag lift / drop, reorder, chart range morph, a number rolling after
- *                  the user's own edit                          ≤ 220ms; critically damped; interruptible
+ *                  the user's own edit                          ≤ 220ms in, ≤ 200ms out; critically damped; interruptible
  *   C3 moment      exactly three: vault unlock, life-app build (its length is the real work), reconcile success
  *                                                              ≤ 600ms; skippable; a crossfade under reduced motion
  *
@@ -30,7 +30,8 @@ export interface ClassBudget {
 export const CLASSES: Record<MotionClass, ClassBudget> = {
   C0: { label: "instant", maxIn: 0, maxOut: 120, overshoot: false },
   C1: { label: "feedback", maxIn: 160, maxOut: 160, overshoot: false },
-  C2: { label: "continuity", maxIn: 220, maxOut: 160, overshoot: false },
+  // Exits may take 200ms: the 1.0 brief §4 makes sidebar hide / show a 200ms transform both ways ("small" motion).
+  C2: { label: "continuity", maxIn: 220, maxOut: 200, overshoot: false },
   C3: { label: "moment", maxIn: 600, maxOut: 300, overshoot: false },
 };
 
@@ -71,6 +72,15 @@ export const REGISTER = {
   chartFirstDraw: { cls: "C2", in: 220, out: 0, where: "charts: first data load only" },
   numberRoll: { cls: "C2", in: 200, out: 0, where: "RollingNumber, only after markUserEdit() from an edit handler" },
   confirmation: { cls: "C2", in: 180, out: 160, where: "motion/Celebrate.tsx celebrate()" },
+  // Shell and projects (1.0 brief §2.1, §4)
+  sidebarToggle: { cls: "C2", in: 200, out: 200, where: "shell.css .emp-sidebar[data-motion] (show and hide 200); shellMotion.ts FLIP of the main column / top bar" },
+  shellHover: { cls: "C1", in: 100, out: 100, where: "shell.css .emp-sb-row / .emp-sb-new, projects.css rows (background fade)" },
+  disclosureCaret: { cls: "C1", in: 120, out: 120, where: "shell.css .emp-sb-head .caret, .emp-sb-chevron svg, .emp-sb-new .caret" },
+  sectionExpand: { cls: "C1", in: 160, out: 160, where: "Sidebar/Section.tsx .emp-sb-sec-body (grid rows + opacity)" },
+  rowInsert: { cls: "C1", in: 160, out: 0, where: "shell.css .emp-sb-row[data-fresh] (fade + 4px)" },
+  rowRemove: { cls: "C1", in: 0, out: 160, where: "shell.css .emp-sb-row[data-leaving]; stores/tree.ts trash() (fade + 4px)" },
+  showSidebarButton: { cls: "C1", in: 160, out: 0, where: "shell.css .emp-sb-show (emp-sub-in)" },
+  favoritesDropZone: { cls: "C1", in: 120, out: 0, where: "shell.css .emp-sb-favdrop (fades in while a row is dragged and there are no favourites)" },
   vaultUnlock: { cls: "C3", in: 600, out: 200, where: "features/vault (signature)" },
   lifeAppBuild: { cls: "C3", in: 600, out: 200, where: "features/lifeapps BuildStage (per step; length = real work)" },
   reconcileSuccess: { cls: "C3", in: 600, out: 200, where: "finance reconcile (signature)" },

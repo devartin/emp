@@ -6,10 +6,13 @@ use emp_store::backup::restore::{RestoreCredentials, restore_backup};
 use emp_store::backup::snapshot::SnapshotInfo;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, Webview};
+use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_opener::OpenerExt;
 
 use super::vault::JobOnlyReq;
 use super::{Empty, job_sink};
-use crate::error::{ApiError, ApiResult};
+use crate::error::{ApiError, ApiResult, ErrorCode};
+use crate::events::MAIN_WINDOW;
 use crate::grants::{GrantMode, GrantPurpose};
 use crate::jobs::JobRef;
 use crate::state::{AppState, blocking};
@@ -175,7 +178,8 @@ pub async fn snapshot_list(app: AppHandle, req: Empty) -> ApiResult<Vec<Snapshot
     blocking(move || Ok(app.state::<AppState>().session()?.snapshot_list()?)).await
 }
 
-/// `snapshot_now({ onEvent })` (job) ⇒ `{ id }`. Unencrypted vaults need a backup password set in Security Center.
+/// `snapshot_now({ onEvent })` (job) ⇒ `{ id }`. Unencrypted vaults need a backup password
+/// (`snapshot_set_backup_password`); without one this fails with `UNSUPPORTED`.
 #[tauri::command]
 pub async fn snapshot_now(
     webview: Webview,
@@ -200,24 +204,169 @@ pub struct SnapshotFolderReq {
     grant_id: Option<String>,
 }
 
-/// `snapshot_set_folder({ grantId | null })`: `null` keeps snapshots in the vault directory. Custom folders need a
-/// folder grant and store support for a second snapshot location, neither of which exists yet: `UNSUPPORTED`.
+/// `snapshot_set_folder({ grantId: null })`: snapshots go back to the vault directory. A folder is chosen with
+/// `snapshot_choose_folder` (the native folder dialog); file grants cannot name folders, so a non-null grant is
+/// refused.
 #[tauri::command]
 pub async fn snapshot_set_folder(app: AppHandle, req: SnapshotFolderReq) -> ApiResult<()> {
     if let Some(g) = &req.grant_id {
         validate::grant_id("grantId", g)?;
-        return Err(ApiError::unsupported(
-            "Snapshots can only be kept in the Ultranote data folder in this version",
+        return Err(ApiError::invalid(
+            "grantId",
+            "Choose the folder with the folder picker",
         ));
     }
     blocking(move || {
         let store = app.state::<AppState>().session()?;
+        store.set_snapshot_folder(None)?;
         store.settings_set_vault(
             &serde_json::json!({ "snapshots": { "folderGrantLabel": null } }),
         )?;
         Ok(())
     })
     .await
+}
+
+/// `snapshot_status` result: what the Backups section needs beyond the settings.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotStatus {
+    /// The workspace is encrypted (snapshots use the vault key).
+    encrypted: bool,
+    /// An unencrypted workspace has a backup password, so automatic snapshots can run.
+    backup_password_set: bool,
+    /// Automatic snapshots will run: enabled, and encrypted or with a backup password.
+    automatic: bool,
+    /// Where new snapshots are written (absolute path, for display and "Show folder").
+    folder_path: String,
+    /// New snapshots go to a folder the user chose (`false`: the Ultranote data folder).
+    custom_folder: bool,
+    /// A chosen folder cannot be reached right now; snapshots fall back to the data folder until it is back.
+    folder_unavailable: bool,
+}
+
+fn snapshot_status_of(store: &emp_store::Store) -> ApiResult<SnapshotStatus> {
+    let encrypted = store.is_encrypted()?;
+    let backup_password_set = !encrypted && store.has_backup_password()?;
+    let enabled = store.vault_settings()?.snapshots.enabled;
+    let chosen = store.snapshot_folder()?;
+    let (target, in_folder) = store.snapshot_target()?;
+    Ok(SnapshotStatus {
+        encrypted,
+        backup_password_set,
+        automatic: enabled && (encrypted || backup_password_set),
+        folder_path: target.to_string_lossy().into_owned(),
+        custom_folder: chosen.is_some(),
+        folder_unavailable: chosen.is_some() && !in_folder,
+    })
+}
+
+/// `snapshot_status({}) → SnapshotStatus`.
+#[tauri::command]
+pub async fn snapshot_status(app: AppHandle, req: Empty) -> ApiResult<SnapshotStatus> {
+    let _ = req;
+    blocking(move || snapshot_status_of(&app.state::<AppState>().session()?)).await
+}
+
+/// `snapshot_set_backup_password` request.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackupPasswordReq {
+    password: Option<SecretString>,
+}
+
+/// `snapshot_set_backup_password({ password | null }) → SnapshotStatus`: the password that protects automatic
+/// snapshots of an **unencrypted** workspace (at least 10 characters). Snapshots are never written unencrypted: they
+/// are often kept in synced folders, and the password container also packs attachments inside the file. `null`
+/// removes it, which stops automatic snapshots. Encrypted workspaces use the vault key and refuse this.
+#[tauri::command]
+pub async fn snapshot_set_backup_password(
+    app: AppHandle,
+    req: BackupPasswordReq,
+) -> ApiResult<SnapshotStatus> {
+    let password = req.password.filter(|p| !p.expose_secret().is_empty());
+    if let Some(p) = &password {
+        validate::password("password", p.expose_secret())?;
+    }
+    blocking(move || {
+        let store = app.state::<AppState>().session()?;
+        if store.is_encrypted()? {
+            return Err(ApiError::invalid(
+                "password",
+                "Snapshots of an encrypted workspace use its password and recovery key",
+            ));
+        }
+        let turning_on = password.is_some();
+        store.set_backup_password(password)?;
+        if turning_on {
+            store.settings_set_vault(&serde_json::json!({ "snapshots": { "enabled": true } }))?;
+        }
+        snapshot_status_of(&store)
+    })
+    .await
+}
+
+/// `snapshot_choose_folder({}) → SnapshotStatus | null`: the native folder dialog, run from Rust (the webview never
+/// names a path). New snapshots go to `<folder>/Ultranote snapshots <id>/`; `null` when cancelled.
+#[tauri::command]
+pub async fn snapshot_choose_folder(
+    app: AppHandle,
+    req: Empty,
+) -> ApiResult<Option<SnapshotStatus>> {
+    let _ = req;
+    app.state::<AppState>().session()?;
+    let handle = app.clone();
+    blocking(move || {
+        let mut b = handle
+            .dialog()
+            .file()
+            .set_title("Choose a folder for automatic backups");
+        if let Some(w) = handle.get_webview_window(MAIN_WINDOW) {
+            b = b.set_parent(&w);
+        }
+        let Some(picked) = b.blocking_pick_folder() else {
+            return Ok(None);
+        };
+        let path = picked
+            .into_path()
+            .map_err(|_| ApiError::invalid("folder", "unsupported location"))?;
+        let path = std::fs::canonicalize(&path)?;
+        if !path.is_dir() {
+            return Err(ApiError::invalid("folder", "choose a folder"));
+        }
+        let store = handle.state::<AppState>().session()?;
+        store.set_snapshot_folder(Some(&path))?;
+        let label: String = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned())
+            .chars()
+            .take(120)
+            .collect();
+        store.settings_set_vault(
+            &serde_json::json!({ "snapshots": { "folderGrantLabel": label } }),
+        )?;
+        tracing::info!("snapshot folder chosen");
+        Ok(Some(snapshot_status_of(&store)?))
+    })
+    .await
+}
+
+/// `snapshot_reveal({})`: opens the folder new snapshots are written to in the file manager.
+#[tauri::command]
+pub async fn snapshot_reveal(app: AppHandle, req: Empty) -> ApiResult<()> {
+    let _ = req;
+    let handle = app.clone();
+    let dir = blocking(move || {
+        let store = handle.state::<AppState>().session()?;
+        let (dir, _) = store.snapshot_target()?;
+        emp_store::vault::create_private_dir(&dir)?;
+        Ok(dir)
+    })
+    .await?;
+    app.opener()
+        .open_path(dir.to_string_lossy(), None::<&str>)
+        .map_err(|_| ApiError::new(ErrorCode::Io, "Could not open the backups folder"))
 }
 
 /// `snapshot_verify` request.
@@ -250,6 +399,19 @@ pub async fn snapshot_verify(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backup_password_request_shape() {
+        let r: BackupPasswordReq =
+            serde_json::from_value(serde_json::json!({ "password": "a long password" })).unwrap();
+        assert!(r.password.is_some());
+        let none: BackupPasswordReq =
+            serde_json::from_value(serde_json::json!({ "password": null })).unwrap();
+        assert!(none.password.is_none());
+        assert!(
+            serde_json::from_value::<BackupPasswordReq>(serde_json::json!({ "pw": "x" })).is_err()
+        );
+    }
 
     #[test]
     fn restored_dirs_are_valid_vault_dir_names() {

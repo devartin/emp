@@ -1,5 +1,5 @@
 /**
- * Security Center flows (§9.10, §9.22): turn encryption on (password → re-encryption progress → recovery key
+ * Privacy & security flows (§9.10, §9.22): turn encryption on (password → re-encryption progress → recovery key
  * ceremony), turn it off (re-auth, typed DECRYPT, progress), change password, view / regenerate the recovery key,
  * and strengthen key derivation. Every flow asks for re-auth where §9.10 requires it.
  */
@@ -21,7 +21,7 @@ import { Input } from "@/ui/Input";
 import { celebrate } from "@/ui/motion/Celebrate";
 import { ease } from "@/ui/motion/tokens";
 import { JobProgress, useJob } from "../JobProgress";
-import { withReauth } from "../reauth";
+import { reauthWith, withReauth } from "../reauth";
 
 const step = {
   initial: { opacity: 0, x: 16 },
@@ -133,7 +133,7 @@ export function EnableEncryptionDialog({ open, onOpenChange }: { open: boolean; 
       title={phase === "recovery" ? "Save your recovery key" : phase === "done" ? "Encryption is on" : "Turn on encryption"}
       description={
         phase === "password"
-          ? "Everything you write is encrypted on your device with 256-bit XChaCha20-Poly1305, under a key protected by your password using Argon2id."
+          ? "Everything you write is encrypted on this computer. Only your password, or your recovery key, can open it."
           : phase === "recovery"
             ? "Your password never leaves this device, and we can’t reset it. Your recovery key is the only other way in, so keep it safe."
             : undefined
@@ -177,7 +177,7 @@ export function EnableEncryptionDialog({ open, onOpenChange }: { open: boolean; 
               onDone={(confirmed) => {
                 void useVault.getState().refresh();
                 setPhase("done");
-                if (!confirmed) notify.warning("Recovery key not confirmed", { description: "You can confirm it later in Security Center." });
+                if (!confirmed) notify.warning("Recovery key not confirmed", { description: "You can confirm it later in Settings, Privacy & security." });
                 window.setTimeout(() => doneRef.current && celebrate(doneRef.current), 260);
               }}
             />
@@ -240,6 +240,8 @@ export function DisableEncryptionDialog({ open, onOpenChange }: { open: boolean;
   const run = async () => {
     setError(null);
     try {
+      // The password typed here confirms it's you: no second prompt.
+      await reauthWith(pw);
       const r = await withReauth("turn off encryption", () => job.start((onEvent) => api.vault.disableEncryption({ password: pw, confirm: "DECRYPT", onEvent })));
       setPw("");
       if (r === null) return;
@@ -322,6 +324,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; on
     setBusy(true);
     setError(null);
     try {
+      await reauthWith(old);
       const status = await withReauth("change your password", () => api.vault.changePassword({ oldPassword: old, newPassword: pw }));
       if (!status) return;
       useVault.getState().setStatus(status);
@@ -344,7 +347,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; on
       onOpenChange={(o) => !busy && onOpenChange(o)}
       size="md"
       title="Change password"
-      description="Your data stays encrypted with the same key; only the lock on that key changes. Ultranote derives it again with Argon2id and a fresh salt."
+      description="Your data stays encrypted with the same key; only the lock on that key changes."
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
@@ -488,7 +491,7 @@ export function StrengthenDialog({ open, onOpenChange }: { open: boolean; onOpen
       useVault.getState().setStatus(st);
       setPw("");
       onOpenChange(false);
-      notify.success("Key derivation strengthened", { description: "Argon2id now uses the Standard profile on this device." });
+      notify.success("Password protection strengthened", { description: "Guessing your password now takes much longer." });
     } catch (e) {
       setError(hasCode(e, "BAD_PASSWORD") ? "Incorrect password" : errorMessage(e));
     } finally {
@@ -500,8 +503,8 @@ export function StrengthenDialog({ open, onOpenChange }: { open: boolean; onOpen
       open={open}
       onOpenChange={(o) => !busy && onOpenChange(o)}
       size="sm"
-      title="Strengthen key derivation"
-      description="Ultranote re-derives your key with Argon2id at the Standard profile (256 MiB, 3 passes) and re-wraps the data key. Your data isn’t re-encrypted."
+      title="Strengthen password protection"
+      description="Ultranote protects your key with stronger settings, so each password guess costs an attacker more time. Your data isn’t re-encrypted."
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>

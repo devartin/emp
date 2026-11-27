@@ -2,7 +2,7 @@
  * Reconcile maths (PROGRAMME-v3 K5b): cards and loans are entered as the statement prints them — an amount owed.
  */
 import { describe, expect, it } from "vitest";
-import { clearedAsOf, reconcileCompare, statementFieldFromFile } from "./reconcile";
+import { reconcileCompare, statementFieldFromFile } from "./reconcile";
 
 describe("reconcile", () => {
   it("a card reconciles from the positive amount owed its statement prints", () => {
@@ -41,14 +41,4 @@ describe("reconcile", () => {
     expect(reconcileCompare(true, statementFieldFromFile(true, "-2025.32"), -2025.32).ok).toBe(true);
   });
 
-  it("cleared as of the statement date counts cleared and reconciled rows up to that day", () => {
-    const txns = [
-      { accountId: "a", date: "2026-11-01", amount: -100, cleared: "cleared" },
-      { accountId: "a", date: "2026-11-02", amount: -50, cleared: "reconciled" },
-      { accountId: "a", date: "2026-11-03", amount: -25, cleared: "uncleared" },
-      { accountId: "a", date: "2026-11-30", amount: -10, cleared: "cleared" },
-      { accountId: "b", date: "2026-11-01", amount: -999, cleared: "cleared" },
-    ];
-    expect(clearedAsOf({ id: "a", opening: -1000 }, txns, "2026-11-20")).toBe(-1150);
-  });
 });

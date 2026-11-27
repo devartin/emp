@@ -1,13 +1,15 @@
 /**
- * Top bar (§6.1): 44px drag region. Left: sidebar toggle (only while collapsed), back / forward (⌘[ / ⌘]),
- * breadcrumbs. Right: "Edited 2m ago" (3s after each save), Favorite, Export, Hide numbers, the lock indicator, the
- * right-panel toggle and the `…` page menu; custom caption buttons on Windows. Turns to glass once content scrolls
- * past 8px (§3.8).
+ * Top bar (§6.1, brief §2.3): 44px drag region. Left: "Show sidebar" (only while the sidebar is hidden), back /
+ * forward (⌘[ / ⌘]), breadcrumbs. Right: "Edited 2m ago" (3s after each save), Favorite, Export, Hide numbers (only
+ * on screens that show money), the right-panel toggle and the `…` page menu; custom caption buttons on Windows.
+ *
+ * The Show button fades in (CSS, so it is at rest even if no frame runs) and the controls after it glide over with a
+ * FLIP that never writes their style (shellMotion.ts).
  */
 import { ArrowLeft, ArrowRight, Eye, EyeOff, PanelLeft, PanelRight } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
-import { useEffect, useState } from "react";
-import { runCommand } from "@/app/commands";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { runCommand, showSidebar } from "@/app/commands";
 import { routePageId, useRoute } from "@/app/router";
 import { listen } from "@/backend";
 import { formatRelative } from "@/lib/dates";
@@ -16,12 +18,14 @@ import { selectCanGoBack, selectCanGoForward, useNav } from "@/stores/nav";
 import { usePrivacy } from "@/stores/privacy";
 import { useTree } from "@/stores/tree";
 import { useUi } from "@/stores/ui";
+import { useWorkspace } from "@/stores/workspace";
 import { IconButton } from "@/ui/IconButton";
-import { ease, spring } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { ExportMenu, FavoriteButton, PageMoreMenu } from "./PageActions";
+import { SIDEBAR_ID } from "./Sidebar/Sidebar";
+import { SIDEBAR_MS, SIDEBAR_OUT_MS, flipX, useShellMotion } from "./shellMotion";
 import { WindowControls } from "./WindowControls";
+import { showsMoney } from "./moneyScreens";
 
 function EditedIndicator({ pageId }: { pageId: string }) {
   const updatedAt = useTree((s) => s.byId.get(pageId)?.updatedAt);
@@ -57,12 +61,10 @@ function EditedIndicator({ pageId }: { pageId: string }) {
 export interface TopbarProps {
   /** The sidebar is collapsed or the window is compact. */
   sidebarHidden: boolean;
-  /** Window narrower than 900px: the sidebar only peeks. */
-  compact: boolean;
   scrolled: boolean;
 }
 
-export function Topbar({ sidebarHidden, compact, scrolled }: TopbarProps) {
+export function Topbar({ sidebarHidden, scrolled }: TopbarProps) {
   const route = useRoute();
   const canBack = useNav(selectCanGoBack);
   const canForward = useNav(selectCanGoForward);
@@ -72,53 +74,58 @@ export function Topbar({ sidebarHidden, compact, scrolled }: TopbarProps) {
   const rightOpen = useUi((s) => s.rightPanelOpen);
   const hasPanel = !!meta || route.t === "app";
   const trafficLights = isTauri && isMac && sidebarHidden;
-  const reduced = useReducedMotionPref();
+  const lifeapps = useWorkspace((s) => s.lifeapps);
+  const owner = meta?.appInstanceId;
+  const money = showsMoney(route, lifeapps, owner);
+  const motion = useShellMotion();
+  const navRef = useRef<HTMLSpanElement>(null);
+  const crumbsRef = useRef<HTMLDivElement>(null);
+  const wasHidden = useRef(sidebarHidden);
+  // The Show button (28px + 2px gap) arrives or leaves: the controls after it glide over instead of jumping.
+  useLayoutEffect(() => {
+    if (wasHidden.current === sidebarHidden) return;
+    wasHidden.current = sidebarHidden;
+    if (!motion) return;
+    const dx = sidebarHidden ? -30 : 30;
+    const ms = sidebarHidden ? SIDEBAR_OUT_MS : SIDEBAR_MS;
+    flipX(navRef.current, dx, ms);
+    flipX(crumbsRef.current, dx, ms);
+  }, [sidebarHidden, motion]);
 
   return (
     <header className="emp-topbar drag-region" data-region="topbar" data-scrolled={scrolled ? "" : undefined} data-glass="" data-tauri-drag-region style={trafficLights ? { paddingLeft: 78 } : undefined}>
       <div className="no-drag flex items-center gap-0.5">
-        {/* The toggle fades/slides in (opacity + x); the controls after it glide over with a layout (transform)
-            animation — no width animation. popLayout takes the leaving toggle out of flow at once. */}
-        <AnimatePresence initial={false} mode="popLayout">
-          {sidebarHidden ? (
-            <m.span
-              key="sb"
-              initial={reduced ? { opacity: 0 } : { opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={reduced ? { opacity: 0 } : { opacity: 0, x: -10 }}
-              transition={reduced ? { duration: 0.12 } : { ...spring.ui, opacity: { duration: 0.16, ease: ease.out } }}
-              className="flex"
-            >
-              <span data-sidebar-toggle="" className="flex">
-                <IconButton
-                  size="sm"
-                  icon={PanelLeft}
-                  label="Show sidebar"
-                  shortcut="mod+\"
-                  onClick={() => {
-                    const ui = useUi.getState();
-                    if (compact) ui.setSidebarPeeking(!ui.sidebarPeeking);
-                    else runCommand("sidebar.toggle");
-                  }}
-                />
-              </span>
-            </m.span>
-          ) : null}
-        </AnimatePresence>
-        <m.span className="flex items-center gap-0.5" layout={reduced ? false : "position"} layoutDependency={sidebarHidden} transition={spring.ui}>
+        {sidebarHidden ? (
+          <span data-sidebar-toggle="" className="emp-sb-show flex" data-motion={motion ? "" : undefined}>
+            <IconButton
+              size="sm"
+              icon={PanelLeft}
+              label="Show sidebar"
+              shortcut="mod+\"
+              aria-controls={SIDEBAR_ID}
+              aria-expanded={false}
+              onClick={() => {
+                showSidebar();
+                // The button goes away: focus moves to the sidebar's own toggle.
+                window.setTimeout(() => document.querySelector<HTMLElement>('aside.emp-sidebar [data-sidebar-toggle] button')?.focus({ preventScroll: true }), 0);
+              }}
+            />
+          </span>
+        ) : null}
+        <span ref={navRef} className="flex items-center gap-0.5">
           <IconButton size="sm" icon={ArrowLeft} label="Back" shortcut="mod+[" disabled={!canBack} onClick={() => void useNav.getState().goBack()} />
           <IconButton size="sm" icon={ArrowRight} label="Forward" shortcut="mod+]" disabled={!canForward} onClick={() => void useNav.getState().goForward()} />
-        </m.span>
+        </span>
       </div>
-      <m.div className="ml-1 min-w-0 flex-shrink" layout={reduced ? false : "position"} layoutDependency={sidebarHidden} transition={spring.ui}>
+      <div ref={crumbsRef} className="ml-1 min-w-0 flex-shrink">
         <Breadcrumbs />
-      </m.div>
+      </div>
       <div className="grow" />
       <div className="no-drag flex items-center gap-0.5">
         {meta ? <EditedIndicator pageId={meta.id} /> : null}
         {meta ? <FavoriteButton meta={meta} /> : null}
         {meta ? <ExportMenu meta={meta} /> : null}
-        <IconButton size="sm" icon={hidden ? EyeOff : Eye} active={hidden} label={hidden ? "Show numbers" : "Hide numbers"} shortcut="mod+shift+h" onClick={() => runCommand("privacy.toggle")} />
+        {money ? <IconButton size="sm" icon={hidden ? EyeOff : Eye} active={hidden} label={hidden ? "Show numbers" : "Hide numbers"} shortcut="mod+shift+h" onClick={() => runCommand("privacy.toggle")} /> : null}
         {hasPanel ? (
           <IconButton size="sm" icon={PanelRight} active={rightOpen} label={rightOpen ? "Hide panel" : "Show panel"} onClick={() => runCommand("panel.toggle")} />
         ) : null}

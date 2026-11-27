@@ -2,6 +2,7 @@
  * Shell UI state (§5.8, §5.9, §6.1): sidebar, command palette, side peek, right panel, sheets/dialogs the app opens
  * from anywhere, zoom, and pending backend prompts (open-external confirmation, dropped files).
  */
+import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import { api } from '@/backend';
 import type { FileGrant, Id } from '@/backend/types';
@@ -91,8 +92,87 @@ function applyZoom(z: number) {
   else root.style.setProperty('zoom', String(z));
 }
 
+/**
+ * The sidebar's open/hidden state and width are remembered per device (brief §2.1): this localStorage mirror is read
+ * synchronously, so the very first frame (and the loading skeleton) already has the right layout. The vault kv copy
+ * below is the fallback when this device has nothing stored yet (or storage is unavailable).
+ */
+const DEVICE_SIDEBAR_KEY = 'emp.shell.sidebar';
+
+interface DeviceSidebar {
+  collapsed: boolean;
+  width: number;
+}
+
+function readDeviceSidebar(): DeviceSidebar | null {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DEVICE_SIDEBAR_KEY) ?? 'null') as Partial<DeviceSidebar> | null;
+    if (!raw || typeof raw !== 'object' || typeof raw.collapsed !== 'boolean') return null;
+    const width = typeof raw.width === 'number' && Number.isFinite(raw.width) ? clamp(Math.round(raw.width), SIDEBAR_MIN, SIDEBAR_MAX) : SIDEBAR_DEFAULT;
+    return { collapsed: raw.collapsed, width };
+  } catch {
+    return null;
+  }
+}
+
+function writeDeviceSidebar(v: DeviceSidebar) {
+  try {
+    localStorage.setItem(DEVICE_SIDEBAR_KEY, JSON.stringify(v));
+  } catch {
+    /* storage unavailable: the vault kv copy still remembers it */
+  }
+}
+
+/** The sidebar layout this device remembers (the shell skeleton reads it before the shell chunk loads). */
+export function deviceSidebar(): DeviceSidebar {
+  return readDeviceSidebar() ?? { collapsed: false, width: SIDEBAR_DEFAULT };
+}
+
+/**
+ * Compact window (< 900px, brief §2.1): the sidebar can only be an overlay. One live source for the shell's render
+ * and for the commands, so they can never disagree.
+ *
+ * The answer is read fresh on every render (a new MediaQueryList evaluates the current viewport) and re-read whenever
+ * anything could have changed it. A launch shows the window only after the first render, and WebKitGTK runs no
+ * rendering steps for a hidden window, so the breakpoint can be crossed before anything listens and without a
+ * `change` event; `useSyncExternalStore` re-reads after it subscribes, and resize / visibility / focus re-read too.
+ * (A stale value once left the docked sidebar hidden after a relaunch, with Show only floating a peek.)
+ */
+export const COMPACT_QUERY = '(max-width: 899px)';
+
+export function isCompactWindow(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  try {
+    return window.matchMedia(COMPACT_QUERY).matches;
+  } catch {
+    return false;
+  }
+}
+
+/** Calls `onChange` whenever the answer may have changed (exported for tests). */
+export function subscribeCompact(onChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const mq = typeof window.matchMedia === 'function' ? window.matchMedia(COMPACT_QUERY) : null;
+  mq?.addEventListener?.('change', onChange);
+  window.addEventListener('resize', onChange);
+  window.addEventListener('focus', onChange);
+  document.addEventListener('visibilitychange', onChange);
+  return () => {
+    mq?.removeEventListener?.('change', onChange);
+    window.removeEventListener('resize', onChange);
+    window.removeEventListener('focus', onChange);
+    document.removeEventListener('visibilitychange', onChange);
+  };
+}
+
+/** Whether the window is compact, kept in step with the viewport (see `isCompactWindow`). */
+export function useCompactWindow(): boolean {
+  return useSyncExternalStore(subscribeCompact, isCompactWindow, () => false);
+}
+
 let prefsTimer: ReturnType<typeof setTimeout> | null = null;
 function savePrefs(s: ShellPrefs) {
+  writeDeviceSidebar({ collapsed: s.sidebarCollapsed, width: s.sidebarWidth });
   if (prefsTimer) clearTimeout(prefsTimer);
   prefsTimer = setTimeout(() => {
     prefsTimer = null;
@@ -116,9 +196,10 @@ export const useUi = create<UiState>()((set, get) => {
     setPrefs({ zoom: next });
   };
 
+  const device = readDeviceSidebar();
   return {
-    sidebarCollapsed: false,
-    sidebarWidth: SIDEBAR_DEFAULT,
+    sidebarCollapsed: device?.collapsed ?? false,
+    sidebarWidth: device?.width ?? SIDEBAR_DEFAULT,
     rightPanelOpen: false,
     rightPanelTab: 'outline',
     rightPanelWidth: RIGHT_PANEL_DEFAULT,
@@ -187,8 +268,15 @@ export const useUi = create<UiState>()((set, get) => {
         const v = (await api.kv.get({ ns: 'ui.shell', key: 'prefs' })) as Partial<ShellPrefs> | null;
         if (!v || typeof v !== 'object') return;
         const next: Partial<ShellPrefs> = {};
-        if (typeof v.sidebarCollapsed === 'boolean') next.sidebarCollapsed = v.sidebarCollapsed;
-        if (typeof v.sidebarWidth === 'number') next.sidebarWidth = clamp(v.sidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX);
+        // This device's own sidebar layout wins over the vault's copy (per-device preference).
+        const device = readDeviceSidebar();
+        if (device) {
+          next.sidebarCollapsed = device.collapsed;
+          next.sidebarWidth = device.width;
+        } else {
+          if (typeof v.sidebarCollapsed === 'boolean') next.sidebarCollapsed = v.sidebarCollapsed;
+          if (typeof v.sidebarWidth === 'number') next.sidebarWidth = clamp(v.sidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX);
+        }
         if (typeof v.rightPanelOpen === 'boolean') next.rightPanelOpen = v.rightPanelOpen;
         if (v.rightPanelTab === 'outline' || v.rightPanelTab === 'info' || v.rightPanelTab === 'guide') next.rightPanelTab = v.rightPanelTab;
         if (typeof v.rightPanelWidth === 'number') next.rightPanelWidth = clamp(v.rightPanelWidth, 280, 480);

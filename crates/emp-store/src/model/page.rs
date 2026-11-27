@@ -32,7 +32,9 @@ impl PageFlags {
         macro_rules! merge {
             ($($f:ident),*) => { $( if patch.$f.is_some() { self.$f = patch.$f; } )* };
         }
-        merge!(full_width, small_text, font, locked, template, inline, project);
+        merge!(
+            full_width, small_text, font, locked, template, inline, project
+        );
     }
 }
 

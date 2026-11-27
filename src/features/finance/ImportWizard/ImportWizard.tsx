@@ -3,9 +3,9 @@
  * preview → review with dedupe (exact skipped, possible duplicates in a review lane), transfer pairs and
  * categorisation (rule / learned / none, overridable) → rules & profile → import with progress.
  */
-import { AlertTriangle, ArrowLeftRight, ArrowRight, Check, ChevronLeft, Copy, FileSpreadsheet, FileUp, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, ArrowRight, Check, ChevronLeft, Copy, FileSpreadsheet, FileUp, Plus, Wand2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/backend";
 import type { FinanceImportPreview, FinanceImportStart, Id, ImportMapping } from "@/backend/types";
 import { cn } from "@/lib/cn";
@@ -30,8 +30,10 @@ import { rememberStatement } from "../shared/statements";
 import type { FinanceImportFile } from "./request";
 import { Sensitive } from "@/ui/Sensitive";
 import { Glyph } from "../shared/ui";
-import { useLedgerCtx, type Ledger } from "../MoneyHQ/ledger";
+import { DEBT_TYPES, useLedgerCtx, type Ledger } from "../MoneyHQ/ledger";
 import { CategoryPicker } from "../MoneyHQ/Transactions";
+
+const AddAccount = lazy(() => import("../MoneyHQ/AddAccount"));
 
 type Step = "file" | "map" | "review" | "rules" | "import";
 const STEPS: Step[] = ["file", "map", "review", "rules", "import"];
@@ -54,9 +56,10 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
   const [saveProfile, setSaveProfile] = useState(true);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [result, setResult] = useState<{ inserted: number; skipped: number; transfersLinked: number } | null>(null);
+  const [result, setResult] = useState<{ inserted: number; skipped: number; transfersLinked: number; openingBalance?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const doneRef = useRef<HTMLDivElement>(null);
+  const [addingAccount, setAddingAccount] = useState(false);
 
   const [fileName, setFileName] = useState<string | undefined>(initialFile?.displayName);
   const startWith = async (file: FinanceImportFile) => {
@@ -69,7 +72,8 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
       setAccountId(s.accountGuess ?? null);
       setFileName(file.displayName);
       setProfileName(s.profileMatch?.name ?? file.displayName.replace(/\.[a-z]+$/i, ""));
-      setStep(s.profileMatch ? "review" : "map");
+      // A known CSV layout skips the mapping, but only when the account is known too.
+      setStep(s.profileMatch && s.accountGuess ? "review" : "map");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't read that file");
     } finally {
@@ -122,6 +126,25 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  // Card exports often list purchases as positive amounts. For a card or loan, when most rows of a CSV read as money
+  // in, flip the signs once (the switch stays the user's to undo) and say so.
+  const flipChecked = useRef(new Set<string>());
+  const [flipped, setFlipped] = useState(false);
+  useEffect(() => {
+    if (!preview || !start || start.format !== "csv" || !accountId || !mapping) return;
+    const key = `${start.importId}:${accountId}`;
+    if (flipChecked.current.has(key)) return;
+    flipChecked.current.add(key);
+    const acct = l.acct.get(accountId);
+    if (!acct || !DEBT_TYPES.has(acct.type) || mapping.invert) return;
+    const amounts = preview.rows.map((r) => num(r.amount)).filter((x) => x !== 0);
+    if (amounts.length >= 3 && amounts.filter((x) => x > 0).length / amounts.length > 0.6) {
+      setMapping({ ...mapping, invert: true });
+      setFlipped(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview]);
+
   const commit = async () => {
     if (!start || !mapping || !accountId) return;
     setStep("import");
@@ -133,7 +156,8 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
         accountId,
         skip: [...skip],
         overrides,
-        saveProfileAs: saveProfile && profileName.trim() ? profileName.trim() : undefined,
+        // A layout profile only means something for CSV (OFX, QFX and QIF carry their own fields).
+        saveProfileAs: start.format === "csv" && saveProfile && profileName.trim() ? profileName.trim() : undefined,
         onEvent: (e) => {
           if (e.kind === "progress" && e.total) setProgress({ done: e.done, total: e.total });
         },
@@ -180,9 +204,15 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
   );
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} size="wizard" title="Import transactions" description={TITLES[step]} footer={footer} dismissible={step !== "import" || !!result}>
+    <Sheet open={open} onOpenChange={onOpenChange} size="wizard" title="Import transactions" description={step === "map" && start && start.format !== "csv" ? "Choose the account" : TITLES[step]} footer={footer} dismissible={step !== "import" || !!result}>
       <div className="flex flex-col gap-5">
         <Stepper total={STEPS.length} current={result ? STEPS.length : idx} />
+        {flipped && (step === "map" || step === "review") ? (
+          <div className="fh-alert" data-tone="info">
+            <ArrowLeftRight size={16} />
+            <span className="text-body-sm">Most amounts in this file read as money in, so the signs were flipped for this card: purchases count as money out. Turn off "Flip signs" if that is wrong.</span>
+          </div>
+        ) : null}
         {error ? (
           <div className="fh-alert" data-tone="warn">
             <AlertTriangle size={16} />
@@ -215,7 +245,7 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
             ) : null}
 
             {step === "map" && start && mapping ? (
-              <MapStep start={start} mapping={mapping} setMapping={setMapping} accountId={accountId} setAccountId={setAccountId} accounts={l.accounts.map((a) => ({ value: a.id, label: a.name }))} preview={preview} previewing={previewing} />
+              <MapStep start={start} mapping={mapping} setMapping={setMapping} accountId={accountId} setAccountId={setAccountId} accounts={l.accounts.map((a) => ({ value: a.id, label: a.name }))} preview={preview} previewing={previewing} onAddAccount={() => setAddingAccount(true)} />
             ) : null}
 
             {step === "review" && preview ? (
@@ -225,6 +255,7 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
             {step === "rules" && preview && start ? (
               <div className="flex flex-col gap-4">
                 <Summary preview={preview} skip={skip} />
+                {start.format === "csv" ? (
                 <div className="fh-card">
                   <div className="flex items-center gap-3">
                     <Switch checked={saveProfile} onCheckedChange={setSaveProfile} aria-label="Save mapping as a profile" />
@@ -237,6 +268,7 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
                   </div>
                   {saveProfile ? <Input className="mt-3" label="Profile name" value={profileName} onChange={(e) => setProfileName(e.target.value)} /> : null}
                 </div>
+                ) : null}
                 <RuleSuggestions preview={preview} instanceId={instanceId} ledger={l} overrides={overrides} />
               </div>
             ) : null}
@@ -259,6 +291,11 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
                       <div className="text-body-sm text-secondary tabular">
                         Statement balance <Sensitive>{fmtMoney(preview.statement.balance, preview.statement.currency)}</Sensitive>
                         {preview.statement.asOf ? ` on ${dayLabel(preview.statement.asOf, true)}` : ""} · ready to reconcile in Accounts
+                      </div>
+                    ) : null}
+                    {result.openingBalance && accountId ? (
+                      <div className="text-body-sm text-secondary tabular max-w-[420px]">
+                        {l.acct.get(accountId)?.name ?? "The account"} had no opening balance, so it was set to <Sensitive>{fmtMoney(result.openingBalance, preview?.statement?.currency)}</Sensitive> to match the statement.
                       </div>
                     ) : null}
                   </>
@@ -284,12 +321,27 @@ export default function ImportWizard({ instanceId, open, onOpenChange, initialFi
             ) : null}
         </div>
       </div>
+      {addingAccount ? (
+        <Suspense fallback={null}>
+          <AddAccount
+            instanceId={instanceId}
+            initialType={start?.format === "qfx" ? "credit_card" : "checking"}
+            onClose={() => setAddingAccount(false)}
+            onCreated={(id) => {
+              l.reload();
+              setAccountId(id);
+            }}
+          />
+        </Suspense>
+      ) : null}
     </Sheet>
   );
 }
 
-function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts, preview, previewing }: { start: FinanceImportStart; mapping: ImportMapping; setMapping: (m: ImportMapping) => void; accountId: Id | null; setAccountId: (id: Id) => void; accounts: { value: string; label: string }[]; preview: FinanceImportPreview | null; previewing: boolean }) {
+function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts, preview, previewing, onAddAccount }: { start: FinanceImportStart; mapping: ImportMapping; setMapping: (m: ImportMapping) => void; accountId: Id | null; setAccountId: (id: Id) => void; accounts: { value: string; label: string }[]; preview: FinanceImportPreview | null; previewing: boolean; onAddAccount: () => void }) {
   const cols = start.columns ?? start.sample[0]?.map((_, i) => `Column ${i + 1}`) ?? [];
+  // OFX, QFX and QIF carry their own fields: only the account is asked for, never a column mapping.
+  const structured = start.format !== "csv";
   const roleOf = (i: number): Role => {
     for (const r of ["date", "amount", "debit", "credit", "payee", "memo", "balance"] as Role[]) if ((mapping as unknown as Record<string, unknown>)[r] === i) return r;
     return "ignore";
@@ -318,9 +370,16 @@ function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts
         {previewing ? <Spinner size={14} className="ml-auto" /> : null}
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Select label="Import into" value={accountId} onValueChange={setAccountId} options={accounts} />
-        <Select label="Date format" value={mapping.dateFormat ?? "YYYY-MM-DD"} onValueChange={(v) => setMapping({ ...mapping, dateFormat: v })} options={DATE_FORMATS.map((f) => ({ value: f, label: f === "excel" ? "Excel serial number" : f }))} />
+        <div className="flex items-end gap-2">
+          <Select label="Import into" value={accountId} onValueChange={setAccountId} options={accounts} className="flex-1" />
+          <Button size="sm" variant="ghost" icon={Plus} onClick={onAddAccount}>
+            New account
+          </Button>
+        </div>
+        {structured ? null : <Select label="Date format" value={mapping.dateFormat ?? "YYYY-MM-DD"} onValueChange={(v) => setMapping({ ...mapping, dateFormat: v })} options={DATE_FORMATS.map((f) => ({ value: f, label: f === "excel" ? "Excel serial number" : f }))} />}
       </div>
+      {structured ? null : (
+      <>
       <div className="flex items-center gap-6">
         <Switch size="sm" checked={mapping.invert} onCheckedChange={(v) => setMapping({ ...mapping, invert: v })} label="Flip signs (card exports list purchases as positive)" />
         <Switch size="sm" checked={mapping.decimalComma} onCheckedChange={(v) => setMapping({ ...mapping, decimalComma: v })} label="Decimal comma (1.234,56)" />
@@ -354,6 +413,8 @@ function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts
           </tbody>
         </table>
       </div>
+      </>
+      )}
       <div>
         <div className="text-caption text-secondary mb-2" style={{ fontWeight: 500 }}>
           How Ultranote reads it
@@ -367,7 +428,7 @@ function MapStep({ start, mapping, setMapping, accountId, setAccountId, accounts
               <Amount value={toMoney(r.amount)} signed={num(r.amount) > 0} align="end" />
             </div>
           ))}
-          {!preview?.rows.length ? <div className="text-body-sm text-tertiary">Pick at least a date, an amount and a payee column.</div> : null}
+          {!preview?.rows.length ? <div className="text-body-sm text-tertiary">{!accountId ? "Choose the account these transactions belong to." : structured ? "This statement has no transactions to import." : "Pick at least a date, an amount and a payee column."}</div> : null}
         </div>
       </div>
     </div>
@@ -503,6 +564,22 @@ function RuleSuggestions({ preview, instanceId, ledger, overrides }: { preview: 
     }
     return [...m.values()].filter((e) => e.n >= 2 && e.categoryId).sort((a, b) => b.n - a.n).slice(0, 6);
   }, [preview.rows, overrides]);
+  // Why there is nothing to suggest: repeats without a category yet, repeats a rule already covers, or no repeats.
+  const why = useMemo(() => {
+    const n = new Map<string, { n: number; cat: boolean; rule: boolean }>();
+    for (const r of preview.rows) {
+      if (r.transferPair || r.duplicateOf) continue;
+      const e = n.get(r.payee) ?? { n: 0, cat: false, rule: false };
+      e.n++;
+      e.cat ||= !!(overrides[r.idx]?.categoryId ?? r.categoryId);
+      e.rule ||= r.confidence === "rule";
+      n.set(r.payee, e);
+    }
+    const repeats = [...n.values()].filter((e) => e.n >= 2);
+    if (repeats.some((e) => !e.cat)) return "Give a repeated payee a category in the review step and a rule is suggested here.";
+    if (repeats.length) return "Every repeat is already covered by a rule.";
+    return "No payee appears more than once in this file.";
+  }, [preview.rows, overrides]);
   const create = async (s: { payee: string; categoryId?: Id }) => {
     if (!s.categoryId) return;
     try {
@@ -540,7 +617,7 @@ function RuleSuggestions({ preview, instanceId, ledger, overrides }: { preview: 
           })}
         </div>
       ) : (
-        <div className="text-body-sm text-tertiary">Every repeat is already covered by a rule.</div>
+        <div className="text-body-sm text-tertiary">{why}</div>
       )}
     </div>
   );

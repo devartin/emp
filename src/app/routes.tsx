@@ -45,6 +45,8 @@ function entry<P>(load: Loader<P>): Entry<P> {
 /* Shell chunk (§12): shell + editor. Shell.tsx itself is loaded by App.tsx through `shellEntry`. */
 export const shellEntry = entry<Record<string, never>>(() => import("@/features/shell/Shell"));
 const PageView = entry<{ pageId: Id; blockId?: string }>(() => import("@/features/editor/PageView"));
+/** A project's page (brief §2.2): its contents, then its notes in the normal editor. */
+const ProjectPage = entry<{ pageId: Id; blockId?: string }>(() => import("@/features/projects/ProjectPage"));
 const HomePage = entry<Record<string, never>>(() => import("@/features/home/HomePage"));
 const TrashPage = entry<Record<string, never>>(() => import("@/features/shell/TrashPage"));
 /* Lazy feature chunks. */
@@ -108,7 +110,8 @@ export function preloadRoute(route: AppRoute): void {
   switch (route.t) {
     case "page": {
       const meta = useTree.getState().byId.get(route.id);
-      if (!meta || meta.kind === "doc") run(PageView);
+      if (meta?.kind === "doc" && meta.flags.project) run(ProjectPage);
+      else if (!meta || meta.kind === "doc") run(PageView);
       else if (meta.kind === "database") run(DatabasePage);
       else if (meta.kind === "sheet") run(SheetPage);
       else run(AppPage);
@@ -223,7 +226,7 @@ function PageDispatch({ id, blockId }: { id: Id; blockId?: string }) {
     case "dashboard":
       return <AppDispatch instanceId={meta.appInstanceId ?? meta.id} />;
     default:
-      return <PageView.C pageId={meta.id} blockId={blockId} />;
+      return meta.flags.project ? <ProjectPage.C pageId={meta.id} blockId={blockId} /> : <PageView.C pageId={meta.id} blockId={blockId} />;
   }
 }
 
@@ -337,7 +340,11 @@ function useNavDirection(key: string): DirInfo {
  * for CSS. Sub-target changes (block anchors, tabs) keep the same key and don't remount.
  */
 export function RouteOutlet({ onRouteChange }: { onRouteChange?: (route: AppRoute) => void }) {
-  const route = useRoute();
+  const current = useRoute();
+  // Settings is a dialog over the page you were on (1.0 brief §2.4): the outlet keeps showing that page behind it.
+  const backdrop = useRef<AppRoute>({ t: "home" });
+  if (current.t !== "settings") backdrop.current = current;
+  const route = current.t === "settings" ? backdrop.current : current;
   const key = routeKey(route);
   const dir = useNavDirection(key);
   const host = useRef<HTMLDivElement>(null);
@@ -348,20 +355,34 @@ export function RouteOutlet({ onRouteChange }: { onRouteChange?: (route: AppRout
     document.documentElement.setAttribute("data-nav-dir", dir.dir);
   }, [dir]);
   return (
-    <AnimatePresence mode="wait" initial={false} custom={dir}>
-      <m.div
-        key={key}
-        ref={host}
-        className="emp-route"
-        data-route={route.t}
-        custom={dir}
-        variants={routeVariants}
-        initial="initial"
-        animate="enter"
-        exit="exit"
-      >
-        <RouteView route={route} readyHost={host} />
-      </m.div>
-    </AnimatePresence>
+    <>
+      <AnimatePresence mode="wait" initial={false} custom={dir}>
+        <m.div
+          key={key}
+          ref={host}
+          className="emp-route"
+          data-route={route.t}
+          custom={dir}
+          variants={routeVariants}
+          initial="initial"
+          animate="enter"
+          exit="exit"
+        >
+          <RouteView route={route} readyHost={host} />
+        </m.div>
+      </AnimatePresence>
+      {current.t === "settings" ? <SettingsOverlay section={current.section} /> : null}
+    </>
+  );
+}
+
+/** The Settings dialog, mounted by the main outlet while the route is `#/settings/<section>`. */
+function SettingsOverlay({ section }: { section: string }) {
+  return (
+    <RouteErrorBoundary resetKey="settings">
+      <Suspense fallback={null}>
+        <SettingsPage.C section={section || "general"} />
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }

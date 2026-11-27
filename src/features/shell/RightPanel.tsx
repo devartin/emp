@@ -131,7 +131,7 @@ function InfoTab({ meta }: { meta: PageMeta }) {
       live = false;
     };
   }, [meta.id, bump]);
-  const kind = { doc: "Page", database: "Database", sheet: "Workbook", app: "Life app", dashboard: "Dashboard" }[meta.kind];
+  const kind = meta.kind === "doc" && meta.flags.project ? "Project" : { doc: "Document", database: "Database", sheet: "Spreadsheet", app: "App", dashboard: "Dashboard" }[meta.kind];
   return (
     <div className="flex flex-col gap-6">
       <dl>
@@ -197,11 +197,11 @@ function GuideTab({ instance }: { instance?: LifeAppInstance }) {
     return (
       <EmptyState
         icon={LayoutGrid}
-        title="Guides live in life apps"
-        body="Install a life app and its setup checklist will show up here."
+        title="Guides live in apps"
+        body="Add an app and its setup checklist will show up here."
         actions={
           <button type="button" className="emp-link text-body-sm" onClick={() => navigate({ t: "lifeapps" })}>
-            Browse life apps
+            Browse apps
           </button>
         }
         className="!py-8"

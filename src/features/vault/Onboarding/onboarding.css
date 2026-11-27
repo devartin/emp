@@ -1,41 +1,36 @@
-/* First run (PROGRAMME-v3 K4, DESIGN v3 §5): the steps sit straight on the paper. No card, no backdrop, no shadow;
-   choices are ruled rows (a hairline between, one level), the one ink key is Continue. Tokens only. */
+/* First run (1.0 brief §2.5): two screens set straight on the paper. No backdrop, no shadow; choices are hairline
+   choice cards (ui/ChoiceCard), the one ink key is the primary button. Tokens only; motion is transform/opacity. */
 
 .onb-stage.emp-vault-stage {
   align-items: flex-start;
   background: var(--bg-canvas);
-  padding: max(56px, 12vh) 24px 56px;
+  padding: max(48px, 10vh) 24px 56px;
 }
 
-/* One left edge for every step: a 600px column whose steps set at 480 (the recovery key uses the full width). */
+/* One left edge for both screens: a 660px column. */
 .onb-panel {
   position: relative;
-  width: 600px;
+  width: 660px;
   max-width: 100%;
   margin: 0 auto;
 }
-.onb-panel:not([data-wide]) > * {
-  max-width: 480px;
-}
 
-/* the step index: three words, the current one in ink */
+/* the step index: two short bars, the reached ones in ink (no step names, brief §1) */
 .onb-steps {
   display: flex;
-  gap: 16px;
-  min-height: 16px;
+  gap: 6px;
+  min-height: 4px;
   margin: 0 0 32px;
-  padding: 0;
-  list-style: none;
-  font-size: calc(12rem / 14);
-  line-height: calc(16 / 12);
-  font-weight: 500;
-  color: var(--text-tertiary);
 }
-.onb-steps li[data-done] {
-  color: var(--text-secondary);
+.onb-step {
+  width: 24px;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--border);
+  transition: background-color 160ms ease-out;
 }
-.onb-steps li[aria-current="step"] {
-  color: var(--text-primary);
+.onb-step[data-on] {
+  background: var(--text-primary);
 }
 
 .onb-mark {
@@ -54,6 +49,7 @@
 }
 .onb-sub {
   margin: 6px 0 0;
+  max-width: 520px;
   font-size: 1rem;
   line-height: calc(20 / 14);
   color: var(--text-secondary);
@@ -61,92 +57,140 @@
 
 .onb-field {
   margin-top: 28px;
+  max-width: 360px;
 }
 
-/* a section head: 14/600 (the hairline is the list's first rule) */
 .onb-section {
-  margin: 28px 0 4px;
+  margin: 28px 0 2px;
   font-size: 1rem;
   line-height: calc(20 / 14);
   font-weight: 600;
   color: var(--text-primary);
 }
-.onb-title + .onb-list,
-.onb-sub + .onb-list,
-div:has(> .onb-sub) + .onb-list,
-div:has(> .onb-title) + .onb-list {
+
+/* ── choice cards ── */
+.onb-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.onb-cards.is-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 24px;
 }
-
-/* ── ruled rows ── */
-.onb-list {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--border-subtle);
+/* the use cards: icon beside the words, so seven fit in three short rows */
+.onb-cards .onb-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  grid-auto-rows: auto;
+  column-gap: 8px;
+  row-gap: 1px;
+  align-content: start;
+  min-width: 0;
+  min-height: 0;
+  padding: 11px 26px 11px 12px;
+  transition: transform 100ms ease-out;
 }
-.onb-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  cursor: pointer;
+.onb-cards .onb-card .emp-choice-icon {
+  grid-row: 1 / span 2;
+  align-self: start;
+  margin: 1px 0 0;
 }
-.onb-row.is-compact {
-  align-items: center;
-  min-height: var(--row-list);
-  padding: 0;
+.onb-cards .onb-card .emp-choice-title,
+.onb-cards .onb-card .emp-choice-desc {
+  grid-column: 2;
 }
-.onb-row-ctl {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.onb-cards .onb-card .emp-choice-badge {
+  top: 9px;
+  right: 8px;
   width: 16px;
-  height: 20px;
+  height: 16px;
 }
-.onb-row-text {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-.onb-row-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 1rem;
-  line-height: calc(20 / 14);
-  font-weight: 500;
-}
-.onb-row.is-compact .onb-row-title {
-  font-weight: 400;
-}
-.onb-row-note {
-  margin-left: 8px;
-  font-size: calc(12rem / 14);
-  font-weight: 400;
-  color: var(--text-tertiary);
-}
-.onb-row-detail {
-  font-size: calc(13rem / 14);
-  line-height: calc(18 / 13);
-  color: var(--text-secondary);
-}
-.onb-row-meta {
-  flex: none;
+.onb-cards .onb-card .emp-choice-desc {
   font-size: calc(12rem / 14);
   line-height: calc(16 / 12);
-  color: var(--text-tertiary);
+}
+.onb-cards.is-two .onb-card {
+  display: flex;
+  padding: 16px 40px 16px 16px;
+}
+.onb-cards.is-two .onb-card .emp-choice-icon {
+  margin-bottom: 8px;
+}
+.onb-cards.is-two .onb-card .emp-choice-badge {
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+}
+.onb-cards.is-two .onb-card .emp-choice-desc {
+  font-size: calc(13rem / 14);
+  line-height: calc(18 / 13);
+}
+.onb-cards .onb-card:active:not(:disabled) {
+  transform: scale(0.98);
+}
+/* Notes and documents is always included: shown checked, not faded. */
+.onb-cards .onb-card:disabled[data-state="checked"] {
+  opacity: 1;
+  cursor: default;
+  border-color: var(--border);
+  box-shadow: none;
+  background: transparent;
+}
+.onb-cards .onb-card:disabled[data-state="checked"] .emp-choice-badge {
+  background: var(--text-tertiary);
+}
+@media (max-width: 660px) {
+  .onb-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 420px) {
+  .onb-cards,
+  .onb-cards.is-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .onb-note {
   margin: 12px 0 0;
   font-size: calc(13rem / 14);
   line-height: calc(18 / 13);
+  color: var(--text-secondary);
+}
+
+/* "Suggest one": the suggested password is shown, never only typed into masked fields */
+.onb-suggest {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--bg-canvas), var(--text-primary) 3%);
+}
+.onb-suggest-label {
+  display: block;
+  font-size: calc(12rem / 14);
+  line-height: calc(16 / 12);
+  color: var(--text-tertiary);
+}
+.onb-suggest-value {
+  display: block;
+  margin: 2px 0;
+  font-family: var(--font-mono-code);
+  font-size: 1rem;
+  line-height: calc(22 / 14);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.onb-suggest-help {
+  display: block;
+  font-size: calc(12rem / 14);
+  line-height: calc(16 / 12);
   color: var(--text-secondary);
 }
 
@@ -170,31 +214,10 @@ div:has(> .onb-title) + .onb-list {
   }
 }
 
-/* ── the build: one ruled row per piece of real work ── */
-.onb-build-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: var(--row-list);
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 1rem;
-  color: var(--text-primary);
+:root[data-motion="reduced"] .onb-step,
+:root[data-motion="reduced"] .onb-cards .onb-card {
+  transition: none;
 }
-.onb-build-row[data-state="pending"] {
-  color: var(--text-tertiary);
-}
-.onb-build-mark {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  color: var(--text-tertiary);
-}
-.onb-build-row[data-state="done"] .onb-build-mark {
-  color: var(--text-primary);
-}
-.onb-build-row[data-state="error"] .onb-build-mark {
-  color: var(--loss-text);
+:root[data-motion="reduced"] .onb-cards .onb-card:active:not(:disabled) {
+  transform: none;
 }

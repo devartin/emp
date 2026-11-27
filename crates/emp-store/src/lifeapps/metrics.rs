@@ -115,6 +115,8 @@ pub struct MetricData {
     pub others: BTreeMap<String, BTreeMap<String, DbData>>,
     /// Spreadsheet lint counts by rule (Spreadsheet Studio).
     pub lint: BTreeMap<String, u32>,
+    /// Live spreadsheets in the instance's workspace (Spreadsheet Studio's `workbook_count`).
+    pub workbook_count: u32,
 }
 
 /// Replaces built-in metric functions (registered by the app, e.g. with `emp-finance` implementations).
@@ -412,6 +414,7 @@ pub const FUNCTIONS: &[&str] = &[
     "tax.taxes_fund",
     // Spreadsheet Studio
     "sheets.lint",
+    "sheets.workbook_count",
     // Life OS
     "life.inbox_count",
     "life.overdue_count",
@@ -1978,6 +1981,9 @@ fn tax_fn(id: &str, d: &MetricData) -> Option<Out> {
 }
 
 fn sheets_fn(id: &str, d: &MetricData) -> Option<Out> {
+    if id == "sheets.workbook_count" {
+        return count_out(d.workbook_count as usize, "Spreadsheets");
+    }
     match id.strip_prefix("sheets.lint") {
         Some("") => {
             let n: u32 = d.lint.values().sum();
@@ -2242,6 +2248,64 @@ fn habit_data(d: &MetricData) -> Option<Vec<HabitData>> {
             })
             .collect(),
     )
+}
+
+/// The calculated columns of one habit row (Habits' `Current streak`, `Best streak` and `30-day rate`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct HabitColumns {
+    /// Habit row id.
+    pub row_id: String,
+    /// Current streak (scheduled periods).
+    pub current: u32,
+    /// Best streak.
+    pub best: u32,
+    /// Completion rate over the last 30 days (0–1).
+    pub rate_30d: f64,
+}
+
+/// Streak and rate columns for every habit row (active or not), the same definitions as the Habits metrics.
+#[must_use]
+pub fn habit_columns(d: &MetricData) -> Vec<HabitColumns> {
+    let Some(h) = db(d, "habits") else {
+        return Vec::new();
+    };
+    let log = db(d, "log");
+    let today = d.today;
+    h.rows
+        .iter()
+        .map(|r| {
+            let mut done = BTreeSet::new();
+            let mut frozen = BTreeSet::new();
+            if let Some(l) = log {
+                for e in l.rows.iter().filter(|e| l.rel(e, "habit").contains(&r.id)) {
+                    let Some(date) = l.date(e, "date") else {
+                        continue;
+                    };
+                    match l.opt(e, "status").as_str() {
+                        "done" | "partial" | "" => {
+                            done.insert(date);
+                        }
+                        "frozen" | "skipped" => {
+                            frozen.insert(date);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            let schedule = schedule_of(h, r, today);
+            let s = habits::streak(&done, &schedule, &grace_of(d, &frozen), today);
+            let start = h
+                .date(r, "started")
+                .unwrap_or(today - Duration::days(29))
+                .max(today - Duration::days(29));
+            HabitColumns {
+                row_id: r.id.clone(),
+                current: s.current,
+                best: s.best,
+                rate_30d: habits::completion_rate(&done, &schedule, start, today),
+            }
+        })
+        .collect()
 }
 
 fn grace_of(d: &MetricData, frozen: &BTreeSet<NaiveDate>) -> Grace {

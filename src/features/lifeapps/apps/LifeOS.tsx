@@ -1,9 +1,11 @@
 /**
- * Life OS hub (§16.6): Tasks · Projects · Review. It lands on Tasks with focus in the quick-add field; the day itself
- * (due and overdue tasks, today's agenda, habits) lives on Home (PROGRAMME-v3 K4: Home is the only "Today").
- * Completing a task ticks the check and strikes the title (C1); recurring tasks spawn their next occurrence in the
- * backend. Quick add previews its parse as plain chips before Enter. No KPI row: the subtitle states the counts once
- * the tasks have loaded (never "0 open" while they load).
+ * Tasks hub (app id `life-os`, §16.6; called "Tasks" since 1.0): Tasks · Lists · Review. It lands on Tasks with focus
+ * in the quick-add field; the day itself (due and overdue tasks, today's agenda, habits) lives on Home (PROGRAMME-v3
+ * K4: Home is the only "Today"). Completing a task ticks the check and strikes the title (C1); the backend keeps
+ * `Done` / `Completed at` in step and spawns the next occurrence of a recurring task. Quick add previews its parse as
+ * plain chips before Enter. No KPI row: the subtitle states the counts once the tasks have loaded (never "0 open"
+ * while they load). Options are matched by manifest key (`done`, `next`, `p1`), which is the option id on both
+ * backends, so renamed statuses keep working.
  */
 import { ArrowRight, CalendarDays, Check, FolderKanban, Inbox, Plus, RotateCcw, Target } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
@@ -28,12 +30,12 @@ import { Tag } from "@/ui/Tag";
 import { spring } from "@/ui/motion/tokens";
 import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
 import { AppHeader } from "../AppHeader";
-import { localDay, optionId, read, write } from "../cells";
+import { keyOf, localDay, optIs, optionFor, read, write } from "../cells";
 import { useAppDatabases, useMetrics, useRows, useStableNow, type AppDb } from "../data";
-import { appVars } from "../identity";
+import { appVars, identity } from "../identity";
 import { PageIcon } from "@/features/shell/PageIcon";
 
-type Tab = "tasks" | "projects" | "review";
+type Tab = "tasks" | "lists" | "review";
 
 const addDays = (day: string, n: number) => {
   const d = new Date(`${day}T12:00:00`);
@@ -53,7 +55,26 @@ function dueLabel(due: string | undefined, today: string): { text: string; cls?:
   return { text: new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) };
 }
 
-const PRIO_COLOR: Record<string, string> = { P1: "var(--loss)", P2: "var(--warning)", P3: "var(--info)", P4: "rgba(var(--text-rgb),.25)", "Do now": "var(--loss)", Schedule: "var(--info)", Delegate: "var(--warning)", Drop: "rgba(var(--text-rgb),.25)" };
+/** Priority / quadrant option keys → dot colour. */
+const PRIO_COLOR: Record<string, string> = { p1: "var(--loss)", p2: "var(--warning)", p3: "var(--info)", p4: "rgba(var(--text-rgb),.25)", do: "var(--loss)", do_now: "var(--loss)", schedule: "var(--info)", delegate: "var(--warning)", drop: "rgba(var(--text-rgb),.25)" };
+const PRIO_KEYS = Object.keys(PRIO_COLOR);
+
+/** The task lists (status option keys) in order, with their labels. */
+const LISTS = [
+  { key: "inbox", label: "Inbox" },
+  { key: "next", label: "Next" },
+  { key: "scheduled", label: "Scheduled" },
+  { key: "waiting", label: "Waiting" },
+  { key: "someday", label: "Someday" },
+  { key: "done", label: "Done" },
+] as const;
+type ListKey = (typeof LISTS)[number]["key"];
+const LIST_KEYS = LISTS.map((l) => l.key);
+
+/** The status key of a task (`inbox` … `done`), matched by option id first. */
+function statusKey(row: RowDTO, db: AppDb | undefined): ListKey | null {
+  return keyOf(read.opt(row, db?.p("task.status")), LIST_KEYS) as ListKey | null;
+}
 
 // ───────────────────────────────────────────────────────────────────────────── task row
 
@@ -61,14 +82,15 @@ const PRIO_COLOR: Record<string, string> = { P1: "var(--loss)", P2: "var(--warni
 function TaskRow({ row, db, today, projectName, onToggle, showStatus, ref }: { row: RowDTO; db: AppDb; today: string; projectName?: string; onToggle: (row: RowDTO, el: HTMLElement) => void; showStatus?: boolean; ref?: Ref<HTMLDivElement> }) {
   const reduced = useReducedMotionPref();
   const status = read.opt(row, db.p("task.status"));
-  const done = status?.name === "Done";
+  const done = optIs(status, "done");
   const prio = read.opt(row, db.p("task.priority"));
+  const prioKey = keyOf(prio, PRIO_KEYS);
   const due = read.date(row, db.p("task.due"));
   const sched = read.date(row, db.p("task.scheduled"));
   const dl = dueLabel(due?.start, today);
   const title = read.text(row, db.p("task.title")) || "Untitled";
   const repeat = row.values[db.p("task.recurrence")?.id ?? ""];
-  const p = prio?.name === "P1" || prio?.name === "Do now" ? "1" : prio?.name === "P2" ? "2" : undefined;
+  const p = prioKey === "p1" || prioKey === "do" || prioKey === "do_now" ? "1" : prioKey === "p2" ? "2" : undefined;
   return (
     <m.div ref={ref} layout="position" transition={spring.glide} className={cn("lo-task group", done && "is-done")} exit={{ opacity: 0, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }}>
       <button
@@ -100,7 +122,7 @@ function TaskRow({ row, db, today, projectName, onToggle, showStatus, ref }: { r
         {sched?.time && sched.start ? <span className="tabular">{formatTime(sched.start)}</span> : null}
         {dl ? <span className={cn("tabular", dl.cls)}>{dl.text}</span> : null}
         {showStatus && status ? <Tag color={(status.color as never) ?? "gray"}>{status.name}</Tag> : null}
-        {prio ? <span className="lo-pri" style={{ background: PRIO_COLOR[prio.name] ?? "var(--text-tertiary)" }} title={prio.name} /> : null}
+        {prio ? <span className="lo-pri" style={{ background: (prioKey && PRIO_COLOR[prioKey]) || "var(--text-tertiary)" }} title={prio.name} /> : null}
       </span>
     </m.div>
   );
@@ -110,8 +132,8 @@ function useToggleTask(db: AppDb | undefined, setRows: (fn: (r: RowDTO[]) => Row
   return async (row: RowDTO, _el: HTMLElement) => {
     if (!db) return;
     const status = db.p("task.status");
-    const done = read.opt(row, status)?.name === "Done";
-    const next = optionId(status, done ? "Next" : "Done");
+    const done = optIs(read.opt(row, status), "done");
+    const next = optionFor(status, done ? "next" : "done");
     if (!status || !next) return;
     setRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, values: { ...r.values, [status.id]: write.status(next) } } : r)));
     try {
@@ -128,7 +150,7 @@ function useToggleTask(db: AppDb | undefined, setRows: (fn: (r: RowDTO[]) => Row
 
 // ───────────────────────────────────────────────────────────────────────────── quick add
 
-function QuickAdd({ db, autoFocus, onAdded }: { db: AppDb | undefined; autoFocus?: boolean; onAdded?: (list: "Inbox" | "Next") => void }) {
+function QuickAdd({ db, autoFocus, onAdded }: { db: AppDb | undefined; autoFocus?: boolean; onAdded?: (list: ListKey) => void }) {
   const [text, setText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   // Life OS lands with focus in this field once the tasks database is ready (the field is disabled until then).
@@ -146,23 +168,27 @@ function QuickAdd({ db, autoFocus, onAdded }: { db: AppDb | undefined; autoFocus
       const title = db.p("task.title");
       if (title) values[title.id] = write.text(parsed.title.trim());
       const status = db.p("task.status");
-      const st = optionId(status, parsed.start ? "Next" : "Inbox");
-      if (status && st) values[status.id] = write.status(st);
+      const st = optionFor(status, parsed.start ? "next" : "inbox");
+      if (status && st) values[status.id] = status.type === "select" ? write.select(st) : write.status(st);
       const due = db.p("task.due");
       if (due && parsed.start) values[due.id] = parsed.hasTime ? write.date(parsed.start.toISOString(), parsed.end?.toISOString(), true) : write.date(localDay(parsed.start));
       const prio = db.p("task.priority");
-      const pName = parsed.priority === "high" ? "P1" : parsed.priority === "med" ? "P2" : parsed.priority === "low" ? "P4" : null;
-      const pid = pName ? optionId(prio, pName) : null;
+      const pKey = parsed.priority === "high" ? "p1" : parsed.priority === "med" ? "p2" : parsed.priority === "low" ? "p4" : null;
+      const pid = pKey ? optionFor(prio, pKey) : null;
       if (prio && pid) values[prio.id] = write.select(pid);
+      // Source is a text column on desktop and a select in older browser-preview data.
       const src = db.p("task.source");
-      const sid = optionId(src, "Quick add");
-      if (src && sid) values[src.id] = write.select(sid);
+      if (src?.type === "text") values[src.id] = write.text("Quick add");
+      else {
+        const sid = optionFor(src, "quick_add");
+        if (src && sid) values[src.id] = write.select(sid);
+      }
       const est = db.p("task.estimate");
       if (est && parsed.durationMinutes) values[est.id] = write.num(parsed.durationMinutes);
       await api.db.rowCreate({ databaseId: db.id, values });
       setText("");
       // The new task stays in view: the list switches to the one it landed in.
-      onAdded?.(parsed.start ? "Next" : "Inbox");
+      onAdded?.(parsed.start ? "next" : "inbox");
       notify.success(parsed.start ? "Added to Next" : "Added to Inbox");
     } catch (e) {
       notify.fromError(e, "Couldn’t add the task");
@@ -203,11 +229,13 @@ function QuickAdd({ db, autoFocus, onAdded }: { db: AppDb | undefined; autoFocus
 // ───────────────────────────────────────────────────────────────────────────── page
 
 export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppInstance; tab?: string }) {
-  const tab = (["tasks", "projects", "review"].includes(tabProp ?? "") ? tabProp : "tasks") as Tab;
+  // "projects" is the pre-1.0 name of the Lists tab (older links and insights).
+  const tab = (tabProp === "projects" ? "lists" : ["tasks", "lists", "review"].includes(tabProp ?? "") ? tabProp : "tasks") as Tab;
   const { byRole, dbs } = useAppDatabases(instance.id);
   const tasksDb = byRole("task.status");
   const projectsDb = byRole("project.status");
   const areasDb = byRole("area.name");
+  const dailyDb = byRole("daily.weekly_review");
   const { rows: tasks, setRows } = useRows(tasksDb?.id);
   const { rows: projects } = useRows(projectsDb?.id);
   const { rows: areas } = useRows(areasDb?.id);
@@ -222,8 +250,8 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
     return map;
   }, [projects, projectsDb]);
 
-  const status = (r: RowDTO) => read.opt(r, tasksDb?.p("task.status"))?.name;
-  const open = (tasks ?? []).filter((r) => status(r) !== "Done");
+  const status = (r: RowDTO) => statusKey(r, tasksDb);
+  const open = (tasks ?? []).filter((r) => status(r) !== "done");
 
   const setTab = (t: Tab) => navigate({ t: "app", instanceId: instance.id, tab: t });
   // Truth: the counts appear once the tasks have loaded; never "0 open" while they load.
@@ -232,7 +260,7 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
     const due = (r: RowDTO) => read.date(r, tasksDb?.p("task.due"))?.start?.slice(0, 10);
     const today_ = open.filter((r) => due(r) === today).length;
     const late = open.filter((r) => (due(r) ?? "9999") < today).length;
-    const inbox = open.filter((r) => status(r) === "Inbox").length;
+    const inbox = open.filter((r) => status(r) === "inbox").length;
     const parts = [`${open.length} open`];
     if (today_) parts.push(`${today_} due today`);
     if (late) parts.push(`${late} overdue`);
@@ -245,11 +273,11 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
     <div className="la-hub" style={appVars("life-os")}>
       <AppHeader<Tab>
         instance={instance}
-        title="Life OS"
+        title={identity("life-os").name}
         subtitle={subtitle}
         tabs={[
           { value: "tasks", label: "Tasks", icon: Inbox },
-          { value: "projects", label: "Projects", icon: FolderKanban },
+          { value: "lists", label: "Lists", icon: FolderKanban },
           { value: "review", label: "Review", icon: RotateCcw },
         ]}
         tab={tab}
@@ -257,13 +285,13 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
       />
       <div className="la-hub-body">
         {dbs && !tasksDb ? (
-          <EmptyState icon={Target} title="Tasks database not found" body="It may have been deleted or detached. Tune up Life OS to recreate it." />
+          <EmptyState icon={Target} title="Your task list is missing" body="It may have been deleted or moved to Trash. Restore it from Trash, or use Tune up to create it again." />
         ) : tab === "tasks" ? (
           <TasksTab db={tasksDb} rows={tasks} today={today} projectName={projectName} onToggle={toggle} />
-        ) : tab === "projects" ? (
+        ) : tab === "lists" ? (
           <ProjectsTab db={projectsDb} rows={projects} tasksDb={tasksDb} tasks={tasks} areas={areas} areasDb={areasDb} today={today} />
         ) : (
-          <ReviewTab instance={instance} metrics={metrics} tasksDb={tasksDb} tasks={tasks} areas={areas} areasDb={areasDb} today={today} />
+          <ReviewTab instance={instance} metrics={metrics} tasksDb={tasksDb} tasks={tasks} areas={areas} areasDb={areasDb} dailyDb={dailyDb} today={today} />
         )}
       </div>
     </div>
@@ -272,17 +300,16 @@ export default function LifeOS({ instance, tab: tabProp }: { instance: LifeAppIn
 
 // ───────────────────────────────────────────────────────────────────────────── tabs
 
-const LISTS = ["Inbox", "Next", "Scheduled", "Waiting", "Someday", "Done"] as const;
-
 function TasksTab({ db, rows, today, projectName, onToggle }: { db: AppDb | undefined; rows: RowDTO[] | null; today: string; projectName: Map<Id, string>; onToggle: (r: RowDTO, el: HTMLElement) => void }) {
-  const [list, setList] = useState<(typeof LISTS)[number]>("Inbox");
+  const [list, setList] = useState<ListKey>("inbox");
+  const label = LISTS.find((l) => l.key === list)?.label ?? "Inbox";
   const shown = (rows ?? [])
-    .filter((r) => read.opt(r, db?.p("task.status"))?.name === list)
+    .filter((r) => statusKey(r, db) === list)
     .sort((a, b) => (read.date(a, db?.p("task.due"))?.start ?? "9999").localeCompare(read.date(b, db?.p("task.due"))?.start ?? "9999"));
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Segmented value={list} onValueChange={setList} options={LISTS.map((l) => ({ value: l, label: l }))} aria-label="List" />
+        <Segmented value={list} onValueChange={setList} options={LISTS.map((l) => ({ value: l.key, label: l.label }))} aria-label="Show" />
         <span className="flex-1" />
         {db ? (
           <Button size="sm" variant="ghost" onClick={() => navigate({ t: "db", id: db.id })}>
@@ -303,9 +330,54 @@ function TasksTab({ db, rows, today, projectName, onToggle }: { db: AppDb | unde
             </AnimatePresence>
           </div>
         ) : (
-          <p className="py-8 text-center text-body-sm text-tertiary">{list === "Inbox" ? "Inbox is empty." : `Nothing in ${list}.`}</p>
+          <p className="py-8 text-center text-body-sm text-tertiary">{list === "inbox" ? "Inbox is empty." : `Nothing in ${label}.`}</p>
         )}
       </Card>
+    </div>
+  );
+}
+
+function NewList({ db }: { db: AppDb }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    const title = name.trim();
+    const nameProp = db.p("project.name");
+    if (!title || !nameProp) return;
+    setBusy(true);
+    try {
+      const values: Record<Id, ReturnType<typeof write.text>> = { [nameProp.id]: write.text(title) };
+      const st = db.p("project.status");
+      const active = optionFor(st, "active");
+      if (st && active) values[st.id] = st.type === "status" ? write.status(active) : write.select(active);
+      await api.db.rowCreate({ databaseId: db.id, values });
+      setName("");
+      notify.success(`${title} added`);
+    } catch (e) {
+      notify.fromError(e, "Couldn’t add the list");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="lo-quickadd well">
+      <Plus size={16} className="lo-plus flex-none text-tertiary" aria-hidden />
+      <input
+        value={name}
+        onChange={(e) => setName(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void add();
+          }
+        }}
+        placeholder="New list, e.g. Plan the move"
+        aria-label="New list"
+        disabled={busy}
+      />
+      <Button size="sm" variant="primary" disabled={!name.trim() || busy} onClick={add} kbd="↵">
+        Add
+      </Button>
     </div>
   );
 }
@@ -313,81 +385,112 @@ function TasksTab({ db, rows, today, projectName, onToggle }: { db: AppDb | unde
 function ProjectsTab({ db, rows, tasksDb, tasks, areas, areasDb, today }: { db: AppDb | undefined; rows: RowDTO[] | null; tasksDb: AppDb | undefined; tasks: RowDTO[] | null; areas: RowDTO[] | null; areasDb: AppDb | undefined; today: string }) {
   const areaName = new Map((areas ?? []).map((a) => [a.id, { name: read.text(a, areasDb?.p("area.name")) }] as const));
   if (!rows || !db) return <Skeleton height={240} radius={14} />;
-  if (!rows.length) return <EmptyState icon={FolderKanban} title="No projects yet" body="Projects group tasks toward an outcome. Add one from the Projects database." actions={<Button variant="primary" onClick={() => navigate({ t: "db", id: db.id })}>Open Projects</Button>} />;
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-      {rows.map((p) => {
-        const ts = (tasks ?? []).filter((t) => read.rel(t, tasksDb?.p("task.project")).includes(p.id));
-        const done = ts.filter((t) => read.opt(t, tasksDb?.p("task.status"))?.name === "Done").length;
-        const next = ts.find((t) => ["Next", "Scheduled"].includes(read.opt(t, tasksDb?.p("task.status"))?.name ?? ""));
-        const area = areaName.get(read.rel(p, db.p("project.area"))[0] ?? "");
-        const st = read.opt(p, db.p("project.status"));
-        const deadline = read.date(p, db.p("project.deadline"))?.start?.slice(0, 10);
-        const days = deadline ? Math.round((new Date(`${deadline}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86_400_000) : null;
-        const pct = ts.length ? done / ts.length : 0;
-        return (
-          <button key={p.id} type="button" className="lo-project panel" onClick={() => useUi.getState().openPeek({ t: "row", id: p.id })}>
-            <div className="flex items-center gap-2">
-              <PageIcon icon={p.icon} kind="doc" size={18} />
-              <span className="min-w-0 flex-1 truncate text-body font-semibold text-primary">{read.text(p, db.p("project.name"))}</span>
-              {st ? <Tag color={(st.color as never) ?? "gray"}>{st.name}</Tag> : null}
-            </div>
-            <p className="line-clamp-2 min-h-[36px] text-body-sm text-secondary">{read.text(p, db.p("project.outcome")) || "No outcome written yet."}</p>
-            <div className="flex items-center gap-2">
-              <Progress value={pct} size={4} color="var(--app)" className="flex-1" aria-label="Progress" />
-              <span className="text-caption tabular text-tertiary">{done}/{ts.length}</span>
-            </div>
-            <div className="flex items-center gap-2 text-caption text-tertiary">
-              {area ? <span>{area.name}</span> : null}
-              <span className="flex-1" />
-              {days !== null ? <span className={cn("tabular", days < 7 && "text-warning-text font-semibold")}>{days >= 0 ? `${days} days left` : `${-days} days late`}</span> : null}
-            </div>
-            <div className="groove-top flex items-center gap-1.5 pt-2.5 text-caption">
-              <ArrowRight size={12} className={next ? "text-accent-text" : "text-warning-text"} aria-hidden />
-              <span className={cn("truncate", next ? "text-primary" : "text-warning-text")}>{next ? read.text(next, tasksDb?.p("task.title")) : "No next action"}</span>
-            </div>
-          </button>
-        );
-      })}
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="min-w-0 flex-1 text-body-sm text-secondary">A list groups tasks toward an outcome. Give each one a next task.</p>
+        <Button size="sm" variant="ghost" onClick={() => navigate({ t: "db", id: db.id })}>
+          Open database
+        </Button>
+      </div>
+      <NewList db={db} />
+      {!rows.length ? (
+        <EmptyState icon={FolderKanban} title="No lists yet" body="Add one above, then pick it as the list of a task." />
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+          {rows.map((p) => {
+            const ts = (tasks ?? []).filter((t) => read.rel(t, tasksDb?.p("task.project")).includes(p.id));
+            const done = ts.filter((t) => statusKey(t, tasksDb) === "done").length;
+            const next = ts.find((t) => ["next", "scheduled"].includes(statusKey(t, tasksDb) ?? ""));
+            const area = areaName.get(read.rel(p, db.p("project.area"))[0] ?? "");
+            const st = read.opt(p, db.p("project.status"));
+            const deadline = read.date(p, db.p("project.deadline"))?.start?.slice(0, 10);
+            const days = deadline ? Math.round((new Date(`${deadline}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86_400_000) : null;
+            const pct = ts.length ? done / ts.length : 0;
+            return (
+              <button key={p.id} type="button" className="lo-project panel" onClick={() => useUi.getState().openPeek({ t: "row", id: p.id })}>
+                <div className="flex items-center gap-2">
+                  <PageIcon icon={p.icon} kind="doc" size={18} />
+                  <span className="min-w-0 flex-1 truncate text-body font-semibold text-primary">{read.text(p, db.p("project.name")) || "Untitled"}</span>
+                  {st ? <Tag color={(st.color as never) ?? "gray"}>{st.name}</Tag> : null}
+                </div>
+                <p className="line-clamp-2 min-h-[36px] text-body-sm text-secondary">{read.text(p, db.p("project.outcome")) || "No outcome written yet."}</p>
+                <div className="flex items-center gap-2">
+                  <Progress value={pct} size={4} color="var(--app)" className="flex-1" aria-label="Progress" />
+                  <span className="text-caption tabular text-tertiary">{done}/{ts.length}</span>
+                </div>
+                <div className="flex items-center gap-2 text-caption text-tertiary">
+                  {area ? <span>{area.name}</span> : null}
+                  <span className="flex-1" />
+                  {days !== null ? <span className={cn("tabular", days < 7 && "text-warning-text font-semibold")}>{days >= 0 ? `${days} days left` : `${-days} days late`}</span> : null}
+                </div>
+                <div className="groove-top flex items-center gap-1.5 pt-2.5 text-caption">
+                  <ArrowRight size={12} className={next ? "text-accent-text" : "text-warning-text"} aria-hidden />
+                  <span className={cn("truncate", next ? "text-primary" : "text-warning-text")}>{next ? read.text(next, tasksDb?.p("task.title")) : "No next task"}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function ReviewTab({ instance, metrics, tasksDb, tasks, areas, areasDb, today }: { instance: LifeAppInstance; metrics: Record<string, { value: unknown; display: string }> | null; tasksDb: AppDb | undefined; tasks: RowDTO[] | null; areas: RowDTO[] | null; areasDb: AppDb | undefined; today: string }) {
+function ReviewTab({ instance, metrics, tasksDb, tasks, areas, areasDb, dailyDb, today }: { instance: LifeAppInstance; metrics: Record<string, { value: unknown; display: string }> | null; tasksDb: AppDb | undefined; tasks: RowDTO[] | null; areas: RowDTO[] | null; areasDb: AppDb | undefined; dailyDb: AppDb | undefined; today: string }) {
   const days = Number(metrics?.days_since_review?.value ?? 0);
-  const last = metrics?.last_review_date?.display ?? "Not yet";
+  const never = !metrics?.last_review_date?.value;
+  const last = never ? "Not yet" : (metrics?.last_review_date?.display ?? "Not yet");
+  const { rows: daily } = useRows(dailyDb?.id);
+  const [busy, setBusy] = useState(false);
   const byArea = useMemo(() => {
     const names = new Map((areas ?? []).map((a) => [a.id, read.text(a, areasDb?.p("area.name"))] as const));
     const from = addDays(today, -6);
     const out = new Map<string, number>();
     for (const t of tasks ?? []) {
       const d = read.date(t, tasksDb?.p("task.completed"))?.start?.slice(0, 10);
-      if (!d || d < from || read.opt(t, tasksDb?.p("task.status"))?.name !== "Done") continue;
+      if (!d || d < from || statusKey(t, tasksDb) !== "done") continue;
       const a = names.get(read.rel(t, tasksDb?.p("task.area"))[0] ?? "") || "No area";
       out.set(a, (out.get(a) ?? 0) + 1);
     }
     return [...out.entries()].map(([area, done]) => ({ area, done })).sort((a, b) => b.done - a.done);
   }, [tasks, areas, areasDb, tasksDb, today]);
+  /** Logging a review ticks "Weekly review done" on today's daily note (what the review metrics read). */
   const markDone = async () => {
+    setBusy(true);
     try {
-      await api.lifeapp.checklistTick({ instanceId: instance.id, itemId: "review" });
+      const flag = dailyDb?.p("daily.weekly_review");
+      const date = dailyDb?.p("daily.date");
+      if (dailyDb && flag && date) {
+        const existing = (daily ?? []).find((r) => read.date(r, date)?.start?.slice(0, 10) === today);
+        if (existing) await api.db.rowsUpdate({ updates: [{ id: existing.id, values: { [flag.id]: write.check(true) } }] });
+        else {
+          const title = dailyDb.p("daily.title");
+          const values: Record<Id, ReturnType<typeof write.text>> = { [date.id]: write.date(today), [flag.id]: write.check(true) };
+          if (title) values[title.id] = write.text(new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }));
+          await api.db.rowCreate({ databaseId: dailyDb.id, values });
+        }
+      }
+      if (instance.checklist.some((c) => c.id === "review" && !c.done)) await api.lifeapp.checklistTick({ instanceId: instance.id, itemId: "review" }).catch(() => undefined);
       await useWorkspace.getState().refreshLifeapps();
       notify.success("Weekly review logged");
     } catch (e) {
       notify.fromError(e, "Couldn’t log the review");
+    } finally {
+      setBusy(false);
     }
   };
   return (
     <div className="lo-grid">
       <Card title="Weekly review" subtitle={`Last done: ${last}`}>
         <div className="flex items-center gap-4">
-          <div className={cn("lo-days well", days > 7 ? "is-late" : "is-ok")} data-static="">
-            {days}
+          <div className={cn("lo-days well", !never && days > 7 ? "is-late" : "is-ok")} data-static="">
+            {never ? "–" : days}
           </div>
-          <p className="text-body-sm text-secondary">days since your last review</p>
+          <p className="text-body-sm text-secondary">{never ? "No review logged yet" : days === 1 ? "day since your last review" : "days since your last review"}</p>
         </div>
         <ol className="mt-4 flex flex-col gap-2 text-body-sm">
-          {["Clear the inbox", "Check calendar, projects and waiting", "Read the someday list", "Pick next week’s top 3"].map((s, i) => (
+          {["Clear the inbox", "Check calendar, lists and waiting", "Read the someday list", "Pick next week’s top 3"].map((s, i) => (
             <li key={s} className="flex items-center gap-3">
               <span className="lo-stepnum well" data-static="">{i + 1}</span>
               {s}
@@ -395,7 +498,7 @@ function ReviewTab({ instance, metrics, tasksDb, tasks, areas, areasDb, today }:
           ))}
         </ol>
         <div className="mt-5 flex gap-2">
-          <Button variant="primary" icon={Check} onClick={markDone}>
+          <Button variant="primary" icon={Check} onClick={markDone} loading={busy}>
             Log review
           </Button>
         </div>

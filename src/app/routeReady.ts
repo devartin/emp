@@ -5,7 +5,8 @@
  *   1. the route's lazy chunk has resolved (the mark lives inside the route's Suspense boundary), and
  *   2. nothing inside the route is loading — no `.emp-route-skeleton`, `.emp-skeleton`, `[aria-busy="true"]` or
  *      `[data-route-busy]` element — and has stayed that way for QUIET_MS (chained loads leave short gaps), and
- *   3. two animation frames have passed after that (first content painted).
+ *   3. two animation frames have passed after that (first content painted; a hidden window waits ~32 ms instead,
+ *      because it runs no frames).
  * It fires as `window.dispatchEvent(new CustomEvent('emp:route-ready', { detail }))` plus
  * `performance.mark('emp:route-ready', { startTime: detail.at, detail })`. `detail.at` is the performance timestamp
  * of the first frame from which the route stayed idle — measure settle from there, not from the event. If loading
@@ -40,6 +41,11 @@ export function watchRouteReady(host: HTMLElement | null, route: string): () => 
   const busy = () => !!host?.isConnected && !!host.querySelector(BUSY);
   const afterTwoFrames = (fn: () => void) => {
     cancelAnimationFrame(raf);
+    // A hidden window (the desktop window before it is shown, a minimised one) runs no frames: wait on a timer.
+    if (document.visibilityState !== 'visible') {
+      timers.push(window.setTimeout(fn, 32));
+      return;
+    }
     raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(fn);
     });

@@ -1,11 +1,16 @@
 /**
- * Capture grammar (PROGRAMME-v3 K4 "⌘K hub", Flow r2 §2.7). Prefix-only: plain text without a prefix is never parsed.
+ * Capture grammar (PROGRAMME-v3 K4 "⌘K hub", Flow r2 §2.7). In ⌘K it is prefix-only: plain text without a prefix is
+ * never parsed (it is a search). Home's capture field passes `{ plain: true }` (1.0 brief §2.6): there plain text is
+ * a task (in Tasks when it is installed, else a to-do in today's note), taken as written (no date guessing). So an
+ * ordinary sentence stays a task, plain mode only takes the prefixes nobody writes by accident: `t …` / `n …`,
+ * `task: …` / `note: …` with a colon, an amount with its sign (`−12.50 coffee`), and `spent 12.50 …` only when the
+ * Money app is installed (`{ money: true }`). "Note to self buy milk" is a task titled exactly that.
  * A prefix can still begin a page title ("Task list", "note to self"); as Flow r2 §2.7 specifies, ⌘K then shows the
  * capture row first and the page second, so the page is one ↓ away and typing without the prefix finds it directly.
  *
- *   t …  / task …        a task (parseNatural: dates, !high/med/low, #tag)  → Life OS Inbox, else a to-do in today's note
+ *   t …  / task …        a task (parseNatural: dates, !high/med/low, #tag)  → the Tasks inbox, else a to-do in today's note
  *   n …  / note …        a paragraph appended to today's note
- *   −12.50 coffee        an expense (+250 refund is income); optional trailing date word and #category → Money HQ
+ *   −12.50 coffee        an expense (+250 refund is income); optional trailing date word and #category → Money
  *   spent 12.50 coffee   the same expense, written as a verb (only with a number after "spent")
  *
  * `parseCapture` is pure (table-driven tests in capture.test.ts); `commitCapture` writes through existing commands.
@@ -27,7 +32,12 @@ export type Capture =
 
 const TASK = /^(?:t|task)\s+(.*)$/is;
 const NOTE = /^(?:n|note)\s+(.*)$/is;
+/** Plain mode (Home): the one-letter prefixes, or the word with a colon ("Task list for Monday" stays a task). */
+const TASK_PLAIN = /^(?:t\s+|task:\s*)(.*)$/is;
+const NOTE_PLAIN = /^(?:n\s+|note:\s*)(.*)$/is;
 const MONEY = /^([−‒–+-])\s*(.*)$/s;
+/** Plain mode: a sign counts only with a number after it ("- call the bank" is a task). */
+const MONEY_PLAIN = /^([−‒–+-])\s*(\d.*)$/s;
 const SPENT = /^spent\s+(\d[\d.,]*(?:\s.*)?)$/is;
 
 function localNoon(d: Date): Date {
@@ -65,10 +75,14 @@ function parseMoneyRest(sign: 1 | -1, rest: string, ref: Date): Capture {
   return { kind: "money", amount: signed, payee, date, category };
 }
 
-/** The capture a query asks for, or null when it has no capture prefix. */
-export function parseCapture(input: string, ref: Date = new Date()): Capture | null {
+/**
+ * The capture a query asks for, or null when it has no capture prefix. With `plain`, text without a prefix is a
+ * task titled exactly as typed, and only unmistakable prefixes count (see the header); `money` says the Money app is
+ * installed, which is what makes "spent 12.50 lunch" an expense there.
+ */
+export function parseCapture(input: string, ref: Date = new Date(), opts: { plain?: boolean; money?: boolean } = {}): Capture | null {
   const s = input.replace(/^\s+/, "");
-  let m = TASK.exec(s);
+  let m = (opts.plain ? TASK_PLAIN : TASK).exec(s);
   if (m) {
     const body = m[1].trim();
     if (!body) return { kind: "error", target: "task", message: "Type the task after t", text: body };
@@ -77,18 +91,22 @@ export function parseCapture(input: string, ref: Date = new Date()): Capture | n
     if (!title) return { kind: "error", target: "task", message: "Type the task after t", text: body };
     return { kind: "task", title, due: r.start, hasTime: r.hasTime, priority: r.priority, tags: r.tags };
   }
-  m = NOTE.exec(s);
+  m = (opts.plain ? NOTE_PLAIN : NOTE).exec(s);
   if (m) {
     const text = m[1].trim();
     return text ? { kind: "note", text } : { kind: "error", target: "note", message: "Type the note after n", text };
   }
-  m = SPENT.exec(s);
+  m = opts.plain && !opts.money ? null : SPENT.exec(s);
   if (m) return parseMoneyRest(-1, m[1], ref);
-  m = MONEY.exec(s);
+  m = (opts.plain ? MONEY_PLAIN : MONEY).exec(s);
   if (m) {
     // "-" alone, or "- coffee": a money capture that can't be read (never a page search).
     const sign = m[1] === "+" ? 1 : -1;
     return parseMoneyRest(sign, m[2], ref);
+  }
+  if (opts.plain) {
+    const title = s.trim();
+    if (title) return { kind: "task", title, hasTime: false, tags: [] };
   }
   return null;
 }
@@ -96,7 +114,7 @@ export function parseCapture(input: string, ref: Date = new Date()): Capture | n
 // ───────────────────────────────────────────────────────────────────────────── commit
 
 export interface Committed {
-  /** "Added to Life OS", "Added to today's note", "Added to Money HQ". */
+  /** "Added to Tasks", "Added to today's note", "Added to Money". */
   title: string;
   /** Where the item lives, for the toast ("Fri, Nov 27 · Inbox"). */
   detail?: string;
@@ -216,7 +234,7 @@ async function commitTask(c: Extract<Capture, { kind: "task" }>, view: (r: { t: 
   if (src && sid) values[src.id] = { t: "select", v: sid };
   const row = await api.db.rowCreate({ databaseId: s.database.id, values });
   return {
-    title: c.due ? "Added to Life OS" : "Added to Life OS inbox",
+    title: "Added to Tasks",
     detail: c.due ? shortDay(c.due) : undefined,
     view: () => view({ t: "row", id: row.id }),
     undo: async () => {
@@ -237,7 +255,7 @@ export interface MoneyTarget {
   categories: { id: Id; name: string }[];
 }
 
-/** Money HQ's transactions database plus open accounts and categories, for the capture preview and commit. */
+/** Money's transactions database plus open accounts and categories, for the capture preview and commit. */
 export async function loadMoneyTarget(): Promise<MoneyTarget | null> {
   const money = instance("money-hq");
   if (!money) return null;
@@ -273,9 +291,9 @@ export async function captureAccount(t: MoneyTarget): Promise<{ id: Id; name: st
 
 async function commitMoney(c: Extract<Capture, { kind: "money" }>, accountId: Id | null, view: (r: { t: "row"; id: Id }) => void): Promise<Committed> {
   const t = await loadMoneyTarget();
-  if (!t) throw new Error("Set up Money HQ to add expenses");
+  if (!t) throw new Error("Add the Money app to record expenses");
   const acct = (accountId ? t.accounts.find((a) => a.id === accountId) : null) ?? (await captureAccount(t));
-  if (!acct) throw new Error("Add an account in Money HQ first");
+  if (!acct) throw new Error("Add an account in Money first");
   const s = t.txns;
   const r = s.database.roles;
   const cat = c.category ? t.categories.find((x) => x.name.toLowerCase() === c.category!.toLowerCase()) : undefined;
@@ -292,7 +310,7 @@ async function commitMoney(c: Extract<Capture, { kind: "money" }>, accountId: Id
   const row = await api.db.rowCreate({ databaseId: s.database.id, values });
   void api.kv.set({ ...LAST_ACCOUNT, value: acct.id }).catch(() => undefined);
   return {
-    title: "Added to Money HQ",
+    title: "Added to Money",
     detail: acct.name,
     view: () => view({ t: "row", id: row.id }),
     undo: async () => {
@@ -320,7 +338,7 @@ export function describeCapture(c: Capture, ctx: { lifeOs: boolean; money: boole
     if (c.due) meta.push(c.hasTime ? `${shortDay(c.due)} ${c.due.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}` : shortDay(c.due));
     if (c.priority) meta.push(`!${c.priority}`);
     for (const t of c.tags) meta.push(`#${t}`);
-    meta.push(ctx.lifeOs ? "Life OS" : "Today’s note");
+    meta.push(ctx.lifeOs ? "Tasks" : "Today’s note");
     return { title: `Task: ${c.title}`, meta };
   }
   if (c.kind === "note") return { title: `Note: ${c.text}`, meta: ["Today’s note"] };
@@ -328,6 +346,6 @@ export function describeCapture(c: Capture, ctx: { lifeOs: boolean; money: boole
   const amt = new Intl.NumberFormat(undefined, { style: "currency", currency: selectBaseCurrency(useSettings.getState()), currencyDisplay: "narrowSymbol" }).format(Math.abs(n));
   const meta = [shortDay(c.date)];
   if (c.category) meta.push(`#${c.category}`);
-  meta.push(ctx.money ? (ctx.account ?? "No account") : "Money HQ not set up");
+  meta.push(ctx.money ? (ctx.account ?? "No account") : "Money isn’t set up");
   return { title: `${n < 0 ? "−" : "+"}${amt} ${c.payee}`, meta };
 }

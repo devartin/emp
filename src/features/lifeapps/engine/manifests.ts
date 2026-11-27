@@ -32,14 +32,15 @@ const tpl = (key: string, kind: Template['kind'], title: string, extra: Partial<
   return { key, kind, optional: false, ...rest, spec };
 };
 
-const review = (title = 'Review & create'): Step => ({ id: 'review', kind: 'review', title, quick: true, skippable: false });
+/** The closing review step; its id is `finish` on both backends (Habits already has a `review` toggle). */
+const review = (title = 'Review and create'): Step => ({ id: 'finish', kind: 'review', title, quick: true, skippable: false });
 
 // ───────────────────────────────────────────────────────────────────────────── Money HQ (§16.2)
 
 const moneyHq: LifeAppManifest = {
   id: 'money-hq',
   version: '1.0.0',
-  title: 'Money HQ',
+  title: 'Money',
   tagline: 'Budget, accounts and bills.',
   icon: 'wallet',
   color: 'jade',
@@ -49,7 +50,7 @@ const moneyHq: LifeAppManifest = {
   disclaimer: FINANCE_DISCLAIMER,
   steps: [...MONEY_HQ_STEPS, review()],
   templates: [
-    tpl('hq', 'dashboard', 'Money HQ', { icon: 'lucide:wallet', note: 'KPIs, Sankey, budget vs actual, forecast' }),
+    tpl('hq', 'dashboard', 'Money', { icon: 'lucide:wallet', note: 'KPIs, Sankey, budget vs actual, forecast' }),
     tpl('how', 'page', 'How your budget works', { icon: 'book-open' }),
     tpl('order', 'page', 'Financial order of operations', { icon: 'list-todo' }),
     tpl('weekly', 'page', 'Weekly check-in', { icon: 'calendar', optional: true }),
@@ -95,7 +96,7 @@ const ASSET_CLASSES = 'US equity, Intl developed, Emerging, Bonds, Inflation-lin
 const portfolio: LifeAppManifest = {
   id: 'portfolio',
   version: '1.0.0',
-  title: 'Portfolio',
+  title: 'Investments',
   tagline: 'Holdings and allocation across accounts.',
   icon: 'candlestick-chart',
   color: 'ocean',
@@ -197,7 +198,7 @@ const portfolio: LifeAppManifest = {
     review(),
   ],
   templates: [
-    tpl('dashboard', 'dashboard', 'Portfolio', { icon: 'lucide:candlestick-chart', note: 'Value, allocation, drift, dividends' }),
+    tpl('dashboard', 'dashboard', 'Investments', { icon: 'lucide:candlestick-chart', note: 'Value, allocation, drift, dividends' }),
     tpl('ips', 'page', 'Investment Policy Statement', { icon: 'scroll-text' }),
     tpl('rebalance', 'page', 'Rebalance planner', { icon: 'scale' }),
     tpl('annual', 'page', 'Annual investing review', { icon: 'calendar', optional: true }),
@@ -227,7 +228,7 @@ const portfolio: LifeAppManifest = {
 const taxOrganizer: LifeAppManifest = {
   id: 'tax-organizer',
   version: '1.0.0',
-  title: 'Tax Organizer',
+  title: 'Taxes',
   tagline: 'Documents, deadlines and a running estimate.',
   icon: 'receipt-text',
   color: 'amber',
@@ -294,7 +295,7 @@ const taxOrganizer: LifeAppManifest = {
     review(),
   ],
   templates: [
-    tpl('hub', 'dashboard', 'Tax year 2026', { icon: 'lucide:receipt-text', note: 'Status ring, countdown, estimate, timeline' }),
+    tpl('hub', 'dashboard', 'Taxes', { icon: 'lucide:receipt-text', note: 'Status ring, countdown, estimate, timeline' }),
     tpl('estimator', 'page', 'Estimator', { icon: 'calculator' }),
     tpl('quarterly', 'page', 'Quarterly payments', { icon: 'calendar', when: 'answers.income_self_employment' }),
     tpl('packet', 'page', 'Preparer packet', { icon: 'package', when: 'answers.preparer != "software"' }),
@@ -328,11 +329,11 @@ export const SHEET_INTENTS: { value: string; label: string; description: string;
   { value: 'loan', label: 'Loan / mortgage', description: 'PMT payment, amortization schedule, extra payments.', icon: 'landmark' },
   { value: 'budget', label: 'Budget sheet', description: 'Transactions → SUMIFS budget vs actual.', icon: 'wallet' },
   { value: 'decision', label: 'Decision matrix', description: 'Weighted scores, ranks and sensitivity.', icon: 'scale' },
-  { value: 'project_budget', label: 'Project budget', description: 'Line items, estimates vs actuals, contingency.', icon: 'hammer' },
+  { value: 'project', label: 'Project budget', description: 'Line items, estimates vs actuals, contingency.', icon: 'hammer' },
   { value: 'timesheet', label: 'Timesheet', description: 'Hours with breaks, weekly totals and overtime.', icon: 'clock' },
   { value: 'inventory', label: 'Inventory', description: 'Stock value and reorder alerts.', icon: 'package' },
   { value: 'split', label: 'Split expenses', description: 'Who paid, balances and who pays whom.', icon: 'split' },
-  { value: 'savings', label: 'Savings / compound interest', description: 'FV growth with an inflation-adjusted column.', icon: 'sprout' },
+  { value: 'compound', label: 'Savings / compound interest', description: 'FV growth with an inflation-adjusted column.', icon: 'sprout' },
   { value: 'blank', label: 'Blank, well-structured', description: 'Inputs, Calculations, Output and Checks sheets.', icon: 'table-2' },
 ];
 
@@ -347,10 +348,10 @@ const spreadsheetStudio: LifeAppManifest = {
   sensitivity: 'normal',
   estMinutes: 2,
   steps: [
-    { id: 'intent', kind: 'choice_cards', title: 'What do you want to build?', quick: true, skippable: false, default: 'loan', options: SHEET_INTENTS },
-    { id: 'excel_compat', kind: 'toggle', title: 'Will you share this with Excel users?', quick: false, skippable: true, default: false, help: 'When on, workbooks stick to functions that round-trip to Excel and warn about ones only Ultranote has (STOCK, FX).' },
+    { id: 'intent', kind: 'choice_cards', title: 'What do you want to build?', quick: true, skippable: false, default: 'blank', options: SHEET_INTENTS },
+    { id: 'excel_compat', kind: 'toggle', title: 'Will you share this with Excel users?', quick: false, skippable: true, default: false, help: 'When on, spreadsheets stick to functions that round-trip to Excel and warn about ones only Ultranote has (STOCK, FX).' },
     {
-      id: 'structure', kind: 'multi_chips', title: 'Which sections should the workbook have?', quick: false, skippable: true, default: ['inputs', 'calculations', 'output', 'checks', 'changelog'],
+      id: 'structure', kind: 'multi_chips', title: 'Which sections should the spreadsheet have?', quick: false, skippable: true, default: ['inputs', 'calculations', 'output', 'checks', 'changelog'],
       why: 'Separating inputs from formulas makes models easier to audit.',
       options: [
         { value: 'inputs', label: 'Inputs' }, { value: 'calculations', label: 'Calculations' }, { value: 'output', label: 'Output' }, { value: 'checks', label: 'Checks' }, { value: 'changelog', label: 'Changelog' },
@@ -363,9 +364,9 @@ const spreadsheetStudio: LifeAppManifest = {
     review(),
   ],
   templates: [
-    tpl('studio', 'dashboard', 'Spreadsheet Studio', { icon: 'lucide:sheet', note: 'Templates and recent workbooks' }),
-    tpl('workbook', 'workbook', 'Workbook', { icon: 'chart-column' }),
-    tpl('guide', 'page', 'How these workbooks are built', { icon: 'ruler', optional: true }),
+    tpl('studio', 'dashboard', 'Spreadsheet Studio', { icon: 'lucide:sheet', note: 'Templates and recent spreadsheets' }),
+    tpl('workbook', 'workbook', 'Spreadsheet', { icon: 'chart-column' }),
+    tpl('guide', 'page', 'How these spreadsheets are built', { icon: 'ruler', optional: true }),
   ],
   metrics: [
     { name: 'workbook_count', kind: 'rust', fn: 'sheets.workbook_count', deps: [] },
@@ -388,8 +389,8 @@ export const LIFE_AREAS = ['Work', 'Health', 'Money', 'Home', 'Relationships', '
 const lifeOs: LifeAppManifest = {
   id: 'life-os',
   version: '1.0.0',
-  title: 'Life OS',
-  tagline: 'Tasks, projects and a daily plan.',
+  title: 'Tasks',
+  tagline: 'Tasks, lists and a daily plan.',
   icon: 'kanban',
   color: 'blue',
   category: 'planning',
@@ -439,7 +440,7 @@ const lifeOs: LifeAppManifest = {
     review(),
   ],
   templates: [
-    tpl('os', 'dashboard', 'Life OS', { icon: 'lucide:kanban', note: 'Tasks, projects and goals' }),
+    tpl('os', 'dashboard', 'Tasks', { icon: 'lucide:kanban', note: 'Tasks, lists and goals' }),
     tpl('tasks', 'database', 'Tasks', { icon: 'circle-check', note: 'Inbox, Due, Upcoming, Board, Someday, Waiting, Completed' }),
     tpl('projects', 'database', 'Projects', { icon: 'target' }),
     tpl('areas_db', 'database', 'Areas', { icon: 'compass' }),
@@ -463,13 +464,13 @@ const lifeOs: LifeAppManifest = {
     { id: 'overdue-5', when: 'metrics.overdue_count > 5', severity: 'warn', title: '{{metrics.overdue_count}} overdue tasks', body: 'Reschedule or drop the ones that no longer matter.', mathMetrics: ['overdue_count'], actions: [{ label: 'Review overdue', route: 'tab:tasks' }] },
     { id: 'overbooked', when: 'metrics.today_scheduled_min > metrics.working_min', severity: 'warn', title: 'Today is overbooked', body: 'You have scheduled {{metrics.today_scheduled_min}} minutes of tasks into {{metrics.working_min}} working minutes.', mathMetrics: ['today_scheduled_min', 'working_min'], actions: [{ label: 'Open tasks', route: 'tab:tasks' }] },
     { id: 'inbox-20', when: 'metrics.inbox_count > 20', severity: 'tip', title: '{{metrics.inbox_count}} items in Inbox', body: '', mathMetrics: ['inbox_count'], actions: [{ label: 'Process inbox', route: 'tab:tasks' }] },
-    { id: 'project-no-next', when: 'metrics.projects_without_next > 0', severity: 'tip', title: '{{metrics.projects_without_next}} {{if(metrics.projects_without_next == 1, "project has", "projects have")}} no next task', body: '', mathMetrics: ['projects_without_next'], actions: [{ label: 'Open projects', route: 'tab:projects' }] },
+    { id: 'project-no-next', when: 'metrics.projects_without_next > 0', severity: 'tip', title: '{{metrics.projects_without_next}} {{if(metrics.projects_without_next == 1, "list has", "lists have")}} no next task', body: '', mathMetrics: ['projects_without_next'], actions: [{ label: 'Open lists', route: 'tab:lists' }] },
     { id: 'review-missed', when: 'metrics.days_since_review > 8', severity: 'tip', title: 'Weekly review is due', body: 'It has been {{metrics.days_since_review}} days since your last review.', mathMetrics: ['last_review_date'], actions: [{ label: 'Start review', route: 'page:weekly' }] },
   ],
   checklist: [
     { id: 'capture5', label: 'Capture 5 tasks' },
     { id: 'inbox', label: 'Process your inbox' },
-    { id: 'project', label: 'Create a project with a next action' },
+    { id: 'project', label: 'Create a list with a next action' },
     { id: 'review', label: 'Do your first weekly review' },
   ],
   migrations: [],

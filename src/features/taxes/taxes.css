@@ -47,7 +47,7 @@
 .tx-doc:first-child { border-top: 0; }
 .tx-doc-icon { flex: none; display: inline-flex; color: var(--text-tertiary); }
 .tx-doc-icon[data-status="received"], .tx-doc-icon[data-status="reviewed"] { color: var(--accent-text); }
-.tx-doc-icon[data-status="sent"] { color: var(--text-primary); }
+.tx-doc-icon[data-status="sent_to_preparer"] { color: var(--text-primary); }
 .tx-steps { display: flex; align-items: center; gap: 4px; }
 .tx-step { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; transition: background-color 120ms var(--ease-out); }
 .tx-step:hover { background: var(--ghost-hover); }

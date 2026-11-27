@@ -89,4 +89,30 @@ describe("parseCapture", () => {
     expect(parseCapture("Lisbon in March", REF)).toBeNull();
     expect(parseCapture("note", REF)).toBeNull();
   });
+  test("Home's plain mode: text without a prefix is a task, taken as written; prefixes still work", () => {
+    expect(parseCapture("buy milk", REF, { plain: true })).toEqual({ kind: "task", title: "buy milk", hasTime: false, tags: [] });
+    // No date guessing in plain text ("May" is a name here).
+    expect(parseCapture("Call May about the lease", REF, { plain: true })).toEqual({ kind: "task", title: "Call May about the lease", hasTime: false, tags: [] });
+    expect(parseCapture("n pottery class idea", REF, { plain: true })).toEqual({ kind: "note", text: "pottery class idea" });
+    expect(parseCapture("-12.50 coffee", REF, { plain: true })).toMatchObject({ kind: "money", payee: "coffee" });
+    expect(parseCapture("t call mum fri", REF, { plain: true })).toMatchObject({ kind: "task", title: "call mum" });
+    expect(parseCapture("   ", REF, { plain: true })).toBeNull();
+  });
+
+  test("Home's plain mode leaves ordinary sentences alone: only unmistakable prefixes count", () => {
+    const task = (title: string) => ({ kind: "task", title, hasTime: false, tags: [] });
+    // A sentence that starts with a prefix word is still a task, titled as typed.
+    expect(parseCapture("Note to self buy milk", REF, { plain: true })).toEqual(task("Note to self buy milk"));
+    expect(parseCapture("Task list for Monday", REF, { plain: true })).toEqual(task("Task list for Monday"));
+    expect(parseCapture("- call the bank", REF, { plain: true })).toEqual(task("- call the bank"));
+    // "spent …" is an expense only where Money is installed.
+    expect(parseCapture("Spent 12 minutes on the plan", REF, { plain: true })).toEqual(task("Spent 12 minutes on the plan"));
+    expect(parseCapture("spent 12.50 lunch", REF, { plain: true, money: true })).toMatchObject({ kind: "money", amount: "-12.5", payee: "lunch" });
+    // The word with a colon, and the one-letter prefixes, still work.
+    expect(parseCapture("note: pottery class idea", REF, { plain: true })).toEqual({ kind: "note", text: "pottery class idea" });
+    expect(parseCapture("Task: call mum fri", REF, { plain: true })).toMatchObject({ kind: "task", title: "call mum" });
+    expect(parseCapture("+250 refund", REF, { plain: true })).toMatchObject({ kind: "money", amount: "250", payee: "refund" });
+    // ⌘K keeps the word prefixes.
+    expect(parseCapture("note to self", REF)).toEqual({ kind: "note", text: "to self" });
+  });
 });

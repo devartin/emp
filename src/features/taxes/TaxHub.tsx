@@ -3,6 +3,7 @@
  * payments, deductions vs standard, insights and the persistent disclaimer; plus Estimator, Quarterly plan,
  * Documents and Deductions tabs. Copy never says "you owe" — every figure is an estimate.
  */
+import { appName } from "@/features/lifeapps/identity";
 import { AlertTriangle, Check, ChevronRight, FileCheck2, FileText, Plus, ReceiptText, ShieldAlert } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { Suspense, useMemo, useState } from "react";
@@ -44,8 +45,8 @@ export default function TaxHub({ instanceId, tab }: TaxHubProps) {
   const data = useTaxData(instanceId);
   const current = (TABS.includes(tab as TTab) ? tab : "overview") as TTab;
   const go = (t: TTab) => navigate({ t: "app", instanceId, tab: t === "overview" ? undefined : t });
-  const received = data.docs.filter((d) => d.status !== "expected" && d.status !== "na").length;
-  const expected = data.docs.filter((d) => d.status !== "na").length;
+  const received = data.docs.filter((d) => d.status !== "expected" && d.status !== "n_a").length;
+  const expected = data.docs.filter((d) => d.status !== "n_a").length;
   const tabs: TabItem<TTab>[] = [
     { value: "overview", label: "Overview" },
     { value: "estimator", label: "Estimator" },
@@ -59,12 +60,14 @@ export default function TaxHub({ instanceId, tab }: TaxHubProps) {
       <HubPage
         icon={ReceiptText}
         tone="amber"
-        title={`Tax year ${data.year}`}
-        subtitle={data.profile ? <>{STATUS_LABEL[data.profile.filingStatus] ?? data.profile.filingStatus} · {data.pack ? `${data.pack.name} pack v${data.pack.version} · verified ${dayLabel(data.pack.verifiedOn, true)}` : data.profile.packId}{data.pack?.stale ? <Badge tone="warning">Stale pack</Badge> : null}</> : null}
+        title={appName("tax-organizer")}
+        subtitle={data.profile ? <>{data.year} · {STATUS_LABEL[data.profile.filingStatus] ?? data.profile.filingStatus} · {data.pack ? `${data.pack.name} pack v${data.pack.version} · verified ${dayLabel(data.pack.verifiedOn, true)}` : data.profile.packId}{data.pack?.stale ? <Badge tone="warning">Stale pack</Badge> : null}</> : null}
         actions={
-          <Button size="sm" variant="secondary" iconRight={ChevronRight} onClick={() => go("estimator")}>
-            Open estimator
-          </Button>
+          current === "estimator" ? null : (
+            <Button size="sm" variant="secondary" iconRight={ChevronRight} onClick={() => go("estimator")}>
+              Open estimator
+            </Button>
+          )
         }
         tabs={tabs}
         tab={current}
@@ -96,8 +99,8 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
   const tx = useTax();
   const { whole: fmtWhole } = taxMoney(tx.currency);
   const plan = useQuarterly();
-  const received = tx.docs.filter((d) => d.status !== "expected" && d.status !== "na").length;
-  const expected = tx.docs.filter((d) => d.status !== "na").length;
+  const received = tx.docs.filter((d) => d.status !== "expected" && d.status !== "n_a").length;
+  const expected = tx.docs.filter((d) => d.status !== "n_a").length;
   const deadlines = useMemo(() => {
     const out: { name: string; date: string }[] = [];
     for (const d of plan.data?.due ?? []) if (d.status !== "paid") out.push({ name: `${d.period} estimated payment`, date: d.date });
@@ -110,7 +113,7 @@ function Overview({ go, instanceId }: { go: (t: TTab) => void; instanceId: Id })
   const est = tx.estimate;
   // `tax.itemised` (definitions.ts): the engine's own itemised total, floors and caps applied (the 7.5% of AGI medical
   // floor, the SALT cap). The raw organiser sum is only a fallback, under its own label "Logged so far".
-  const logged = tx.deductions.filter((d) => d.kind !== null).reduce((a, d) => a + d.amount * d.pct, 0);
+  const logged = tx.deductions.filter((d) => d.kind !== null).reduce((a, d) => a + Math.round(d.deductible * 100), 0) / 100;
   const cmp = itemisedComparison(est, logged);
   const itemized = cmp?.itemised ?? 0;
   const std = cmp?.standard ?? 0;
@@ -235,14 +238,14 @@ function Documents() {
   const groups = useMemo(() => {
     const m = new Map<string, DocRow[]>();
     for (const d of tx.docs) {
-      const k = d.status === "na" ? "Not needed" : d.status === "expected" ? "Waiting for" : "In hand";
+      const k = d.status === "n_a" ? "Not needed" : d.status === "expected" ? "Waiting for" : "In hand";
       const list = m.get(k) ?? [];
       list.push(d);
       m.set(k, list);
     }
     return ["Waiting for", "In hand", "Not needed"].filter((k) => m.has(k)).map((k) => [k, m.get(k)!] as const);
   }, [tx.docs]);
-  if (!tx.schemas.documents) return <Skeleton height={360} radius={10} />;
+  if (!tx.dbs.documents) return <Skeleton height={360} radius={10} />;
   return (
     <div className="flex flex-col gap-4">
       {groups.map(([g, list]) => (
@@ -276,8 +279,8 @@ function Documents() {
                     ))}
                     <span className="tx-step-label">{DOC_LABEL[d.status] ?? d.status}</span>
                   </div>
-                  <Button size="xs" variant="ghost" title={d.status === "na" ? "Move back to the checklist" : "This form doesn't apply to me this year"} onClick={() => void tx.setDocStatus(d.id, d.status === "na" ? "expected" : "na")}>
-                    {d.status === "na" ? "Needed after all" : "Not needed"}
+                  <Button size="xs" variant="ghost" title={d.status === "n_a" ? "Move back to the checklist" : "This form doesn't apply to me this year"} onClick={() => void tx.setDocStatus(d.id, d.status === "n_a" ? "expected" : "n_a")}>
+                    {d.status === "n_a" ? "Needed after all" : "Not needed"}
                   </Button>
                 </m.div>
               );
@@ -285,9 +288,9 @@ function Documents() {
           </AnimatePresence>
         </Section>
       ))}
-      {tx.schemas.documents ? (
+      {tx.dbs.documents ? (
         <div className="flex justify-end">
-          <Button size="sm" variant="ghost" iconRight={ChevronRight} onClick={() => navigate({ t: "db", id: tx.schemas.documents!.database.id })}>
+          <Button size="sm" variant="ghost" iconRight={ChevronRight} onClick={() => navigate({ t: "db", id: tx.dbs.documents! })}>
             Open the checklist database
           </Button>
         </div>
@@ -318,13 +321,13 @@ function Deductions() {
     const m = new Map<string, { name: string; total: number; n: number }>();
     for (const d of tx.deductions) {
       const e = m.get(d.category) ?? { name: d.categoryName, total: 0, n: 0 };
-      e.total += d.amount * d.pct;
+      e.total = Math.round(e.total * 100 + d.deductible * 100) / 100;
       e.n++;
       m.set(d.category, e);
     }
     return [...m.entries()].sort((a, b) => b[1].total - a[1].total);
   }, [tx.deductions]);
-  const total = tx.deductions.reduce((a, d) => a + d.amount * d.pct, 0);
+  const total = tx.deductions.reduce((a, d) => a + Math.round(d.deductible * 100), 0) / 100;
   return (
     <div className="fh-grid">
       <Section className="fh-span-4" title="By category" subtitle={<>Total logged <Sensitive>{fmtWhole(total)}</Sensitive></>}>
@@ -365,7 +368,7 @@ function Deductions() {
                   <td><Badge tone="outline">{d.categoryName}</Badge></td>
                   <td className="text-secondary">{d.date ? dayLabel(d.date, true) : "—"}</td>
                   <td>{d.receipt ? <span className="inline-flex items-center gap-1 text-caption text-secondary"><Check size={14} absoluteStrokeWidth strokeWidth={1.25} /> Kept</span> : d.amount > 250 ? <Badge tone="warning">Missing</Badge> : <span className="text-caption text-tertiary">—</span>}</td>
-                  <td className="num font-medium"><Sensitive align="end">{fmtMoney(d.amount * d.pct)}</Sensitive></td>
+                  <td className="num font-medium"><Sensitive align="end">{fmtMoney(d.deductible)}</Sensitive></td>
                 </tr>
               ))}
             </tbody>

@@ -9,6 +9,7 @@ import type { MockCtx, MockHandlers, PageRecord, WorkspaceRecord } from '../ctx'
 import { b, docText, extractBlocks, findBlock, makeDoc, outgoingLinks, outline, regenerateIds, setTodoChecked } from '../lib/doc';
 import { TITLE_MAX } from '../lib/pages';
 import { byNewest, type VersionRecord } from '../lib/versions';
+import { kvRead, kvWrite } from './kv';
 
 const RECENTS_MAX = 20;
 const AUTO_VERSION_MIN_AGE = 10 * 60_000;
@@ -136,6 +137,11 @@ export const handlers: MockHandlers = {
     const ws = ctx.db.table<WorkspaceRecord>('workspaces').require(req.workspaceId, 'Workspace');
     flags = { font: ws.defaults.font, fullWidth: ws.defaults.fullWidth, smallText: ws.defaults.smallText, ...flags };
     if (req.kind !== 'doc' && req.kind !== 'dashboard') throw new BackendError('INVALID', 'Use db_create or sheet_workbook_create', { field: 'kind' });
+    // Initial flags (brief §3), merged over the defaults like Rust's `PageFlags::apply`; only documents can be projects.
+    if (req.flags) {
+      if (req.flags.project === true && req.kind !== 'doc') throw new BackendError('INVALID', 'only documents can be projects', { field: 'flags' });
+      flags = { ...flags, ...req.flags };
+    }
     const rec = ctx.pages.create({
       workspaceId: req.workspaceId,
       parentId: req.parentId,
@@ -162,7 +168,10 @@ export const handlers: MockHandlers = {
     if (p.title !== undefined) patch.title = p.title;
     if ('icon' in p) patch.icon = p.icon ?? undefined;
     if ('cover' in p) patch.cover = p.cover ?? undefined;
-    if (p.flags) patch.flags = p.flags as PageRecord['flags'];
+    if (p.flags) {
+      if (p.flags.project === true && ctx.pages.require(req.id).kind !== 'doc') throw new BackendError('INVALID', 'only documents can be projects', { field: 'flags' });
+      patch.flags = p.flags as PageRecord['flags'];
+    }
     return ctx.pages.toMeta(ctx.pages.update(req.id, patch));
   },
 
@@ -285,11 +294,16 @@ export const handlers: MockHandlers = {
   page_set_template: (req, ctx) => ctx.pages.toMeta(ctx.pages.update(req.id, { flags: { template: req.template } })),
 };
 
+/** Checklist items the store records (`TRACKED` in crates/emp-store/src/repo/tour.rs). */
+const GS_TRACKED = new Set(['create_page', 'try_slash', 'open_palette', 'hide_numbers', 'lock', 'add_transaction', 'templates', 'capture', 'import']);
+
 export function setup(ctx: MockCtx): void {
   // Getting Started checklist (§6.2): items tick themselves as the user tries each thing.
   ctx.events.on('gettingStarted:tick', ({ item }) => {
     const gs = ctx.db.meta<{ pageId: Id; items: Record<string, string> }>('gettingStarted');
     if (!gs) return;
+    // Like Rust (`getting_started_tick`): every tracked tick is recorded where Home's checklist reads it.
+    if (GS_TRACKED.has(item) && kvRead(ctx, 'ui.gettingStarted', item) === null) kvWrite(ctx, 'ui.gettingStarted', item, ctx.clock.now());
     const blockId = gs.items[item];
     const rec = ctx.docs.get(gs.pageId);
     const page = ctx.pages.get(gs.pageId);

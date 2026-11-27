@@ -11,7 +11,7 @@ import { fmtPct, fmtPrice } from "../finance/shared/format";
 import { FreshnessBadge, Signed } from "../finance/shared/ui";
 import { ticker, useSparkline, useSymbolInfo } from "./data";
 
-export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: SymbolKey; onClick?: () => void; selected?: boolean; compact?: boolean }) {
+export function QuoteTile({ symbol, onClick, selected, compact, unavailable }: { symbol: SymbolKey; onClick?: () => void; selected?: boolean; compact?: boolean; unavailable?: boolean }) {
   const q = useQuote(symbol);
   const info = useSymbolInfo(symbol);
   const spark = useSparkline(symbol);
@@ -41,6 +41,8 @@ export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: Symb
               </div>
               <Delta percent={q.changePct} digits={2} className="text-caption" />
             </>
+          ) : unavailable ? (
+            <div className="mk-tile-price text-tertiary" aria-label="No price">—</div>
           ) : (
             <>
               <Skeleton width={90} height={20} />
@@ -55,7 +57,7 @@ export function QuoteTile({ symbol, onClick, selected, compact }: { symbol: Symb
 }
 
 /** One quote line (watchlists, doc blocks). */
-export function QuoteRow({ symbol, q, onClick, selected, trailing }: { symbol: SymbolKey; q?: Quote; onClick?: () => void; selected?: boolean; trailing?: React.ReactNode }) {
+export function QuoteRow({ symbol, q, onClick, selected, trailing, unavailable }: { symbol: SymbolKey; q?: Quote; onClick?: () => void; selected?: boolean; trailing?: React.ReactNode; unavailable?: boolean }) {
   const live = useQuote(symbol);
   const quote = q ?? live;
   const info = useSymbolInfo(symbol);
@@ -79,6 +81,8 @@ export function QuoteRow({ symbol, q, onClick, selected, trailing }: { symbol: S
               {fmtPct(quote.changePct, 2, true)}
             </Signed>
           </>
+        ) : unavailable ? (
+          <span className="text-caption text-tertiary" aria-label="No price">—</span>
         ) : (
           <Skeleton width={70} height={12} className="ml-auto" />
         )}

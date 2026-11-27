@@ -1,34 +1,34 @@
 /**
- * Home = the day (PROGRAMME-v3 K4; Flow r2 §2.3). One 720px column in a fixed order, no containers, motion C0:
+ * Home = the day (PROGRAMME-v3 K4; Flow r2 §2.3; 1.0 brief §2.6). One 720px column in a fixed order, no containers:
  *
- *   the date (H1) · subtitle: all-day items · Today's note
- *   one capture field (t / n / −12.50 prefixes, capture.ts)
+ *   the date (H1, no greeting) · all-day items · Today's note
+ *   [new workspace] the recovery-key reminder, Start here, the apps building in the background
+ *   one capture field (plain text is a task; t / n / −12.50 prefixes keep working, capture.ts)
+ *   [new workspace] Getting started: a short self-ticking checklist that can be hidden
  *   Agenda       today's events, with a now line
- *   To do        starred, overdue and due-today Life OS tasks, then unchecked to-dos of today's note; the habits line
- *   Money        Money's one-line glance plus at most one alert (only with Money HQ)
+ *   To do        starred, overdue and due-today tasks, then unchecked to-dos of today's note; the habits line
+ *   Money        Money's one-line glance plus at most one alert (only with the Money app)
  *   Recent       six pages
  *
- * Empty sections are omitted. A new vault adds a self-ticking "Get started" list and one Life apps line. Not
- * customisable by design. j/k (or ↓/↑) move through the rows from the moment Home opens, x ticks the focused to-do,
- * Enter or Space opens it.
+ * Empty sections are omitted. Not customisable by design. j/k (or ↓/↑) move through the rows from the moment Home
+ * opens, x ticks the focused to-do, Enter or Space opens it. Home's first render never pulls in the editor.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { api, listen } from "@/backend";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { api } from "@/backend";
 import type { CalendarEvent, Id, RowDTO } from "@/backend/types";
-import { openPaletteHeld, openTodayNote, runCommand } from "@/app/commands";
-import { shortcutLabel } from "@/lib/platform";
+import { openTodayNote } from "@/app/commands";
 import { navigate } from "@/app/router";
 import { cn } from "@/lib/cn";
 import { formatRelative, formatTime } from "@/lib/dates";
 import { notify } from "@/stores/toasts";
 import { useUi } from "@/stores/ui";
-import { useWorkspace } from "@/stores/workspace";
 import { Amount } from "@/ui/Amount";
 import { Checkbox } from "@/ui/Checkbox";
 import { PageIcon } from "@/features/shell/PageIcon";
 import { optionId, read, write } from "@/features/lifeapps/cells";
 import { useAppDatabases, useRows, useStableNow, type AppDb } from "@/features/lifeapps/data";
 import { CaptureField } from "./CaptureField";
+import { GettingStarted, RecoveryReminder, SetupProgress, StartHere, useFirstRun } from "./firstRun";
 import { localDay, useAppInstance, useHabitsToday, useMoneyGlance, useNoteTodos, useRecentPages, useTodayEvents, useTodayNoteMeta } from "./data";
 import "./home.css";
 
@@ -53,6 +53,41 @@ function Section({ title, link, children, label }: { title: string; link?: { lab
 /** Marks a section that is still loading, so `emp:route-ready` waits for it (routeReady.ts) and nothing is shown
  * until its data is real. */
 const Loading = () => <span data-route-busy="" hidden />;
+
+/** Chained loads (a section's data, then its rows) leave short gaps; the body waits this long without one. */
+const SETTLE_QUIET_MS = 40;
+/** A section that never finishes loading does not keep the rest of Home hidden for longer than this. */
+const SETTLE_MAX_MS = 1200;
+
+/**
+ * Home's body appears whole (1.0 brief §4, skeleton → content without jumps): it stays transparent until no
+ * section is loading, then fades in (120 ms, CSS; instant under reduced motion). Without this, Start here and
+ * Getting started (which wait on the workspace's first-run state) popped in above the capture field after the
+ * first paint and pushed everything down. The date above it paints at once.
+ */
+function useSettled(ref: RefObject<HTMLElement | null>): boolean {
+  const [settled, setSettled] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (settled || !el) return;
+    let quiet = 0;
+    const idle = () => !el.querySelector("[data-route-busy]");
+    const arm = () => {
+      window.clearTimeout(quiet);
+      if (idle()) quiet = window.setTimeout(() => idle() && setSettled(true), SETTLE_QUIET_MS);
+    };
+    const mo = new MutationObserver(arm);
+    mo.observe(el, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-route-busy"] });
+    arm();
+    const cap = window.setTimeout(() => setSettled(true), SETTLE_MAX_MS);
+    return () => {
+      mo.disconnect();
+      window.clearTimeout(quiet);
+      window.clearTimeout(cap);
+    };
+  }, [ref, settled]);
+  return settled;
+}
 
 /** Times always carry minutes ("4:00 PM", not "4 PM") so the time column lines up. */
 const clock = (v: Date | string) => {
@@ -235,7 +270,7 @@ function Todo({ today, noteId, lifeos }: { today: string; noteId: Id | null; lif
   const hidden = all_ || over <= 1 ? 0 : over;
   const shown = hidden ? all.slice(0, TODO_FIRST) : all;
   return (
-    <Section title="To do" link={instanceId ? { label: "Life OS", go: () => navigate({ t: "app", instanceId }) } : undefined}>
+    <Section title="To do" link={instanceId ? { label: "Tasks", go: () => navigate({ t: "app", instanceId }) } : undefined}>
       <ul className="hm-list">
         {shown.map((t) => (
           <li key={t.key} className={cn("hm-row hm-todo", t.checked && "is-done")}>
@@ -298,7 +333,7 @@ function MoneyLine({ today }: { today: string }) {
   if (!parts.length) return null;
   const alert = g.alert;
   return (
-    <Section title="Money" link={{ label: "Money HQ", go: () => navigate({ t: "app", instanceId: g.instanceId }) }}>
+    <Section title="Money" link={{ label: "Money", go: () => navigate({ t: "app", instanceId: g.instanceId }) }}>
       <p className="hm-money">
         {parts.map((p, i) => (
           <span key={i}>
@@ -344,66 +379,6 @@ function Recent() {
         ))}
       </ul>
     </Section>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────── first run
-
-const GET_STARTED: { key: string; label: string; run: () => void }[] = [
-  { key: "capture", label: "Add a task or note in the field above", run: () => document.querySelector<HTMLInputElement>(".hm-capture-input")?.focus() },
-  { key: "open_palette", label: `Search everything with ${shortcutLabel("mod+k")}`, run: () => openPaletteHeld("all") },
-  { key: "try_slash", label: "Type / in a page to add a block", run: () => runCommand("page.new") },
-  { key: "import", label: "Import pages or a bank file", run: () => useUi.getState().setImportOpen(true) },
-];
-
-/** Shown after first run until every item is done. Each item ticks itself when you do the thing. */
-function useGetStarted(): { done: Record<string, boolean>; show: boolean } | null {
-  const [state, setState] = useState<{ done: Record<string, boolean>; show: boolean } | null>(null);
-  const paletteOpen = useUi((s) => s.paletteOpen);
-  const importOpen = useUi((s) => s.importOpen);
-  const load = useCallback(() => {
-    Promise.all([api.kv.get({ ns: "ui.onboarding", key: "completedAt" }), api.kv.getMany({ ns: "ui.gettingStarted", keys: GET_STARTED.map((g) => g.key) })])
-      .then(([completed, got]) => {
-        const done = Object.fromEntries(GET_STARTED.map((g) => [g.key, !!got[g.key]]));
-        setState({ done, show: !!completed && !Object.values(done).every(Boolean) });
-      })
-      .catch(() => setState({ done: {}, show: false }));
-  }, []);
-  useEffect(() => {
-    if (!paletteOpen && !importOpen) load();
-  }, [load, paletteOpen, importOpen]);
-  useEffect(() => listen("db:changed", () => load()), [load]);
-  return state;
-}
-
-function GetStarted({ state }: { state: { done: Record<string, boolean> } }) {
-  return (
-    <Section title="Get started">
-      <ul className="hm-list">
-        {GET_STARTED.map((g) => (
-          <li key={g.key} className={cn("hm-row hm-todo", state.done[g.key] && "is-done")}>
-            <Checkbox checked={!!state.done[g.key]} disabled aria-label={`${g.label}: ${state.done[g.key] ? "done" : "not done"}`} />
-            <button type="button" data-home-item="" className="hm-row-title hm-todo-title" onClick={g.run}>
-              {g.label}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </Section>
-  );
-}
-
-function LifeAppsLine() {
-  const apps = useWorkspace((s) => s.lifeapps);
-  if (apps.some((a) => a.appId === "money-hq" || a.appId === "portfolio" || a.appId === "tax-organizer")) return null;
-  return (
-    <p className="hm-apps-line">
-      <span>Add money, investing or taxes</span>
-      <span className="hm-dot"> · </span>
-      <button type="button" data-home-item="" className="hm-quiet-link" onClick={() => navigate({ t: "lifeapps" })}>
-        Life apps
-      </button>
-    </p>
   );
 }
 
@@ -454,11 +429,12 @@ export default function HomePage() {
   const events = useTodayEvents(today);
   const lifeos = useLifeOsTodos(today);
   const note = useTodayNoteMeta(today);
-  const gs = useGetStarted();
-  const fresh = !!gs?.show;
+  const [first, setFirst] = useFirstRun();
   const allDay = (events ?? []).filter((e) => e.allDay);
   const date = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   const pageRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const settled = useSettled(bodyRef);
   useListKeys(pageRef);
 
   return (
@@ -477,13 +453,17 @@ export default function HomePage() {
           </button>
         </p>
       </header>
-      <CaptureField autoFocus={fresh} />
-      {!gs ? <Loading /> : fresh ? <GetStarted state={gs} /> : null}
-      {events && lifeos.items !== null ? <Agenda events={events} now={now} taskIds={lifeos.ids} /> : <Loading />}
-      <Todo today={today} noteId={note?.id ?? null} lifeos={lifeos} />
-      <MoneyLine today={today} />
-      <Recent />
-      {fresh ? <LifeAppsLine /> : null}
+      <div ref={bodyRef} className="hm-body" data-settled={settled ? "" : undefined}>
+        <RecoveryReminder />
+        {first ? <StartHere state={first} set={setFirst} /> : <Loading />}
+        <SetupProgress />
+        <CaptureField />
+        {first ? <GettingStarted state={first} set={setFirst} /> : null}
+        {events && lifeos.items !== null ? <Agenda events={events} now={now} taskIds={lifeos.ids} /> : <Loading />}
+        <Todo today={today} noteId={note?.id ?? null} lifeos={lifeos} />
+        <MoneyLine today={today} />
+        <Recent />
+      </div>
     </div>
   );
 }

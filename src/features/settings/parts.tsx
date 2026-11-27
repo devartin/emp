@@ -1,23 +1,33 @@
 /**
- * Building blocks for settings sections: a section header, grouped cards of rows, and the row layout
- * (label + description on the left, control on the right). Rows carry `data-setting` so search and deep links can
- * scroll to them and flash them.
+ * Building blocks for settings sections (1.0 brief §2.4): a section header, groups of rows, the row layout (label and
+ * description on the left, control on the right) and the one "More options" disclosure each section ends with. Rows
+ * carry `data-setting` so search and deep links can scroll to them and flash them.
+ *
+ * More options: the caret turns in 120ms and the body opens in 160ms (grid rows + opacity, the same recipe as the
+ * sidebar sections, register `disclosureCaret` / `sectionExpand`); reduced motion makes both instant. Its open state
+ * lives in `useSettingsUi`, so search and deep links can open it before they scroll.
  */
-import { m } from "motion/react";
-import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { create } from "zustand";
 import { cn } from "@/lib/cn";
-import { spring } from "@/ui/motion/tokens";
-import { useReducedMotionPref } from "@/ui/motion/useReducedEffects";
+import type { SectionId } from "./meta";
 
-export function SectionHeader({ icon: Icon, title, description, actions }: { icon: LucideIcon; title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+interface SettingsUi {
+  more: Partial<Record<SectionId, boolean>>;
+  setMore(section: SectionId, open: boolean): void;
+}
+
+export const useSettingsUi = create<SettingsUi>()((set) => ({
+  more: {},
+  setMore: (section, open) => set((s) => ({ more: { ...s.more, [section]: open } })),
+}));
+
+export function SectionHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
   return (
     <header className="st-header">
-      <span className="st-header-icon" aria-hidden>
-        <Icon size={20} strokeWidth={1.75} />
-      </span>
       <div className="min-w-0 flex-1">
-        <h1 className="st-title">{title}</h1>
+        <h2 className="st-title">{title}</h2>
         {description ? <p className="st-desc">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-none items-center gap-2">{actions}</div> : null}
@@ -25,20 +35,19 @@ export function SectionHeader({ icon: Icon, title, description, actions }: { ico
   );
 }
 
-export function Group({ title, description, actions, children, className, id, footer, flush, bare }: { title?: ReactNode; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; id?: string; footer?: ReactNode; flush?: boolean; /** No card around the content (embedded panels that bring their own cards). */ bare?: boolean }) {
+export function Group({ title, description, actions, children, className, id }: { title?: ReactNode; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; id?: string }) {
   return (
     <section className={cn("st-group", className)} data-setting={id} aria-label={typeof title === "string" ? title : undefined}>
       {title || actions ? (
         <div className="st-group-head">
           <div className="min-w-0 flex-1">
-            {title ? <h2 className="st-group-title">{title}</h2> : null}
+            {title ? <h3 className="st-group-title">{title}</h3> : null}
             {description ? <p className="st-group-desc">{description}</p> : null}
           </div>
           {actions ? <div className="flex flex-none items-center gap-2">{actions}</div> : null}
         </div>
       ) : null}
-      {bare ? <div className="st-bare">{children}</div> : <div className={cn("st-card", flush && "is-flush")}>{children}</div>}
-      {footer ? <div className="st-group-foot">{footer}</div> : null}
+      <div className="st-card">{children}</div>
     </section>
   );
 }
@@ -51,15 +60,13 @@ export interface RowProps {
   htmlFor?: string;
   /** Stack the control under the label (wide controls). */
   stacked?: boolean;
-  icon?: ReactNode;
   badge?: ReactNode;
   className?: string;
 }
 
-export function Row({ id, label, description, children, htmlFor, stacked, icon, badge, className }: RowProps) {
+export function Row({ id, label, description, children, htmlFor, stacked, badge, className }: RowProps) {
   return (
     <div className={cn("st-row", stacked && "is-stacked", className)} data-setting={id}>
-      {icon ? <span className="st-row-icon">{icon}</span> : null}
       <div className="st-row-text">
         <div className="st-row-label">
           {htmlFor ? <label htmlFor={htmlFor}>{label}</label> : <span>{label}</span>}
@@ -72,24 +79,38 @@ export function Row({ id, label, description, children, htmlFor, stacked, icon, 
   );
 }
 
-/** A status chip (green / amber / neutral) that springs in when its state changes. */
-export function StatusChip({ tone, children, icon: Icon }: { tone: "ok" | "warn" | "neutral" | "bad"; children: ReactNode; icon?: LucideIcon }) {
-  const reduced = useReducedMotionPref();
+/** A block inside a card that isn't a label/control row (previews, lists, progress). */
+export function Block({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
   return (
-    <m.span
-      layout={reduced ? false : "position"}
-      className="st-chip"
-      data-tone={tone}
-      initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={spring.ui}
-    >
-      {Icon ? <Icon size={13} strokeWidth={2.25} aria-hidden /> : <span className="st-chip-dot" aria-hidden />}
+    <div className={cn("st-block", className)} data-setting={id}>
       {children}
-    </m.span>
+    </div>
   );
 }
 
 export function Hint({ children, className }: { children: ReactNode; className?: string }) {
   return <p className={cn("st-hint", className)}>{children}</p>;
+}
+
+/** The one "More options" disclosure at the bottom of a section. Closed by default; search and deep links open it. */
+export function MoreOptions({ section, children, label = "More options" }: { section: SectionId; children: ReactNode; label?: string }) {
+  const open = useSettingsUi((s) => !!s.more[section]);
+  const setMore = useSettingsUi((s) => s.setMore);
+  const id = useId();
+  // Mounted on first open (its panels load data), then kept so closing can animate.
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return (
+    <div className="st-more" data-open={open ? "" : undefined}>
+      <button type="button" className="st-more-toggle" aria-expanded={open} aria-controls={id} onClick={() => setMore(section, !open)}>
+        <ChevronRight size={14} strokeWidth={2} className="st-more-caret" aria-hidden />
+        {label}
+      </button>
+      <div className="st-more-body" id={id} data-closed={open ? undefined : ""} inert={!open}>
+        <div className="st-more-inner">{open || mounted ? children : null}</div>
+      </div>
+    </div>
+  );
 }

@@ -22,7 +22,8 @@ describe('vault', () => {
     const [ws] = await api.workspace.list();
     const open = await api.workspace.open({ id: ws.id });
     expect(open.pages.map((p) => p.title)).toContain('Getting Started');
-    expect(open.workspace.favorites).toHaveLength(1);
+    // Getting Started lists once, under Documents: it is not pinned to Favorites (1.0 brief §2.1).
+    expect(open.workspace.favorites).toHaveLength(0);
   });
 
   test('lock, wrong password with backoff, unlock with "demo"', async () => {
@@ -211,7 +212,7 @@ describe('pages and docs', () => {
       'Writing in Ultranote',
       'Keyboard shortcuts',
       'Privacy & encryption',
-      'Money & life apps',
+      'Apps in Ultranote',
     ]);
     const a = await api.page.get({ id: gs!.id });
     const c = await api.page.get({ id: copy.id });
@@ -271,20 +272,24 @@ describe('pages and docs', () => {
     expect(await checked()).toBe(0);
     await api.page.create({ workspaceId: ws.id, parentId: null, kind: 'doc', title: 'Mine' });
     await api.kv.set({ ns: 'ui.gettingStarted', key: 'open_palette', value: 1 });
-    await api.template.list({ workspaceId: ws.id });
+    // The editor's slash menu recording a block is "Add a heading, list or table".
+    await api.kv.set({ ns: 'ui.editor', key: 'slashRecent', value: ['heading'] });
     expect(await checked()).toBe(3);
+    // Every tick is recorded where Home's checklist reads it, as Rust does.
+    const got = await api.kv.getMany({ ns: 'ui.gettingStarted', keys: ['create_page', 'try_slash', 'open_palette', 'lock'] });
+    expect(Object.keys(got).sort()).toEqual(['create_page', 'open_palette', 'try_slash']);
   });
 });
 
 describe('search', () => {
   test('titles and body text with snippets, prefix matching and operators', async () => {
     const { api } = await mockApi();
-    const res = await api.search.query({ q: 'argon', limit: 5, reqId: 7 });
+    const res = await api.search.query({ q: 'fileva', limit: 5, reqId: 7 });
     expect(res.reqId).toBe(7);
     expect(res.hits[0].title).toBe('Privacy & encryption');
-    expect(res.hits[0].snippet?.text.toLowerCase()).toContain('argon2id');
+    expect(res.hits[0].snippet?.text.toLowerCase()).toContain('filevault');
     const [s, e] = res.hits[0].snippet!.ranges[0];
-    expect(res.hits[0].snippet!.text.slice(s, e).toLowerCase()).toBe('argon');
+    expect(res.hits[0].snippet!.text.slice(s, e).toLowerCase()).toBe('fileva');
     expect(res.hits[0].blockId).toBeTruthy();
 
     const prefix = await api.search.query({ q: 'kitch', limit: 5, reqId: 1 });

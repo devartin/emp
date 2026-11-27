@@ -3,6 +3,7 @@
  * estimated balance due / refund (≈ range when answers are uncertain), bracket visualisation, "Show math" lines,
  * standard vs itemised, and scenario toggles with deltas. Never "you owe" — always an estimate.
  */
+import { appName } from "@/features/lifeapps/identity";
 import { Calculator, Link2, Plus, X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -95,7 +96,7 @@ export default function Estimator() {
   return (
     <div className="fh-grid">
       <div className="fh-span-5 flex flex-col gap-4">
-        <Section title="Household" subtitle={`Tax year ${p.year} · ${tx.pack ? `${tx.pack.name} v${tx.pack.version}` : p.packId}`}>
+        <Section title="Household" subtitle={`For ${p.year} · ${tx.pack ? `${tx.pack.name} v${tx.pack.version}` : p.packId}`}>
           <div className="grid grid-cols-2 gap-3">
             <Select label="Filing status" value={p.filingStatus} onValueChange={(v) => tx.setProfile({ filingStatus: v })} options={Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))} />
             <NumberField label="Dependents under 17" value={p.dependents} onChange={(v) => tx.setProfile({ dependents: Math.max(0, Math.round(v ?? 0)) })} min={0} max={12} />
@@ -119,8 +120,8 @@ export default function Estimator() {
           {tx.pulled.length ? (
             <div className="tx-pulled">
               <div className="flex items-center gap-2">
-                <Switch size="sm" checked={p.pullPortfolio} onCheckedChange={(v) => tx.setProfile({ pullPortfolio: v })} aria-label="Include figures from Portfolio" />
-                <span className="text-body-sm font-medium flex-1">Include figures from Portfolio</span>
+                <Switch size="sm" checked={p.pullPortfolio} onCheckedChange={(v) => tx.setProfile({ pullPortfolio: v })} aria-label={`Include figures from ${appName("portfolio")}`} />
+                <span className="text-body-sm font-medium flex-1">Include figures from {appName("portfolio")}</span>
               </div>
               <div className="flex flex-col gap-1 mt-2">
                 {tx.pulled.map((x) => (

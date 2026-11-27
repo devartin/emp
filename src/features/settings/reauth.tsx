@@ -48,6 +48,16 @@ export async function ensureReauth(reason: string): Promise<boolean> {
   return useReauthStore.getState().ask(reason);
 }
 
+/**
+ * Confirm with a password the person has just typed in the same dialog (change password, turn off encryption), so
+ * they are not asked for it a second time. Rejects with BAD_PASSWORD when it is wrong.
+ */
+export async function reauthWith(password: string): Promise<void> {
+  const v = useVault.getState();
+  if (!v.status?.encrypted || v.reauthValid()) return;
+  await v.reauth(password);
+}
+
 /** Runs `fn` with re-auth, asking again once if the backend says the window expired. */
 export async function withReauth<T>(reason: string, fn: () => Promise<T>): Promise<T | null> {
   if (!(await ensureReauth(reason))) return null;

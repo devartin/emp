@@ -73,6 +73,13 @@ export interface Txn {
   importId: string;
   cleared: string;
   hasSplits: boolean;
+  /** `txn.reviewed`; null without the property. */
+  reviewed: boolean | null;
+  /** `txn.source` key. */
+  source: string;
+  /** Tag option names. */
+  tags: string[];
+  rev: number;
 }
 
 export interface RecurringItem {
@@ -87,6 +94,7 @@ export interface RecurringItem {
   autopay: boolean;
   variable: boolean;
   prevAmount: number | null;
+  cancelUrl: string;
 }
 
 export interface Goal {
@@ -97,6 +105,8 @@ export interface Goal {
   date: string | null;
   saved: number;
   accountId: Id | null;
+  priority: string;
+  icon: string;
 }
 
 export interface Ledger {
@@ -212,6 +222,13 @@ export function readLedger(ctx: MockCtx, set: FinSet): Ledger {
     importId: text(r.values[rx['txn.import_id']]),
     cleared: selOf(r.values[rx['txn.cleared']]) ?? 'uncleared',
     hasSplits: parents.has(r.id),
+    reviewed: rx['txn.reviewed'] ? checkOf(r.values[rx['txn.reviewed']]) : null,
+    source: selOf(r.values[rx['txn.source']]) ?? '',
+    tags: (() => {
+      const v = r.values[rx['txn.tags']];
+      return v && v.t === 'multi' ? v.v.map((id) => optionName(ctx, rx['txn.tags'], id)) : [];
+    })(),
+    rev: r.rev,
   }));
   txns.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const recurring: RecurringItem[] = liveRows(ctx, R.id).map((r) => {
@@ -229,6 +246,10 @@ export function readLedger(ctx: MockCtx, set: FinSet): Ledger {
       autopay: checkOf(r.values[rr['rec.autopay']]),
       variable: checkOf(r.values[rr['rec.variable']]),
       prevAmount: moneyOf(r.values[rr['rec.prev_amount']]),
+      cancelUrl: (() => {
+        const v = r.values[rr['rec.cancel_url']];
+        return v && v.t === 'url' ? (v.v ?? '') : text(v);
+      })(),
     };
   });
   const goals: Goal[] = liveRows(ctx, G.id).map((r) => ({
@@ -239,6 +260,8 @@ export function readLedger(ctx: MockCtx, set: FinSet): Ledger {
     date: dateOf(r.values[rg['goal.date']]),
     saved: moneyOf(r.values[rg['goal.saved']]) ?? 0,
     accountId: relOf(r.values[rg['goal.account']]),
+    priority: selOf(r.values[rg['goal.priority']]) ?? 'medium',
+    icon: text(r.values[rg['goal.icon']]) || 'target',
   }));
   const ledger: Ledger = {
     set,
@@ -1257,7 +1280,377 @@ function blockColor(c: string): import('../../types').BlockColor {
 
 const money = (cents: number, cur = 'USD') => ({ amount: centsToStr(cents), currency: cur });
 
+// ───────────────────────────────────────────────────────────────────────────── ledger views (ULTRANOTE-1.0 §5)
+// The same compact views Rust builds over its cached ledger (`finance_ledger`, `finance_txns_query`) and the
+// key-based writes, in integer cents.
+
+const HISTORY_DAYS = 90;
+const RECENT_TXNS = 8;
+const MAX_TXN_WINDOW = 1000;
+const CLEARED_KEYS = ['uncleared', 'cleared', 'reconciled'];
+
+/** Top-level rows (split parts nested), newest first; equal dates keep database order (Rust `top_level`). */
+function topLevel(l: Ledger): Txn[] {
+  const top = l.txns.filter((t) => !t.splitParent || !l.txnById.has(t.splitParent));
+  const order = new Map(liveOrder(l).map((id, i) => [id, i]));
+  return top.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)));
+}
+
+/** Database order of the transactions (the ledger sorts by date). */
+const liveOrderCache = new WeakMap<Ledger, Id[]>();
+function liveOrder(l: Ledger): Id[] {
+  let o = liveOrderCache.get(l);
+  if (!o) {
+    o = l.txns.map((t) => t.id);
+    liveOrderCache.set(l, o);
+  }
+  return o;
+}
+
+const needsCategory = (t: Txn) => !t.categoryId && !t.transferId && !t.hasSplits;
+
+function clearedOf(l: Ledger, t: Txn): string {
+  const p = t.splitParent ? l.txnById.get(t.splitParent) : undefined;
+  return (p ?? t).cleared || 'uncleared';
+}
+
+function txnView(l: Ledger, t: Txn): import('../../types').LedgerTxn {
+  const twin = t.transferId ? l.txnById.get(t.transferId) : undefined;
+  return {
+    id: t.id,
+    rev: t.rev,
+    date: t.date,
+    payee: t.payee,
+    raw: t.raw,
+    memo: t.memo,
+    amount: centsToStr(t.amount),
+    accountId: t.accountId,
+    categoryId: t.categoryId,
+    transferId: t.transferId,
+    transferAccountId: twin?.accountId ?? null,
+    splitParent: t.splitParent,
+    cleared: clearedOf(l, t) as import('../../types').ClearedState,
+    reviewed: t.reviewed,
+    source: t.source,
+    tags: t.tags,
+    splits: t.hasSplits ? l.txns.filter((c) => c.splitParent === t.id).map((c) => txnView(l, c)) : [],
+  };
+}
+
+/** Cleared balance as of `day` (opening plus cleared/reconciled top-level rows; Rust `cleared_balance`). */
+function clearedAt(l: Ledger, a: Account, day: string): number {
+  let b = a.opening;
+  for (const t of balanceRows(l)) if (t.accountId === a.id && t.date <= day && clearedOf(l, t) !== 'uncleared') b += t.amount;
+  return b;
+}
+
+function historyOf(l: Ledger, a: Account, today: string): number[] {
+  const rows = balanceRows(l)
+    .filter((t) => t.accountId === a.id && t.date <= today)
+    .sort((x, y) => (x.date < y.date ? 1 : x.date > y.date ? -1 : 0));
+  let bal = balanceAt(l, a.id, today);
+  const out: number[] = [];
+  let k = 0;
+  for (let d = 0; d < HISTORY_DAYS; d++) {
+    const day = addDays(today, -d);
+    out.push(bal / 100);
+    while (k < rows.length && rows[k].date >= day) {
+      bal -= rows[k].amount;
+      k++;
+    }
+  }
+  return out.reverse();
+}
+
+function ledgerView(ctx: MockCtx, set: FinSet, l: Ledger): import('../../types').FinanceLedger {
+  const today = ctx.clock.today();
+  const top = topLevel(l);
+  const hasReviewed = !!l.roles.txn['txn.reviewed'];
+  return {
+    rev: String(ctx.db.version),
+    currency: set.baseCurrency,
+    today,
+    dbs: { accounts: set.dbs.accounts, categories: set.dbs.categories, transactions: set.dbs.txns, recurring: set.dbs.recurring, goals: set.dbs.goals, budgets: null, payees: null },
+    hasReviewed,
+    accounts: l.accounts.map((a) => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      institution: a.institution,
+      currency: a.currency && a.currency !== set.baseCurrency ? a.currency : '',
+      opening: centsToStr(a.opening),
+      apr: a.apr,
+      minPayment: centsToStr(a.minPayment),
+      limit: a.limit === null ? null : centsToStr(a.limit),
+      onBudget: a.onBudget,
+      lowThreshold: a.lowThreshold === null ? null : centsToStr(a.lowThreshold),
+      reconciled: a.reconciled,
+      closed: a.closed,
+      balance: centsToStr(balanceAt(l, a.id, today)),
+      cleared: centsToStr(clearedAt(l, a, today)),
+      history: historyOf(l, a, today),
+    })),
+    categories: l.categories.map((c) => ({ id: c.id, name: c.name, group: c.group, color: blockColor(c.color), icon: c.icon === 'circle' ? 'circle-dollar-sign' : c.icon, essential: c.essential, rollover: c.rollover, target: centsToStr(c.target), isIncome: c.income })),
+    recurring: l.recurring.map((r) => ({ id: r.id, name: r.name, amount: centsToStr(r.amount), rrule: r.rrule, dtstart: r.dtstart, accountId: r.accountId, categoryId: r.categoryId, kind: r.kind, autopay: r.autopay, variable: r.variable, prevAmount: r.prevAmount === null ? null : centsToStr(r.prevAmount), cancelUrl: r.cancelUrl })),
+    goals: l.goals.map((g) => ({ id: g.id, name: g.name, kind: g.kind, target: centsToStr(g.target), date: g.date, saved: centsToStr(g.saved), accountId: g.accountId, priority: g.priority, icon: g.icon })),
+    recent: top.slice(0, RECENT_TXNS).map((t) => txnView(l, t)),
+    counts: { txns: top.length, toReview: hasReviewed ? top.filter((t) => t.reviewed === false).length : null, uncategorized: top.filter(needsCategory).length },
+  };
+}
+
+function txnsQuery(ctx: MockCtx, l: Ledger, req: { filter?: string; accountId?: Id; search?: string; offset: number; limit: number }): import('../../types').FinanceTxnPage {
+  const filter = req.filter ?? 'all';
+  if (!['all', 'review', 'uncategorized', 'transfers', 'income'].includes(filter)) ctx.fail('INVALID', 'unknown filter', { field: 'filter' });
+  if (!Number.isInteger(req.limit) || req.limit < 0 || req.limit > MAX_TXN_WINDOW) ctx.fail('INVALID', `at most ${MAX_TXN_WINDOW} items are allowed`, { field: 'limit' });
+  const needle = (req.search ?? '').trim().toLowerCase();
+  const top = topLevel(l);
+  const match = top.filter((t) => {
+    if (req.accountId && t.accountId !== req.accountId) return false;
+    if (filter === 'uncategorized' && !needsCategory(t)) return false;
+    if (filter === 'review' && t.reviewed !== false) return false;
+    if (filter === 'transfers' && !t.transferId) return false;
+    if (filter === 'income' && !(t.amount > 0 && !t.transferId)) return false;
+    if (!needle) return true;
+    const catName = (id: Id | null) => (id ? (l.catById.get(id)?.name ?? '').toLowerCase() : '');
+    const parts = t.hasSplits ? l.txns.filter((c) => c.splitParent === t.id) : [];
+    // Like Rust: an amount as typed ("-82.17", "$1,500") matches the absolute amount; split parts by category.
+    const amountNeedle = /^[\d.,\-\u2212$ ]+$/.test(needle) ? needle.replace(/[^\d.]/g, '') : '';
+    return t.payee.toLowerCase().includes(needle) || t.raw.toLowerCase().includes(needle) || t.memo.toLowerCase().includes(needle) || catName(t.categoryId).includes(needle) || parts.some((p) => catName(p.categoryId).includes(needle)) || centsToStr(Math.abs(t.amount)).includes(needle) || (!!amountNeedle && centsToStr(Math.abs(t.amount)).includes(amountNeedle));
+  });
+  let inflow = 0;
+  let outflow = 0;
+  for (const t of match) {
+    if (t.transferId) continue;
+    if (t.amount > 0) inflow += t.amount;
+    else outflow -= t.amount;
+  }
+  const hasReviewed = !!l.roles.txn['txn.reviewed'];
+  return {
+    rows: match.slice(req.offset ?? 0, (req.offset ?? 0) + req.limit).map((t) => txnView(l, t)),
+    total: match.length,
+    inflow: centsToStr(inflow),
+    outflow: centsToStr(outflow),
+    counts: { all: top.length, review: hasReviewed ? top.filter((t) => t.reviewed === false).length : null, uncategorized: top.filter(needsCategory).length },
+  };
+}
+
+function isoDate(ctx: MockCtx, field: string, s: string | undefined): string {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(Date.parse(`${s}T12:00:00Z`))) return ctx.fail('INVALID', 'must be a date (YYYY-MM-DD)', { field });
+  return s;
+}
+
+function amountCents(ctx: MockCtx, field: string, s: string | undefined): number {
+  const n = Number(String(s ?? '').replace(/[−]/g, '-').trim());
+  if (s === undefined || String(s).trim() === '' || !Number.isFinite(n) || Math.abs(n) > 1e12) return ctx.fail('INVALID', 'invalid amount', { field });
+  return Math.round(n * 100);
+}
+
+function softDelete(ctx: MockCtx, ids: Id[]): void {
+  const rows = ctx.db.table<RowRecord>('db_rows');
+  const now = ctx.clock.now();
+  for (const id of ids) if (rows.has(id)) rows.update(id, (x) => void (x.deletedAt = now));
+}
+
 export const handlers: MockHandlers = {
+  finance_ledger: (req, ctx) => {
+    const set = resolveSet(ctx, req.instanceId);
+    return ledgerView(ctx, set, readLedger(ctx, set));
+  },
+
+  finance_txns_query: (req, ctx) => {
+    const set = resolveSet(ctx, req.instanceId);
+    return txnsQuery(ctx, readLedger(ctx, set), req);
+  },
+
+  finance_txns_update: (req, ctx) => {
+    const set = resolveSet(ctx, req.instanceId);
+    const l = readLedger(ctx, set);
+    const R = l.roles.txn;
+    if (req.updates.length > 1000) ctx.fail('INVALID', 'at most 1000 items are allowed', { field: 'updates' });
+    const out: { id: Id; values: Record<Id, CellValue | null> }[] = [];
+    for (const u of req.updates) {
+      const t = l.txnById.get(u.id);
+      if (!t) return ctx.fail('NOT_FOUND', 'transaction not found');
+      const values: Record<Id, CellValue | null> = {};
+      if ('categoryId' in u && u.categoryId !== undefined) {
+        if (u.categoryId !== null && !l.catById.has(u.categoryId)) ctx.fail('INVALID', 'unknown category', { field: 'categoryId' });
+        values[R['txn.category']] = V.rel(u.categoryId ? [u.categoryId] : []);
+      }
+      if (u.memo !== undefined) values[R['txn.memo']] = V.text(u.memo);
+      if (u.date !== undefined) values[R['txn.date']] = V.date(isoDate(ctx, 'date', u.date));
+      if (u.amount !== undefined) values[R['txn.amount']] = V.money(amountCents(ctx, 'amount', u.amount), (t.accountId && l.acctById.get(t.accountId)?.currency) || set.baseCurrency);
+      if (u.reviewed !== undefined && R['txn.reviewed']) values[R['txn.reviewed']] = V.check(u.reviewed);
+      if (u.cleared !== undefined) {
+        if (!CLEARED_KEYS.includes(u.cleared)) ctx.fail('INVALID', 'must be uncleared, cleared or reconciled', { field: 'cleared' });
+        values[R['txn.cleared']] = V.status(u.cleared);
+        for (const part of l.txns) if (part.splitParent === t.id) out.push({ id: part.id, values: { [R['txn.cleared']]: V.status(u.cleared) } });
+      }
+      if (Object.keys(values).length) out.push({ id: t.id, values });
+    }
+    updateTxnRows(ctx, out);
+    return { updated: out.length };
+  },
+
+  finance_txn_create: (req, ctx) => {
+    const set = resolveSet(ctx, req.instanceId);
+    const l = readLedger(ctx, set);
+    const R = l.roles.txn;
+    const date = isoDate(ctx, 'date', req.date);
+    const cents = amountCents(ctx, 'amount', req.amount);
+    const acct = l.acctById.get(req.accountId);
+    if (!acct) return ctx.fail('INVALID', 'unknown account', { field: 'accountId' });
+    if (req.categoryId && !l.catById.has(req.categoryId)) ctx.fail('INVALID', 'unknown category', { field: 'categoryId' });
+    if (!req.payee?.trim()) ctx.fail('INVALID', 'must not be empty', { field: 'payee' });
+    const values: Record<Id, CellValue> = {
+      [l.primary.txn]: V.text(req.payee.trim()),
+      [R['txn.date']]: V.date(date),
+      [R['txn.amount']]: V.money(cents, acct.currency || set.baseCurrency),
+      [R['txn.account']]: V.rel([acct.id]),
+      ...(req.categoryId ? { [R['txn.category']]: V.rel([req.categoryId]) } : {}),
+      ...(req.memo?.trim() ? { [R['txn.memo']]: V.text(req.memo.trim()) } : {}),
+      ...(R['txn.cleared'] ? { [R['txn.cleared']]: V.status('uncleared') } : {}),
+      ...(R['txn.source'] ? { [R['txn.source']]: V.sel('manual') } : {}),
+      // Entered by hand, field by field: nothing left to review.
+      ...(R['txn.reviewed'] ? { [R['txn.reviewed']]: V.check(true) } : {}),
+    };
+    const row = createRow(ctx, set.dbs.txns, { values, silent: true });
+    emitChanged(ctx, set.dbs.txns);
+    return { id: row.id };
+  },
+
+  finance_txn_split: (req, ctx) => {
+    const set = resolveSet(ctx, req.instanceId);
+    const l = readLedger(ctx, set);
+    const R = l.roles.txn;
+    const parent = l.txnById.get(req.parentId);
+    if (!parent) return ctx.fail('NOT_FOUND', 'transaction not found');
+    if (parent.splitParent || parent.transferId) ctx.fail('INVALID', 'this transaction cannot be split', { field: 'parentId' });
+    const parts = req.parts.map((p) => {
+      const c = amountCents(ctx, 'parts.amount', p.amount);
+      if (!l.catById.has(p.categoryId)) ctx.fail('INVALID', 'unknown category', { field: 'parts.categoryId' });
+      if (c === 0 || c < 0 !== parent.amount < 0) ctx.fail('INVALID', "each part must have the transaction's sign", { field: 'parts.amount' });
+      return { categoryId: p.categoryId, cents: c };
+    });
+    if (parts.length && parts.reduce((s, p) => s + p.cents, 0) !== parent.amount) ctx.fail('INVALID', 'the parts must add up to the transaction', { field: 'parts' });
+    softDelete(ctx, l.txns.filter((t) => t.splitParent === parent.id).map((t) => t.id));
+    for (const p of parts) {
+      createRow(ctx, set.dbs.txns, {
+        silent: true,
+        values: {
+          [l.primary.txn]: V.text(parent.payee),
+          [R['txn.date']]: V.date(parent.date),
+          [R['txn.amount']]: V.money(p.cents, set.baseCurrency),
+          ...(parent.accountId ? { [R['txn.account']]: V.rel([parent.accountId]) } : {}),
+          [R['txn.category']]: V.rel([p.categoryId]),
+          [R['txn.split_parent']]: V.rel([parent.id]),
+          ...(R['txn.cleared'] ? { [R['txn.cleared']]: V.status(parent.cleared || 'uncleared') } : {}),
+          ...(R['txn.reviewed'] ? { [R['txn.reviewed']]: V.check(true) } : {}),
+        },
+      });
+    }
+    if (parts.length) updateTxnRows(ctx, [{ id: parent.id, values: { [R['txn.category']]: V.rel([]) } }]);
+    emitChanged(ctx, set.dbs.txns);
+    return { parts: parts.length };
+  },
+
+  finance_reconcile: (req, ctx) => {
+    const set = resolveSet(ctx, req.instanceId);
+    const l = readLedger(ctx, set);
+    const asOf = isoDate(ctx, 'asOf', req.asOf);
+    const a = l.acctById.get(req.accountId);
+    if (!a) return ctx.fail('INVALID', 'unknown account', { field: 'accountId' });
+    const cleared = clearedAt(l, a, asOf);
+    const lock = l.txns.filter((t) => t.accountId === a.id && t.date <= asOf && clearedOf(l, t) === 'cleared');
+    const count = lock.filter((t) => !t.splitParent).length;
+    let reconciled = a.reconciled;
+    if (req.commit) {
+      const R = l.roles.txn;
+      updateTxnRows(ctx, lock.map((t) => ({ id: t.id, values: { [R['txn.cleared']]: V.status('reconciled') } })));
+      const rec = l.roles.acct['acct.reconciled'];
+      if (rec) {
+        ctx.services.get<DbApi>('db.api')?.updateRows(ctx, [{ id: a.id, values: { [rec]: V.date(asOf) } }]);
+        reconciled = asOf;
+      }
+    }
+    return { cleared: centsToStr(cleared), count, reconciled };
+  },
+
+  finance_goal_upsert: (req, ctx) => {
+    const set = resolveSet(ctx, req.instanceId);
+    const l = readLedger(ctx, set);
+    const G = l.roles.goal;
+    const values: Record<Id, CellValue | null> = {};
+    if (req.name !== undefined) {
+      if (!req.name.trim()) ctx.fail('INVALID', 'must not be empty', { field: 'name' });
+      values[l.primary.goal] = V.text(req.name.trim());
+    }
+    if (req.target !== undefined) values[G['goal.target']] = V.money(amountCents(ctx, 'target', req.target), set.baseCurrency);
+    if (req.saved !== undefined) values[G['goal.saved']] = V.money(amountCents(ctx, 'saved', req.saved), set.baseCurrency);
+    if (req.date !== undefined && G['goal.date']) values[G['goal.date']] = req.date === null ? null : V.date(isoDate(ctx, 'date', req.date));
+    if (req.kind !== undefined) {
+      if (!['emergency', 'sinking', 'savings'].includes(req.kind)) ctx.fail('INVALID', 'must be emergency, sinking or savings', { field: 'kind' });
+      if (G['goal.kind']) values[G['goal.kind']] = V.sel(req.kind);
+    }
+    if (req.id) {
+      if (!l.goals.some((g) => g.id === req.id)) return ctx.fail('NOT_FOUND', 'goal not found');
+      ctx.services.get<DbApi>('db.api')?.updateRows(ctx, [{ id: req.id, values }]);
+      return { id: req.id };
+    }
+    if (req.name === undefined || req.target === undefined) return ctx.fail('INVALID', 'a new goal needs a name and a target', { field: 'name' });
+    if (G['goal.saved'] && !values[G['goal.saved']]) values[G['goal.saved']] = V.money(0, set.baseCurrency);
+    if (G['goal.icon']) values[G['goal.icon']] = V.text('target');
+    const clean = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null)) as Record<Id, CellValue>;
+    const row = createRow(ctx, set.dbs.goals, { values: clean, silent: true });
+    emitChanged(ctx, set.dbs.goals);
+    return { id: row.id };
+  },
+
+  finance_account_create: (req, ctx) => {
+    const set = resolveSet(ctx, req.instanceId);
+    const l = readLedger(ctx, set);
+    const A = l.roles.acct;
+    const types = ['checking', 'savings', 'credit_card', 'student_loan', 'auto_loan', 'mortgage', 'personal_loan', 'investment', 'cash', 'other_asset', 'other_liability'];
+    if (!types.includes(req.type)) ctx.fail('INVALID', 'unknown account type', { field: 'type' });
+    if (!req.name?.trim()) ctx.fail('INVALID', 'must not be empty', { field: 'name' });
+    const cents = (field: string, v?: string) => (v === undefined || String(v).trim() === '' ? null : amountCents(ctx, field, v));
+    const opening = cents('opening', req.opening);
+    const limit = cents('limit', req.limit);
+    const minPayment = cents('minPayment', req.minPayment);
+    const onBudget = req.onBudget ?? ['checking', 'savings', 'cash', 'credit_card'].includes(req.type);
+    const inst = findProp(ctx, set.dbs.accounts, 'Institution');
+    const values: Record<Id, CellValue> = {
+      [l.primary.acct]: V.text(req.name.trim()),
+      [A['acct.type']]: V.sel(req.type),
+      ...(opening !== null && A['acct.opening'] ? { [A['acct.opening']]: V.money(opening, set.baseCurrency) } : {}),
+      ...(limit !== null && A['acct.limit'] ? { [A['acct.limit']]: V.money(limit, set.baseCurrency) } : {}),
+      ...(minPayment !== null && A['acct.min_payment'] ? { [A['acct.min_payment']]: V.money(minPayment, set.baseCurrency) } : {}),
+      ...(req.apr !== undefined && A['acct.apr'] ? { [A['acct.apr']]: V.num(req.apr) } : {}),
+      ...(req.institution?.trim() && inst ? { [inst]: V.text(req.institution.trim()) } : {}),
+      ...(A['acct.on_budget'] ? { [A['acct.on_budget']]: V.check(onBudget) } : {}),
+    };
+    const row = createRow(ctx, set.dbs.accounts, { values, silent: true });
+    emitChanged(ctx, set.dbs.accounts);
+    return { id: row.id };
+  },
+
+  finance_budget_assign_many: (req, ctx) => {
+    const set = resolveSet(ctx, req.instanceId);
+    const l = readLedger(ctx, set);
+    const month = validMonth(ctx, req.month);
+    if (req.items.length > 1000) ctx.fail('INVALID', 'at most 1000 items are allowed', { field: 'items' });
+    for (const it of req.items) {
+      if (!l.catById.has(it.categoryId)) ctx.fail('NOT_FOUND', 'Category not found', { field: 'categoryId' });
+      budgets(ctx).put({ id: `${set.id}|${month}|${it.categoryId}`, setId: set.id, month, categoryId: it.categoryId, assigned: amountCents(ctx, 'items.amount', it.amount) });
+    }
+    const today = ctx.clock.today().slice(0, 7);
+    const b = computeBudget(ctx, readLedger(ctx, set), month > today ? month : today);
+    if (req.items.length) ctx.services.get<(id: Id | null, item: string) => void>('lifeapp.checklist.tick')?.(set.instanceId, 'budget');
+    return {
+      toBeAssigned: centsToStr(b.tba.get(month) ?? 0),
+      categories: req.items.map((it) => ({ categoryId: it.categoryId, available: centsToStr(b.cats.get(month)?.get(it.categoryId)?.available ?? 0) })),
+    };
+  },
+
   finance_overview: (req, ctx) => {
     const set = resolveSet(ctx, req.instanceId);
     const l = readLedger(ctx, set);
@@ -1586,6 +1979,11 @@ export const handlers: MockHandlers = {
     let transfersLinked = 0;
     const rulesUsed = new Map<Id, number>();
     const rows = ctx.db.table<RowRecord>('db_rows');
+    // Rust `commit_import`: the first statement into an empty account with no opening balance sets the opening
+    // balance from the file's closing balance, so the account then shows what the bank shows.
+    const fresh = !l.txns.some((t) => t.accountId === req.accountId) && acct!.opening === 0;
+    const statementDate = preview.statement?.asOf;
+    let throughStatement = 0;
     for (let k = 0; k < preview.rows.length; k++) {
       const pr = preview.rows[k];
       if (k % 25 === 0) {
@@ -1618,6 +2016,7 @@ export const handlers: MockHandlers = {
       if (cat && l.catById.has(cat)) values[R['txn.category']] = V.rel([cat]);
       if (pr.transferPair && R['txn.transfer']) values[R['txn.transfer']] = V.rel([pr.transferPair]);
       const row = createRow(ctx, set.dbs.txns, { values, silent: true });
+      if (statementDate && pr.date <= statementDate) throughStatement += strToCents(pr.amount);
       if (pr.transferPair && R['txn.transfer'] && rows.has(pr.transferPair)) {
         rows.update(pr.transferPair, (x) => void (x.values[R['txn.transfer']] = V.rel([row.id])));
         transfersLinked++;
@@ -1631,11 +2030,20 @@ export const handlers: MockHandlers = {
       const rec: ProfileRec = { id: existing?.id ?? ctx.id(), setId: set.id, name: req.saveProfileAs.trim().slice(0, 120), fingerprint: s!.fingerprint, mapping: req.mapping, accountId: acct!.id };
       profiles(ctx).put(rec);
     }
+    let openingBalance: string | undefined;
+    if (fresh && statementDate && preview.statement) {
+      const value = strToCents(preview.statement.balance) - throughStatement;
+      const col = l.roles.acct['acct.opening'];
+      if (value !== 0 && col) {
+        ctx.services.get<DbApi>('db.api')?.updateRows(ctx, [{ id: acct!.id, values: { [col]: V.money(value, acct!.currency || set.baseCurrency) } }]);
+        openingBalance = centsToStr(value);
+      }
+    }
     (ctx as MockCallCtx).progress?.(total, total, 'Done');
     emitChanged(ctx, set.dbs.txns);
     sessionsOf(ctx).delete(s!.id);
     ctx.services.get<(id: Id | null, item: string) => void>('lifeapp.checklist.tick')?.(set.instanceId, 'import');
-    return { inserted, skipped, transfersLinked };
+    return { inserted, skipped, transfersLinked, ...(openingBalance ? { openingBalance } : {}) };
   },
 
   finance_rules_list: (req, ctx) => {

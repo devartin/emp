@@ -95,7 +95,9 @@ function StepBody(props: StepProps) {
 }
 
 export function WizardSheet() {
-  const { open, appId, tuneup, seed, mode: initialMode, close } = useWizard();
+  const { open, appId, tuneup, seed, parentId, mode: initialMode, close } = useWizard();
+  /** Display name from the app identity map (1.0 brief §1), not the manifest. */
+  const appTitle = appId ? identity(appId).name : "App";
   const workspace = useWorkspace((s) => s.workspace);
   const encrypted = useVault((s) => s.status?.encrypted ?? true);
   const currency = useSettings((s) => s.vault?.baseCurrency ?? "USD");
@@ -230,7 +232,7 @@ export function WizardSheet() {
       if (reduced) setStaged(true);
     }
     setPhase("installing");
-    setBuild([{ label: tuneup ? "Comparing with what you have" : `Preparing ${manifest.title}`, done: false }]);
+    setBuild([{ label: tuneup ? "Comparing with what you have" : `Preparing ${appTitle}`, done: false }]);
     const onEvent = (e: { kind: string; done?: number; total?: number; label?: string }) => {
       if (e.kind !== "progress" || !e.total) return;
       setProgress(e.done! / e.total);
@@ -252,12 +254,12 @@ export function WizardSheet() {
         void import("./AppPage").catch(() => undefined);
         const fileStep = manifest.steps.find((s) => s.kind === "file_import");
         const wantsSample = sample || (fileStep ? (valueFor(fileStep) as { source?: string } | undefined)?.source === "sample" : false);
-        const job = await api.lifeapp.install({ appId: manifest.id, answers, mode, disabledKeys: disabled, workspaceId: workspace.id, sampleData: wantsSample, onEvent });
+        const job = await api.lifeapp.install({ appId: manifest.id, answers, mode, disabledKeys: disabled, workspaceId: workspace.id, sampleData: wantsSample, ...(parentId ? { parentId } : {}), onEvent });
         const res = await job.result;
         setResult(res);
         void api.kv.set({ ns: "ui.lifeapps", key: `answers:${res.instanceId}`, value: resolved }).catch(() => undefined);
         // Undo for 10 minutes (§13.4): inverse is lifeapp_uninstall {keepContent:false}. The toast follows the landing.
-        const title = manifest.title;
+        const title = appTitle;
         const cmd = {
           label: `Undo ${title} setup`,
           expiresAt: Date.now() + UNDO_WINDOW,
@@ -272,7 +274,7 @@ export function WizardSheet() {
         useUndo.getState().push(cmd);
         notifyRef.current = () =>
           notify.success(`${title} is ready`, {
-            description: "Everything was created in your sidebar.",
+            description: "Find it under Apps in the sidebar.",
             duration: 10_000,
             action: { label: `Undo ${title} setup`, onClick: () => void useUndo.getState().undoCommand(cmd) },
           });
@@ -317,7 +319,7 @@ export function WizardSheet() {
 
   const busy = phase === "installing";
   const total = steps.length;
-  const title = manifest ? (tuneup ? `Tune up ${manifest.title}` : `Set up ${manifest.title}`) : "Life app";
+  const title = manifest ? (tuneup ? `Tune up ${appTitle}` : `Set up ${appTitle}`) : "App";
 
   const header = (
     <div className="la-wiz-header" style={appVars(appId ?? "")}>
@@ -383,7 +385,7 @@ export function WizardSheet() {
             </Button>
           ) : (
             <Button variant="primary" size="lg" onClick={create} disabled={!plan || compressing}>
-              {`Create ${manifest?.title}`}
+              {`Create ${appTitle}`}
             </Button>
           )
         ) : step.id === ENCRYPT.id && encChoice === "encrypt" ? (
@@ -402,7 +404,7 @@ export function WizardSheet() {
           Close
         </Button>
         <Button variant="primary" onClick={openApp}>
-          Open {manifest?.title}
+          Open {appTitle}
         </Button>
       </div>
     ) : phase === "error" ? (
@@ -465,7 +467,7 @@ export function WizardSheet() {
                     {isReview && plan ? <p className="text-body-sm text-secondary">Everything below is created on this device. You can tune it up any time.</p> : null}
                   </div>
                   {step.id === ENCRYPT.id ? (
-                    <EncryptStep appTitle={manifest.title} choice={encChoice} onChoice={setEncChoice} onDone={() => go(1)} />
+                    <EncryptStep appTitle={appTitle} choice={encChoice} onChoice={setEncChoice} onDone={() => go(1)} />
                   ) : isReview ? (
                     <Review
                       manifest={manifest}
@@ -499,7 +501,7 @@ export function WizardSheet() {
     {staged && manifest && !tuneup ? (
       <BuildStage
         appId={manifest.id}
-        title={manifest.title}
+        title={appTitle}
         items={(plan?.items ?? []).filter((i) => i.enabled && !disabled.includes(i.key))}
         progress={progress}
         label={label}

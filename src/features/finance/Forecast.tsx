@@ -22,30 +22,26 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
   const l = useLedgerCtx();
   const [horizon, setHorizon] = useState<"30" | "60" | "90">("90");
   const fc = useAsync(() => api.finance.forecast({ instanceId, horizonDays: Number(horizon), band: true }), [instanceId, horizon]);
-  useDbChanged([l.schemas.txns?.database.id, l.schemas.recurring?.database.id], fc.reload, 500);
-  const checking = l.accounts.filter((a) => a.type === "checking").sort((a, b) => (b.lowThreshold ?? 0) - (a.lowThreshold ?? 0))[0];
+  useDbChanged(l.dbIds, fc.reload, 500);
+  // The backend projects cash on hand: every open, on-budget checking, savings and cash account in the base currency
+  // (Rust `finance_forecast`), so the history and the scheduled flows below cover the same accounts.
+  const cash = useMemo(() => l.accounts.filter((a) => ["checking", "savings", "cash"].includes(a.type) && a.onBudget && !a.closed && (!a.currency || a.currency === l.currency)), [l.accounts, l.currency]);
+  const cashIds = useMemo(() => new Set(cash.map((a) => a.id)), [cash]);
+  const checking = cash.length ? { name: cash.length === 1 ? cash[0].name : "Cash on hand", balance: cash.reduce((t, a) => t + Math.round(a.balance * 100), 0) / 100 } : undefined;
   const today = todayIso();
 
   const data = useMemo(() => {
     if (!fc.data || !checking) return [];
     // 30 days of actual history, then the projection (median ≈ deterministic path).
     const hist: { x: string; actual: number }[] = [];
-    let bal = checking.balance;
-    const txs = l.txns.filter((t) => t.accountId === checking.id);
-    let k = 0;
-    for (let d = 0; d <= 30; d++) {
-      const day = shift(today, -d);
-      hist.push({ x: day, actual: bal });
-      while (k < txs.length && txs[k].date >= day) {
-        bal -= txs[k].amount;
-        k++;
-      }
-    }
-    hist.reverse();
+    // The backend's end-of-day balances (oldest first), summed over the cash accounts; the last 31 days end today.
+    const days = Array.from({ length: 31 }, (_, i) => cash.reduce((t, a) => t + Math.round((a.history[a.history.length - 31 + i] ?? a.balance) * 100), 0) / 100);
+    days.forEach((actual, i) => hist.push({ x: shift(today, i - (days.length - 1)), actual }));
+    if (!hist.length) hist.push({ x: today, actual: checking.balance });
     const proj = fc.data.t.map((x, i) => ({ x, p10: fc.data!.p10?.[i], p50: fc.data!.balance[i], p90: fc.data!.p90?.[i] }));
     const joint = { ...hist[hist.length - 1], p10: hist[hist.length - 1].actual, p50: hist[hist.length - 1].actual, p90: hist[hist.length - 1].actual };
     return [...hist.slice(0, -1), joint, ...proj];
-  }, [fc.data, checking, l.txns, today]);
+  }, [fc.data, checking, cash, today]);
 
   const end = fc.data ? fc.data.balance[fc.data.balance.length - 1] : 0;
   const min = fc.data ? Math.min(...fc.data.balance) : 0;
@@ -56,9 +52,9 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
     if (!checking) return [];
     const last = shift(today, Number(horizon));
     const list: { day: string; name: string; amount: number }[] = [];
-    for (const r of l.recurring) if (r.accountId === checking.id) for (const d of occurrences(r.rrule, r.dtstart, shift(today, 1), last)) list.push({ day: d, name: r.name, amount: r.amount });
+    for (const r of l.recurring) if (!r.accountId || cashIds.has(r.accountId)) for (const d of occurrences(r.rrule, r.dtstart, shift(today, 1), last)) list.push({ day: d, name: r.name, amount: r.amount });
     return list.sort((a, b) => (a.day < b.day ? -1 : 1)).slice(0, 14);
-  }, [l.recurring, checking, today, horizon]);
+  }, [l.recurring, checking, cashIds, today, horizon]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,7 +86,7 @@ export default function Forecast({ instanceId }: { instanceId: Id }) {
           actions={<Segmented size="sm" value={horizon} onValueChange={setHorizon} options={[{ value: "30", label: "30d" }, { value: "60", label: "60d" }, { value: "90", label: "90d" }]} aria-label="Horizon" />}
         >
           <div className="fh-fan" key={`${horizon}:${fc.data ? 1 : 0}`} data-reveal="">
-          <FanChart data={data} height={300} xFormat={(v) => dayLabel(String(v))} target={fc.data?.threshold !== undefined && p10min !== null && p10min < fc.data.threshold * 4 + 1500 ? { value: fc.data.threshold, label: "Low-balance threshold" } : undefined} loading={fc.loading && !fc.data} summaryLabel="Projected checking balance" />
+          <FanChart data={data} height={300} xFormat={(v) => dayLabel(String(v))} target={fc.data?.threshold !== undefined && p10min !== null && p10min < fc.data.threshold * 4 + 1500 ? { value: fc.data.threshold, label: "Low-balance threshold" } : undefined} loading={fc.loading && !fc.data} summaryLabel={`Projected balance, ${checking?.name ?? "cash on hand"}`} />
           </div>
           <div className="flex items-center gap-5 mt-3 text-caption text-tertiary">
             <span className="inline-flex items-center gap-1.5"><i className="fh-key" style={{ background: "var(--text-primary)" }} />Actual</span>

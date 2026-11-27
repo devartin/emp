@@ -9,7 +9,7 @@
  */
 import type { CellValue, Id, SymbolKey } from '../../types';
 import type { MockCallCtx, MockCtx, MockHandlers } from '../ctx';
-import { liveRows, type DbRecord, type PropRecord } from './db';
+import { liveRows, type DbApi, type DbRecord, type PropRecord } from './db';
 import { quoteNow } from './market';
 import { closeOn, instrument, priceNow } from '../market';
 import { centsToStr, pfSets, strToCents, type PfSet } from '../seed/finance';
@@ -468,7 +468,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // ───────────────────────────────────────────────────────────────────────────── rebalance
 
-function rebalance(ctx: MockCtx, l: PfLedger, req: { newCash: string; allowTaxableSells: boolean; minTrade: string; fractional: boolean }) {
+function rebalance(ctx: MockCtx, l: PfLedger, req: { newCash: string; allowTaxableSells: boolean; minTrade: string; fractional: boolean; cashAccountId?: Id }) {
   const s = summary(ctx, l);
   const book = rebuild(l);
   const newCash = Math.max(0, strToCents(req.newCash));
@@ -484,7 +484,8 @@ function rebalance(ctx: MockCtx, l: PfLedger, req: { newCash: string; allowTaxab
     if (!rep.has(h.sec.cls) && (instrument(h.sec.key)?.type !== 'equity' || !rep.has(h.sec.cls))) rep.set(h.sec.cls, h.sec);
   }
   const trades: { accountId: Id; symbol: SymbolKey; side: 'buy' | 'sell'; qty: string; amount: string; estRealizedGain?: string }[] = [];
-  const taxable = l.accounts.find((a) => a.tax === 'taxable' && a.type === 'taxable') ?? l.accounts[0];
+  // The account that receives new cash: the one asked for (Rust `cashAccountId`), else the taxable brokerage.
+  const taxable = (req.cashAccountId ? l.accounts.find((a) => a.id === req.cashAccountId) : undefined) ?? l.accounts.find((a) => a.tax === 'taxable' && a.type === 'taxable') ?? l.accounts[0];
   const sheltered = l.accounts.filter((a) => a.tax !== 'taxable');
   const heldQty = (accountId: Id, secId: Id) => book.lots.filter((x) => x.accountId === accountId && x.secId === secId).reduce((a, x) => a + x.qty, 0) - soldQty.get(`${accountId}|${secId}`)!;
   const soldQty = new Map<string, number>();
@@ -596,6 +597,109 @@ function rebalance(ctx: MockCtx, l: PfLedger, req: { newCash: string; allowTaxab
 // ───────────────────────────────────────────────────────────────────────────── handlers
 
 export const handlers: MockHandlers = {
+  /** Rust `portfolio_book`: accounts, securities, open FIFO lots, income and the latest transactions. */
+  portfolio_book: (req, ctx) => {
+    const set = resolvePf(ctx, req.instanceId);
+    const l = readPortfolio(ctx, set);
+    const book = rebuild(l);
+    const tax = (id: Id | null) => (id ? (l.acctById.get(id)?.tax ?? 'taxable') : 'taxable');
+    const key = (secId: Id | null) => (secId ? (l.secById.get(secId)?.key ?? '') : '');
+    return {
+      currency: 'USD',
+      dbs: { accounts: set.dbs.accounts, securities: set.dbs.securities, transactions: set.dbs.txns, targets: set.dbs.targets },
+      accounts: l.accounts.map((a) => ({ id: a.id, name: a.name, type: a.type, tax: a.tax })),
+      securities: l.securities.map((s) => ({ id: s.id, symbol: s.key, name: s.name, assetClass: s.cls })).sort((a, b) => (a.symbol < b.symbol ? -1 : 1)),
+      lots: book.lots.map((x) => ({ symbol: key(x.secId), accountId: x.accountId, accountName: l.acctById.get(x.accountId)?.name ?? '', taxTreatment: tax(x.accountId), acquired: x.acquired, qty: String(Math.round(x.qty * 1e8) / 1e8), costPerUnit: String(Math.round(x.cost) / 100), basis: centsToStr(Math.round(x.qty * x.cost)) })),
+      income: l.txns
+        .filter((t) => t.type === 'dividend' || t.type === 'interest' || t.type === 'reinvest')
+        .map((t) => ({ id: t.id, date: t.date, symbol: key(t.secId), accountId: t.accountId ?? '', amount: centsToStr(Math.abs(t.amount) || Math.round(t.qty * t.price)), kind: t.type === 'interest' ? 'interest' : 'dividend', reinvested: t.type === 'reinvest', taxTreatment: tax(t.accountId) })),
+      txns: l.txns
+        .slice()
+        .reverse()
+        .slice(0, 500)
+        .map((t) => ({ id: t.id, date: t.date, type: t.type, symbol: key(t.secId), name: t.secId ? (l.secById.get(t.secId)?.name ?? '') : '', accountId: t.accountId ?? '', qty: t.qty ? String(t.qty) : null, price: t.price ? centsToStr(t.price) : null, amount: t.amount ? centsToStr(Math.abs(t.amount)) : null, fees: centsToStr(t.fees) })),
+      warnings: [],
+    };
+  },
+
+  /** Rust `portfolio_trade`: records a trade, dividend, interest or fee (adding the security and a Brokerage account when needed). */
+  portfolio_trade: (req, ctx) => {
+    const set = resolvePf(ctx, req.instanceId);
+    const l = readPortfolio(ctx, set);
+    const kind = req.type;
+    if (!['buy', 'sell', 'dividend', 'interest', 'reinvest', 'fee'].includes(kind)) ctx.fail('INVALID', 'must be buy, sell, dividend, interest, reinvest or fee', { field: 'type' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.date ?? '')) ctx.fail('INVALID', 'must be a date (YYYY-MM-DD)', { field: 'date' });
+    const dec = (field: string, v?: string): number | null => {
+      if (v === undefined || String(v).trim() === '') return null;
+      const n = Number(v);
+      if (!Number.isFinite(n)) ctx.fail('INVALID', 'invalid amount', { field });
+      return n;
+    };
+    const qty = dec('qty', req.qty);
+    const price = dec('price', req.price);
+    const cash = dec('amount', req.amount);
+    const fees = dec('fees', req.fees) ?? 0;
+    if (fees < 0) ctx.fail('INVALID', 'must not be negative', { field: 'fees' });
+    const trades = kind === 'buy' || kind === 'sell' || kind === 'reinvest';
+    if (trades && !(qty !== null && qty > 0)) ctx.fail('INVALID', 'enter how many shares', { field: 'qty' });
+    if (trades && !(price !== null && price >= 0)) ctx.fail('INVALID', 'enter the price per share', { field: 'price' });
+    if (!trades && !(cash !== null && cash > 0)) ctx.fail('INVALID', 'enter the amount', { field: 'amount' });
+    const symbol = req.symbol?.trim().toUpperCase() || '';
+    if (!symbol && kind !== 'interest' && kind !== 'fee') ctx.fail('INVALID', 'enter a ticker symbol', { field: 'symbol' });
+    const db = (id: Id) => dbs(ctx).require(id);
+    const A = db(set.dbs.accounts);
+    const S = db(set.dbs.securities);
+    const X = db(set.dbs.txns);
+    const optId = (propId: Id | undefined, k: string): string | null => {
+      if (!propId) return null;
+      const p = ctx.db.table<PropRecord>('db_properties').get(propId);
+      const opts = (p?.config.options as { id: string; name: string }[] | undefined) ?? [];
+      const n = (x: string) => x.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      return opts.find((o) => o.id === k)?.id ?? opts.find((o) => n(o.id) === k || n(o.name) === k)?.id ?? null;
+    };
+    const api = ctx.services.get<DbApi>('db.api')!;
+    let accountId = req.accountId ?? l.accounts[0]?.id;
+    if (req.accountId && !l.acctById.has(req.accountId)) ctx.fail('INVALID', 'unknown investment account', { field: 'accountId' });
+    if (!accountId) {
+      const values: Record<Id, CellValue> = { [A.primaryPropId]: { t: 'text', v: [{ text: 'Brokerage' }] } };
+      const t = optId(A.roles['iacct.type'], 'taxable');
+      if (t) values[A.roles['iacct.type']] = { t: 'select', v: t };
+      const tx = optId(A.roles['iacct.tax'], 'taxable');
+      if (tx) values[A.roles['iacct.tax']] = { t: 'select', v: tx };
+      accountId = api.createRow(ctx, A.id, { values }).id;
+    }
+    let sec = symbol ? l.securities.find((s) => s.key.split(':')[0].toUpperCase() === symbol.split(':')[0] || s.key.toUpperCase() === symbol) : undefined;
+    if (kind === 'sell' && sec) {
+      const held = rebuild(l).lots.filter((x) => x.accountId === accountId && x.secId === sec!.id).reduce((s, x) => s + x.qty, 0);
+      if (qty! > held + 1e-9) ctx.fail('INVALID', `this account holds ${Math.round(held * 1e4) / 1e4} shares`, { field: 'qty' });
+    } else if (kind === 'sell') ctx.fail('INVALID', 'this account holds 0 shares', { field: 'qty' });
+    let securityId: Id | null = sec?.id ?? null;
+    if (symbol && !sec) {
+      const values: Record<Id, CellValue> = { [S.primaryPropId]: { t: 'text', v: [{ text: req.name?.trim() || symbol }] }, [S.roles['sec.ticker']]: { t: 'ticker', v: symbol } };
+      const c = optId(S.roles['sec.class'], req.assetClass ?? 'us_equity');
+      if (c) values[S.roles['sec.class']] = { t: 'select', v: c };
+      securityId = api.createRow(ctx, S.id, { values }).id;
+    }
+    const gross = trades ? (cash ?? (qty ?? 0) * (price ?? 0)) : (cash ?? 0);
+    const verb = { buy: 'Buy', sell: 'Sell', dividend: 'Dividend', interest: 'Interest', reinvest: 'Reinvest', fee: 'Fee' }[kind];
+    const typeId = optId(X.roles['inv.type'], kind) ?? kind;
+    // The mock's lot replay reads a buy's cost as |amount| (fees included), sells' proceeds as |amount| − fees.
+    const amountCents = Math.round(gross * 100) + (kind === 'buy' || kind === 'reinvest' ? Math.round(fees * 100) : 0);
+    const values: Record<Id, CellValue> = {
+      [X.primaryPropId]: { t: 'text', v: [{ text: `${verb} ${symbol ? symbol.split(':')[0] : 'cash'}` }] },
+      [X.roles['inv.date']]: { t: 'date', v: { start: req.date, time: false } },
+      [X.roles['inv.type']]: { t: 'select', v: typeId },
+      [X.roles['inv.account']]: { t: 'relation', v: [accountId] },
+      ...(securityId ? { [X.roles['inv.security']]: { t: 'relation', v: [securityId] } as CellValue } : {}),
+      ...(qty !== null ? { [X.roles['inv.qty']]: { t: 'number', v: qty } as CellValue } : {}),
+      ...(price !== null ? { [X.roles['inv.price']]: { t: 'money', v: centsToStr(Math.round(price * 100)), cur: 'USD' } as CellValue } : {}),
+      [X.roles['inv.amount']]: { t: 'money', v: centsToStr(amountCents), cur: 'USD' },
+      [X.roles['inv.fees']]: { t: 'money', v: centsToStr(Math.round(fees * 100)), cur: 'USD' },
+    };
+    const row = api.createRow(ctx, X.id, { values });
+    return { id: row.id, accountId, securityId };
+  },
+
   portfolio_rebuild: async (req, ctx) => {
     const l = readPortfolio(ctx, resolvePf(ctx, req.instanceId));
     const c = ctx as MockCallCtx;

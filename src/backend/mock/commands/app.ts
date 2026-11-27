@@ -2,7 +2,6 @@
 import { BackendError } from '../../errors';
 import type { AppFeature, Platform } from '../../types';
 import type { MockHandlers } from '../ctx';
-import { deviceSettings } from '../lib/settings';
 
 function detectPlatform(): Platform {
   if (typeof navigator === 'undefined') return 'macos';
@@ -45,13 +44,16 @@ export const handlers: MockHandlers = {
   app_reveal_data_dir: () => {
     throw new BackendError('UNSUPPORTED', 'The data folder lives on your device in the desktop app.');
   },
+  app_reveal_logs: () => {
+    throw new BackendError('UNSUPPORTED', 'Logs are kept on your device in the desktop app.');
+  },
   app_quit: () => {
     if (typeof window !== 'undefined') window.close();
   },
+  // Rust asks GitHub through NetGuard; the browser preview has no network path of its own, so it says so.
   app_check_update: (_req, ctx) => {
-    if (deviceSettings(ctx).updates === 'off') throw new BackendError('OFFLINE', 'Update checks are turned off');
     if (ctx.isOffline()) throw new BackendError('OFFLINE', 'Offline mode is on');
-    return { available: false };
+    throw new BackendError('UNSUPPORTED', 'Update checks run in the desktop app');
   },
   app_install_update: () => {
     throw new BackendError('UNSUPPORTED', 'Updates install in the desktop app');

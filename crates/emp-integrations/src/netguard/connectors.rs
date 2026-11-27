@@ -89,6 +89,8 @@ impl ConnectorId {
                 HostPolicy::Exact(&["query1.finance.yahoo.com", "query2.finance.yahoo.com"])
             }
             ConnectorId::Updater => HostPolicy::Exact(&[
+                // Keyless "latest release" lookup for the update check (Settings › About).
+                "api.github.com",
                 "github.com",
                 "objects.githubusercontent.com",
                 "release-assets.githubusercontent.com",

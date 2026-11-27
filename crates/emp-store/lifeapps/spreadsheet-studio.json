@@ -71,7 +71,7 @@
     {
       "id": "structure",
       "kind": "multi_chips",
-      "title": "Workbook structure",
+      "title": "Spreadsheet structure",
       "quick": false,
       "skippable": true,
       "default": [
@@ -136,7 +136,7 @@
       ]
     },
     {
-      "id": "review",
+      "id": "finish",
       "kind": "review",
       "title": "Review and create",
       "quick": true,
@@ -303,7 +303,7 @@
                     "=Principal+CUMPRINC(Rate/PPY, Years*PPY, Principal, 1, SEQUENCE(Years*PPY), 0)",
                     "",
                     "",
-                    "=MAX(0, Principal*(1+Rate/PPY)^SEQUENCE(Years*PPY)-(B2+Extra)*((1+Rate/PPY)^SEQUENCE(Years*PPY)-1)/(Rate/PPY))"
+                    "=((Principal*(1+Rate/PPY)^SEQUENCE(Years*PPY)-(B2+Extra)*((1+Rate/PPY)^SEQUENCE(Years*PPY)-1)/(Rate/PPY))>0)*(Principal*(1+Rate/PPY)^SEQUENCE(Years*PPY)-(B2+Extra)*((1+Rate/PPY)^SEQUENCE(Years*PPY)-1)/(Rate/PPY))"
                   ]
                 ]
               }
@@ -1583,10 +1583,76 @@
                     "Pay"
                   ],
                   [
-                    "=Log!F2",
-                    "=SUMIFS(Log!E2:E200, Log!F2:F200, A2)",
-                    "=MAX(0, B2-OvertimeThreshold)",
-                    "=(B2-C2)*HourlyRate+C2*HourlyRate*1.5"
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 1), \"\")",
+                    "=IF(A2=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A2)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A2=\"\", \"\", MAX(0, B2-OvertimeThreshold))",
+                    "=IF(A2=\"\", \"\", (B2-C2)*HourlyRate+C2*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 2), \"\")",
+                    "=IF(A3=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A3)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A3=\"\", \"\", MAX(0, B3-OvertimeThreshold))",
+                    "=IF(A3=\"\", \"\", (B3-C3)*HourlyRate+C3*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 3), \"\")",
+                    "=IF(A4=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A4)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A4=\"\", \"\", MAX(0, B4-OvertimeThreshold))",
+                    "=IF(A4=\"\", \"\", (B4-C4)*HourlyRate+C4*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 4), \"\")",
+                    "=IF(A5=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A5)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A5=\"\", \"\", MAX(0, B5-OvertimeThreshold))",
+                    "=IF(A5=\"\", \"\", (B5-C5)*HourlyRate+C5*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 5), \"\")",
+                    "=IF(A6=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A6)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A6=\"\", \"\", MAX(0, B6-OvertimeThreshold))",
+                    "=IF(A6=\"\", \"\", (B6-C6)*HourlyRate+C6*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 6), \"\")",
+                    "=IF(A7=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A7)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A7=\"\", \"\", MAX(0, B7-OvertimeThreshold))",
+                    "=IF(A7=\"\", \"\", (B7-C7)*HourlyRate+C7*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 7), \"\")",
+                    "=IF(A8=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A8)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A8=\"\", \"\", MAX(0, B8-OvertimeThreshold))",
+                    "=IF(A8=\"\", \"\", (B8-C8)*HourlyRate+C8*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 8), \"\")",
+                    "=IF(A9=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A9)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A9=\"\", \"\", MAX(0, B9-OvertimeThreshold))",
+                    "=IF(A9=\"\", \"\", (B9-C9)*HourlyRate+C9*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 9), \"\")",
+                    "=IF(A10=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A10)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A10=\"\", \"\", MAX(0, B10-OvertimeThreshold))",
+                    "=IF(A10=\"\", \"\", (B10-C10)*HourlyRate+C10*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 10), \"\")",
+                    "=IF(A11=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A11)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A11=\"\", \"\", MAX(0, B11-OvertimeThreshold))",
+                    "=IF(A11=\"\", \"\", (B11-C11)*HourlyRate+C11*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 11), \"\")",
+                    "=IF(A12=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A12)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A12=\"\", \"\", MAX(0, B12-OvertimeThreshold))",
+                    "=IF(A12=\"\", \"\", (B12-C12)*HourlyRate+C12*HourlyRate*1.5)"
+                  ],
+                  [
+                    "=IFERROR(INDEX(SORT(UNIQUE(FILTER(WEEKNUM(Log!A$2:A$400), Log!A$2:A$400<>\"\"))), 12), \"\")",
+                    "=IF(A13=\"\", \"\", SUMPRODUCT((WEEKNUM(Log!A$2:A$400)=A13)*(Log!A$2:A$400<>\"\"), MOD(Log!C$2:C$400-Log!B$2:B$400, 1)*24-Log!D$2:D$400/60))",
+                    "=IF(A13=\"\", \"\", MAX(0, B13-OvertimeThreshold))",
+                    "=IF(A13=\"\", \"\", (B13-C13)*HourlyRate+C13*HourlyRate*1.5)"
                   ]
                 ]
               }
@@ -1598,12 +1664,16 @@
                 "fill": "#F3F4F6"
               },
               {
-                "range": "B2:D2",
+                "range": "B2:D13",
                 "role": "output",
                 "bold": true
               },
               {
-                "range": "D2",
+                "range": "B2:C13",
+                "numFmt": "0.00"
+              },
+              {
+                "range": "D2:D13",
                 "numFmt": "#,##0.00"
               }
             ],
@@ -1823,15 +1893,15 @@
                 "at": "A1",
                 "rows": [
                   [
+                    "Inventory value",
+                    "=SUMPRODUCT(Items!B2:B200, Items!C2:C200)"
+                  ],
+                  [],
+                  [
                     "Reorder now"
                   ],
                   [
                     "=FILTER(Items!A2:A200, (Items!B2:B200<=Items!D2:D200)*(Items!A2:A200<>\"\"), \"Nothing to reorder\")"
-                  ],
-                  [],
-                  [
-                    "Inventory value",
-                    "=SUM(Items!E2:E200)"
                   ]
                 ]
               }
@@ -1842,13 +1912,17 @@
                 "bold": true
               },
               {
-                "range": "B4",
+                "range": "B1",
                 "role": "output",
                 "bold": true
               },
               {
-                "range": "B4",
+                "range": "B1",
                 "numFmt": "#,##0.00"
+              },
+              {
+                "range": "A3",
+                "bold": true
               }
             ],
             "colWidths": {
@@ -1966,9 +2040,8 @@
       "optional": false,
       "spec": {
         "title": "Split expenses",
-        "post": "settle",
         "names": {
-          "People": "Inputs!$A$4:$A$6"
+          "People": "Inputs!$A$4:$A$13"
         },
         "sheets": [
           {
@@ -2013,7 +2086,7 @@
                 "fill": "#F3F4F6"
               },
               {
-                "range": "A4:A6",
+                "range": "A4:A13",
                 "role": "input",
                 "fill": "#E8F0FE",
                 "color": "#1A56DB"
@@ -2095,47 +2168,96 @@
                     "Person",
                     "Net",
                     "Paid",
-                    "",
-                    "",
-                    ""
+                    "Pays in",
+                    "Gets back"
                   ],
                   [
-                    "=Inputs!A4",
-                    "=C2-SUM(Expenses!$D$2:$D$200)/COUNTA(People)",
-                    "=SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A2)"
+                    "=IF(Inputs!A4=\"\", \"\", Inputs!A4)",
+                    "=IF(A2=\"\", \"\", C2-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A2=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A2))",
+                    "=IF(A2=\"\", \"\", MAX(0, -B2))",
+                    "=IF(A2=\"\", \"\", MAX(0, B2))"
                   ],
                   [
-                    "=Inputs!A5",
-                    "=C3-SUM(Expenses!$D$2:$D$200)/COUNTA(People)",
-                    "=SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A3)"
+                    "=IF(Inputs!A5=\"\", \"\", Inputs!A5)",
+                    "=IF(A3=\"\", \"\", C3-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A3=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A3))",
+                    "=IF(A3=\"\", \"\", MAX(0, -B3))",
+                    "=IF(A3=\"\", \"\", MAX(0, B3))"
                   ],
                   [
-                    "=Inputs!A6",
-                    "=C4-SUM(Expenses!$D$2:$D$200)/COUNTA(People)",
-                    "=SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A4)"
+                    "=IF(Inputs!A6=\"\", \"\", Inputs!A6)",
+                    "=IF(A4=\"\", \"\", C4-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A4=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A4))",
+                    "=IF(A4=\"\", \"\", MAX(0, -B4))",
+                    "=IF(A4=\"\", \"\", MAX(0, B4))"
+                  ],
+                  [
+                    "=IF(Inputs!A7=\"\", \"\", Inputs!A7)",
+                    "=IF(A5=\"\", \"\", C5-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A5=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A5))",
+                    "=IF(A5=\"\", \"\", MAX(0, -B5))",
+                    "=IF(A5=\"\", \"\", MAX(0, B5))"
+                  ],
+                  [
+                    "=IF(Inputs!A8=\"\", \"\", Inputs!A8)",
+                    "=IF(A6=\"\", \"\", C6-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A6=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A6))",
+                    "=IF(A6=\"\", \"\", MAX(0, -B6))",
+                    "=IF(A6=\"\", \"\", MAX(0, B6))"
+                  ],
+                  [
+                    "=IF(Inputs!A9=\"\", \"\", Inputs!A9)",
+                    "=IF(A7=\"\", \"\", C7-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A7=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A7))",
+                    "=IF(A7=\"\", \"\", MAX(0, -B7))",
+                    "=IF(A7=\"\", \"\", MAX(0, B7))"
+                  ],
+                  [
+                    "=IF(Inputs!A10=\"\", \"\", Inputs!A10)",
+                    "=IF(A8=\"\", \"\", C8-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A8=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A8))",
+                    "=IF(A8=\"\", \"\", MAX(0, -B8))",
+                    "=IF(A8=\"\", \"\", MAX(0, B8))"
+                  ],
+                  [
+                    "=IF(Inputs!A11=\"\", \"\", Inputs!A11)",
+                    "=IF(A9=\"\", \"\", C9-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A9=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A9))",
+                    "=IF(A9=\"\", \"\", MAX(0, -B9))",
+                    "=IF(A9=\"\", \"\", MAX(0, B9))"
+                  ],
+                  [
+                    "=IF(Inputs!A12=\"\", \"\", Inputs!A12)",
+                    "=IF(A10=\"\", \"\", C10-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A10=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A10))",
+                    "=IF(A10=\"\", \"\", MAX(0, -B10))",
+                    "=IF(A10=\"\", \"\", MAX(0, B10))"
+                  ],
+                  [
+                    "=IF(Inputs!A13=\"\", \"\", Inputs!A13)",
+                    "=IF(A11=\"\", \"\", C11-SUM(Expenses!$D$2:$D$200)/COUNTA(People))",
+                    "=IF(A11=\"\", \"\", SUMIFS(Expenses!$D$2:$D$200, Expenses!$C$2:$C$200, A11))",
+                    "=IF(A11=\"\", \"\", MAX(0, -B11))",
+                    "=IF(A11=\"\", \"\", MAX(0, B11))"
                   ]
                 ]
               }
             ],
             "styles": [
               {
-                "range": "A1:F1",
+                "range": "A1:E1",
                 "bold": true,
                 "fill": "#F3F4F6"
               },
               {
-                "range": "B2:C4",
+                "range": "B2:E11",
                 "role": "output",
                 "bold": true
               },
               {
-                "range": "B2:C4",
+                "range": "B2:E11",
                 "numFmt": "#,##0.00"
-              },
-              {
-                "range": "F2:F50",
-                "numFmt": "#,##0.00",
-                "bold": true
               }
             ],
             "freeze": [
@@ -2159,7 +2281,7 @@
                   ],
                   [
                     "Balances net to zero",
-                    "=ABS(SUM(Balances!B2:B4))<0.01"
+                    "=ABS(SUM(Balances!B2:B11))<0.01"
                   ],
                   [
                     "All checks pass",
@@ -2530,7 +2652,7 @@
       "kind": "workbook",
       "optional": false,
       "spec": {
-        "title": "Workbook",
+        "title": "Spreadsheet",
         "names": {
           "ExampleRate": "Inputs!$B$5"
         },
@@ -2959,6 +3081,12 @@
     }
   ],
   "metrics": [
+    {
+      "name": "workbook_count",
+      "kind": "rust",
+      "fn": "sheets.workbook_count",
+      "deps": []
+    },
     {
       "name": "lint_total",
       "kind": "rust",

@@ -22,7 +22,7 @@ export default function NetWorth() {
   const l = useLedgerCtx();
   const [range, setRange] = useState<Range>("3y");
   const s = useAsync(() => api.finance.networthSeries({ instanceId, range }), [instanceId, range]);
-  useDbChanged([l.schemas.txns?.database.id], s.reload, 500);
+  useDbChanged(l.dbIds, s.reload, 500);
   const data = useMemo(() => (s.data ? s.data.t.map((t, i) => ({ t, net: s.data!.net[i], assets: s.data!.assets[i], liabilities: s.data!.liabilities[i] })) : []), [s.data]);
   // Month-end points for the waterfall + table.
   const monthly = useMemo(() => {

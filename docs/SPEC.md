@@ -2496,8 +2496,9 @@ app_info({}) → { version:string; commit:string; platform:'macos'|'windows'|'li
   features:('reduced-transparency'|'vibrancy'|'mica'|'keychain'|'biometrics'|'eyedropper')[] }
 app_ready({ marks:Record<string,number> }) → void
 app_reveal_data_dir({}) → void
+app_reveal_logs({}) → void   // 1.0: opens <data>/logs (Settings › About)
 app_quit({}) → void
-app_check_update({}) → { available:boolean; version?:string; notes?:string }            // OFFLINE if updates disabled/offline
+app_check_update({}) → { available:boolean; current:string; version?:string; notes?:string; url?:string }   // 1.0: GitHub latest release via NetGuard (updater connector); OFFLINE in offline mode, NETWORK when unreachable; user action or the "check automatically" switch only
 app_install_update({ onEvent }) (job) ⇒ void
 open_external({ url:string }) → void                                                     // §9.13: https|http(warn)|mailto; emits open-external:confirm unless host remembered
 open_external_confirm({ requestId:Id; allow:boolean; rememberHost:boolean }) → void
@@ -2535,6 +2536,7 @@ vault_integrity_reseal({}) (reauth) → void
 security_log({ limit:number }) → { at:Ts; event:string }[]
 password_strength({ password:string }) → { score:0|1|2|3|4; crackTime:string; warning?:string; suggestions:string[]; common:boolean }
 password_generate({}) → { passphrase:string; bits:number }
+vault_recovery_save_file({ words:string[] }) → { saved:boolean; fileName?:string }   // native save dialog; writes the key as a text file (1.0 brief §2.5, §9)
 ```
 
 #### Secrets
@@ -2563,6 +2565,7 @@ settings_set_vault({ patch:Partial<VaultSettings> }) → VaultSettings
 kv_get({ ns:`ui.${string}`; key:string }) → unknown|null
 kv_set({ ns:`ui.${string}`; key:string; value:unknown }) → void
 kv_get_many({ ns:`ui.${string}`; keys:string[] }) → Record<string,unknown>
+settings_detect_region({ locale?:string; timeZone?:string; apply?:boolean }) → { locale:string; timezone:string; weekStart:0|1|6; clock:12|24; dateFormat:'full'|'dmy'|'ymd'; currency?:string; applied:boolean }   // 1.0: OS time zone + webview/OS locale; works locked; apply (unlocked) saves once per vault while locale/zone/week/clock are the built-in defaults (brief §2.5)
 ```
 
 #### Backup, import, export
@@ -2571,8 +2574,12 @@ backup_create({ grantId:Id; password?:string; onEvent }) (job) ⇒ { bytes:numbe
 backup_restore({ grantId:Id; password?:string; recoveryWords?:string[]; onEvent }) (job) ⇒ { vaultId:string; pages:number }  // opens as new vault, app restarts into it
 snapshot_list({}) → { id:string; at:Ts; bytes:number; schemaVersion:number; location:'local'|'folder' }[]
 snapshot_now({ onEvent }) (job) ⇒ { id:string }
-snapshot_set_folder({ grantId:Id|null }) → void
+snapshot_set_folder({ grantId:Id|null }) → void   // 1.0: null = back to the data folder; folders are chosen with snapshot_choose_folder
 snapshot_verify({ id:string; onEvent }) (job) ⇒ { ok:boolean }
+snapshot_status({}) → { encrypted:boolean; backupPasswordSet:boolean; automatic:boolean; folderPath:string; customFolder:boolean; folderUnavailable:boolean }   // 1.0
+snapshot_set_backup_password({ password:string|null }) → SnapshotStatus   // 1.0: unencrypted workspaces only (≥10 chars); setting one turns automatic snapshots on
+snapshot_choose_folder({}) → SnapshotStatus | null   // 1.0: native folder dialog in Rust; null = cancelled; snapshots go to <folder>/Ultranote snapshots <id>/
+snapshot_reveal({}) → void   // 1.0: opens the folder new snapshots go to
 import_detect({ grantId:Id }) → { kind:'markdown'|'markdown_folder'|'notion_zip'|'csv'|'xlsx'|'ofx'|'qfx'|'qif'|'ics'|'empbackup'|'unknown'; details:Record<string,unknown> }
 import_markdown({ grantId:Id; workspaceId:Id; parentId:Id|null; onEvent }) (job) ⇒ { pages:number; warnings:string[] }
 import_notion({ grantId:Id; workspaceId:Id; parentId:Id|null; onEvent }) (job) ⇒ { pages:number; databases:number; rows:number; assets:number; unresolved:{ title:string; ref:string }[]; warnings:string[] }
@@ -2772,7 +2779,7 @@ lifeapp_list({}) → LifeAppSummary[]
 lifeapp_manifest({ id:string }) → LifeAppManifest                       // §16.1
 lifeapp_recommend({ appId:string; stepId:string; answers:Record<string,unknown> }) → { value:unknown; why:string; source:string }
 lifeapp_preview({ appId:string; answers:Record<string,unknown>; mode:'quick'|'guided'; disabledKeys:string[] }) → GenerationPlan
-lifeapp_install({ appId:string; answers:Record<string,unknown>; mode:'quick'|'guided'; disabledKeys:string[]; workspaceId:Id; sampleData:boolean; onEvent }) (job) ⇒ { instanceId:Id; rootPageId:Id; created:Id[] }
+lifeapp_install({ appId:string; answers:Record<string,unknown>; mode:'quick'|'guided'; disabledKeys:string[]; workspaceId:Id; sampleData:boolean; parentId?:Id; onEvent }) (job) ⇒ { instanceId:Id; rootPageId:Id; created:Id[] }   // 1.0: hub under parentId (a live doc page); a second instance of the app → CONFLICT
 lifeapp_instances({ workspaceId:Id }) → LifeAppInstance[]
 lifeapp_tuneup_preview({ instanceId:Id; answers:Record<string,unknown> }) → PlanDiff
 lifeapp_tuneup_apply({ instanceId:Id; answers:Record<string,unknown>; acceptConflicts:string[]; onEvent }) (job) ⇒ { changed:Id[] }
@@ -2783,6 +2790,8 @@ lifeapp_insights({ instanceId?:Id }) → Insight[]                        // all
 lifeapp_insight_mute({ instanceId:Id; ruleId:string; until:Ts|null }) → void
 lifeapp_sample_data({ instanceId:Id; on:boolean }) → { rows:number }
 lifeapp_checklist_tick({ instanceId:Id; itemId:string }) → void         // also auto-ticked in Rust on matching events
+lifeapp_event({ event:string; data?:Record<string,unknown> }) → { instanceId:Id; itemId:string }[]   // 1.0: UI-only checklist events
+lifeapp_add_workbook({ instanceId:Id; intent:string }) → PageMeta      // 1.0: Spreadsheet Studio template → a new spreadsheet each call
 ```
 
 #### Finance
@@ -2837,6 +2846,15 @@ finance_debt_plan({ debts:{ name:string; balance:string; aprPct:string; minPayme
 finance_forecast({ instanceId:Id; horizonDays:number; band:boolean }) → { t:string[]; balance:number[]; p10?:number[]; p90?:number[]; threshold?:number; breaches:{ date:string; accountId:Id; amount:string; topOutflows:string[] }[] }
 finance_amortization({ principal:string; annualRatePct:string; termMonths:number; extraMonthly?:string; startDate:string }) → { payment:string; totalInterest:string; payoffDate:string; rows:{ n:number; date:string; payment:string; principal:string; interest:string; balance:string }[] }
 finance_goal_plan({ target:string; by:string; current:string; annualYieldPct:string }) → { monthlyRequired:string; onTrack:boolean }
+finance_ledger({ instanceId:Id }) → FinanceLedger      // ULTRANOTE-1.0 §5: cached ledger, exact balances, option keys
+finance_txns_query({ instanceId:Id; filter?:'all'|'review'|'uncategorized'|'transfers'|'income'; accountId?:Id; search?:string; offset:number; limit:number }) → FinanceTxnPage
+finance_txns_update({ instanceId:Id; updates:{ id:Id; categoryId?:Id|null; memo?:string; date?:string; amount?:string; cleared?:'uncleared'|'cleared'|'reconciled'; reviewed?:boolean }[] }) → { updated:number }
+finance_txn_create({ instanceId:Id; date:string; payee:string; amount:string; accountId:Id; categoryId?:Id; memo?:string }) → { id:Id }
+finance_txn_split({ instanceId:Id; parentId:Id; parts:{ categoryId:Id; amount:string }[] }) → { parts:number }
+finance_reconcile({ instanceId:Id; accountId:Id; asOf:string; commit:boolean }) → { cleared:string; count:number; reconciled:string|null }
+finance_goal_upsert({ instanceId:Id; id?:Id; name?:string; target?:string; date?:string|null; kind?:'emergency'|'sinking'|'savings'; saved?:string }) → { id:Id }
+finance_budget_assign_many({ instanceId:Id; month:string; items:{ categoryId:Id; amount:string }[] }) → { toBeAssigned:string; categories:{ categoryId:Id; available:string }[] }
+finance_account_create({ instanceId:Id; name:string; type:string; opening?:string; institution?:string; apr?:number; limit?:string; minPayment?:string; onBudget?:boolean }) → { id:Id }
 ```
 
 #### Portfolio and tax
@@ -2847,14 +2865,20 @@ portfolio_summary({ instanceId:Id }) → { totalValue:Money; dayChange:Money; da
   holdings:{ symbol:SymbolKey; name:string; qty:string; price:number|null; value:Money; costBasis:Money; gain:Money; gainPct:number; weight:number; dayPct?:number; stale:boolean; assetClass:string }[];
   allocation:{ assetClass:string; current:number; target:number; drift:number; status:'ok'|'outside_band' }[]; asOf:Ts }
 portfolio_performance({ instanceId:Id; range:'1m'|'3m'|'ytd'|'1y'|'5y'|'all'; benchmark?:SymbolKey }) → { t:number[]; value:number[]; contributions:number[]; twr:number[]; benchmark?:number[]; xirr?:number }
-portfolio_rebalance_plan({ instanceId:Id; newCash:string; allowTaxableSells:boolean; minTrade:string; fractional:boolean })
+portfolio_rebalance_plan({ instanceId:Id; newCash:string; allowTaxableSells:boolean; minTrade:string; fractional:boolean; cashAccountId?:Id })
   → { trades:{ accountId:Id; symbol:SymbolKey; side:'buy'|'sell'; qty:string; amount:string; estRealizedGain?:string }[]; after:{ assetClass:string; pct:number }[]; estRealizedGain:string }
 portfolio_dividends({ instanceId:Id; year:number }) → { month:string; paid:string; projected:string }[]
 portfolio_realized({ instanceId:Id; year:number }) → { lots:{ symbol:SymbolKey; acquired:string; sold:string; qty:string; proceeds:string; basis:string; gain:string; term:'short'|'long' }[]; totals:{ short:string; long:string } }
+portfolio_book({ instanceId:Id }) → PortfolioBook      // accounts, securities, open lots, income, latest transactions
+portfolio_trade({ instanceId:Id; date:string; type:'buy'|'sell'|'dividend'|'interest'|'reinvest'|'fee'; symbol?:string; name?:string; assetClass?:string; accountId?:Id; qty?:string; price?:string; amount?:string; fees?:string }) → { id:Id; accountId:Id; securityId:Id|null }
 tax_packs({}) → { id:string; name:string; year:number; tier:'estimator'|'organizer'|'custom'; version:string; verifiedOn:string; stale:boolean }[]
 tax_estimate(TaxInput) → TaxEstimate          // §15.6
 tax_quarterly_plan({ packId:string; year:number; method:'safe_harbor'|'current_90'|'even_split'; estimate:TaxEstimate; priorYearTax?:string; priorYearAgi?:string; paid:{ date:string; amount:string }[] })
   → { due:{ period:string; date:string; suggested:string; paid:string; status:'upcoming'|'due_soon'|'paid'|'late' }[]; method:string; note:string }
+tax_records({ instanceId:Id; year:number }) → TaxRecords      // documents, deductions, payments by key; Portfolio pulls
+tax_doc_status({ instanceId:Id; id:Id; status:'expected'|'received'|'reviewed'|'sent_to_preparer'|'n_a' }) → void
+tax_payment_record({ instanceId:Id; period:string; amount:string; date:string; method?:'online'|'check'|'withholding' }) → { id:Id }
+tax_deduction_add({ instanceId:Id; desc:string; date:string; category:string; amount:string; payee?:string; receipt?:boolean; year:number }) → { id:Id }
 ```
 
 #### Markets

@@ -142,10 +142,7 @@ pub async fn vault_create(app: AppHandle, req: VaultCreateReq) -> ApiResult<Vaul
     blocking(move || {
         let state = app.state::<AppState>();
         if state.store_opt().is_some() {
-            return Err(ApiError::invalid(
-                "password",
-                "Ultranote is already set up",
-            ));
+            return Err(ApiError::invalid("password", "Ultranote is already set up"));
         }
         let _guard = state.begin_unlock()?;
         let kdf = match req.profile {
@@ -267,6 +264,34 @@ pub enum ManualReason {
     Manual,
 }
 
+/// How long a manual lock waits after `vault:will-lock` before dropping the keys. The app's own lock command flushes
+/// every pending save *before* it calls `vault_lock` (`src/app/boot.ts`, `installLockFlush`), so this is only a
+/// backstop for saves started elsewhere (another view's debounce firing on the event). The saves arrive as ordinary
+/// commands and `lock_now` waits for commands in flight. Automatic locks use the longer
+/// [`crate::state::WILL_LOCK_GRACE`].
+pub const MANUAL_LOCK_GRACE: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Set while a manual lock is in its grace period, so a second Ctrl+Shift+L (or a click on the lock indicator)
+/// during it neither emits `vault:will-lock` again nor starts a second lock.
+static MANUAL_LOCK_PENDING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Clears [`MANUAL_LOCK_PENDING`] however the lock ends.
+struct ManualLockPending;
+
+impl ManualLockPending {
+    /// `None` when a manual lock is already under way.
+    fn begin() -> Option<Self> {
+        (!MANUAL_LOCK_PENDING.swap(true, std::sync::atomic::Ordering::SeqCst)).then_some(Self)
+    }
+}
+
+impl Drop for ManualLockPending {
+    fn drop(&mut self) {
+        MANUAL_LOCK_PENDING.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// `vault_lock({ reason?: 'manual' })`.
 #[tauri::command]
 pub async fn vault_lock(app: AppHandle, req: LockReq) -> ApiResult<()> {
@@ -279,9 +304,144 @@ pub async fn vault_lock(app: AppHandle, req: LockReq) -> ApiResult<()> {
                 "Turn on encryption to lock Ultranote",
             ));
         }
+        // A second press while the first lock is still flushing: that lock covers it.
+        let Some(_pending) = ManualLockPending::begin() else {
+            return Ok(());
+        };
+        if store.is_unlocked() {
+            // Text typed just before Ctrl+Shift+L is still in the editor's autosave debounce: let the UI flush it.
+            state.events.emit(
+                crate::events::VAULT_WILL_LOCK,
+                crate::events::LockPayload {
+                    reason: LockReason::Manual,
+                },
+            );
+            std::thread::sleep(MANUAL_LOCK_GRACE);
+        }
         state.lock_now(LockReason::Manual, false)
     })
     .await
+}
+
+/// `vault_recovery_save_file` request: the 24 words the UI is showing (from `vault_create`,
+/// `vault_enable_encryption`, `vault_recovery_view` or `vault_recovery_regenerate`).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecoverySaveReq {
+    words: Vec<String>,
+}
+
+/// `vault_recovery_save_file` result: `saved: false` when the person closed the dialog.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoverySaved {
+    saved: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_name: Option<String>,
+}
+
+/// Default file name of a saved recovery key.
+pub const RECOVERY_FILE_NAME: &str = "Ultranote Recovery Key.txt";
+
+/// The text file a recovery key is saved as: the words in a numbered 4 × 6 grid and a warning.
+#[must_use]
+pub fn recovery_file_text(words: &[String], created: &str) -> String {
+    let mut grid = String::new();
+    for row in words.chunks(4).enumerate() {
+        let (r, chunk) = row;
+        let mut line = String::new();
+        for (c, w) in chunk.iter().enumerate() {
+            let cell = format!("{:>2}. {}", r * 4 + c + 1, w);
+            line.push_str(&format!("{cell:<18}"));
+        }
+        grid.push_str(line.trim_end());
+        grid.push('\n');
+    }
+    format!(
+        "Ultranote recovery key\n\n{grid}\nCreated {created}.\n\nIf you forget your password, choose \"Use recovery key\" on the lock screen and enter these 24 words.\nStore this somewhere safe. If you lose both your password and this key, your data cannot be recovered.\n"
+    )
+}
+
+/// Checks that `words` is a complete, valid recovery key (24 words with a correct checksum) and returns its
+/// canonical spelling, so only a real key can be written through `vault_recovery_save_file`. It does not compare
+/// the words with this workspace's key (that copy is gone once the key is confirmed, and saving a second copy after
+/// confirming must still work); the browser mock checks the same shape (`mock/commands/recoveryFile.ts`).
+fn check_recovery_words(words: &[String]) -> ApiResult<emp_crypto::recovery::RecoveryWords> {
+    if words.len() != emp_crypto::recovery::WORD_COUNT {
+        return Err(ApiError::invalid("words", "the recovery key has 24 words"));
+    }
+    for w in words {
+        validate::bounded("words", w, 32)?;
+    }
+    let key = emp_crypto::RecoveryKey::from_words(words)
+        .map_err(|_| ApiError::invalid("words", "this isn't a recovery key"))?;
+    key.words()
+        .map_err(|_| ApiError::invalid("words", "this isn't a recovery key"))
+}
+
+/// `vault_recovery_save_file({ words }) → { saved, fileName? }`: asks where to save the recovery key with the
+/// native save dialog and writes it there as a text file (owner-only permissions on Unix). The webview cannot
+/// download files (downloads are denied, §9.13), so this is the only way the key reaches a file.
+#[tauri::command]
+pub async fn vault_recovery_save_file(
+    app: AppHandle,
+    req: RecoverySaveReq,
+) -> ApiResult<RecoverySaved> {
+    let typed = zeroize::Zeroizing::new(req.words);
+    let words = check_recovery_words(&typed)?;
+    drop(typed);
+    app.state::<AppState>().session()?;
+    let handle = app.clone();
+    blocking(move || {
+        use tauri_plugin_dialog::DialogExt;
+        let mut b = handle
+            .dialog()
+            .file()
+            .add_filter("Text", &["txt"])
+            .set_file_name(RECOVERY_FILE_NAME)
+            .set_title("Save your recovery key");
+        if let Some(w) = handle.get_webview_window(crate::events::MAIN_WINDOW) {
+            b = b.set_parent(&w);
+        }
+        let Some(fp) = b.blocking_save_file() else {
+            return Ok(RecoverySaved {
+                saved: false,
+                file_name: None,
+            });
+        };
+        let path = fp
+            .into_path()
+            .map_err(|_| ApiError::invalid("path", "unsupported location"))?;
+        let path = crate::grants::canonicalize_for(&path, crate::grants::GrantMode::Write)?;
+        let created = chrono::Local::now().format("%B %-d, %Y").to_string();
+        let text = zeroize::Zeroizing::new(recovery_file_text(&words, &created));
+        write_private(&path, text.as_bytes())?;
+        tracing::info!("recovery key saved to a file");
+        Ok(RecoverySaved {
+            saved: true,
+            file_name: path.file_name().map(|n| n.to_string_lossy().into_owned()),
+        })
+    })
+    .await
+}
+
+/// Writes `bytes` to `path`, readable only by the owner on Unix.
+fn write_private(path: &std::path::Path, bytes: &[u8]) -> ApiResult<()> {
+    use std::io::Write;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut f = opts
+        .open(path)
+        .map_err(|_| ApiError::new(ErrorCode::Io, "Couldn't save the file there"))?;
+    f.write_all(bytes)
+        .and_then(|()| f.sync_all())
+        .map_err(|_| ApiError::new(ErrorCode::Io, "Couldn't save the file there"))?;
+    Ok(())
 }
 
 /// `vault_activity_ping({})`: the UI saw input (sent at most every 30 s).
@@ -658,6 +818,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_second_manual_lock_during_the_grace_is_absorbed() {
+        let first = ManualLockPending::begin().expect("no lock under way");
+        assert!(
+            ManualLockPending::begin().is_none(),
+            "a second press while the first lock flushes must not lock (or emit will-lock) again"
+        );
+        drop(first);
+        assert!(ManualLockPending::begin().is_some());
+    }
+
+    #[test]
     fn rejects_weak_new_passwords() {
         let weak: SecretString = "password".to_owned().into();
         let e = check_new_password("password", &weak).unwrap_err();
@@ -708,6 +879,46 @@ mod tests {
             }))
             .is_err()
         );
+    }
+
+    #[test]
+    fn recovery_file_accepts_only_a_real_key() {
+        let key = emp_crypto::RecoveryKey::generate().unwrap();
+        let words: Vec<String> = key.words().unwrap().to_vec();
+        let checked = check_recovery_words(&words).unwrap();
+        assert_eq!(checked.as_slice(), words.as_slice());
+        // Upper case is accepted and written in the canonical spelling.
+        let upper: Vec<String> = words.iter().map(|w| w.to_uppercase()).collect();
+        assert_eq!(
+            check_recovery_words(&upper).unwrap().as_slice(),
+            words.as_slice()
+        );
+        // Wrong count, unknown words and a bad checksum are refused.
+        assert!(check_recovery_words(&words[..23]).is_err());
+        let mut junk = words.clone();
+        junk[3] = "notaword".into();
+        assert!(check_recovery_words(&junk).is_err());
+        let arbitrary: Vec<String> = (0..24).map(|_| "abandon".to_owned()).collect();
+        assert!(check_recovery_words(&arbitrary).is_err());
+    }
+
+    #[test]
+    fn recovery_file_lists_every_word_in_order() {
+        let words: Vec<String> = (1..=24).map(|i| format!("w{i}")).collect();
+        let text = recovery_file_text(&words, "November 27, 2026");
+        assert!(text.starts_with("Ultranote recovery key\n\n 1. w1"));
+        assert_eq!(text.lines().filter(|l| l.contains(". w")).count(), 6);
+        let mut last = 0;
+        for w in &words {
+            let at = text
+                .find(&format!(". {w} "))
+                .or_else(|| text.find(&format!(". {w}\n")))
+                .unwrap();
+            assert!(at > last);
+            last = at;
+        }
+        assert!(text.contains("Created November 27, 2026."));
+        assert!(text.contains("cannot be recovered"));
     }
 
     #[test]

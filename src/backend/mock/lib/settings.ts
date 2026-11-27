@@ -1,4 +1,4 @@
-/** Device + vault settings storage for the mock (defaults per §11.3; device defaults follow the boot cache). */
+/** Device + vault settings storage for the mock (defaults match Rust; device appearance follows the boot cache). */
 import { DEFAULT_BOOT, readBootPrefs } from '@/lib/bootPrefs';
 import type { DeviceSettings, VaultSettings } from '../../types';
 import type { MockCtx } from '../ctx';
@@ -27,21 +27,14 @@ export function defaultDeviceSettings(): DeviceSettings {
   };
 }
 
+/** Same as Rust's `VaultSettings::default()`; the region is detected and applied by `settings_detect_region`. */
 export function defaultVaultSettings(): VaultSettings {
-  let timezone = 'UTC';
-  let locale = 'en-US';
-  try {
-    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en-US';
-  } catch {
-    /* defaults */
-  }
   return {
     profileName: '',
     baseCurrency: 'USD',
-    locale,
-    timezone,
-    weekStart: 1,
+    locale: 'en-US',
+    timezone: 'UTC',
+    weekStart: 0,
     dateFormat: 'full',
     clock: 12,
     spellcheck: true,
@@ -56,7 +49,7 @@ export function defaultVaultSettings(): VaultSettings {
     celebrations: true,
     startPage: 'home',
     snapshots: { enabled: true, keepDaily: 7, keepWeekly: 4, keepMonthly: 6 },
-    marketProviders: { order: ['finnhub', 'tiingo', 'stooq', 'coingecko', 'frankfurter'], refreshSeconds: 60 },
+    marketProviders: { order: ['frankfurter', 'stooq', 'coingecko'], refreshSeconds: 60 },
     offline: false,
   };
 }

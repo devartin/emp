@@ -26,7 +26,7 @@ export default function Dividends({ instanceId, summary: s }: { instanceId: Id; 
         {[
           { l: "Last 12 months", v: s ? fmtWhole(s.divTtm.amount, { currency: s.divTtm.currency }) : "—", sub: s && value ? `${fmtPct(num(s.divTtm.amount) / value, 2)} trailing yield` : "" },
           { l: "Next 12 months", v: s ? fmtWhole(s.divFwd12m.amount, { currency: s.divFwd12m.currency }) : "—", sub: "last regular dividend × frequency" },
-          { l: `Paid in ${year}`, v: fmtWhole(paid), sub: `${rows.filter((r) => r.paid > 0).length} months with payouts` },
+          { l: `Paid in ${year}`, v: fmtWhole(paid), sub: (() => { const n = rows.filter((r) => r.paid > 0).length; return `${n} ${n === 1 ? "month" : "months"} with payouts`; })() },
           { l: `Still expected in ${year}`, v: fmtWhole(proj), sub: "based on last year's calendar" },
         ].map((k) => (
           <div key={k.l} className="fh-card">

@@ -15,6 +15,7 @@
 //!   expression metrics and insight rules.
 //! * [`sample`]: deterministic sample data.
 //! * [`packs`]: account-type and holiday packs (`crates/emp-store/packs/`).
+//! * [`upkeep`]: the vault-open upgrade of older installs, calculated columns and recurring tasks.
 //!
 //! The store-facing commands (`lifeapp_*` of §11.3) are `Store` methods in [`crate::repo::lifeapps`].
 
@@ -30,6 +31,7 @@ pub mod plan;
 pub mod recommend;
 pub mod sample;
 pub mod settle;
+pub mod upkeep;
 pub mod workbook;
 
 use std::sync::LazyLock;
