@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in Ultra Note doesn't work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please don't include personal data, passwords, recovery phrases or real financial details.
+        Security problems go through [private reporting](https://github.com/devartin/ultra-note/security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Ultra Note version
+      description: The release you downloaded, or the commit you built from.
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Browser demo
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: "macOS 15.2, Windows 11 24H2, Ubuntu 24.04 …"
+  - type: dropdown
+    id: vault
+    attributes:
+      label: Is vault encryption on?
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or logs
+      description: Anything else that helps, with personal data removed.

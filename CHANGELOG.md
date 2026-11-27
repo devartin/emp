@@ -5,6 +5,11 @@ All notable changes to Ultra Note are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-26
+
+The v3 redesign, a simpler structure built around Home, and a round of finance and tax corrections. Workspaces
+created with 0.1.0 still open.
+
 ### Design: v3 "paper, ink and keys"
 - A new visual language replaces v2 "Slab" ([docs/DESIGN.md](docs/DESIGN.md)). Warm paper with graphite ink as the
   only accent, IBM Plex Sans with tabular figures, hairline rules instead of nested boxes, and depth only on things
@@ -122,3 +127,7 @@ First public release, as Ultra Note (developed under the codename EMP). Local-fi
 - Design language v2 "Slab": tactile keycap buttons, recessed inputs, machined panels with pointer-tracked edge light,
   glass overlays, one spring system for all motion, and signature moments such as the vault unlock, life-app build
   and rolling numbers. Reduced-motion, reduced-transparency and higher-contrast modes are honoured throughout.
+
+[Unreleased]: https://github.com/devartin/ultra-note/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/devartin/ultra-note/releases/tag/v0.3.0
+[0.1.0]: https://github.com/devartin/ultra-note/blob/main/CHANGELOG.md#010--2026-11-26
