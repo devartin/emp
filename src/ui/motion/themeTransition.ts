@@ -7,7 +7,7 @@
  * replaced in-flight transform transitions so slabs, glides and route entrances snapped to their end values.
  * Without View Transitions, or under reduced motion, colours switch instantly.
  */
-import { isViewTransitionActive } from "./viewTransition";
+import { isViewTransitionActive, supportsViewTransitions } from "./viewTransition";
 import { isReducedMotion } from "./useReducedEffects";
 
 type VTDoc = Document & { startViewTransition?: (cb: () => void | Promise<void>) => { ready: Promise<void>; finished: Promise<void> } };
@@ -36,13 +36,13 @@ function same(a: Snap, b: Snap) {
 
 function canTransition(): boolean {
   const doc = document as VTDoc;
-  return !!doc.startViewTransition && !busy && !isViewTransitionActive() && !isReducedMotion();
+  return !!doc.startViewTransition && supportsViewTransitions() && !busy && !isViewTransitionActive() && !isReducedMotion();
 }
 
 function runCrossfade(ms: number, apply: () => void) {
   const doc = document as VTDoc;
   const root = document.documentElement;
-  if (!doc.startViewTransition) return apply();
+  if (!doc.startViewTransition || !supportsViewTransitions()) return apply();
   busy = true;
   root.style.setProperty("--emp-switch-ms", `${ms}ms`);
   root.classList.add("emp-vt-crossfade");
@@ -95,7 +95,7 @@ export function crossfadeColors(ms = 200, apply?: () => void): void {
 
 export function switchThemeWithReveal(apply: () => void, origin?: { x: number; y: number } | HTMLElement | null): void {
   const doc = document as VTDoc;
-  if (!doc.startViewTransition || isReducedMotion() || busy || isViewTransitionActive()) {
+  if (!doc.startViewTransition || !supportsViewTransitions() || isReducedMotion() || busy || isViewTransitionActive()) {
     apply();
     return;
   }

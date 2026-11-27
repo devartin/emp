@@ -29,8 +29,19 @@ export function vtStyle(name: string | undefined | null): CSSProperties | undefi
   return name ? ({ viewTransitionName: name } as CSSProperties) : undefined;
 }
 
+/**
+ * WebKitGTK (the Linux desktop webview) exposes `startViewTransition` but its web process crashes on it when
+ * accelerated compositing is off (`WEBKIT_DISABLE_COMPOSITING_MODE=1`, common on NVIDIA and in VMs), taking the
+ * whole app down. The crash is native, so it cannot be caught: never use View Transitions there.
+ */
+export function isWebKitGtk(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Linux/.test(ua) && /AppleWebKit/.test(ua) && !/Chrome|Chromium|Android/.test(ua);
+}
+
 export function supportsViewTransitions(): boolean {
-  return typeof document !== "undefined" && typeof (document as Doc).startViewTransition === "function";
+  return typeof document !== "undefined" && typeof (document as Doc).startViewTransition === "function" && !isWebKitGtk();
 }
 
 let running = false;
@@ -91,7 +102,7 @@ export interface ViewTransitionOptions {
  */
 export function withViewTransition(update: () => void, opts: ViewTransitionOptions = {}): Promise<void> {
   const doc = document as Doc;
-  if (running || !doc.startViewTransition || isReducedMotion()) {
+  if (running || !doc.startViewTransition || !supportsViewTransitions() || isReducedMotion()) {
     update();
     return Promise.resolve();
   }
