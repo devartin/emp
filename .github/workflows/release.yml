@@ -46,9 +46,20 @@ jobs:
           node-version: 22
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_targets }}
+      # rust-toolchain.toml pins the compiler, and cargo uses that pin rather than whatever toolchain an action
+      # installs, so the extra macOS targets must be added to the pinned toolchain itself.
+      - name: Install the pinned toolchain (rust-toolchain.toml)
+        shell: bash
+        run: |
+          # Windows runners check out with core.autocrlf=true: drop the CR so the channel name is exact.
+          channel="$(sed -n 's/^channel *= *"\([^"]*\)".*/\1/p' rust-toolchain.toml | tr -d '\r')"
+          test -n "$channel"
+          rustup toolchain install "$channel" --profile minimal
+          targets="${{ matrix.rust_targets }}"
+          if [ -n "$targets" ]; then
+            rustup target add --toolchain "$channel" ${targets//,/ }
+          fi
+          rustc --version
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -62,9 +73,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
+          # A tag push creates a draft release and uploads every platform's installers to it; publish the draft
+          # once all three builds have attached their files. A manual run (workflow_dispatch) is a build-only
+          # dry run: with no tag name, nothing is uploaded.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: "Ultra Note ${{ github.ref_name }}"
-          releaseBody: "See CHANGELOG.md for what's new. Download the installer for your platform below."
-          releaseDraft: false
+          releaseBody: "See [CHANGELOG.md](https://github.com/devartin/ultra-note/blob/main/CHANGELOG.md) for what's new. Download the installer for your platform below."
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Keep the dry run's installers so they can be tried before tagging.
+      - name: Upload installers (dry run)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.platform }}
+          path: |
+            target/**/release/bundle/**/*.dmg
+            target/**/release/bundle/**/*.msi
+            target/**/release/bundle/**/*-setup.exe
+            target/**/release/bundle/**/*.AppImage
+            target/**/release/bundle/**/*.deb
+            target/**/release/bundle/**/*.rpm
+          if-no-files-found: warn
+          retention-days: 7

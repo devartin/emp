@@ -260,8 +260,9 @@ Get the latest installer for your platform from **[Releases](https://github.com/
 
 ## Build from source
 
-Requirements: Rust (stable), Node.js 22+, and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for
-your OS.
+Requirements: [rustup](https://rustup.rs) (it installs the pinned Rust toolchain automatically), Node.js 22+, and the
+[Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS. Contributions are welcome; see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
 git clone https://github.com/devartin/ultra-note && cd ultra-note
