@@ -34,7 +34,7 @@
         "use": "isolation",
         "options": { "dir": "../src-tauri/isolation" }
       },
-      "freezePrototype": true,
+      "freezePrototype": false,
       "assetProtocol": { "enable": false },
       "dangerousDisableAssetCspModification": ["style-src"],
       "csp": {

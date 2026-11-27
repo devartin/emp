@@ -608,7 +608,10 @@ mod tests {
         );
         let sec = &v["app"]["security"];
         assert_eq!(sec["pattern"]["use"], "isolation");
-        assert_eq!(sec["freezePrototype"], true);
+        // Freezing Object.prototype breaks React, decimal.js-light and TipTap at module init in WebKit (they assign
+        // `toString`/`valueOf` on plain prototype objects), which crashed Home and most life apps in 0.3.0. The
+        // isolation pattern and the strict CSP below remain the defence against injected script.
+        assert_eq!(sec["freezePrototype"], false);
         assert_eq!(sec["assetProtocol"]["enable"], false);
         let csp = sec["csp"].to_string();
         assert!(
