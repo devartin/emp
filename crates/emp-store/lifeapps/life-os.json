@@ -1,8 +1,8 @@
 {
   "id": "life-os",
   "version": "1.0.0",
-  "title": "Life OS",
-  "tagline": "Tasks, projects and a daily plan.",
+  "title": "Tasks",
+  "tagline": "Tasks, lists and a daily plan.",
   "icon": "kanban",
   "color": "blue",
   "category": "planning",
@@ -197,6 +197,13 @@
         "nlDates": true
       },
       "help": "Type “call Sam tomorrow 3pm #home” and dates are understood. A global capture hotkey is not part of this version."
+    },
+    {
+      "id": "review",
+      "kind": "review",
+      "title": "Review and create",
+      "quick": true,
+      "skippable": false
     }
   ],
   "templates": [
@@ -205,12 +212,12 @@
       "kind": "dashboard",
       "optional": false,
       "spec": {
-        "title": "Life OS",
+        "title": "Tasks",
         "icon": "lucide:kanban",
-        "subtitle": "Tasks, projects and goals.",
+        "subtitle": "Tasks, lists and goals.",
         "tabs": [
           "Tasks",
-          "Projects",
+          "Lists",
           "Review"
         ],
         "tiles": [
@@ -235,7 +242,7 @@
           {
             "t": "kpi",
             "metric": "projects_without_next",
-            "label": "Projects without a next action",
+            "label": "Lists without a next action",
             "format": "number"
           }
         ],
@@ -278,12 +285,12 @@
       "kind": "page",
       "optional": false,
       "spec": {
-        "title": "How Life OS works",
+        "title": "How Tasks works",
         "icon": "lucide:brain",
         "blocks": [
           {
             "t": "md",
-            "md": "## Capture everything\nAnything on your mind goes to the **Inbox**. Quick add understands dates like “tomorrow 3pm” and tags like `#home`. Capturing is not committing; it gets things out of your head.\n\n## Clarify and organise\nWhen you process the inbox, decide for each item:\n- **Is it actionable?** No → delete it, file it as a resource, or move it to *Someday*.\n- **Takes under two minutes?** Do it now.\n- **Waiting on someone?** Status *Waiting*, and note who.\n- **Has a date?** Give it a *Due* date only when there is a real deadline; use *Scheduled* for when you plan to do it.\n- **More than one step?** It is a **Project**; give it an outcome and one *Next* action.\n\n## Prioritise\n{{if(answers.priority == \"eisenhower\", \"You chose the Eisenhower matrix: do urgent + important now, schedule important, delegate urgent, drop the rest. The Eisenhower board groups tasks by quadrant.\", if(answers.priority == \"top3\", \"You chose Top 3 per day: pick the three tasks that would make today a success in your morning plan; everything else is a bonus.\", \"You chose P1–P4: P1 is today-critical, P2 this week, P3 soon, P4 whenever. Keep P1 to a handful.\"))}}\n\n## Plan the day, then shut down\nEach morning look at **Due** on the Life OS page, choose your top 3 and give focus work a time block. At the end of the day run the shutdown checklist so work stays at work.\n\n## Weekly review\nOnce a week: get clear (inbox to zero), get current (calendar, projects without a next action, waiting list) and get creative (someday list). This is what keeps the system trusted."
+            "md": "## Capture everything\nAnything on your mind goes to the **Inbox**. Quick add understands dates like “tomorrow 3pm” and tags like `#home`. Capturing is not committing; it gets things out of your head.\n\n## Clarify and organise\nWhen you process the inbox, decide for each item:\n- **Is it actionable?** No → delete it, file it as a resource, or move it to *Someday*.\n- **Takes under two minutes?** Do it now.\n- **Waiting on someone?** Status *Waiting*, and note who.\n- **Has a date?** Give it a *Due* date only when there is a real deadline; use *Scheduled* for when you plan to do it.\n- **More than one step?** It is a **list**: give it an outcome and one *Next* action.\n\n## Prioritise\n{{if(answers.priority == \"eisenhower\", \"You chose the Eisenhower matrix: do urgent + important now, schedule important, delegate urgent, drop the rest. The Eisenhower board groups tasks by quadrant.\", if(answers.priority == \"top3\", \"You chose Top 3 per day: pick the three tasks that would make today a success in your morning plan; everything else is a bonus.\", \"You chose P1–P4: P1 is today-critical, P2 this week, P3 soon, P4 whenever. Keep P1 to a handful.\"))}}\n\n## Plan the day, then shut down\nEach morning look at **Due** in Tasks, choose your top 3 and give focus work a time block. At the end of the day run the shutdown checklist so work stays at work.\n\n## Weekly review\nOnce a week: get clear (inbox to zero), get current (calendar, lists without a next action, waiting list) and get creative (someday list). This is what keeps the system trusted."
           }
         ]
       }
@@ -316,7 +323,7 @@
             "t": "checklist",
             "items": [
               "Review the calendar: past week and next two weeks",
-              "Every active project has a Next action",
+              "Every active list has a Next action",
               "Check the Waiting list and follow up",
               "Read this week's insights"
             ]
@@ -361,12 +368,14 @@
           {
             "key": "title",
             "name": "Title",
-            "type": "title"
+            "type": "title",
+            "role": "task.title"
           },
           {
             "key": "status",
             "name": "Status",
             "type": "status",
+            "role": "task.status",
             "options": [
               {
                 "key": "inbox",
@@ -410,6 +419,7 @@
             "key": "priority",
             "name": "Priority",
             "type": "select",
+            "role": "task.priority",
             "options": [
               {
                 "key": "p1",
@@ -437,6 +447,7 @@
             "key": "quadrant",
             "name": "Quadrant",
             "type": "select",
+            "role": "task.quadrant",
             "options": [
               {
                 "key": "do",
@@ -463,22 +474,26 @@
           {
             "key": "due",
             "name": "Due",
-            "type": "date"
+            "type": "date",
+            "role": "task.due"
           },
           {
             "key": "scheduled",
             "name": "Scheduled",
-            "type": "date"
+            "type": "date",
+            "role": "task.scheduled"
           },
           {
             "key": "estimate",
             "name": "Estimate (min)",
-            "type": "number"
+            "type": "number",
+            "role": "task.estimate"
           },
           {
             "key": "area",
             "name": "Area",
             "type": "relation",
+            "role": "task.area",
             "relation": {
               "db": "areas",
               "limit": "one",
@@ -490,8 +505,9 @@
           },
           {
             "key": "project",
-            "name": "Project",
+            "name": "List",
             "type": "relation",
+            "role": "task.project",
             "relation": {
               "db": "projects",
               "limit": "one",
@@ -505,6 +521,7 @@
             "key": "context",
             "name": "Context",
             "type": "multi_select",
+            "role": "task.context",
             "options": [
               {
                 "key": "home",
@@ -528,6 +545,7 @@
             "key": "energy",
             "name": "Energy",
             "type": "select",
+            "role": "task.energy",
             "options": [
               {
                 "key": "high",
@@ -546,28 +564,40 @@
           {
             "key": "recurrence",
             "name": "Recurrence",
-            "type": "recurrence"
+            "type": "recurrence",
+            "role": "task.recurrence"
           },
           {
             "key": "waiting_on",
             "name": "Waiting on",
-            "type": "text"
+            "type": "text",
+            "role": "task.waiting"
           },
           {
             "key": "source",
             "name": "Source",
-            "type": "text"
+            "type": "text",
+            "role": "task.source"
           },
           {
             "key": "completed_at",
             "name": "Completed at",
-            "type": "date"
+            "type": "date",
+            "role": "task.completed"
           },
           {
             "key": "done_flag",
             "name": "Done",
             "type": "checkbox",
+            "role": "task.done",
             "hidden": true
+          },
+          {
+            "key": "top3",
+            "name": "Top 3",
+            "type": "checkbox",
+            "role": "task.top3",
+            "description": "Starred for today; shows on Home."
           }
         ],
         "views": [
@@ -699,18 +729,20 @@
       "kind": "database",
       "optional": false,
       "spec": {
-        "title": "Projects",
+        "title": "Lists",
         "icon": "lucide:folder",
         "properties": [
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "project.name"
           },
           {
             "key": "area",
             "name": "Area",
             "type": "relation",
+            "role": "project.area",
             "relation": {
               "db": "areas",
               "limit": "one"
@@ -720,6 +752,7 @@
             "key": "status",
             "name": "Status",
             "type": "select",
+            "role": "project.status",
             "options": [
               {
                 "key": "active",
@@ -747,17 +780,20 @@
             "key": "outcome",
             "name": "Outcome",
             "type": "text",
+            "role": "project.outcome",
             "description": "What does done look like?"
           },
           {
             "key": "deadline",
             "name": "Deadline",
-            "type": "date"
+            "type": "date",
+            "role": "project.deadline"
           },
           {
             "key": "progress",
             "name": "Progress",
             "type": "rollup",
+            "role": "project.progress",
             "rollup": {
               "relation": "tasks",
               "target": "done_flag",
@@ -768,12 +804,14 @@
             "key": "next_action",
             "name": "Next action",
             "type": "formula",
+            "role": "project.next",
             "formula": "prop(\"Tasks\").filter(current.prop(\"Status\") == \"Next\").map(current.prop(\"Title\")).first()"
           },
           {
             "key": "review",
             "name": "Review date",
-            "type": "date"
+            "type": "date",
+            "role": "project.review"
           }
         ],
         "views": [
@@ -810,18 +848,21 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "area.name"
           },
           {
             "key": "standard",
             "name": "Standard",
             "type": "text",
+            "role": "area.standard",
             "description": "What “good” looks like in this area."
           },
           {
             "key": "icon",
             "name": "Icon",
-            "type": "text"
+            "type": "text",
+            "role": "area.icon"
           }
         ],
         "rows": [
@@ -919,22 +960,26 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "resource.name"
           },
           {
             "key": "topic",
             "name": "Topic",
-            "type": "text"
+            "type": "text",
+            "role": "resource.topic"
           },
           {
             "key": "url",
             "name": "Link",
-            "type": "url"
+            "type": "url",
+            "role": "resource.url"
           },
           {
             "key": "area",
             "name": "Area",
             "type": "relation",
+            "role": "resource.area",
             "relation": {
               "db": "areas",
               "limit": "one"
@@ -955,37 +1000,44 @@
           {
             "key": "title",
             "name": "Title",
-            "type": "title"
+            "type": "title",
+            "role": "daily.title"
           },
           {
             "key": "date",
             "name": "Date",
-            "type": "date"
+            "type": "date",
+            "role": "daily.date"
           },
           {
             "key": "top3",
             "name": "Top 3",
-            "type": "text"
+            "type": "text",
+            "role": "daily.top3"
           },
           {
             "key": "log",
             "name": "Log",
-            "type": "text"
+            "type": "text",
+            "role": "daily.log"
           },
           {
             "key": "gratitude",
             "name": "Gratitude",
-            "type": "text"
+            "type": "text",
+            "role": "daily.gratitude"
           },
           {
             "key": "shutdown",
             "name": "Shutdown done",
-            "type": "checkbox"
+            "type": "checkbox",
+            "role": "daily.shutdown"
           },
           {
             "key": "weekly_review",
             "name": "Weekly review done",
-            "type": "checkbox"
+            "type": "checkbox",
+            "role": "daily.weekly_review"
           }
         ],
         "views": [
@@ -1078,7 +1130,7 @@
       "optional": true,
       "spec": {
         "title": "Monthly reset",
-        "text": "Monthly reset: review areas and projects",
+        "text": "Monthly reset: review areas and lists",
         "target": "projects",
         "rrule": "${answers.rituals.monthly.rrule}",
         "time": "${answers.rituals.monthly.time}"
@@ -1179,14 +1231,14 @@
       "id": "project-no-next",
       "when": "metrics.projects_without_next > 0",
       "severity": "tip",
-      "title": "{{metrics.projects_without_next}} {{if(metrics.projects_without_next == 1, \"project has\", \"projects have\")}} no next task",
+      "title": "{{metrics.projects_without_next}} {{if(metrics.projects_without_next == 1, \"list has\", \"lists have\")}} no next task",
       "body": "",
       "mathMetrics": [
         "projects_without_next"
       ],
       "actions": [
         {
-          "label": "Open projects",
+          "label": "Open lists",
           "route": "app:projects"
         }
       ]
@@ -1260,7 +1312,7 @@
     },
     {
       "id": "project",
-      "label": "Create a project with a next action",
+      "label": "Create a list with a next action",
       "autoTick": {
         "event": "project.next_action_set"
       }

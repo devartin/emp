@@ -136,31 +136,11 @@
       ]
     },
     {
-      "id": "import_opts",
+      "id": "review",
       "kind": "review",
-      "title": "Import options",
-      "quick": false,
-      "skippable": true,
-      "when": "answers.intent == \"import\"",
-      "default": {
-        "headerRow": "auto",
-        "mode": "sheet",
-        "runChecks": true
-      },
-      "options": [
-        {
-          "value": "sheet",
-          "label": "Keep as spreadsheet"
-        },
-        {
-          "value": "database",
-          "label": "Convert to database"
-        },
-        {
-          "value": "both",
-          "label": "Both (linked)"
-        }
-      ]
+      "title": "Review and create",
+      "quick": true,
+      "skippable": false
     }
   ],
   "templates": [
@@ -174,7 +154,7 @@
         "blocks": [
           {
             "t": "md",
-            "md": "Workbooks built with best-practice structure:\n\n- **Inputs** hold every assumption in blue cells, named so formulas read like sentences (`=PMT(Rate/PPY, Years*PPY, -Principal)`).\n- **Calculations** reference inputs by name, with no hard-coded constants.\n- **Output** summarises results in bold for readers.\n- **Checks** turn the tab green when everything adds up, red when something is off.\n- **Changelog** records what changed and why.\n\nHeader rows are frozen and dates are ISO (YYYY-MM-DD). The advisor runs sheet checks and points out `#REF!`, `#DIV/0!`, circular references, numbers stored as text and other common mistakes."
+            "md": "Spreadsheets built with best-practice structure:\n\n- **Inputs** hold every assumption in blue cells, named so formulas read like sentences (`=PMT(Rate/PPY, Years*PPY, -Principal)`).\n- **Calculations** reference inputs by name, with no hard-coded constants.\n- **Output** summarises results in bold for readers.\n- **Checks** turn the tab green when everything adds up, red when something is off.\n- **Changelog** records what changed and why.\n\nHeader rows are frozen and dates are ISO (YYYY-MM-DD). The advisor runs sheet checks and points out `#REF!`, `#DIV/0!`, circular references, numbers stored as text and other common mistakes."
           },
           {
             "t": "checklist",
@@ -2766,7 +2746,7 @@
       "kind": "workbook",
       "optional": false,
       "spec": {
-        "title": "Imported workbook",
+        "title": "Imported spreadsheet",
         "names": {
           "ExampleRate": "Inputs!$B$5"
         },

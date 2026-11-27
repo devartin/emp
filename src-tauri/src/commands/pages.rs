@@ -1,8 +1,8 @@
 //! Pages and docs commands (SPEC §11.3 "Pages and docs").
 
 use emp_store::model::{
-    Backlink, DocOwnerKind, Icon, OutlineItem, PageCreate, PageCreated, PageGet, PageKind,
-    PageMeta, PageMetaPatch, TemplateInfo, TipTapDoc, TipTapNode,
+    Backlink, DocOwnerKind, Icon, OutlineItem, PageCreate, PageCreated, PageFlags, PageGet,
+    PageKind, PageMeta, PageMetaPatch, TemplateInfo, TipTapDoc, TipTapNode,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, Webview};
@@ -60,6 +60,9 @@ pub struct PageCreateReq {
     template_page_id: Option<String>,
     #[serde(default)]
     doc: Option<TipTapDoc>,
+    /// Initial flags, e.g. `{ project: true }` (Ultranote 1.0 brief §3).
+    #[serde(default)]
+    flags: Option<PageFlags>,
 }
 
 /// Page kinds `page_create` may create (databases, sheets and apps have their own commands).
@@ -72,7 +75,7 @@ pub enum CreateKind {
     Dashboard,
 }
 
-/// `page_create({ workspaceId, parentId, kind: 'doc'|'dashboard', title?, icon?, afterId?, templatePageId?, doc? })
+/// `page_create({ workspaceId, parentId, kind: 'doc'|'dashboard', title?, icon?, afterId?, templatePageId?, doc?, flags? })
 /// → { meta, docRev }`.
 #[tauri::command]
 pub async fn page_create(app: AppHandle, req: PageCreateReq) -> ApiResult<PageCreated> {
@@ -101,6 +104,7 @@ pub async fn page_create(app: AppHandle, req: PageCreateReq) -> ApiResult<PageCr
             after_id: req.after_id,
             template_page_id: req.template_page_id,
             doc: req.doc,
+            flags: req.flags,
         })?)
     })
     .await

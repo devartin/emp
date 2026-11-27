@@ -476,7 +476,26 @@ struct PropPlan {
     currency: Option<String>,
 }
 
-fn default_status(ids: &IdGen, base: &str) -> (Vec<SelectOption>, BTreeMap<String, String>) {
+/// **Option-id rule (1.0):** the id of a select / multi-select / status option an app generates is its manifest
+/// option key (`credit_card`, `done`, `p1`), unique within its property. Frontends compare and write option ids as
+/// keys on both backends (the browser mock uses the same ids). Options a person adds later get ordinary random ids.
+/// Installs made before 1.0 had `UUIDv5(instance, "<db>.prop:<p>.opt:<key>")` ids; the vault-open upgrade
+/// ([`crate::repo::lifeapps`] `upgrade_instance`) rewrites them to keys (options, cells, views and row templates).
+#[must_use]
+pub fn option_key_id(key: &str) -> String {
+    key.to_owned()
+}
+
+/// The pre-1.0 id of a generated option (what [`option_key_id`] replaced), for the vault-open upgrade.
+#[must_use]
+pub fn legacy_option_id(ids: &IdGen, db_key: &str, prop_key: &str, opt_key: &str) -> String {
+    ids.id(&format!("{db_key}.prop:{prop_key}.opt:{opt_key}"))
+}
+
+/// Option keys of the default status options (a status property without options).
+pub const DEFAULT_STATUS_KEYS: [&str; 3] = ["not_started", "in_progress", "done"];
+
+fn default_status() -> (Vec<SelectOption>, BTreeMap<String, String>) {
     let defs = [
         (
             "not_started",
@@ -496,7 +515,7 @@ fn default_status(ids: &IdGen, base: &str) -> (Vec<SelectOption>, BTreeMap<Strin
     let opts = defs
         .iter()
         .map(|(k, n, c, g)| {
-            let id = ids.id(&format!("{base}.opt:{k}"));
+            let id = option_key_id(k);
             keys.insert((*k).to_owned(), id.clone());
             SelectOption {
                 id,
@@ -527,7 +546,7 @@ fn plan_props(
                         .iter()
                         .enumerate()
                         .map(|(i, o)| {
-                            let id = ids.id(&format!("{base}.opt:{}", o.key));
+                            let id = option_key_id(&o.key);
                             keys.insert(o.key.clone(), id.clone());
                             SelectOption {
                                 id,
@@ -541,7 +560,7 @@ fn plan_props(
                         .collect();
                     (list, keys)
                 }
-                (_, PropType::Status) => default_status(ids, &base),
+                (_, PropType::Status) => default_status(),
                 _ => (Vec::new(), BTreeMap::new()),
             };
             let currency = (p.kind == PropType::Money).then(|| {

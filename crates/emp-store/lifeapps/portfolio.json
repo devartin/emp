@@ -1,7 +1,7 @@
 {
   "id": "portfolio",
   "version": "1.0.0",
-  "title": "Portfolio",
+  "title": "Investments",
   "tagline": "Holdings and allocation across accounts.",
   "icon": "candlestick-chart",
   "color": "ocean",
@@ -268,6 +268,13 @@
           "label": "A symbol (e.g. VT)"
         }
       ]
+    },
+    {
+      "id": "review",
+      "kind": "review",
+      "title": "Review and create",
+      "quick": true,
+      "skippable": false
     }
   ],
   "templates": [
@@ -276,7 +283,7 @@
       "kind": "dashboard",
       "optional": false,
       "spec": {
-        "title": "Portfolio",
+        "title": "Investments",
         "icon": "lucide:candlestick-chart",
         "subtitle": "Holdings, allocation, performance and dividends. Ultranote never places trades.",
         "tabs": [
@@ -490,22 +497,26 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "iacct.name"
           },
           {
             "key": "broker",
             "name": "Broker",
-            "type": "text"
+            "type": "text",
+            "role": "iacct.broker"
           },
           {
             "key": "currency",
             "name": "Currency",
-            "type": "text"
+            "type": "text",
+            "role": "iacct.currency"
           },
           {
             "key": "type",
             "name": "Type",
             "type": "select",
+            "role": "iacct.type",
             "options": [
               {
                 "key": "401k",
@@ -553,6 +564,7 @@
             "key": "tax_treatment",
             "name": "Tax treatment",
             "type": "select",
+            "role": "iacct.tax",
             "options": [
               {
                 "key": "taxable",
@@ -574,7 +586,8 @@
           {
             "key": "notes",
             "name": "Notes",
-            "type": "text"
+            "type": "text",
+            "role": "iacct.notes"
           }
         ],
         "rows": [
@@ -603,7 +616,8 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "sec.name"
           },
           {
             "key": "ticker",
@@ -668,6 +682,7 @@
             "key": "region",
             "name": "Region",
             "type": "select",
+            "role": "sec.region",
             "options": [
               {
                 "key": "us",
@@ -691,6 +706,7 @@
             "key": "type",
             "name": "Type",
             "type": "select",
+            "role": "sec.type",
             "options": [
               {
                 "key": "etf",
@@ -721,7 +737,8 @@
           {
             "key": "currency",
             "name": "Currency",
-            "type": "text"
+            "type": "text",
+            "role": "sec.currency"
           },
           {
             "key": "expense_ratio",
@@ -733,17 +750,20 @@
           {
             "key": "last_price",
             "name": "Last price",
-            "type": "computed"
+            "type": "computed",
+            "role": "sec.price"
           },
           {
             "key": "day_pct",
             "name": "Day %",
-            "type": "computed"
+            "type": "computed",
+            "role": "sec.day_pct"
           },
           {
             "key": "price_as_of",
             "name": "Price as-of",
-            "type": "date"
+            "type": "date",
+            "role": "sec.price_as_of"
           }
         ],
         "views": [
@@ -793,7 +813,8 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "inv.name"
           },
           {
             "key": "date",
@@ -932,12 +953,14 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "lot.name"
           },
           {
             "key": "security",
             "name": "Security",
             "type": "relation",
+            "role": "lot.security",
             "relation": {
               "db": "securities",
               "limit": "one"
@@ -947,6 +970,7 @@
             "key": "account",
             "name": "Account",
             "type": "relation",
+            "role": "lot.account",
             "relation": {
               "db": "inv_accounts",
               "limit": "one"
@@ -955,27 +979,32 @@
           {
             "key": "acquired",
             "name": "Acquired",
-            "type": "date"
+            "type": "date",
+            "role": "lot.acquired"
           },
           {
             "key": "qty",
             "name": "Quantity",
-            "type": "computed"
+            "type": "computed",
+            "role": "lot.qty"
           },
           {
             "key": "basis",
             "name": "Cost basis",
-            "type": "computed"
+            "type": "computed",
+            "role": "lot.basis"
           },
           {
             "key": "term",
             "name": "Term",
-            "type": "computed"
+            "type": "computed",
+            "role": "lot.term"
           },
           {
             "key": "unrealized",
             "name": "Unrealised",
-            "type": "computed"
+            "type": "computed",
+            "role": "lot.unrealized"
           }
         ]
       }
@@ -992,12 +1021,14 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "hold.name"
           },
           {
             "key": "security",
             "name": "Security",
             "type": "relation",
+            "role": "hold.security",
             "relation": {
               "db": "securities",
               "limit": "one"
@@ -1006,22 +1037,26 @@
           {
             "key": "qty",
             "name": "Quantity",
-            "type": "computed"
+            "type": "computed",
+            "role": "hold.qty"
           },
           {
             "key": "value",
             "name": "Value",
-            "type": "computed"
+            "type": "computed",
+            "role": "hold.value"
           },
           {
             "key": "weight",
             "name": "Weight",
-            "type": "computed"
+            "type": "computed",
+            "role": "hold.weight"
           },
           {
             "key": "day",
             "name": "Today",
-            "type": "computed"
+            "type": "computed",
+            "role": "hold.day"
           }
         ]
       }
@@ -1037,7 +1072,8 @@
           {
             "key": "name",
             "name": "Asset class",
-            "type": "title"
+            "type": "title",
+            "role": "alloc.name"
           },
           {
             "key": "class",
@@ -1113,17 +1149,20 @@
           {
             "key": "current",
             "name": "Current %",
-            "type": "computed"
+            "type": "computed",
+            "role": "alloc.current"
           },
           {
             "key": "drift",
             "name": "Drift",
-            "type": "computed"
+            "type": "computed",
+            "role": "alloc.drift"
           },
           {
             "key": "status",
             "name": "Status",
             "type": "formula",
+            "role": "alloc.status",
             "formula": "if(prop(\"Target %\") > 0, \"Target set\", \"No target\")"
           }
         ],
@@ -1313,29 +1352,34 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "watch.name"
           },
           {
             "key": "ticker",
             "name": "Ticker",
-            "type": "ticker"
+            "type": "ticker",
+            "role": "watch.ticker"
           },
           {
             "key": "alert_above",
             "name": "Alert above",
             "type": "money",
+            "role": "watch.alert_above",
             "currency": "USD"
           },
           {
             "key": "alert_below",
             "name": "Alert below",
             "type": "money",
+            "role": "watch.alert_below",
             "currency": "USD"
           },
           {
             "key": "alert_pct",
             "name": "Alert % move",
-            "type": "number"
+            "type": "number",
+            "role": "watch.alert_pct"
           }
         ],
         "rows": [
@@ -1364,17 +1408,20 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "div.name"
           },
           {
             "key": "date",
             "name": "Date",
-            "type": "date"
+            "type": "date",
+            "role": "div.date"
           },
           {
             "key": "security",
             "name": "Security",
             "type": "relation",
+            "role": "div.security",
             "relation": {
               "db": "securities",
               "limit": "one"
@@ -1384,6 +1431,7 @@
             "key": "account",
             "name": "Account",
             "type": "relation",
+            "role": "div.account",
             "relation": {
               "db": "inv_accounts",
               "limit": "one"
@@ -1393,12 +1441,14 @@
             "key": "amount",
             "name": "Amount",
             "type": "money",
+            "role": "div.amount",
             "currency": "USD"
           },
           {
             "key": "kind",
             "name": "Kind",
             "type": "select",
+            "role": "div.kind",
             "options": [
               {
                 "key": "qualified",

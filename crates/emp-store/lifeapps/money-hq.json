@@ -1,7 +1,7 @@
 {
   "id": "money-hq",
   "version": "1.0.0",
-  "title": "Money HQ",
+  "title": "Money",
   "tagline": "Budget, accounts and bills.",
   "icon": "wallet",
   "color": "jade",
@@ -470,6 +470,13 @@
         "monthly": "recurrence",
         "billDays": "number"
       }
+    },
+    {
+      "id": "review",
+      "kind": "review",
+      "title": "Review and create",
+      "quick": true,
+      "skippable": false
     }
   ],
   "templates": [
@@ -478,7 +485,7 @@
       "kind": "dashboard",
       "optional": false,
       "spec": {
-        "title": "Money HQ",
+        "title": "Money",
         "icon": "lucide:wallet",
         "subtitle": "Your budget, accounts, goals and bills in one place.",
         "tabs": [
@@ -650,7 +657,7 @@
           },
           {
             "t": "md",
-            "md": "## The idea\nBefore the month starts, **assign all income to categories** (bills, spending, savings, debt) until *To be assigned* reaches zero. Nothing is left unplanned.\n\n## Why it was suggested\nZero-based budgeting suits irregular income, debt has a high APR, or cash is tight: you only budget money you already have.\n\n## How to use it\n1. When income arrives, it lands in **To be assigned** on the Money HQ dashboard.\n2. Assign it to categories on the **Budgets** page until To be assigned is 0.\n3. Overspent a category? Move money from another category; the budget always balances.\n4. With irregular income, **budget last month's income**: hold this month's pay in a \"Next month\" buffer category."
+            "md": "## The idea\nBefore the month starts, **assign all income to categories** (bills, spending, savings, debt) until *To be assigned* reaches zero. Nothing is left unplanned.\n\n## Why it was suggested\nZero-based budgeting suits irregular income, debt has a high APR, or cash is tight: you only budget money you already have.\n\n## How to use it\n1. When income arrives, it lands in **To be assigned** on the Money overview.\n2. Assign it to categories on the **Budgets** page until To be assigned is 0.\n3. Overspent a category? Move money from another category; the budget always balances.\n4. With irregular income, **budget last month's income**: hold this month's pay in a \"Next month\" buffer category."
           },
           {
             "t": "disclaimer"
@@ -893,7 +900,8 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "acct.name"
           },
           {
             "key": "type",
@@ -961,7 +969,8 @@
           {
             "key": "institution",
             "name": "Institution",
-            "type": "text"
+            "type": "text",
+            "role": "acct.institution"
           },
           {
             "key": "currency",
@@ -980,12 +989,14 @@
             "key": "balance",
             "name": "Balance",
             "type": "computed",
+            "role": "acct.balance",
             "description": "Opening balance plus transactions; kept up to date by Ultranote."
           },
           {
             "key": "cleared",
             "name": "Cleared balance",
-            "type": "computed"
+            "type": "computed",
+            "role": "acct.cleared"
           },
           {
             "key": "on_budget",
@@ -1020,12 +1031,14 @@
             "key": "utilization",
             "name": "Utilization",
             "type": "formula",
+            "role": "acct.utilization",
             "formula": "if(prop(\"Credit limit\") > 0, prop(\"Opening balance\") / prop(\"Credit limit\"), 0)"
           },
           {
             "key": "last_reconciled",
             "name": "Last reconciled",
-            "type": "date"
+            "type": "date",
+            "role": "acct.reconciled"
           },
           {
             "key": "low_threshold",
@@ -1037,7 +1050,8 @@
           {
             "key": "closed",
             "name": "Closed",
-            "type": "checkbox"
+            "type": "checkbox",
+            "role": "acct.closed"
           },
           {
             "key": "last4",
@@ -1132,18 +1146,21 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "payee.name"
           },
           {
             "key": "aliases",
             "name": "Aliases",
             "type": "text",
+            "role": "payee.aliases",
             "description": "Other spellings your bank uses, comma separated."
           },
           {
             "key": "default_category",
             "name": "Default category",
             "type": "relation",
+            "role": "payee.default_category",
             "relation": {
               "db": "categories",
               "limit": "one"
@@ -1152,7 +1169,8 @@
           {
             "key": "icon",
             "name": "Icon",
-            "type": "text"
+            "type": "text",
+            "role": "payee.icon"
           }
         ]
       }
@@ -1169,7 +1187,8 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "cat.name"
           },
           {
             "key": "group",
@@ -1230,12 +1249,14 @@
           {
             "key": "icon",
             "name": "Icon",
-            "type": "text"
+            "type": "text",
+            "role": "cat.icon"
           },
           {
             "key": "color",
             "name": "Color",
             "type": "select",
+            "role": "cat.color",
             "options": [
               {
                 "key": "gray",
@@ -1752,6 +1773,7 @@
             "key": "tags",
             "name": "Tags",
             "type": "multi_select",
+            "role": "txn.tags",
             "options": [
               {
                 "key": "reimbursable",
@@ -1770,7 +1792,8 @@
           {
             "key": "receipt",
             "name": "Receipt",
-            "type": "files"
+            "type": "files",
+            "role": "txn.receipt"
           },
           {
             "key": "source",
@@ -1935,18 +1958,21 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "budget.name"
           },
           {
             "key": "month",
             "name": "Month",
             "type": "text",
+            "role": "budget.month",
             "description": "YYYY-MM"
           },
           {
             "key": "category",
             "name": "Category",
             "type": "relation",
+            "role": "budget.category",
             "relation": {
               "db": "categories",
               "limit": "one",
@@ -1960,22 +1986,26 @@
             "key": "assigned",
             "name": "Assigned",
             "type": "money",
+            "role": "budget.assigned",
             "currency": "${answers.currency.code}"
           },
           {
             "key": "activity",
             "name": "Activity",
-            "type": "computed"
+            "type": "computed",
+            "role": "budget.activity"
           },
           {
             "key": "available",
             "name": "Available",
-            "type": "computed"
+            "type": "computed",
+            "role": "budget.available"
           },
           {
             "key": "status",
             "name": "Status",
             "type": "formula",
+            "role": "budget.status",
             "formula": "if(prop(\"Assigned\") > 0, \"On track\", \"Not budgeted\")"
           }
         ],
@@ -2035,7 +2065,8 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "rec.name"
           },
           {
             "key": "amount",
@@ -2053,7 +2084,8 @@
           {
             "key": "next",
             "name": "Next date",
-            "type": "computed"
+            "type": "computed",
+            "role": "rec.next"
           },
           {
             "key": "account",
@@ -2123,7 +2155,8 @@
           {
             "key": "variable",
             "name": "Variable",
-            "type": "checkbox"
+            "type": "checkbox",
+            "role": "rec.variable"
           }
         ],
         "views": [
@@ -2200,7 +2233,8 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "goal.name"
           },
           {
             "key": "kind",
@@ -2249,12 +2283,14 @@
             "key": "monthly_needed",
             "name": "Monthly needed",
             "type": "formula",
+            "role": "goal.monthly_needed",
             "formula": "if(empty(prop(\"Target date\")), 0, if(dateBetween(prop(\"Target date\"), today(), \"months\") <= 0, prop(\"Target\") - prop(\"Saved\"), (prop(\"Target\") - prop(\"Saved\")) / dateBetween(prop(\"Target date\"), today(), \"months\")))"
           },
           {
             "key": "priority",
             "name": "Priority",
             "type": "select",
+            "role": "goal.priority",
             "options": [
               {
                 "key": "high",
@@ -2274,14 +2310,27 @@
             ]
           },
           {
+            "key": "account",
+            "name": "Account",
+            "type": "relation",
+            "role": "goal.account",
+            "relation": {
+              "db": "accounts",
+              "limit": "one"
+            },
+            "description": "The account this goal is saved in (optional)."
+          },
+          {
             "key": "status",
             "name": "Status",
-            "type": "status"
+            "type": "status",
+            "role": "goal.status"
           },
           {
             "key": "progress",
             "name": "Progress",
             "type": "formula",
+            "role": "goal.progress",
             "formula": "if(prop(\"Target\") > 0, min(prop(\"Saved\") / prop(\"Target\"), 1), 0)"
           }
         ],
@@ -2351,30 +2400,35 @@
           {
             "key": "month",
             "name": "Month",
-            "type": "title"
+            "type": "title",
+            "role": "nw.date"
           },
           {
             "key": "assets",
             "name": "Assets",
             "type": "money",
+            "role": "nw.assets",
             "currency": "${answers.currency.code}"
           },
           {
             "key": "liabilities",
             "name": "Liabilities",
             "type": "money",
+            "role": "nw.liabilities",
             "currency": "${answers.currency.code}"
           },
           {
             "key": "net",
             "name": "Net worth",
             "type": "formula",
+            "role": "nw.net",
             "formula": "prop(\"Assets\") - prop(\"Liabilities\")"
           },
           {
             "key": "source",
             "name": "Source",
             "type": "select",
+            "role": "nw.source",
             "options": [
               {
                 "key": "auto",
@@ -2439,18 +2493,21 @@
           {
             "key": "service",
             "name": "Service",
-            "type": "title"
+            "type": "title",
+            "role": "sub.name"
           },
           {
             "key": "amount",
             "name": "Amount",
             "type": "money",
+            "role": "sub.amount",
             "currency": "${answers.currency.code}"
           },
           {
             "key": "cycle",
             "name": "Cycle",
             "type": "select",
+            "role": "sub.cycle",
             "options": [
               {
                 "key": "weekly",
@@ -2473,18 +2530,21 @@
           {
             "key": "next_charge",
             "name": "Next charge",
-            "type": "date"
+            "type": "date",
+            "role": "sub.next"
           },
           {
             "key": "annual",
             "name": "Annual cost",
             "type": "formula",
+            "role": "sub.annual",
             "formula": "prop(\"Amount\") * ifs(prop(\"Cycle\") == \"Weekly\", 52, prop(\"Cycle\") == \"Quarterly\", 4, prop(\"Cycle\") == \"Yearly\", 1, 12)"
           },
           {
             "key": "category",
             "name": "Category",
             "type": "relation",
+            "role": "sub.category",
             "relation": {
               "db": "categories",
               "limit": "one"
@@ -2494,6 +2554,7 @@
             "key": "status",
             "name": "Status",
             "type": "select",
+            "role": "sub.status",
             "options": [
               {
                 "key": "active",
@@ -2515,18 +2576,21 @@
           {
             "key": "last_price_change",
             "name": "Last price change",
-            "type": "date"
+            "type": "date",
+            "role": "sub.price_changed"
           },
           {
             "key": "value_rating",
             "name": "Value rating",
             "type": "rating",
+            "role": "sub.rating",
             "max": 5
           },
           {
             "key": "cancel_url",
             "name": "Cancel URL",
-            "type": "url"
+            "type": "url",
+            "role": "sub.cancel_url"
           }
         ],
         "views": [
@@ -2572,17 +2636,20 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "rule.name"
           },
           {
             "key": "match",
             "name": "Match text",
-            "type": "text"
+            "type": "text",
+            "role": "rule.match"
           },
           {
             "key": "field",
             "name": "Field",
             "type": "select",
+            "role": "rule.field",
             "options": [
               {
                 "key": "payee",
@@ -2602,6 +2669,7 @@
             "key": "category",
             "name": "Category",
             "type": "relation",
+            "role": "rule.category",
             "relation": {
               "db": "categories",
               "limit": "one"
@@ -2610,17 +2678,20 @@
           {
             "key": "rename",
             "name": "Rename payee to",
-            "type": "text"
+            "type": "text",
+            "role": "rule.rename"
           },
           {
             "key": "priority",
             "name": "Priority",
-            "type": "number"
+            "type": "number",
+            "role": "rule.priority"
           },
           {
             "key": "enabled",
             "name": "Enabled",
-            "type": "checkbox"
+            "type": "checkbox",
+            "role": "rule.enabled"
           }
         ]
       }

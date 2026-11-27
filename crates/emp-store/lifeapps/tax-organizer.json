@@ -1,7 +1,7 @@
 {
   "id": "tax-organizer",
   "version": "1.0.0",
-  "title": "Tax Organizer",
+  "title": "Taxes",
   "tagline": "Documents, deadlines and a running estimate.",
   "icon": "receipt-text",
   "color": "amber",
@@ -291,6 +291,13 @@
       "min": 1,
       "max": 60,
       "step": 1
+    },
+    {
+      "id": "review",
+      "kind": "review",
+      "title": "Review and create",
+      "quick": true,
+      "skippable": false
     }
   ],
   "templates": [
@@ -299,7 +306,7 @@
       "kind": "dashboard",
       "optional": false,
       "spec": {
-        "title": "Tax Year {{answers.jurisdiction_year}}",
+        "title": "Taxes",
         "icon": "lucide:receipt-text",
         "subtitle": "Documents, deadlines, deductions and an estimate of what you owe.",
         "tabs": [
@@ -418,7 +425,7 @@
             "t": "callout",
             "icon": "lucide:triangle-alert",
             "color": "yellow",
-            "md": "Every number here is an estimate. Figures pulled from Money HQ or Portfolio need your confirmation and show a source chip."
+            "md": "Every number here is an estimate. Figures pulled from Money or Investments need your confirmation and show a source chip."
           },
           {
             "t": "kpi",
@@ -640,7 +647,8 @@
           {
             "key": "file",
             "name": "File",
-            "type": "files"
+            "type": "files",
+            "role": "taxdoc.file"
           },
           {
             "key": "amount_summary",
@@ -658,6 +666,7 @@
             "key": "keep_until",
             "name": "Keep until",
             "type": "formula",
+            "role": "taxdoc.keep_until",
             "formula": "dateAdd(prop(\"Expected by\"), 3, \"years\")"
           }
         ],
@@ -1017,7 +1026,8 @@
           {
             "key": "suggested",
             "name": "Suggested",
-            "type": "money"
+            "type": "money",
+            "role": "taxpay.suggested"
           },
           {
             "key": "paid",
@@ -1054,12 +1064,14 @@
           {
             "key": "confirmation",
             "name": "Confirmation #",
-            "type": "secret"
+            "type": "secret",
+            "role": "taxpay.confirmation"
           },
           {
             "key": "status",
             "name": "Status",
             "type": "formula",
+            "role": "taxpay.status",
             "formula": "if(prop(\"Paid amount\") > 0, \"Paid\", \"Due\")"
           }
         ],
@@ -1141,17 +1153,20 @@
           {
             "key": "name",
             "name": "Deadline",
-            "type": "title"
+            "type": "title",
+            "role": "deadline.name"
           },
           {
             "key": "date",
             "name": "Date",
-            "type": "date"
+            "type": "date",
+            "role": "deadline.date"
           },
           {
             "key": "kind",
             "name": "Kind",
             "type": "select",
+            "role": "deadline.kind",
             "options": [
               {
                 "key": "federal",
@@ -1178,12 +1193,14 @@
           {
             "key": "done",
             "name": "Done",
-            "type": "checkbox"
+            "type": "checkbox",
+            "role": "deadline.done"
           },
           {
             "key": "notes",
             "name": "Notes",
-            "type": "text"
+            "type": "text",
+            "role": "deadline.notes"
           }
         ],
         "views": [
@@ -1244,37 +1261,44 @@
           {
             "key": "purpose",
             "name": "Purpose",
-            "type": "title"
+            "type": "title",
+            "role": "mileage.purpose"
           },
           {
             "key": "date",
             "name": "Date",
-            "type": "date"
+            "type": "date",
+            "role": "mileage.date"
           },
           {
             "key": "from",
             "name": "From",
-            "type": "text"
+            "type": "text",
+            "role": "mileage.from"
           },
           {
             "key": "to",
             "name": "To",
-            "type": "text"
+            "type": "text",
+            "role": "mileage.to"
           },
           {
             "key": "miles",
             "name": "Miles",
-            "type": "number"
+            "type": "number",
+            "role": "mileage.miles"
           },
           {
             "key": "rate",
             "name": "Rate per mile",
-            "type": "number"
+            "type": "number",
+            "role": "mileage.rate"
           },
           {
             "key": "deduction",
             "name": "Deduction",
             "type": "formula",
+            "role": "mileage.deduction",
             "formula": "prop(\"Miles\") * prop(\"Rate per mile\")"
           }
         ],
@@ -1568,7 +1592,7 @@
       "when": "coalesce(metrics.taxes_fund, -1) >= 0 and metrics.taxes_fund < metrics.est_balance",
       "severity": "info",
       "title": "Taxes fund is below the estimated balance due",
-      "body": "Money HQ's Taxes fund holds {{fmt_money(metrics.taxes_fund)}}; the estimate is {{fmt_money(metrics.est_balance)}}.",
+      "body": "Money's Taxes fund holds {{fmt_money(metrics.taxes_fund)}}; the estimate is {{fmt_money(metrics.est_balance)}}.",
       "mathMetrics": [
         "taxes_fund",
         "est_balance"

@@ -1189,6 +1189,7 @@ pub async fn gdocs_import(
                 after_id: None,
                 template_page_id: None,
                 doc: Some(conv.doc),
+                flags: None,
             })?;
             ctx.report(2, 2, Some("Done"));
             Ok(json!({ "page": created.meta, "warnings": warnings }))

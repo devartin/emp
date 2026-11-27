@@ -21,6 +21,9 @@ pub struct PageFlags {
     pub template: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inline: Option<bool>,
+    /// A project: a doc page whose children are its contents (Ultranote 1.0 brief §2.2, §3). Absent means `false`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<bool>,
 }
 
 impl PageFlags {
@@ -29,7 +32,7 @@ impl PageFlags {
         macro_rules! merge {
             ($($f:ident),*) => { $( if patch.$f.is_some() { self.$f = patch.$f; } )* };
         }
-        merge!(full_width, small_text, font, locked, template, inline);
+        merge!(full_width, small_text, font, locked, template, inline, project);
     }
 }
 
@@ -157,6 +160,9 @@ pub struct PageCreate {
     /// Initial document.
     #[serde(default)]
     pub doc: Option<TipTapDoc>,
+    /// Initial flags (merged over the defaults, e.g. `{ project: true }`).
+    #[serde(default)]
+    pub flags: Option<PageFlags>,
 }
 
 impl PageCreate {
@@ -172,6 +178,7 @@ impl PageCreate {
             after_id: None,
             template_page_id: None,
             doc: None,
+            flags: None,
         }
     }
 }

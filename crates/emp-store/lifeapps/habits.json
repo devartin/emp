@@ -145,6 +145,13 @@
       "quick": false,
       "skippable": true,
       "default": true
+    },
+    {
+      "id": "review",
+      "kind": "review",
+      "title": "Review and create",
+      "quick": true,
+      "skippable": false
     }
   ],
   "templates": [
@@ -283,12 +290,14 @@
           {
             "key": "name",
             "name": "Name",
-            "type": "title"
+            "type": "title",
+            "role": "habit.name"
           },
           {
             "key": "type",
             "name": "Type",
             "type": "select",
+            "role": "habit.type",
             "options": [
               {
                 "key": "yes_no",
@@ -316,6 +325,7 @@
             "key": "schedule",
             "name": "Schedule",
             "type": "select",
+            "role": "habit.schedule",
             "options": [
               {
                 "key": "daily",
@@ -338,37 +348,44 @@
           {
             "key": "per_week",
             "name": "Times per week",
-            "type": "number"
+            "type": "number",
+            "role": "habit.per_week"
           },
           {
             "key": "every_n",
             "name": "Every N days",
-            "type": "number"
+            "type": "number",
+            "role": "habit.every_n"
           },
           {
             "key": "target",
             "name": "Target",
-            "type": "number"
+            "type": "number",
+            "role": "habit.target"
           },
           {
             "key": "unit",
             "name": "Unit",
-            "type": "text"
+            "type": "text",
+            "role": "habit.unit"
           },
           {
             "key": "two_minute",
             "name": "Two-minute version",
-            "type": "text"
+            "type": "text",
+            "role": "habit.two_min"
           },
           {
             "key": "cue",
             "name": "Cue",
-            "type": "text"
+            "type": "text",
+            "role": "habit.cue"
           },
           {
             "key": "time_of_day",
             "name": "Time of day",
             "type": "select",
+            "role": "habit.time",
             "options": [
               {
                 "key": "morning",
@@ -391,32 +408,38 @@
           {
             "key": "area",
             "name": "Area",
-            "type": "text"
+            "type": "text",
+            "role": "habit.area"
           },
           {
             "key": "active",
             "name": "Active",
-            "type": "checkbox"
+            "type": "checkbox",
+            "role": "habit.active"
           },
           {
             "key": "started",
             "name": "Started",
-            "type": "date"
+            "type": "date",
+            "role": "habit.started"
           },
           {
             "key": "current_streak",
             "name": "Current streak",
-            "type": "computed"
+            "type": "computed",
+            "role": "habit.streak"
           },
           {
             "key": "best_streak",
             "name": "Best streak",
-            "type": "computed"
+            "type": "computed",
+            "role": "habit.best"
           },
           {
             "key": "rate_30d",
             "name": "30-day rate",
-            "type": "computed"
+            "type": "computed",
+            "role": "habit.rate30"
           }
         ],
         "views": [
@@ -473,17 +496,20 @@
           {
             "key": "name",
             "name": "Entry",
-            "type": "title"
+            "type": "title",
+            "role": "log.name"
           },
           {
             "key": "date",
             "name": "Date",
-            "type": "date"
+            "type": "date",
+            "role": "log.date"
           },
           {
             "key": "habit",
             "name": "Habit",
             "type": "relation",
+            "role": "log.habit",
             "relation": {
               "db": "habits",
               "limit": "one",
@@ -496,12 +522,14 @@
           {
             "key": "value",
             "name": "Value",
-            "type": "number"
+            "type": "number",
+            "role": "log.value"
           },
           {
             "key": "status",
             "name": "Status",
             "type": "select",
+            "role": "log.status",
             "options": [
               {
                 "key": "done",
@@ -533,12 +561,14 @@
           {
             "key": "note",
             "name": "Note",
-            "type": "text"
+            "type": "text",
+            "role": "log.note"
           },
           {
             "key": "mood",
             "name": "Mood",
             "type": "rating",
+            "role": "log.mood",
             "max": 5
           }
         ],

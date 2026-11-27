@@ -427,16 +427,17 @@ pub fn manifest_titles(store: &Store, app_id: &str) -> BTreeMap<String, String> 
         .unwrap_or_default()
 }
 
-/// Loads every database of an instance, keyed by template key.
-///
-/// The databases the app generated are found exactly through the instance's record key map
-/// (`Store::lifeapp_key_map`: template key → database id, `<key>.prop:<prop>` → property id), so renaming a database
-/// or a column does not lose it. Live databases of the instance that the key map does not name are classified by
-/// role, then by manifest title.
-pub fn load_instance(
-    store: &Store,
-    instance_id: &str,
-) -> ApiResult<(String, BTreeMap<String, InstanceDb>)> {
+/// The databases of an instance without their rows: `(key, schema, manifest property key → property id)`, keyed the
+/// way [`load_instance`] files them. Cheap (schemas only), so it also fingerprints the instance for [`Ledger::load`].
+pub struct InstanceLayout {
+    /// Workspace of the instance.
+    pub workspace_id: String,
+    /// The databases.
+    pub dbs: Vec<(String, DbSchema, BTreeMap<String, String>)>,
+}
+
+/// Finds the databases of an instance (see [`load_instance`]) without loading their rows.
+pub fn instance_layout(store: &Store, instance_id: &str) -> ApiResult<InstanceLayout> {
     let (ws, app_id) = find_instance(store, instance_id)?;
     let titles = manifest_titles(store, &app_id);
     let key_map = store.lifeapp_key_map(instance_id).unwrap_or_else(|e| {
@@ -448,21 +449,15 @@ pub fn load_instance(
     });
     let metas = instance_databases(store, &ws, instance_id)?;
     let live: HashSet<&str> = metas.iter().map(|m| m.id.as_str()).collect();
-    let load = |id: &str, prop_keys: BTreeMap<String, String>| -> ApiResult<InstanceDb> {
-        Ok(InstanceDb {
-            schema: store.db_get_schema(id)?,
-            rows: super::db::all_rows(store, id, None)?,
-            prop_keys,
-        })
-    };
-    let mut out = BTreeMap::new();
-    let mut claimed = HashSet::new();
+    let mut out: Vec<(String, DbSchema, BTreeMap<String, String>)> = Vec::new();
+    let mut keys: HashSet<String> = HashSet::new();
+    let mut claimed: HashSet<String> = HashSet::new();
     for tkey in titles.keys() {
         let Some(id) = key_map.get(tkey).filter(|id| live.contains(id.as_str())) else {
             continue;
         };
         let key = canonical_key(tkey);
-        if out.contains_key(key) {
+        if keys.contains(key) {
             continue;
         }
         let prefix = format!("{tkey}.prop:");
@@ -471,31 +466,61 @@ pub fn load_instance(
             .take_while(|(k, _)| k.starts_with(&prefix))
             .map(|(k, v)| (k[prefix.len()..].to_owned(), v.clone()))
             .collect();
-        out.insert(key.to_owned(), load(id, prop_keys)?);
-        claimed.insert(id.as_str());
+        out.push((key.to_owned(), store.db_get_schema(id)?, prop_keys));
+        keys.insert(key.to_owned());
+        claimed.insert(id.clone());
     }
     for meta in &metas {
-        if claimed.contains(meta.id.as_str()) {
+        if claimed.contains(&meta.id) {
             continue;
         }
         let schema = store.db_get_schema(&meta.id)?;
         let Some(key) = classify(&schema, &titles) else {
             continue;
         };
-        if out.contains_key(&key) {
+        if keys.contains(&key) {
             continue;
         }
-        let rows = super::db::all_rows(store, &meta.id, None)?;
+        keys.insert(key.clone());
+        out.push((key, schema, BTreeMap::new()));
+    }
+    Ok(InstanceLayout {
+        workspace_id: ws,
+        dbs: out,
+    })
+}
+
+/// Loads every database of an instance, keyed by template key.
+///
+/// The databases the app generated are found exactly through the instance's record key map
+/// (`Store::lifeapp_key_map`: template key → database id, `<key>.prop:<prop>` → property id), so renaming a database
+/// or a column does not lose it. Live databases of the instance that the key map does not name are classified by
+/// role, then by manifest title.
+pub fn load_instance(
+    store: &Store,
+    instance_id: &str,
+) -> ApiResult<(String, BTreeMap<String, InstanceDb>)> {
+    let lay = instance_layout(store, instance_id)?;
+    Ok((lay.workspace_id, load_rows(store, lay.dbs)?))
+}
+
+fn load_rows(
+    store: &Store,
+    dbs: Vec<(String, DbSchema, BTreeMap<String, String>)>,
+) -> ApiResult<BTreeMap<String, InstanceDb>> {
+    let mut out = BTreeMap::new();
+    for (key, schema, prop_keys) in dbs {
+        let rows = super::db::all_rows(store, &schema.database.id, None)?;
         out.insert(
             key,
             InstanceDb {
                 schema,
                 rows,
-                prop_keys: BTreeMap::new(),
+                prop_keys,
             },
         );
     }
-    Ok((ws, out))
+    Ok(out)
 }
 
 // ───────────────────────────────────────────────────────────────────────────── ledger
@@ -517,8 +542,140 @@ pub struct Ledger {
     pub assignments: Vec<Assignment>,
     /// Payee names by row id.
     pub payees: HashMap<String, String>,
+    /// Per-transaction fields `emp-finance` does not model (cleared state, review flag, source, tags).
+    pub txn_meta: HashMap<String, TxnMeta>,
+    /// Per-account fields `emp-finance` does not model.
+    pub acct_meta: HashMap<String, AcctMeta>,
+    /// Per-category fields `emp-finance` does not model.
+    pub cat_meta: HashMap<String, CatMeta>,
+    /// Revision fingerprint of the databases this ledger was built from (see [`Ledger::load`]).
+    pub rev: String,
     /// The raw databases.
     pub dbs: BTreeMap<String, InstanceDb>,
+}
+
+/// Transaction fields kept beside [`Txn`].
+#[derive(Clone, Debug, Default)]
+pub struct TxnMeta {
+    /// `txn.cleared` option key: `uncleared`, `cleared` or `reconciled`.
+    pub cleared: String,
+    /// `txn.reviewed`, `None` when the database has no Reviewed property.
+    pub reviewed: Option<bool>,
+    /// `txn.source` option key (`manual`, `import`, `rule`), empty when unset.
+    pub source: String,
+    /// Tag option names.
+    pub tags: Vec<String>,
+    /// Row revision.
+    pub rev: i64,
+}
+
+/// Account fields kept beside [`Account`].
+#[derive(Clone, Debug, Default)]
+pub struct AcctMeta {
+    /// `acct.type` option key.
+    pub kind: String,
+    /// Institution text.
+    pub institution: String,
+    /// Last reconciled date.
+    pub reconciled: Option<NaiveDate>,
+    /// The currency as entered (empty = base).
+    pub currency: String,
+}
+
+/// Category fields kept beside [`Category`].
+#[derive(Clone, Debug, Default)]
+pub struct CatMeta {
+    /// Colour key.
+    pub color: String,
+    /// Icon name.
+    pub icon: String,
+    /// Monthly target.
+    pub target: Decimal,
+}
+
+/// Known option keys of a select/status property, each with the option names the generated databases (and older
+/// installs) use for it. See [`option_key`].
+pub type OptionKeys = &'static [(&'static str, &'static [&'static str])];
+
+/// `acct.type`.
+pub const ACCT_TYPES: OptionKeys = &[
+    ("checking", &[]),
+    ("savings", &[]),
+    ("credit_card", &["Card"]),
+    ("student_loan", &[]),
+    ("auto_loan", &["Car loan"]),
+    ("mortgage", &[]),
+    ("personal_loan", &[]),
+    ("investment", &[]),
+    ("cash", &[]),
+    ("other_asset", &[]),
+    ("other_liability", &[]),
+];
+/// `txn.cleared`.
+pub const CLEARED: OptionKeys = &[("uncleared", &[]), ("cleared", &[]), ("reconciled", &[])];
+/// `txn.source`.
+pub const TXN_SOURCES: OptionKeys = &[("manual", &[]), ("import", &[]), ("rule", &[])];
+/// `rec.kind`.
+pub const REC_KINDS: OptionKeys = &[
+    ("bill", &[]),
+    ("income", &[]),
+    ("subscription", &[]),
+    ("transfer", &[]),
+    ("savings", &[]),
+];
+/// `goal.kind`.
+pub const GOAL_KINDS: OptionKeys = &[
+    ("emergency", &["Emergency fund"]),
+    ("sinking", &["Sinking fund"]),
+    ("savings", &["Savings goal"]),
+];
+/// Goal priority.
+pub const PRIORITIES: OptionKeys = &[("high", &[]), ("medium", &[]), ("low", &[])];
+
+/// The semantic key of an option: its id when that is one of `known` (ids equal manifest keys on new installs and in
+/// the browser mock), else the known key whose name (or alias) matches the option's name, else the option's
+/// normalised name. Comparing keys, never raw option ids, is what keeps older installs (generated ids) working.
+#[must_use]
+pub fn key_of_option(id: &str, name: &str, known: OptionKeys) -> String {
+    if let Some((k, _)) = known.iter().find(|(k, _)| *k == id) {
+        return (*k).to_owned();
+    }
+    let n = norm(name);
+    known
+        .iter()
+        .find(|(k, aliases)| *k == n || aliases.iter().any(|a| norm(a) == n))
+        .map_or(n, |(k, _)| (*k).to_owned())
+}
+
+/// The key of a select/status cell (see [`key_of_option`]).
+#[must_use]
+pub fn option_key(r: &RowDto, p: Option<&Property>, known: OptionKeys) -> Option<String> {
+    let p = p?;
+    let id = match r.values.get(&p.id)? {
+        CellValue::Select { v: Some(id) } | CellValue::Status { v: Some(id) } => id,
+        _ => return None,
+    };
+    let o = p.select_options().into_iter().find(|o| &o.id == id)?;
+    Some(key_of_option(&o.id, &o.name, known))
+}
+
+/// The option id of `p` whose key is `key` (see [`key_of_option`]).
+#[must_use]
+pub fn option_for_key(p: &Property, key: &str, known: OptionKeys) -> Option<String> {
+    p.select_options()
+        .into_iter()
+        .find(|o| key_of_option(&o.id, &o.name, known) == key)
+        .map(|o| o.id)
+}
+
+/// A select or status cell holding option `id` of `p`.
+#[must_use]
+pub fn option_cell(p: &Property, id: String) -> CellValue {
+    if p.kind == emp_store::dbmodel::PropType::Status {
+        CellValue::Status { v: Some(id) }
+    } else {
+        CellValue::Select { v: Some(id) }
+    }
 }
 
 fn account_type(name: Option<&str>) -> AccountType {
@@ -526,16 +683,75 @@ fn account_type(name: Option<&str>) -> AccountType {
         .unwrap_or(AccountType::OtherAsset)
 }
 
+/// Revision fingerprint of a ledger: every instance database's `(key, id, data_rev, schema_rev)` and the base currency.
+type LedgerKey = (Vec<(String, String, i64, i64)>, String);
+
+/// Ledgers built this session, by instance id (the ledger cache of ULTRANOTE-1.0 §5). Each entry is valid while its
+/// databases' revisions are unchanged, so a write anywhere in the instance invalidates it; dropped on lock.
+static LEDGERS: LazyLock<Mutex<HashMap<String, (LedgerKey, Arc<Ledger>)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Instances whose ledger is cached at once.
+const MAX_CACHED_LEDGERS: usize = 8;
+
+/// Drops every cached ledger (vault lock, tests).
+pub fn clear_ledger_cache() {
+    LEDGERS.lock().clear();
+}
+
+/// The vault's base currency (USD when unset or invalid).
+fn base_currency(store: &Store) -> String {
+    store
+        .vault_settings()
+        .map(|v| v.base_currency)
+        .ok()
+        .filter(|c| Currency::new(c).is_ok())
+        .unwrap_or_else(|| "USD".into())
+}
+
 impl Ledger {
-    /// Loads the ledger of `instance_id`.
-    pub fn load(store: &Store, instance_id: &str) -> ApiResult<Self> {
-        let (_, dbs) = load_instance(store, instance_id)?;
-        let currency = store
-            .vault_settings()
-            .map(|v| v.base_currency)
-            .ok()
-            .filter(|c| Currency::new(c).is_ok())
-            .unwrap_or_else(|| "USD".into());
+    /// The ledger of `instance_id`, from the session cache while none of the instance's databases changed (one
+    /// schema read per database to check), else freshly loaded.
+    pub fn load(store: &Store, instance_id: &str) -> ApiResult<Arc<Self>> {
+        let lay = instance_layout(store, instance_id)?;
+        let currency = base_currency(store);
+        let key: LedgerKey = (
+            lay.dbs
+                .iter()
+                .map(|(k, s, _)| {
+                    (
+                        k.clone(),
+                        s.database.id.clone(),
+                        s.database.data_rev,
+                        s.database.schema_rev,
+                    )
+                })
+                .collect(),
+            currency.clone(),
+        );
+        if let Some((k, l)) = LEDGERS.lock().get(instance_id)
+            && *k == key
+        {
+            return Ok(Arc::clone(l));
+        }
+        let dbs = load_rows(store, lay.dbs)?;
+        let mut l = Self::build(dbs, currency)?;
+        l.rev = {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            key.hash(&mut h);
+            format!("{:016x}", h.finish())
+        };
+        let l = Arc::new(l);
+        let mut cache = LEDGERS.lock();
+        if cache.len() >= MAX_CACHED_LEDGERS && !cache.contains_key(instance_id) {
+            cache.clear();
+        }
+        cache.insert(instance_id.to_owned(), (key, Arc::clone(&l)));
+        Ok(l)
+    }
+
+    /// Builds a ledger from loaded databases.
+    fn build(dbs: BTreeMap<String, InstanceDb>, currency: String) -> ApiResult<Self> {
         let mut l = Ledger {
             currency: currency.clone(),
             ..Ledger::default()
@@ -559,9 +775,25 @@ impl Ledger {
             let onb = d.col_id("acct.on_budget", &["On budget"]);
             let low = d.col_id("acct.low_threshold", &["Low-balance threshold"]);
             let closed = d.keyed_id("closed", &["Closed"]);
+            let inst = d.keyed_id("institution", &["Institution"]);
+            let reconciled = d
+                .col_id("acct.reconciled", &[])
+                .or_else(|| d.keyed_id("last_reconciled", &["Last reconciled"]));
             for r in &d.rows {
                 let c = text(get(r, &cur));
-                let kind = account_type(d.option_name(r, ty).as_deref());
+                let kind = account_type(option_key(r, ty, ACCT_TYPES).as_deref());
+                l.acct_meta.insert(
+                    r.id.clone(),
+                    AcctMeta {
+                        kind: serde_json::to_value(kind)
+                            .ok()
+                            .and_then(|v| v.as_str().map(str::to_owned))
+                            .unwrap_or_else(|| "other_asset".into()),
+                        institution: text(get(r, &inst)),
+                        reconciled: date(get(r, &reconciled)),
+                        currency: c.trim().to_uppercase(),
+                    },
+                );
                 l.accounts.push(Account {
                     id: r.id.clone(),
                     name: d.title(r),
@@ -587,7 +819,20 @@ impl Ledger {
             let ess = d.col_id("cat.essential", &["Essential"]);
             let roll = d.col_id("cat.rollover", &["Rollover"]);
             let color = d.keyed("color", &["Color"]);
+            let icon = d.col_id("cat.icon", &[]).or_else(|| d.keyed_id("icon", &["Icon"]));
+            let target = d.col_id("cat.target", &["Target"]);
             for r in &d.rows {
+                l.cat_meta.insert(
+                    r.id.clone(),
+                    CatMeta {
+                        color: d
+                            .option_color(r, color)
+                            .or_else(|| d.option_color(r, group))
+                            .unwrap_or_else(|| "gray".into()),
+                        icon: text(get(r, &icon)),
+                        target: amount(get(r, &target)).unwrap_or_default(),
+                    },
+                );
                 let g = d.option_name(r, group).unwrap_or_default();
                 let gn = norm(&g);
                 if let Some(c) = d
@@ -624,6 +869,10 @@ impl Ledger {
             let raw = d
                 .col_id("txn.raw", &[])
                 .unwrap_or_else(|| d.title_id().to_owned());
+            let cleared = d.col("txn.cleared", &["Cleared"]);
+            let source = d.col("txn.source", &["Source"]);
+            let reviewed = d.col_id("txn.reviewed", &["Reviewed"]);
+            let tags = d.col("txn.tags", &[]).or_else(|| d.keyed("tags", &["Tags"]));
             let mut parents = HashSet::new();
             for r in &d.rows {
                 if let Some(p) = rel(get(r, &sp)) {
@@ -635,6 +884,26 @@ impl Ledger {
                     continue;
                 };
                 let raw_s = text(r.values.get(&raw));
+                l.txn_meta.insert(
+                    r.id.clone(),
+                    TxnMeta {
+                        cleared: option_key(r, cleared, CLEARED)
+                            .unwrap_or_else(|| "uncleared".into()),
+                        reviewed: reviewed.as_ref().map(|c| check(r.values.get(c))),
+                        source: option_key(r, source, TXN_SOURCES).unwrap_or_default(),
+                        tags: match (tags, tags.and_then(|p| r.values.get(&p.id))) {
+                            (Some(p), Some(CellValue::Multi { v })) => {
+                                let opts = p.select_options();
+                                v.iter()
+                                    .filter_map(|id| opts.iter().find(|o| &o.id == id))
+                                    .map(|o| o.name.clone())
+                                    .collect()
+                            }
+                            _ => Vec::new(),
+                        },
+                        rev: r.rev,
+                    },
+                );
                 let payee_s = rel(get(r, &payee))
                     .and_then(|p| l.payees.get(&p).cloned())
                     .unwrap_or_else(|| emp_finance::payee::normalize(&raw_s));
@@ -2117,6 +2386,7 @@ static IMPORTS: LazyLock<Mutex<HashMap<String, StagedImport>>> =
 
 /// Drops every staged statement import (lock hygiene: the bytes are decrypted user data).
 pub fn clear_staged_imports() {
+    clear_ledger_cache();
     IMPORTS.lock().clear();
 }
 

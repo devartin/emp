@@ -459,6 +459,9 @@ impl Store {
     pub fn page_create(&self, req: PageCreate) -> Result<PageCreated> {
         let title = req.title.clone().unwrap_or_default();
         validate_title(&title)?;
+        if req.flags.as_ref().and_then(|f| f.project) == Some(true) && req.kind != PageKind::Doc {
+            return Err(StoreError::invalid("only documents can be projects"));
+        }
         let s = self.session()?;
         let mut doc = req.doc.clone();
         if let Some(d) = doc.as_mut() {
@@ -505,6 +508,9 @@ impl Store {
                 if req.icon.is_some() {
                     payload.icon.clone_from(&req.icon);
                 }
+                if let Some(f) = &req.flags {
+                    payload.flags.apply(f);
+                }
                 write_payload(tx, codec, &row, &payload, row.rev + 1, now)?;
                 root = load_meta(tx, codec, &root.id)?.ok_or(StoreError::NotFound("page"))?;
                 let rev = i64::from(root_doc.is_some());
@@ -515,6 +521,9 @@ impl Store {
             let id = new_id();
             let mut payload = PagePayload::new(&title);
             payload.icon.clone_from(&req.icon);
+            if let Some(f) = &req.flags {
+                payload.flags.apply(f);
+            }
             insert_page(
                 tx,
                 codec,
@@ -559,6 +568,11 @@ impl Store {
         let id = id.to_owned();
         let meta = self.write(move |tx| {
             let row = load_page(tx, &id)?.ok_or(StoreError::NotFound("page"))?;
+            if patch.flags.as_ref().and_then(|f| f.project) == Some(true)
+                && row.kind != PageKind::Doc.as_str()
+            {
+                return Err(StoreError::invalid("only documents can be projects"));
+            }
             let mut p = decode_page(&sess.codec, &row)?;
             if let Some(t) = patch.title {
                 p.title = t;
